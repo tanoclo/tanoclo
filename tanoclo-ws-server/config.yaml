@@ -1,0 +1,54 @@
+# ==============================================================================
+# config.yaml
+# Description: Configuration schema and metadata definitions for the Home Assistant
+#              WebSocket Server addon. Configures database credentials, ports (988, 3111),
+#              certificates lookup, log levels, and domain strings.
+# ==============================================================================
+name: "TaNoClo WebSocket Server"
+version: "0.2.0"
+slug: "tanoclo-ws-server"
+description: "Self-hosted Tado WebSocket and API Server replica"
+url: "https://github.com/tanoclo/tanoclo"
+image: "ghcr.io/tanoclo/tanoclo-ws-server"
+arch:
+  - amd64
+  - aarch64
+startup: "application"
+boot: "auto"
+map:
+  - "ssl:ro"
+ports:
+  "988/tcp": 988
+  "3111/tcp": 3111
+options:
+  db_host: "core-mariadb"
+  db_port: 3306
+  db_name: "tanoclo"
+  db_user: "tanoclo"
+  db_password: ""
+  jwt_secret: ""
+  ws_port: 988
+  http_api_port: 3111
+  tanoclo_domain: "tanoclo.domain.com"
+  mqtt_enabled: true
+  mqtt_host: "mqtt://core-mosquitto:1883"
+  mqtt_username: ""
+  mqtt_password: ""
+  log_level: "info"
+  zone_config_readonly: true
+schema:
+  db_host: "str"
+  db_port: "int"
+  db_name: "str"
+  db_user: "str"
+  db_password: "str?"
+  jwt_secret: "str?"
+  ws_port: "int?"
+  http_api_port: "int?"
+  tanoclo_domain: "str"
+  mqtt_enabled: "bool"
+  mqtt_host: "str?"
+  mqtt_username: "str?"
+  mqtt_password: "str?"
+  log_level: "list(info|warn|error|debug)"
+  zone_config_readonly: "bool"

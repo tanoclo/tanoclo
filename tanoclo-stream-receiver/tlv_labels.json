@@ -1,0 +1,1339 @@
+{
+  "fields": {
+    "0x0000": {
+      "name": "pair_stop_marker_0000",
+      "type": "empty",
+      "notes": "Seen only in POST .../pair when exiting/disabling pairing; likely stop/cancel companion marker"
+    },
+    "0x0003": {
+      "name": "reported_rf_key",
+      "type": "bytes",
+      "unit": "aes128"
+    },
+    "0x0004": {
+      "name": "field_0x0004",
+      "type": "bytes"
+    },
+    "0x0007": {
+      "name": "client_nonce",
+      "type": "bytes",
+      "notes": "Client nonce used in auth/token flow"
+    },
+    "0x000b": {
+      "name": "field_0x000b",
+      "type": "bytes"
+    },
+    "0x0016": {
+      "name": "field_0x0016",
+      "type": "bytes"
+    },
+    "0x0018": {
+      "name": "field_0x0018",
+      "type": "bytes"
+    },
+    "0x002b": {
+      "name": "field_0x002b",
+      "type": "bytes"
+    },
+    "0x0030": {
+      "name": "field_0x0030",
+      "type": "bytes"
+    },
+    "0x0040": {
+      "name": "field_0x0040",
+      "type": "bytes"
+    },
+    "0x0043": {
+      "name": "field_0x0043",
+      "type": "bytes"
+    },
+    "0x004c": {
+      "name": "field_0x004c",
+      "type": "bytes"
+    },
+    "0x0049": {
+      "name": "field_0x0049",
+      "type": "bytes"
+    },
+    "0x0058": {
+      "name": "field_0x0058",
+      "type": "bytes"
+    },
+    "0x005a": {
+      "name": "field_0x005a",
+      "type": "bytes"
+    },
+    "0x005c": {
+      "name": "field_0x005c",
+      "type": "bytes"
+    },
+    "0x005d": {
+      "name": "field_0x005d",
+      "type": "bytes"
+    },
+    "0x005e": {
+      "name": "field_0x005e",
+      "type": "bytes"
+    },
+    "0x0061": {
+      "name": "field_0x0061",
+      "type": "bytes"
+    },
+    "0x0062": {
+      "name": "field_0x0062",
+      "type": "bytes"
+    },
+    "0x0063": {
+      "name": "field_0x0063",
+      "type": "bytes"
+    },
+    "0x007a": {
+      "name": "orientation_or_overlay_state",
+      "type": "u8",
+      "notes": "Seen in /sen; toggles with orientation/dial overlay"
+    },
+    "0x00b5": {
+      "name": "valve_position_raw_b5",
+      "type": "u16be",
+      "notes": "Seen in /mnt: likely motor/valve position"
+    },
+    "0x00b6": {
+      "name": "valve_position_raw_b6",
+      "type": "u16be",
+      "notes": "Seen in /mnt: likely motor/valve position"
+    },
+    "0x00b8": {
+      "name": "mnt_state_b8",
+      "type": "u8",
+      "unit": "bool",
+      "notes": "Seen in /mnt; toggles when mounted"
+    },
+    "0x00fa": {
+      "name": "mnt_flag_fa",
+      "type": "u8",
+      "unit": "bool",
+      "notes": "Mount-related flag (seen in /mnt)"
+    },
+    "0x00fb": {
+      "name": "mnt_flag_fb",
+      "type": "u8",
+      "unit": "bool",
+      "notes": "Mount-related flag (seen in /mnt)"
+    },
+    "0x0104": {
+      "name": "pair_action",
+      "type": "empty",
+      "notes": "Pairing transaction marker in POST .../pair; present on both start and stop"
+    },
+    "0x01a0": {
+      "name": "fw_state_status",
+      "type": "u8",
+      "unit": "enum",
+      "notes": "Firmware state/status byte seen in d/<dev>/fw.state. Observed: 0x07 immediately before an update sequence; 0x08 when device is on normal/steady state after update."
+    },
+    "0x003a": {
+      "name": "fw_version_active",
+      "type": "u16be",
+      "unit": "version_fp6",
+      "notes": "Active/running firmware version."
+    },
+    "0x0039": {
+      "name": "fw_version_target_or_reported",
+      "type": "u16be",
+      "unit": "version_fp6",
+      "notes": "Second firmware version field in fw.state. Often matches 0x003A after update; can be 0x0000 before update. Likely 'target/expected' or 'reported-to-cloud' firmware version."
+    },
+    "0x0035": {
+      "name": "fw_version_other_slot",
+      "type": "u16be",
+      "unit": "version_fp6",
+      "notes": "Firmware version present in the other/inactive external SPI slot (or previous version)."
+    },
+    "0x003b": {
+      "name": "fw_state_phase_or_step",
+      "type": "u8",
+      "unit": "enum_or_u8",
+      "notes": "Small state/phase value in fw.state. Observed values: 0x0E (older state) and 0x06 (post-update). Likely update/bootloader phase indicator."
+    },
+    "0x0036": {
+      "name": "fw_state_aux_0036",
+      "type": "u8",
+      "unit": "u8",
+      "notes": "Auxiliary fw.state byte. Observed: VA/RU show 0x0A; IB shows 0x00. Possibly device-family, channel, or partition indicator. Needs more samples correlated with device type."
+    },
+    "0x003c": {
+      "name": "fw_state_phase_aux_003c",
+      "type": "u8",
+      "unit": "enum_or_u8",
+      "notes": "Second small state/phase value in fw.state. Observed values track 0x003B in samples (e.g., 0x0E or 0x06). Likely additional phase/health indicator for the update state machine."
+    },
+    "0x0180": {
+      "name": "fw_state_update_result_or_bootcount",
+      "type": "u8",
+      "unit": "u8_or_enum",
+      "notes": "fw.state flag that changed across an update in observed VA: 0x00 before update, 0x04 after update. Likely update result/status, applied-update marker, or boot counter/flags."
+    },
+    "0x012d": {
+      "name": "temperature_ambient",
+      "type": "s16be",
+      "unit": "C",
+      "scale": 0.01,
+      "decimals": 2,
+      "notes": "Primary ambient temperature (°C×100). | Seen in: d/RU*/sen, d/VA*/sen | Len: 2 bytes | u16 values around 1600–1900 consistent with temperature in centi-degrees (°C×100)."
+    },
+    "0x012e": {
+      "name": "aux_temperature_1",
+      "type": "s16be",
+      "unit": "C",
+      "scale": 0.01,
+      "decimals": 2,
+      "notes": "Secondary temperature (°C×100). | Seen in: d/RU*/sen, d/VA*/sen | Len: 2 bytes | u16 values around 1600–1900 consistent with temperature in centi-degrees (°C×100)."
+    },
+    "0x0135": {
+      "name": "humidity_percent",
+      "type": "u16be",
+      "unit": "%",
+      "scale": 0.1,
+      "decimals": 1,
+      "notes": "Relative humidity (%×10). | Seen in: d/RU*/sen, d/VA*/sen | Len: 2 bytes | u16 values around 450–560 consistent with humidity ×10 (%RH)."
+    },
+    "0x0136": {
+      "name": "ambient_light_level",
+      "type": "u8",
+      "unit": "level",
+      "notes": "Ambient light level (unitless). | Seen in: d/RU*/sen, d/VA*/sen | Len: 1 bytes | u8 values 0–70-ish; likely ambient light 'level'."
+    },
+    "0x0137": {
+      "name": "dial_encoder_steps",
+      "type": "u8",
+      "unit": "step",
+      "notes": "Dial encoder A/B state bitfield (0..3 typical). | Seen in: d/RU*/sen, d/VA*/sen | Observed values: 0, 3 | Len: 1 bytes | u8 values 0–3-ish; likely dial encoder A/B state bitfield."
+    },
+    "0x0140": {
+      "name": "temperature_offset",
+      "type": "s16be",
+      "unit": "C",
+      "scale": 0.01,
+      "notes": "Temperature offset in C"
+    },
+    "0x0143": {
+      "name": "device_flag_0143",
+      "type": "bool",
+      "unit": "bool",
+      "notes": "Unknown setup/config flag"
+    },
+    "0x0149": {
+      "name": "va_orientation",
+      "type": "u8",
+      "unit": "enum",
+      "notes": "Seen in d/*/config."
+    },
+    "0x014c": {
+      "name": "fw_active_slot",
+      "type": "u8",
+      "unit": "enum",
+      "notes": "Active firmware storage slot (e.g. 1 or 2)"
+    },
+    "0x0158": {
+      "name": "device_ui_flags_0158",
+      "type": "u16be",
+      "unit": "bitfield",
+      "notes": "Config flags; observed dazzle mode toggle changes 0x0158 between 0x0000 (off) and 0x0200 (on)."
+    },
+    "0x015a": {
+      "name": "device_config",
+      "type": "bytes",
+      "unit": "raw",
+      "notes": "Device configuration/identity blob"
+    },
+    "0x015c": {
+      "name": "home_id",
+      "type": "u32be",
+      "unit": "home_id",
+      "notes": "Paired home id stored on device"
+    },
+    "0x015d": {
+      "name": "device_type",
+      "type": "u16be",
+      "unit": "enum",
+      "notes": "Device type identifier: RU = 71, VA Horizontal = 112, VA Vertical = 113"
+    },
+    "0x015e": {
+      "name": "zone_binding",
+      "type": "u16_pairs_role_zone"
+    },
+    "0x0160": {
+      "name": "device_reset_reason",
+      "type": "u8",
+      "unit": "bitfield",
+      "notes": "Hardware reset reason flags (STM32 RCC CSR flags: 1=PIN, 2=POR/PDR, 4=Software, 8=IWDG, 16=WWDG, 32=LPWR)"
+    },
+    "0x0161": {
+      "name": "hvac_link_status_flags",
+      "type": "u16be",
+      "unit": "bitfield",
+      "notes": "HVAC and Room Unit link/communication status flags (Bit 15 = DHW/Burner Active, Bit 14 = OT Link Online, Bits 0-7 = Contiki communication error codes)"
+    },
+    "0x0162": {
+      "name": "battery_mv",
+      "type": "u16be",
+      "unit": "mV",
+      "notes": "Battery voltage in millivolts. | Seen in: d/RU*/sen, d/VA*/sen | Len: 2 bytes"
+    },
+    "0x0168": {
+      "name": "ru_opentherm_selftest_supply_mv",
+      "type": "u32be",
+      "unit": "mV",
+      "notes": "RU selftest metric seen in d/RU*/selftest/result. Value ~2900-3130 (mV), likely OT/docked subsystem supply/reference rail health check; not tied to heat demand."
+    },
+    "0x0182": {
+      "name": "fallback_active",
+      "type": "bool",
+      "unit": "bool",
+      "notes": "Active status for device fallback mode"
+    },
+    "0x01ab": {
+      "name": "hvac_status_bits_01ab",
+      "type": "u8",
+      "unit": "bitfield",
+      "notes": "OpenTherm-style status bits (DHW, CH, Flame)"
+    },
+    "0x01a9": {
+      "name": "fw_flags_a9",
+      "type": "u8",
+      "unit": "bitfield",
+      "notes": "Seen in d/fw."
+    },
+    "0x01aa": {
+      "name": "fw_campaign_or_crc_u16",
+      "type": "u16",
+      "notes": "Seen in d/fw."
+    },
+    "0x01a8": {
+      "name": "fw_offer_marker_a8",
+      "type": "flag",
+      "unit": "bool",
+      "notes": "Seen in d/fw with zero length."
+    },
+    "0x01a3": {
+      "name": "error_flags_u32",
+      "type": "u32be",
+      "unit": "bitfield",
+      "notes": "Observed 0x00004000 for VA when unmounted, 0x00000000 when mounted. Likely bit14=mount/contact fault."
+    },
+    "0x01b8": {
+      "name": "va_mount_state",
+      "type": "u8",
+      "unit": "enum",
+      "scale": 1,
+      "notes": "Valve calibration mounting state index"
+    },
+    "0x01b5": {
+      "name": "va_mount_reference_steps",
+      "type": "u16be",
+      "unit": "steps",
+      "scale": 1,
+      "notes": "Valve learned calibration reference/offset steps"
+    },
+    "0x01b6": {
+      "name": "va_mount_seatpoint_steps",
+      "type": "u16be",
+      "unit": "steps",
+      "scale": 1,
+      "notes": "Valve learned seat/contact point steps"
+    },
+    "0x01c8": {
+      "name": "aux_temperature_2",
+      "type": "s16be",
+      "unit": "C",
+      "scale": 0.01,
+      "decimals": 2,
+      "notes": "Auxilary temperature"
+    },
+    "0x01fa": {
+      "name": "va_mount_mode",
+      "type": "u8",
+      "unit": "enum",
+      "scale": 1,
+      "notes": "Actuator mounting mechanism operation mode"
+    },
+    "0x01fb": {
+      "name": "va_mount_flags",
+      "type": "u8",
+      "scale": 1,
+      "notes": "Actuator mounting process execution status flags"
+    },
+    "0x01fc": {
+      "name": "pairing_mode",
+      "type": "bool",
+      "unit": "bool",
+      "notes": "IB pairing mode toggle; 01 enables pairing mode, 00 disables"
+    },
+    "0x0201": {
+      "name": "pair_stop_marker",
+      "type": "empty",
+      "notes": "Seen only in POST .../pair when exiting/disabling pairing"
+    },
+    "0x0210": {
+      "name": "firmware_build_id",
+      "type": "string_ascii",
+      "notes": "Seen in fw.state"
+    },
+    "0x025e": {
+      "name": "session_token",
+      "type": "bytes",
+      "unit": "opaque",
+      "notes": "Observed length 8 bytes; mirrors CoAP option 2048"
+    },
+    "0x025f": {
+      "name": "token_validity_minutes",
+      "type": "u16be",
+      "unit": "min",
+      "notes": "Example 0x05a0=1440 (24h)"
+    },
+    "0x0260": {
+      "name": "device_id",
+      "type": "string_ascii"
+    },
+    "0x0265": {
+      "name": "va_act_position_steps",
+      "type": "u16be",
+      "unit": "steps",
+      "scale": 1,
+      "notes": "Motor piston extension distance steps"
+    },
+    "0x0273": {
+      "name": "va_act_limit_low_steps",
+      "type": "u16be",
+      "unit": "steps",
+      "scale": 1,
+      "notes": "Piston closed/zero-level threshold steps"
+    },
+    "0x027a": {
+      "name": "dial_interaction_result",
+      "type": "u8",
+      "unit": "enum",
+      "notes": "Dial interaction result/status. | Seen in: d/VA*/sen | Observed values: 0, 3 | Len: 1 bytes"
+    },
+    "0x027c": {
+      "name": "va_act_limit_high_steps",
+      "type": "u16be",
+      "unit": "steps",
+      "scale": 1,
+      "notes": "Piston fully retracted span limit steps"
+    },
+    "0x0280": {
+      "name": "va_act_drive_cal_const",
+      "type": "u16be",
+      "scale": 1,
+      "notes": "Valve actuator mechanical drive constant"
+    },
+    "0x028d": {
+      "name": "va_act_status_flags_s16",
+      "type": "s16be",
+      "unit": "bits",
+      "scale": 1,
+      "notes": "Motor movement error and block bitmask"
+    },
+    "0x0290": {
+      "name": "va_child_lock_enabled",
+      "type": "bool",
+      "unit": "bool",
+      "notes": "VA child lock enabled"
+    },
+    "0x0294": {
+      "name": "va_act_position2_steps",
+      "type": "u16be",
+      "unit": "steps",
+      "scale": 1,
+      "notes": "Secondary piston movement steps"
+    },
+    "0x0312": {
+      "name": "fw_manifest_blob",
+      "type": "bytes",
+      "unit": "blob",
+      "notes": "Seen in d/fw. Length=128."
+    },
+    "0x044c": {
+      "name": "ot_ch_flow_temperature",
+      "type": "s16be",
+      "unit": "C",
+      "scale": 0.01,
+      "decimals": 2,
+      "notes": "OpenTherm ID 18 (CH water temperature / flow). Encoded as centi-degC."
+    },
+    "0x044d": {
+      "name": "ot_ch_return_temperature",
+      "type": "s16be",
+      "unit": "C",
+      "scale": 0.01,
+      "decimals": 2,
+      "notes": "OpenTherm ID 19 (CH return temperature). Encoded as centi-degC."
+    },
+    "0x0450": {
+      "name": "ot_ch_control_setpoint",
+      "type": "s16be",
+      "unit": "C",
+      "scale": 0.01,
+      "decimals": 2,
+      "notes": "Most likely OpenTherm ID 1 (Control setpoint / target CH flow temp). Encoded as centi-degC."
+    },
+    "0x0452": {
+      "name": "ot_relative_modulation_level",
+      "type": "u16be",
+      "unit": "%",
+      "notes": "OpenTherm ID 14 Relative modulation level. Observed as integer percent"
+    },
+    "0x0457": {
+      "name": "boiler_active",
+      "type": "bool",
+      "unit": "bool",
+      "notes": "Derived runtime flag. Correlates with modulation >0 and elevated flow temp; likely burner/heat-cycle active."
+    },
+    "0x0458": {
+      "name": "hvac_status_or_fault_flags",
+      "type": "u16be",
+      "unit": "bitfield",
+      "notes": "Status/fault flags word. Often 0 during normal operation; may not be raw OpenTherm ID 0."
+    },
+    "0x0481": {
+      "name": "hvac_field_presence_list",
+      "type": "bytes",
+      "unit": "tlv_ref_list",
+      "notes": "List of referenced FIDs with an attribute byte (seen attr=2). Likely supported/present/valid fields for this topic."
+    },
+    "0x044e": {
+      "name": "ot_exhaust_temperature",
+      "type": "s16be",
+      "unit": "°C",
+      "scale": 0.01,
+      "decimals": 2,
+      "round": 2,
+      "notes": "OpenTherm flue exhaust gas temperature reading (Data ID 33)"
+    },
+    "0x044f": {
+      "name": "ot_outside_temperature",
+      "type": "s16be",
+      "unit": "°C",
+      "scale": 0.01,
+      "decimals": 2,
+      "round": 2,
+      "notes": "OpenTherm outside sensor temperature reading (Data ID 27)"
+    },
+    "0x045b": {
+      "name": "dhw_target_temperature",
+      "type": "s16be",
+      "unit": "C",
+      "scale": 0.01,
+      "decimals": 2,
+      "notes": "Domestic hot water target temperature (°C×100). | Seen in: h/*/hvac/mon/dhw | Len: 2 bytes"
+    },
+    "0x0460": {
+      "name": "hvac_water_pressure_mbar",
+      "type": "u32be",
+      "unit": "mbar",
+      "notes": "Observed as 0xFFFFxxxx; low16 tracks plausible CH system pressure in mbar (e.g. 0x0529=1321mbar=1.321bar). High16 often 0xFFFF sentinel. Likely derived from OpenTherm Data-ID 18 (CH water pressure)."
+    },
+    "0x0463": {
+      "name": "ot_burner_start_count",
+      "type": "u32be",
+      "unit": "cyc",
+      "notes": "OpenTherm-derived burner start counter (OT Data-ID ~116). Observed as 0x0000FFFF when not supported or unavailable."
+    },
+    "0x0464": {
+      "name": "ot_ch_pump_start_count",
+      "type": "u32be",
+      "unit": "cyc",
+      "notes": "OpenTherm-derived central-heating pump start counter (OT Data-ID ~117). Often reported as 0x0000FFFF (not available)."
+    },
+    "0x0465": {
+      "name": "ot_ch_burner_start_count",
+      "type": "u32be",
+      "unit": "cyc",
+      "notes": "Derived central heating burner start counter (total burner starts - DHW burner starts)"
+    },
+    "0x0466": {
+      "name": "ot_burner_time_total",
+      "type": "u32be",
+      "unit": "hrs",
+      "scale": 0.01666666666,
+      "decimals": 0,
+      "notes": "OpenTherm-derived total burner operation time. Observed divisible by 60; likely OT-hours * 60."
+    },
+    "0x0467": {
+      "name": "ot_burner_time_ch",
+      "type": "u32be",
+      "unit": "hrs",
+      "scale": 0.01666666666,
+      "decimals": 0,
+      "notes": "OpenTherm-derived burner operation time attributed to CH (space heating). 0x0466 = 0x0467 + 0x0468."
+    },
+    "0x0468": {
+      "name": "ot_burner_time_dhw",
+      "type": "u32be",
+      "unit": "hrs",
+      "scale": 0.01666666666,
+      "decimals": 0,
+      "notes": "OpenTherm-derived burner operation time attributed to DHW. 0x0466 = 0x0467 + 0x0468."
+    },
+    "0x046c": {
+      "name": "ot_dhw_supported",
+      "type": "bool",
+      "unit": "bool_or_enum",
+      "notes": "HVAC config flag. | Seen in: h/*/hvac/config | Len: 1 bytes"
+    },
+    "0x046d": {
+      "name": "ot_dhw_not_supported",
+      "type": "bool",
+      "unit": "bool_or_enum",
+      "notes": "HVAC config flag. | Seen in: h/*/hvac/config | Len: 1 bytes"
+    },
+    "0x046f": {
+      "name": "dhw_setpoint",
+      "type": "u16be",
+      "unit": "°C",
+      "scale": 0.01,
+      "decimals": 2,
+      "notes": "OpenTherm domestic hot water target setpoint (Data ID 57)"
+    },
+    "0x0471": {
+      "name": "dhw_setpoint_max",
+      "type": "u16be",
+      "unit": "°C",
+      "scale": 0.01,
+      "notes": "OpenTherm domestic hot water setpoint upper limit/boundary (Data ID 48)"
+    },
+    "0x2040": {
+      "name": "circuit_dhw_max_flow_temperature",
+      "type": "u16be",
+      "unit": "C",
+      "scale": 0.01,
+      "notes": "DHW Max Flow Temperature | Len: 2 bytes"
+    },
+    "0x2090": {
+      "name": "circuit_mode_or_flags_2090",
+      "type": "u8",
+      "unit": "bitfield_or_enum",
+      "notes": "Circuit mode/flags. | Seen in: h/*/c/1/act | Observed values: 0, 1, 3, 4 | Len: 1 bytes | Bitfield/enum; observed values 0–4 in h/*/c/*/act."
+    },
+    "0x4000": {
+      "name": "circuit_reference_temp",
+      "type": "s16be",
+      "unit": "C",
+      "scale": 0.01,
+      "decimals": 2,
+      "notes": "Circuit reference/measured room temperature used by controller. Typically below/around target when demand>0."
+    },
+    "0x4040": {
+      "name": "circuit_target_temp",
+      "type": "s16be",
+      "unit": "C",
+      "scale": 0.01,
+      "decimals": 2,
+      "notes": "Circuit target temperature. | Seen in: h/*/c/1/act | Len: 2 bytes | Observed values in h/*/c/*/act consistent with target temp in cC."
+    },
+    "0x4080": {
+      "name": "circuit_demand_percent",
+      "type": "u8",
+      "unit": "%",
+      "notes": "Circuit demand as percent. | Seen in: h/*/c/1/act | Len: 1 bytes | Observed values 0–100 in h/*/c/*/act consistent with demand/percent."
+    },
+    "0x40a0": {
+      "name": "demand_percent",
+      "type": "u8",
+      "unit": "%",
+      "notes": "Demand percent seen on /act topics"
+    },
+    "0x40b0": {
+      "name": "circuit_status_0x40b0",
+      "type": "u16be",
+      "unit": "bitfield",
+      "notes": "Status/demand aux for heating circuit"
+    },
+    "0x6020": {
+      "name": "zone_service_type",
+      "type": "u8",
+      "unit": "enum",
+      "notes": "Seen in z/*/s."
+    },
+    "0x6040": {
+      "name": "zone_program_uri",
+      "type": "string",
+      "unit": "uri",
+      "notes": "CoAP URI for zone program endpoint (often /z/p)"
+    },
+    "0x6060": {
+      "name": "zone_program_enabled",
+      "type": "bool",
+      "unit": "bool",
+      "notes": "Boolean flag related to zone program/schedule config"
+    },
+    "0x6080": {
+      "name": "zone_temperature_deviation_limit",
+      "type": "u16be",
+      "unit": "C",
+      "scale": 0.01,
+      "decimals": 2,
+      "notes": "Allowed deviation from baseline (±). Max likely baseline+this, min likely baseline-this (clamped by frost min). Observed 10.00°C."
+    },
+    "0x60a0": {
+      "name": "zone_frost_min_temperature",
+      "type": "u16be",
+      "unit": "C",
+      "scale": 0.01,
+      "decimals": 2,
+      "notes": "Hard minimum temperature floor for zone UI/control"
+    },
+    "0x60c0": {
+      "name": "zone_temperature_baseline",
+      "type": "u16be",
+      "unit": "C",
+      "scale": 0.01,
+      "decimals": 2,
+      "notes": "Baseline/center temperature used for deriving allowed range"
+    },
+    "0x60e0": {
+      "name": "zone_open_window_detection_enabled",
+      "type": "bool",
+      "unit": "bool",
+      "notes": "Boolean flag. True if open window detection is enabled"
+    },
+    "0x6160": {
+      "name": "home_away",
+      "type": "u8",
+      "unit": "enum",
+      "notes": "Seen in z/*/s. Flips to 2 on away-mode, back to 1 on home-mode."
+    },
+    "0x6180": {
+      "name": "zone_state_flag_6180",
+      "type": "bool",
+      "notes": "Seen in z/*/s."
+    },
+    "0x61e0": {
+      "name": "zone_enabled",
+      "type": "bool",
+      "unit": "bool",
+      "notes": "Seen in z/*/s. 1 when zone active; 0 when zone inactive."
+    },
+    "0x6200": {
+      "name": "schedule_target_temp",
+      "type": "s16be",
+      "unit": "C",
+      "scale": 0.01,
+      "round": 2,
+      "notes": "Current scheduled target temperature."
+    },
+    "0x6240": {
+      "name": "overlay_mode",
+      "type": "u8",
+      "unit": "enum",
+      "notes": "Seen in z/*/s. 0 during schedule. 2/3 when manual target set. Observed value 3 for DHW manual override states (incl. OFF+temp-null and temp override)."
+    },
+    "0x6260": {
+      "name": "overlay_has_setpoint",
+      "type": "bool",
+      "unit": "bool",
+      "notes": "Seen in h/.../overlay with overlay_target_temperature;"
+    },
+    "0x6280": {
+      "name": "overlay_target_temp",
+      "type": "s16be",
+      "unit": "C",
+      "scale": 0.01,
+      "notes": "Dial-set target temperature sent via /overlay; value in centi-degrees C"
+    },
+    "0x62c0": {
+      "name": "zone_open_window_shutoff_duration",
+      "type": "u16be",
+      "unit": "minutes",
+      "scale": 0.01666666666,
+      "decimals": 0,
+      "notes": "Seconds to disable heating when open window is detected"
+    },
+    "0x62e0": {
+      "name": "overlay_active_aux",
+      "type": "bool",
+      "unit": "enum_or_bool",
+      "notes": "Seen in z/*/s. Often 0 when schedule is active/no overlay. Changes when overlay is active; exact semantics still TBD."
+    },
+    "0x6380": {
+      "name": "zone_program_time_step",
+      "type": "u16be",
+      "unit": "minutes",
+      "scale": 0.01666666666,
+      "decimals": 0,
+      "notes": "Zone config constant. Likely schedule/program granularity enforced by devices."
+    },
+    "0x63a0": {
+      "name": "zone_state_uri",
+      "type": "string",
+      "unit": "uri",
+      "notes": "CoAP URI for zone state endpoint (often /z/s)"
+    },
+    "0x63e0": {
+      "name": "zone_peer_uris_enabled",
+      "type": "bool",
+      "unit": "bool",
+      "notes": "Zone config capability/presence flag. Appears alongside zone peer URI fields (state/program URIs)."
+    },
+    "0x6440": {
+      "name": "telemetry_config",
+      "type": "u16be",
+      "notes": "Seen in PUT z/s immediately after pressing resume schedule"
+    },
+    "0x8000": {
+      "name": "zone_state_peer_uris",
+      "type": "string",
+      "unit": "uri",
+      "notes": "Repeated list of CoAP URIs pointing to /z/s on peers"
+    },
+    "0x8200": {
+      "name": "zone_cpe_peer_uris",
+      "type": "string",
+      "unit": "uri",
+      "notes": "Repeated list of CoAP URIs pointing to /z/cpe on peers"
+    },
+    "0x8400": {
+      "name": "zone_program_peer_uris",
+      "type": "string",
+      "unit": "uri",
+      "notes": "Repeated list of CoAP URIs pointing to /z/p on peers"
+    },
+    "0x01d1": {
+      "name": "neighbor_entry",
+      "type": "bytes",
+      "notes": "Neighbor entry sub-TLV. Contains type byte + 0x01d2 IPv6. Typically 19 bytes.",
+      "parse": "neighbor_subtlv"
+    },
+    "0x01d3": {
+      "name": "neighbor_data",
+      "type": "bytes",
+      "notes": "Neighbor link metrics/data. Variable length (20 or 39 bytes). Often all zeros when no data available."
+    },
+    "0x02b3": {
+      "name": "device_config_flag_02b3",
+      "type": "bool",
+      "notes": "Device config boolean flag. Observed always false in server-to-client config pushes."
+    },
+    "0x0dd3": {
+      "name": "server_field_0dd3",
+      "type": "u8",
+      "notes": "Server-originated u8 field. Single occurrence with value 0xA3 (163). Purpose unknown."
+    },
+    "0x0dd8": {
+      "name": "server_marker_0dd8",
+      "type": "empty",
+      "notes": "Server-originated empty marker. Single occurrence. Purpose unknown."
+    },
+    "0x01d0": {
+      "name": "neighbor_self_ipv6",
+      "type": "bytes",
+      "notes": "Self IPv6 address in neighbor table. Always 16 bytes."
+    },
+    "0x021a": {
+      "name": "device_config_aux_021a",
+      "type": "u16be",
+      "notes": "Device config auxiliary field. Observed always 0 in server-to-client config pushes."
+    },
+    "0x028c": {
+      "name": "va_actuator_active",
+      "type": "bool",
+      "scale": 1,
+      "notes": "Actuator calibration/activity status"
+    },
+    "0x6460": {
+      "name": "zone_fallback_heating_type",
+      "type": "u8",
+      "unit": "enum",
+      "notes": "Zone fallback heating type."
+    },
+    "0x0d1c": {
+      "name": "server_marker_0d1c",
+      "type": "empty",
+      "notes": "Server-originated empty marker. Single occurrence. Purpose unknown."
+    },
+    "0x7380": {
+      "name": "zone_config_marker_7380",
+      "type": "empty",
+      "unit": "marker",
+      "notes": "Config terminal/separator marker"
+    },
+    "0x016e": {
+      "name": "mounting",
+      "type": "bytes"
+    },
+    "0x016a": {
+      "name": "valve_calibration_state",
+      "type": "u8",
+      "unit": "enum"
+    },
+    "0x0217": {
+      "name": "valve_position",
+      "type": "u8",
+      "unit": "percent"
+    },
+    "0x0218": {
+      "name": "valve_state",
+      "type": "u8",
+      "unit": "enum"
+    },
+    "0x0219": {
+      "name": "valve_error",
+      "type": "u8",
+      "unit": "enum"
+    },
+    "0x020f": {
+      "name": "child_lock",
+      "type": "bool",
+      "unit": "bool"
+    },
+    "0x017d": {
+      "name": "orientation",
+      "type": "u8",
+      "unit": "enum"
+    },
+    "0x019d": {
+      "name": "display_contrast",
+      "type": "u8"
+    },
+    "0x019e": {
+      "name": "display_brightness",
+      "type": "u8"
+    },
+    "0x01ac": {
+      "name": "fw_state_put",
+      "type": "u8",
+      "unit": "enum"
+    },
+    "0x022c": {
+      "name": "fw_update_start",
+      "type": "u8"
+    },
+    "0x0232": {
+      "name": "unknown_0232",
+      "type": "bytes"
+    },
+    "0x0245": {
+      "name": "unknown_0245",
+      "type": "bytes"
+    },
+    "0x0231": {
+      "name": "unknown_0231",
+      "type": "bytes"
+    },
+    "0x022e": {
+      "name": "unknown_022e",
+      "type": "bytes"
+    },
+    "0x0230": {
+      "name": "unknown_0230",
+      "type": "bytes"
+    },
+    "0x022d": {
+      "name": "unknown_022d",
+      "type": "bytes"
+    },
+    "0x022f": {
+      "name": "unknown_022f",
+      "type": "bytes"
+    },
+    "0x0233": {
+      "name": "unknown_0233",
+      "type": "bytes"
+    },
+    "0x0234": {
+      "name": "unknown_0234",
+      "type": "bytes"
+    },
+    "0x0235": {
+      "name": "unknown_0235",
+      "type": "bytes"
+    },
+    "0x0236": {
+      "name": "unknown_0236",
+      "type": "bytes"
+    },
+    "0x0237": {
+      "name": "unknown_0237",
+      "type": "bytes"
+    },
+    "0x0238": {
+      "name": "unknown_0238",
+      "type": "bytes"
+    },
+    "0x0239": {
+      "name": "unknown_0239",
+      "type": "bytes"
+    },
+    "0x023a": {
+      "name": "unknown_023a",
+      "type": "bytes"
+    },
+    "0x023b": {
+      "name": "unknown_023b",
+      "type": "bytes"
+    },
+    "0x023c": {
+      "name": "unknown_023c",
+      "type": "bytes"
+    },
+    "0x000a": {
+      "name": "status_field_000a",
+      "type": "u8"
+    },
+    "0x0183": {
+      "name": "config_field_0183",
+      "type": "bytes"
+    },
+    "0x021b": {
+      "name": "config_field_021b",
+      "type": "bytes"
+    },
+    "0x0221": {
+      "name": "config_field_0221",
+      "type": "bytes"
+    },
+    "0x0270": {
+      "name": "config_field_0270",
+      "type": "bytes"
+    },
+    "0x0275": {
+      "name": "config_field_0275",
+      "type": "bytes"
+    },
+    "0x0276": {
+      "name": "config_field_0276",
+      "type": "bytes"
+    },
+    "0x0286": {
+      "name": "config_field_0286",
+      "type": "u16be",
+      "unit": "raw"
+    },
+    "0x0291": {
+      "name": "config_field_0291",
+      "type": "u8",
+      "unit": "raw"
+    },
+    "0x0292": {
+      "name": "config_field_0292",
+      "type": "u8",
+      "unit": "raw"
+    },
+    "0x0293": {
+      "name": "config_field_0293",
+      "type": "bytes"
+    },
+    "0x1120": {
+      "name": "telemetry_field_1120",
+      "type": "bytes"
+    },
+    "0x2000": {
+      "name": "circuit_field_2000",
+      "type": "bytes"
+    },
+    "0x6000": {
+      "name": "zone_state_base",
+      "type": "bytes"
+    },
+    "0x6300": {
+      "name": "zone_config_field_6300",
+      "type": "bytes"
+    },
+    "0x6320": {
+      "name": "zone_config_field_6320",
+      "type": "bytes"
+    },
+    "0x6340": {
+      "name": "zone_state_flag_6340",
+      "type": "bool"
+    },
+    "0x0223": {
+      "name": "config_field_0223",
+      "type": "bytes"
+    },
+    "0x0224": {
+      "name": "config_field_0224",
+      "type": "bytes"
+    },
+    "0x0225": {
+      "name": "config_field_0225",
+      "type": "bytes"
+    },
+    "0x0226": {
+      "name": "config_field_0226",
+      "type": "bytes"
+    },
+    "0x0227": {
+      "name": "config_field_0227",
+      "type": "bytes"
+    },
+    "0x0228": {
+      "name": "config_field_0228",
+      "type": "bytes"
+    },
+    "0x0229": {
+      "name": "config_field_0229",
+      "type": "bytes"
+    },
+    "0x022a": {
+      "name": "config_field_022a",
+      "type": "bytes"
+    },
+    "0x022b": {
+      "name": "config_field_022b",
+      "type": "bytes"
+    },
+    "0x023d": {
+      "name": "config_field_023d",
+      "type": "bytes"
+    },
+    "0x023e": {
+      "name": "config_field_023e",
+      "type": "bytes"
+    },
+    "0x023f": {
+      "name": "config_field_023f",
+      "type": "bytes"
+    },
+    "0x0240": {
+      "name": "config_field_0240",
+      "type": "bytes"
+    },
+    "0x0241": {
+      "name": "config_field_0241",
+      "type": "bytes"
+    },
+    "0x0242": {
+      "name": "config_field_0242",
+      "type": "bytes"
+    },
+    "0x0243": {
+      "name": "config_field_0243",
+      "type": "bytes"
+    },
+    "0x0244": {
+      "name": "config_field_0244",
+      "type": "bytes"
+    },
+    "0x0246": {
+      "name": "config_field_0246",
+      "type": "bytes"
+    },
+    "0x0247": {
+      "name": "config_field_0247",
+      "type": "bytes"
+    },
+    "0x0248": {
+      "name": "config_field_0248",
+      "type": "bytes"
+    },
+    "0x0249": {
+      "name": "config_field_0249",
+      "type": "bytes"
+    },
+    "0x024a": {
+      "name": "config_field_024a",
+      "type": "bytes"
+    },
+    "0x024b": {
+      "name": "config_field_024b",
+      "type": "bytes"
+    },
+    "0x024c": {
+      "name": "config_field_024c",
+      "type": "bytes"
+    },
+    "0x024d": {
+      "name": "config_field_024d",
+      "type": "bytes"
+    },
+    "0x024e": {
+      "name": "config_field_024e",
+      "type": "bytes"
+    },
+    "0x024f": {
+      "name": "config_field_024f",
+      "type": "bytes"
+    },
+    "0x0250": {
+      "name": "config_field_0250",
+      "type": "bytes"
+    },
+    "0x0251": {
+      "name": "config_field_0251",
+      "type": "bytes"
+    },
+    "0x0252": {
+      "name": "config_field_0252",
+      "type": "bytes"
+    },
+    "0x0253": {
+      "name": "config_field_0253",
+      "type": "bytes"
+    },
+    "0x00d0": {
+      "name": "firmware_table_fid_00d0",
+      "type": "bytes"
+    },
+    "0x019a": {
+      "name": "firmware_table_fid_019a",
+      "type": "bytes"
+    },
+    "0x01fe": {
+      "name": "firmware_table_fid_01fe",
+      "type": "bytes"
+    },
+    "0x01ff": {
+      "name": "firmware_table_fid_01ff",
+      "type": "bytes"
+    },
+    "0x0200": {
+      "name": "firmware_table_fid_0200",
+      "type": "bytes"
+    },
+    "0x0202": {
+      "name": "firmware_table_fid_0202",
+      "type": "bytes"
+    },
+    "0x0203": {
+      "name": "firmware_table_fid_0203",
+      "type": "bytes"
+    },
+    "0x0204": {
+      "name": "firmware_table_fid_0204",
+      "type": "bytes"
+    },
+    "0x0205": {
+      "name": "firmware_table_fid_0205",
+      "type": "bytes"
+    },
+    "0x0206": {
+      "name": "firmware_table_fid_0206",
+      "type": "bytes"
+    },
+    "0x0207": {
+      "name": "firmware_table_fid_0207",
+      "type": "bytes"
+    },
+    "0x0208": {
+      "name": "firmware_table_fid_0208",
+      "type": "bytes"
+    },
+    "0x0209": {
+      "name": "firmware_table_fid_0209",
+      "type": "bytes"
+    },
+    "0x020a": {
+      "name": "firmware_table_fid_020a",
+      "type": "bytes"
+    },
+    "0x020b": {
+      "name": "firmware_table_fid_020b",
+      "type": "bytes"
+    },
+    "0x020c": {
+      "name": "firmware_table_fid_020c",
+      "type": "bytes"
+    },
+    "0x020e": {
+      "name": "firmware_table_fid_020e",
+      "type": "bytes"
+    },
+    "0x0155": {
+      "name": "rf_key",
+      "type": "bytes",
+      "unit": "aes128",
+      "scale": 1,
+      "notes": "Operational network AES-128 RF key."
+    },
+    "0x0266": {
+      "name": "va_act_position2_steps_unused",
+      "type": "u16be",
+      "unit": "steps",
+      "scale": 1,
+      "notes": "Unused. Real VA firmware uses 0x0294 for secondary position steps."
+    },
+    "0x0283": {
+      "name": "va_act_status_flags_unused",
+      "type": "s16be",
+      "unit": "bits",
+      "scale": 1,
+      "notes": "Unused. Real VA firmware uses 0x028d for actuator status/flags."
+    },
+    "0x4060": {
+      "name": "zone_temperature_4060",
+      "type": "s16be",
+      "unit": "°C",
+      "scale": 0.01,
+      "decimals": 2,
+      "round": 2,
+      "notes": "Zone temperature seen in /z/p captures"
+    },
+    "0x01d2": {
+      "name": "neighbor_ipv6",
+      "type": "bytes",
+      "notes": "Neighbor IPv6 address (used as sub-TLV inside 0x01d1)"
+    },
+    "0x6500": {
+      "name": "zone_param_kp",
+      "type": "u16be",
+      "scale": 0.01,
+      "notes": "Proportional gain coefficient (Kp) for zone PID controller"
+    },
+    "0x6520": {
+      "name": "zone_param_ki",
+      "type": "u16be",
+      "scale": 0.01,
+      "notes": "Integral gain coefficient (Ki) for zone PID controller"
+    },
+    "0x6540": {
+      "name": "zone_param_kd",
+      "type": "u16be",
+      "scale": 0.01,
+      "notes": "Derivative gain coefficient (Kd) for zone PID controller"
+    },
+    "0x6560": {
+      "name": "zone_param_heating_curve",
+      "type": "u8",
+      "scale": 1,
+      "notes": "Heating curve index representing flow temp response"
+    },
+    "0x045a": {
+      "name": "ot_dhw_temperature",
+      "type": "s16be",
+      "unit": "°C",
+      "scale": 0.01,
+      "decimals": 2,
+      "round": 2,
+      "notes": "OpenTherm domestic hot water measured temperature"
+    },
+    "0x02b2": {
+      "name": "display_active_timeout",
+      "type": "u16be",
+      "unit": "min",
+      "scale": 1,
+      "decimals": 0,
+      "round": 0,
+      "notes": "Timeout duration for display activity/temporary overlay in minutes"
+    },
+    "0x045e": {
+      "name": "ot_dhw_flow_rate",
+      "type": "u16be",
+      "unit": "L/min",
+      "scale": 0.1,
+      "decimals": 1,
+      "round": 1,
+      "notes": "OpenTherm ID 19 domestic hot water flow rate in litres per minute"
+    },
+    "0x0462": {
+      "name": "ot_ch_water_pressure_bar",
+      "type": "s16be",
+      "unit": "bar",
+      "scale": 0.1,
+      "decimals": 1,
+      "round": 1,
+      "notes": "OpenTherm ID 18 central heating system water pressure in bar"
+    }
+  }
+}

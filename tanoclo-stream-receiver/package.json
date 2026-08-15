@@ -1,0 +1,18 @@
+{
+  "name": "tado-sniffer-receiver",
+  "version": "0.2.0",
+  "description": "Node.js TCP stream receiver for Tado RF sniffer — decrypts, parses CoAP/TLV, and publishes to MQTT",
+  "main": "stream_receiver.js",
+  "scripts": {
+    "start": "node stream_receiver.js",
+    "start:stats": "node stream_receiver.js --stats",
+    "sync-labels": "node sync_tlv_labels.js"
+  },
+  "dependencies": {
+    "mqtt": "^5.0.0"
+  },
+  "optionalDependencies": {
+    "mysql2": "^3.0.0"
+  },
+  "private": true
+}

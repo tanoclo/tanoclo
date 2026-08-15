@@ -1,0 +1,171 @@
+name: TaNoClo RF Sniffer Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'RF Sniffer Release version (e.g. 0.2.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  VERSION: ${{ github.event.inputs.version }}
+
+jobs:
+  version-bump:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: stream-receiver-v${{ github.event.inputs.version }}
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Bump RF Sniffer versions
+        run: |
+          VERSION="${{ env.VERSION }}"
+          echo "Bumping RF Sniffer version to ${VERSION}..."
+
+          # package.json
+          node -e "
+            const fs = require('fs');
+            const f = 'tanoclo-stream-receiver/package.json';
+            if (fs.existsSync(f)) {
+              const pkg = JSON.parse(fs.readFileSync(f, 'utf8'));
+              pkg.version = '${VERSION}';
+              fs.writeFileSync(f, JSON.stringify(pkg, null, 2) + '\n');
+              console.log('  ✓ ' + f);
+            }
+          "
+
+          # config.yaml
+          if [ -f tanoclo-stream-receiver/config.yaml ]; then
+            sed -i "s/^version: \".*\"/version: \"${VERSION}\"/" tanoclo-stream-receiver/config.yaml
+            echo "  ✓ tanoclo-stream-receiver/config.yaml"
+          fi
+
+          # README.md version badge
+          if [ -f tanoclo-stream-receiver/README.md ]; then
+            sed -i "s|badge/version-v.*-blue.svg|badge/version-v${VERSION}-blue.svg|" tanoclo-stream-receiver/README.md
+            echo "  ✓ tanoclo-stream-receiver/README.md badge"
+          fi
+
+      - name: Update CHANGELOG
+        run: |
+          VERSION="${{ env.VERSION }}"
+          node -e "
+            const { execSync } = require('child_process');
+            const fs = require('fs');
+            const version = '${VERSION}';
+            const date = new Date().toISOString().split('T')[0];
+
+            let prevTag = '';
+            try {
+              prevTag = execSync('git describe --tags --abbrev=0 2>/dev/null', { encoding: 'utf8' }).trim();
+            } catch (e) {}
+
+            const logCmd = prevTag ? 'git log ' + prevTag + '..HEAD --oneline --no-merges' : 'git log -n 15 --oneline --no-merges';
+            let commits = [];
+            try {
+              const raw = execSync(logCmd, { encoding: 'utf8' }).trim();
+              if (raw) {
+                commits = raw.split('\n').map(line => {
+                  const parts = line.split(' ');
+                  return parts.slice(1).join(' ').trim();
+                }).filter(c => c && !c.startsWith('chore: bump'));
+              }
+            } catch (e) {}
+
+            if (commits.length === 0) commits = ['Maintenance and bug fixes'];
+
+            const commitBullets = commits.map(c => '- ' + c).join('\n');
+            const newEntry = '## [' + version + '] - ' + date + '\n\n' + commitBullets + '\n\n';
+
+            const changelogFiles = ['CHANGELOG.md', 'tanoclo-stream-receiver/CHANGELOG.md'];
+            for (const f of changelogFiles) {
+              if (fs.existsSync(f)) {
+                let content = fs.readFileSync(f, 'utf8');
+                if (content.includes('## [' + version + ']')) continue;
+                if (content.includes('## [Unreleased]')) {
+                  content = content.replace('## [Unreleased]', '## [Unreleased]\n\n' + newEntry.trim());
+                } else {
+                  content += '\n' + newEntry;
+                }
+                fs.writeFileSync(f, content);
+                console.log('  ✓ Updated ' + f);
+              }
+            }
+          "
+
+      - name: Sync package-lock.json files
+        run: |
+          cd tanoclo-stream-receiver && npm install --package-lock-only --ignore-scripts 2>/dev/null || true && cd ..
+
+      - name: Commit and tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && echo "No changes to commit" || {
+            git commit -m "chore: bump stream-receiver version to ${{ env.VERSION }}"
+            git push origin main
+          }
+          git tag "stream-receiver-v${{ env.VERSION }}"
+          git push origin "stream-receiver-v${{ env.VERSION }}"
+
+  docker-images:
+    needs: version-bump
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tagged version
+        uses: actions/checkout@v7
+        with:
+          ref: stream-receiver-v${{ env.VERSION }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push tanoclo-stream-receiver
+        uses: docker/build-push-action@v7
+        with:
+          context: tanoclo-stream-receiver
+          file: .github/docker/stream-receiver.Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/tanoclo/tanoclo-stream-receiver:latest
+            ghcr.io/tanoclo/tanoclo-stream-receiver:${{ env.VERSION }}
+
+  create-release:
+    needs: [version-bump, docker-images]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: stream-receiver-v${{ env.VERSION }}
+          name: TaNoClo RF Sniffer v${{ env.VERSION }}
+          generate_release_notes: true

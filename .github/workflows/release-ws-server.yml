@@ -1,0 +1,175 @@
+name: TaNoClo WS Server Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'WS Server Release version (e.g. 0.2.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  VERSION: ${{ github.event.inputs.version }}
+
+jobs:
+  version-bump:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ws-server-v${{ github.event.inputs.version }}
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Bump WS Server versions
+        run: |
+          VERSION="${{ env.VERSION }}"
+          echo "Bumping WS Server version to ${VERSION}..."
+
+          # package.json files
+          node -e "
+            const fs = require('fs');
+            const files = ['package.json', 'ws-server/package.json', 'frontend-new/package.json'];
+            for (const f of files) {
+              if (fs.existsSync(f)) {
+                const pkg = JSON.parse(fs.readFileSync(f, 'utf8'));
+                pkg.version = '${VERSION}';
+                fs.writeFileSync(f, JSON.stringify(pkg, null, 2) + '\n');
+                console.log('  ✓ ' + f);
+              }
+            }
+          "
+
+          # config.yaml
+          if [ -f tanoclo-ws-server/config.yaml ]; then
+            sed -i "s/^version: \".*\"/version: \"${VERSION}\"/" tanoclo-ws-server/config.yaml
+            echo "  ✓ tanoclo-ws-server/config.yaml"
+          fi
+
+          # README.md version badge
+          if [ -f tanoclo-ws-server/README.md ]; then
+            sed -i "s|badge/version-v.*-blue.svg|badge/version-v${VERSION}-blue.svg|" tanoclo-ws-server/README.md
+            echo "  ✓ tanoclo-ws-server/README.md badge"
+          fi
+
+      - name: Update CHANGELOG
+        run: |
+          VERSION="${{ env.VERSION }}"
+          node -e "
+            const { execSync } = require('child_process');
+            const fs = require('fs');
+            const version = '${VERSION}';
+            const date = new Date().toISOString().split('T')[0];
+
+            let prevTag = '';
+            try {
+              prevTag = execSync('git describe --tags --abbrev=0 2>/dev/null', { encoding: 'utf8' }).trim();
+            } catch (e) {}
+
+            const logCmd = prevTag ? 'git log ' + prevTag + '..HEAD --oneline --no-merges' : 'git log -n 15 --oneline --no-merges';
+            let commits = [];
+            try {
+              const raw = execSync(logCmd, { encoding: 'utf8' }).trim();
+              if (raw) {
+                commits = raw.split('\n').map(line => {
+                  const parts = line.split(' ');
+                  return parts.slice(1).join(' ').trim();
+                }).filter(c => c && !c.startsWith('chore: bump'));
+              }
+            } catch (e) {}
+
+            if (commits.length === 0) commits = ['Maintenance and bug fixes'];
+
+            const commitBullets = commits.map(c => '- ' + c).join('\n');
+            const newEntry = '## [' + version + '] - ' + date + '\n\n' + commitBullets + '\n\n';
+
+            const changelogFiles = ['CHANGELOG.md', 'tanoclo-ws-server/CHANGELOG.md'];
+            for (const f of changelogFiles) {
+              if (fs.existsSync(f)) {
+                let content = fs.readFileSync(f, 'utf8');
+                if (content.includes('## [' + version + ']')) continue;
+                if (content.includes('## [Unreleased]')) {
+                  content = content.replace('## [Unreleased]', '## [Unreleased]\n\n' + newEntry.trim());
+                } else {
+                  content += '\n' + newEntry;
+                }
+                fs.writeFileSync(f, content);
+                console.log('  ✓ Updated ' + f);
+              }
+            }
+          "
+
+      - name: Sync package-lock.json files
+        run: |
+          npm install --package-lock-only --ignore-scripts 2>/dev/null || true
+          cd ws-server && npm install --package-lock-only --ignore-scripts 2>/dev/null || true && cd ..
+          cd frontend-new && npm install --package-lock-only --ignore-scripts 2>/dev/null || true && cd ..
+
+      - name: Commit and tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && echo "No changes to commit" || {
+            git commit -m "chore: bump ws-server version to ${{ env.VERSION }}"
+            git push origin main
+          }
+          git tag "ws-server-v${{ env.VERSION }}"
+          git push origin "ws-server-v${{ env.VERSION }}"
+
+  docker-images:
+    needs: version-bump
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout tagged version
+        uses: actions/checkout@v7
+        with:
+          ref: ws-server-v${{ env.VERSION }}
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push tanoclo-ws-server
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: .github/docker/ws-server.Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/tanoclo/tanoclo-ws-server:latest
+            ghcr.io/tanoclo/tanoclo-ws-server:${{ env.VERSION }}
+
+  create-release:
+    needs: [version-bump, docker-images]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ws-server-v${{ env.VERSION }}
+          name: TaNoClo WS Server v${{ env.VERSION }}
+          generate_release_notes: true

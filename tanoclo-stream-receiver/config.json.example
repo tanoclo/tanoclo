@@ -1,0 +1,32 @@
+{
+  "tcpPort": 9999,
+  "fileLogging": true,
+  "auto_exclusion": true,
+  "keys": {
+    "IB1234567890": "aabbccddeeff00112233445566778899",
+    "IB0987654321": "112233445566778899aabbccddeeff00",
+    "IB1122334455": "33445566778899aabbccddeeff001122",
+    "PAIRING": "7461646f2070616972696e67206b6579" //Static Tado pairing key, keep this one.
+  },
+  "whitelistedPanIds": [
+    "0x1234",
+    "0x5678",
+    "0x90AB",
+    "0xCD12",
+    "0x3456",
+    "0x7890",
+    "0x0000",
+    "0x1111",
+    "0x2222",
+    "0x3333",
+    "0x4444",
+    "0x5555"
+  ],
+  "mqtt": {
+    "enabled": false,
+    "host": "mqtt://localhost",
+    "topic": "tado/sniffer",
+    "username": "your_username",
+    "password": "your_password"
+  }
+}

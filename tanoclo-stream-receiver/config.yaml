@@ -1,0 +1,50 @@
+# ==============================================================================
+# config.yaml
+# Description: Configuration schema and metadata definitions for the Home Assistant
+#              addon. Specifies sniffer keys, MQTT topics, port configurations,
+#              and architecture capabilities.
+# ==============================================================================
+name: "TaNoClo RF Sniffer Receiver"
+version: "0.2.0"
+slug: "tanoclo-stream-receiver"
+description: "Decrypts, parses, and publishes Tado RF Sniffer packets to MQTT with Home Assistant Discovery"
+url: "https://github.com/tanoclo/tanoclo"
+image: "ghcr.io/tanoclo/tanoclo-stream-receiver"
+init: false
+arch:
+  - amd64
+  - aarch64
+startup: "application"
+boot: "auto"
+map:
+  - share:rw
+ports:
+  "9999/tcp": 9999
+options:
+  tcp_port: 9999
+  tado_keys: "PAIRING=7461646f2070616972696e67206b6579"
+  tado_pan_ids: ""
+  mqtt_enabled: true
+  mqtt_host: "mqtt://core-mosquitto:1883"
+  mqtt_username: ""
+  mqtt_password: ""
+  mqtt_topic: "tado/sniffer"
+  mqtt_ha_path: "homeassistant"
+  file_logging: false
+  stats: false
+  console_logging: false
+  auto_exclusion: true
+schema:
+  tcp_port: "int"
+  tado_keys: "str?"
+  tado_pan_ids: "str?"
+  mqtt_enabled: "bool"
+  mqtt_host: "str?"
+  mqtt_username: "str?"
+  mqtt_password: "str?"
+  mqtt_topic: "str"
+  mqtt_ha_path: "str"
+  file_logging: "bool"
+  stats: "bool"
+  console_logging: "bool"
+  auto_exclusion: "bool?"

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">TaNoClo</string>
+    <string name="title_activity_main">TaNoClo</string>
+    <string name="package_name">com.tanoclo.app</string>
+    <string name="custom_url_scheme">com.tanoclo.app</string>
+</resources>

@@ -1,0 +1,112 @@
+name: Web OTA Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Web OTA Version Name (e.g. 0.1.5)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  ota-web-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Install frontend dependencies
+        run: |
+          cd frontend-new
+          npm ci || npm install
+
+      - name: Build Web SPA assets
+        run: |
+          cd frontend-new
+          npm run build
+
+      - name: Package dist.zip
+        run: |
+          cd ws-server/frontend-dist
+          zip -r ../../dist.zip .
+          cd ../..
+
+      - name: Force-push single orphan commit to ota branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # 1. Save compiled dist.zip
+          cp dist.zip /tmp/dist.zip
+
+          # 2. Collect release notes from git log
+          PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            NOTES=$(git log "$PREV_TAG"..HEAD --oneline --no-merges -- frontend-new/ | head -20 | sed 's/^[a-f0-9]* /- /')
+          else
+            NOTES=$(git log -n 10 --oneline --no-merges -- frontend-new/ | sed 's/^[a-f0-9]* /- /')
+          fi
+          [ -z "$NOTES" ] && NOTES="- Web asset update"
+          # Use heredoc delimiter for multiline env var
+          {
+            echo "RELEASE_NOTES<<EOF_NOTES"
+            echo "$NOTES"
+            echo "EOF_NOTES"
+          } >> "$GITHUB_ENV"
+
+          # 3. Try fetching existing manifest.json and tanoclo.apk from ota branch so we preserve APK
+          curl -s -f https://raw.githubusercontent.com/tanoclo/tanoclo/ota/tanoclo.apk -o /tmp/tanoclo.apk || true
+          curl -s -f https://raw.githubusercontent.com/tanoclo/tanoclo/ota/manifest.json -o /tmp/manifest.json || true
+
+          # 4. Create fresh orphan branch without commit history
+          git checkout --orphan ota_orphan
+          git rm -rf . 2>/dev/null || true
+
+          # 5. Restore files
+          cp /tmp/dist.zip dist.zip
+          if [ -f /tmp/tanoclo.apk ]; then cp /tmp/tanoclo.apk tanoclo.apk; fi
+          if [ -f /tmp/manifest.json ]; then cp /tmp/manifest.json manifest.json; fi
+
+          RUN_NUM=${{ github.run_number }}
+          WEB_VERSION="${{ github.event.inputs.version }}"
+
+          # 6. Update manifest with real release notes
+          node -e "
+            const fs = require('fs');
+            const releaseNotes = process.env.RELEASE_NOTES || 'Web asset update';
+            let manifest = {
+              webVersionCode: ${RUN_NUM},
+              webVersionName: '${WEB_VERSION}',
+              apkVersionCode: 1,
+              apkVersionName: '0.1.0',
+              zipUrl: 'https://raw.githubusercontent.com/tanoclo/tanoclo/ota/dist.zip',
+              apkUrl: 'https://raw.githubusercontent.com/tanoclo/tanoclo/ota/tanoclo.apk',
+              releaseNotes: releaseNotes
+            };
+            if (fs.existsSync('manifest.json')) {
+              try {
+                const existing = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
+                manifest = { ...existing, webVersionCode: ${RUN_NUM}, webVersionName: '${WEB_VERSION}', zipUrl: 'https://raw.githubusercontent.com/tanoclo/tanoclo/ota/dist.zip', releaseNotes: releaseNotes };
+              } catch (e) {}
+            }
+            fs.writeFileSync('manifest.json', JSON.stringify(manifest, null, 2));
+          "
+
+          git add dist.zip manifest.json
+          if [ -f tanoclo.apk ]; then git add tanoclo.apk; fi
+
+          git commit -m "ota: web bundle v${WEB_VERSION}"
+          git push -f origin ota_orphan:ota

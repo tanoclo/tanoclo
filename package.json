@@ -1,0 +1,14 @@
+{
+  "name": "tanoclo-workspace",
+  "version": "0.2.0",
+  "private": true,
+  "scripts": {
+    "build": "npm run build --prefix frontend-new",
+    "dev": "npm run dev --prefix frontend-new",
+    "start": "npm start --prefix ws-server",
+    "test": "npm test --prefix ws-server"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^4.1.10"
+  }
+}

@@ -1,0 +1,630 @@
+/**
+ * @file api/routes/devices.js
+ * @brief REST routes managing physical hardware devices (Bridges, Wall Thermostats, Valves).
+ * 
+ * Implements endpoints to retrieve device registration lists, perform device pairing
+ * associations, update child lock states, configure temperature offsets, and handle
+ * device deletions.
+ */
+
+const express = require('express');
+const db = require('../../lib/db');
+const authMiddleware = require('../middleware/auth');
+const homeAccessMiddleware = require('../middleware/home-access');
+const commandApi = require('../../lib/command-api');
+const { getLogger } = require('../../lib/logger');
+const { mapDevice } = require('../../lib/mappers');
+
+const router = express.Router();
+const _log = getLogger('devices-api');
+
+router.use(authMiddleware);
+router.use(homeAccessMiddleware);
+
+async function checkConfigReadonly(homeId) {
+    const pool = db.getPool();
+    const [homes] = await pool.execute('SELECT zone_config_readonly, dev_bypass FROM homes WHERE id = ?', [homeId]);
+    if (homes.length === 0) return { isReadOnly: false, devBypass: false };
+    const config = require('../../lib/config');
+    const isReadOnly = homes[0].zone_config_readonly === null ? config.zoneConfigReadonly : Boolean(homes[0].zone_config_readonly);
+    const devBypass = Boolean(homes[0].dev_bypass);
+    return { isReadOnly, devBypass };
+}
+const checkZoneConfigReadonly = checkConfigReadonly;
+
+async function verifyDeviceHome(req, deviceId) {
+    const pool = db.getPool();
+    const [rows] = await pool.execute('SELECT home_id FROM devices WHERE serial_no = ?', [deviceId]);
+    if (rows.length === 0) {
+        const err = new Error('Device not found');
+        err.statusCode = 404;
+        throw err;
+    }
+    const homeId = rows[0].home_id;
+    if (req.params.homeId) {
+        const pathHomeId = parseInt(req.params.homeId, 10);
+        if (pathHomeId !== homeId) {
+            const err = new Error('Device not found');
+            err.statusCode = 404;
+            throw err;
+        }
+    }
+    if (req.user && req.user.homes && !req.user.homes.includes(homeId)) {
+        const err = new Error('Forbidden');
+        err.statusCode = 403;
+        throw err;
+    }
+    return homeId;
+}
+
+// GET /api/v2/homes/{homeId}/devices OR /api/v2/devices
+async function getDeviceList(req, res) {
+    try {
+        let homeId = req.params.homeId;
+        if (!homeId) {
+            if (req.user && req.user.homeId) {
+                homeId = req.user.homeId;
+            } else if (req.user && req.user.homes && req.user.homes.length > 0) {
+                const pool = db.getPool();
+                const placeholders = req.user.homes.map(() => '?').join(',');
+                const [devices] = await pool.execute(`SELECT * FROM devices WHERE home_id IN (${placeholders})`, req.user.homes);
+                return res.json(devices.map(mapDevice));
+            } else {
+                return res.json([]);
+            }
+        }
+
+        const parsedHomeId = parseInt(homeId, 10);
+        if (req.user && req.user.homes && !req.user.homes.includes(parsedHomeId)) {
+            return res.status(403).json({ error: 'forbidden' });
+        }
+        const devices = await db.getDevicesForHome(parsedHomeId);
+        res.json(devices.map(mapDevice));
+    } catch (err) {
+        res.status(500).json({ error: 'internal_error' });
+    }
+}
+
+async function getDevice(req, res) {
+    try {
+        const { deviceId } = req.params;
+        const homeId = await verifyDeviceHome(req, deviceId);
+        const pool = db.getPool();
+        const [devices] = await pool.execute('SELECT * FROM devices WHERE serial_no = ? AND home_id = ?', [deviceId, homeId]);
+        if (devices.length === 0) return res.status(404).json({ error: 'Device not found' });
+        res.json(mapDevice(devices[0]));
+    } catch (err) {
+        if (err.statusCode) return res.status(err.statusCode).json({ error: err.message.toLowerCase() });
+        res.status(500).json({ error: 'internal_error' });
+    }
+}
+
+async function getTemperatureOffset(req, res) {
+    try {
+        const { deviceId } = req.params;
+        const homeId = await verifyDeviceHome(req, deviceId);
+        const pool = db.getPool();
+        const [devices] = await pool.execute('SELECT field_0140 FROM devices WHERE serial_no = ? AND home_id = ?', [deviceId, homeId]);
+        if (devices.length === 0) return res.status(404).json({ error: 'Device not found' });
+
+        const val = parseFloat(devices[0].field_0140 || 0);
+        const fahr = val * 1.8;
+        res.setHeader('Content-Type', 'application/json');
+        res.send(`{"celsius":${val.toFixed(1)},"fahrenheit":${fahr.toFixed(1)}}`);
+    } catch (err) {
+        if (err.statusCode) return res.status(err.statusCode).json({ error: err.message.toLowerCase() });
+        res.status(500).json({ error: 'internal_error' });
+    }
+}
+
+async function setTemperatureOffset(req, res) {
+    try {
+        const { deviceId } = req.params;
+        const homeId = await verifyDeviceHome(req, deviceId);
+        const { isReadOnly, devBypass } = await checkConfigReadonly(homeId);
+        if (isReadOnly && !devBypass) {
+            return res.status(403).json({ error: 'config_readonly', message: 'Configuration is read-only' });
+        }
+        const celsius = parseFloat(req.body.celsius ?? 0.0);
+        const pool = db.getPool();
+
+        await pool.execute('UPDATE devices SET field_0140 = ? WHERE serial_no = ? AND home_id = ?', [celsius, deviceId, homeId]);
+
+        await commandApi.pushConfigRefresh(deviceId).catch(err => {
+            _log('warn', `Failed to push config refresh for ${deviceId}: ${err.message}`);
+        });
+
+        const fahr = celsius * 1.8;
+        res.setHeader('Content-Type', 'application/json');
+        res.send(`{"celsius":${celsius.toFixed(1)},"fahrenheit":${fahr.toFixed(1)}}`);
+    } catch (err) {
+        if (err.statusCode) return res.status(err.statusCode).json({ error: err.message.toLowerCase() });
+        res.status(500).json({ error: 'internal_error' });
+    }
+}
+
+async function identifyDevice(req, res) {
+    try {
+        const { deviceId } = req.params;
+        const homeId = await verifyDeviceHome(req, deviceId);
+        const pool = db.getPool();
+        const [existing] = await pool.execute('SELECT * FROM devices WHERE serial_no = ? AND home_id = ?', [deviceId, homeId]);
+        if (existing.length === 0) return res.status(404).json({ error: 'Device not found' });
+
+        try {
+            await commandApi.pushDeviceIdentify(deviceId);
+            _log('info', `[Device API] identify call pushed to ${deviceId}`);
+        } catch (e) {
+            _log('error', `Failed to push identify: ${e.message}`);
+        }
+
+        res.json({});
+    } catch (err) {
+        if (err.statusCode) return res.status(err.statusCode).json({ error: err.message.toLowerCase() });
+        res.status(500).json({ error: 'internal_error' });
+    }
+}
+
+async function getChildLock(req, res) {
+    try {
+        const { deviceId } = req.params;
+        const homeId = await verifyDeviceHome(req, deviceId);
+        const pool = db.getPool();
+        const [devices] = await pool.execute('SELECT child_lock_enabled FROM devices WHERE serial_no = ? AND home_id = ?', [deviceId, homeId]);
+        if (devices.length === 0) return res.status(404).json({ error: 'Device not found' });
+
+        res.json({ childLockEnabled: Boolean(devices[0].child_lock_enabled) });
+    } catch (err) {
+        if (err.statusCode) return res.status(err.statusCode).json({ error: err.message.toLowerCase() });
+        res.status(500).json({ error: 'internal_error' });
+    }
+}
+
+async function setChildLock(req, res) {
+    try {
+        const { deviceId } = req.params;
+        const homeId = await verifyDeviceHome(req, deviceId);
+        const enabled = req.body.childLockEnabled ?? false;
+        const pool = db.getPool();
+
+        const [existing] = await pool.execute('SELECT * FROM devices WHERE serial_no = ? AND home_id = ?', [deviceId, homeId]);
+        if (existing.length === 0) return res.status(404).json({ error: 'Device not found' });
+
+        await pool.execute('UPDATE devices SET child_lock_enabled = ? WHERE serial_no = ? AND home_id = ?', [enabled ? 1 : 0, deviceId, homeId]);
+
+        await commandApi.pushDeviceLock(deviceId, enabled).catch(err => {
+            _log('warn', `Failed to push child lock for ${deviceId}: ${err.message}`);
+        });
+
+        res.json({ childLockEnabled: Boolean(enabled) });
+    } catch (err) {
+        if (err.statusCode) return res.status(err.statusCode).json({ error: err.message.toLowerCase() });
+        res.status(500).json({ error: 'internal_error' });
+    }
+}
+
+async function setOrientation(req, res) {
+    try {
+        const { deviceId } = req.params;
+        const homeId = await verifyDeviceHome(req, deviceId);
+        const { isReadOnly, devBypass } = await checkConfigReadonly(homeId);
+        if (isReadOnly && !devBypass) {
+            return res.status(403).json({ error: 'config_readonly', message: 'Configuration is read-only' });
+        }
+        const rawOrient = req.body.orientation || 'VERTICAL';
+        const orientation = db.mapOrientation(rawOrient);
+        const pool = db.getPool();
+
+        const [existing] = await pool.execute('SELECT * FROM devices WHERE serial_no = ? AND home_id = ?', [deviceId, homeId]);
+        if (existing.length === 0) return res.status(404).json({ error: 'Device not found' });
+
+        await pool.execute('UPDATE devices SET field_0149 = ? WHERE serial_no = ? AND home_id = ?', [orientation, deviceId, homeId]);
+
+        await commandApi.pushConfigRefresh(deviceId).catch(err => {
+            _log('warn', `Failed to push config refresh for ${deviceId}: ${err.message}`);
+        });
+
+        const mqttPublisher = require('../../lib/mqtt-publisher');
+        await mqttPublisher.publishOrientation(deviceId, orientation).catch(err => {
+            _log('warn', `Failed to publish orientation to MQTT for ${deviceId}: ${err.message}`);
+        });
+
+        res.json({ orientation });
+    } catch (err) {
+        if (err.statusCode) return res.status(err.statusCode).json({ error: err.message.toLowerCase() });
+        res.status(500).json({ error: 'internal_error' });
+    }
+}
+
+async function setPairing(req, res) {
+    try {
+        const { deviceId } = req.params;
+        const homeId = await verifyDeviceHome(req, deviceId);
+        const pool = db.getPool();
+        const [existing] = await pool.execute('SELECT * FROM devices WHERE serial_no = ? AND home_id = ?', [deviceId, homeId]);
+        if (existing.length === 0) return res.status(404).json({ error: 'Device not found' });
+
+        await pool.execute('UPDATE devices SET in_pairing_mode = 1 WHERE serial_no = ? AND home_id = ?', [deviceId, homeId]);
+
+        await commandApi.pushDevicePair(deviceId, true).catch(err => {
+            _log('warn', `Failed to push pairing mode for ${deviceId}: ${err.message}`);
+        });
+
+        res.json({});
+    } catch (err) {
+        if (err.statusCode) return res.status(err.statusCode).json({ error: err.message.toLowerCase() });
+        res.status(500).json({ error: 'internal_error' });
+    }
+}
+
+async function deletePairing(req, res) {
+    try {
+        const { deviceId } = req.params;
+        const homeId = await verifyDeviceHome(req, deviceId);
+        const pool = db.getPool();
+        const [existing] = await pool.execute('SELECT * FROM devices WHERE serial_no = ? AND home_id = ?', [deviceId, homeId]);
+        if (existing.length === 0) return res.status(404).json({ error: 'Device not found' });
+
+        await pool.execute('UPDATE devices SET in_pairing_mode = 0 WHERE serial_no = ? AND home_id = ?', [deviceId, homeId]);
+
+        await commandApi.pushDevicePair(deviceId, false).catch(err => {
+            _log('warn', `Failed to push pairing stop for ${deviceId}: ${err.message}`);
+        });
+
+        res.status(204).end();
+    } catch (err) {
+        if (err.statusCode) return res.status(err.statusCode).json({ error: err.message.toLowerCase() });
+        res.status(500).json({ error: 'internal_error' });
+    }
+}
+
+async function createDevice(req, res) {
+    try {
+        const { homeId } = req.params;
+        const { serialNo, deviceType } = req.body;
+        let { zoneId } = req.body;
+
+        if (!serialNo) {
+            return res.status(400).json({ error: 'serialNo is required' });
+        }
+
+        const upperSerialNo = serialNo.toUpperCase();
+        const match = /^(VA|RU|IB|BU|WR|SU|BP|BR)(\d{10})$/.exec(upperSerialNo);
+        if (!match) {
+            return res.status(400).json({ error: 'invalid_serial', message: 'Invalid serial number format' });
+        }
+
+        const prefix = match[1];
+        let derivedType = deviceType;
+        if (!derivedType) {
+            if (prefix === 'VA') derivedType = 'VA02';
+            else if (['RU', 'WR', 'SU', 'BP', 'BR'].includes(prefix)) derivedType = 'RU02';
+            else if (prefix === 'IB') derivedType = 'IB01';
+            else if (prefix === 'BU') derivedType = 'BU01';
+        }
+
+        const parsedHomeId = parseInt(homeId, 10);
+        if (req.user && req.user.homes && !req.user.homes.includes(parsedHomeId)) {
+            return res.status(403).json({ error: 'forbidden', message: 'Forbidden' });
+        }
+
+        const { isReadOnly, devBypass } = await checkZoneConfigReadonly(parsedHomeId);
+        if (isReadOnly && !devBypass) {
+            return res.status(403).json({ error: 'zone_config_readonly', message: 'Zone configuration is read-only' });
+        }
+
+        const pool = db.getPool();
+
+        const [existing] = await pool.execute('SELECT COUNT(*) as c FROM devices WHERE serial_no = ?', [upperSerialNo]);
+        if (existing[0].c > 0) {
+            return res.status(409).json({ error: 'Device already exists' });
+        }
+
+        const isBridge = derivedType.startsWith('IB') || derivedType.startsWith('GW') || derivedType === 'BRIDGE';
+        const isHeatingDev = !isBridge;
+
+        if (isHeatingDev) {
+            const [heatingDevRows] = await pool.execute(
+                "SELECT COUNT(*) as c FROM devices WHERE home_id = ? AND device_type NOT LIKE 'IB%' AND device_type NOT LIKE 'GW%' AND device_type != 'BRIDGE'",
+                [parsedHomeId]
+            );
+            if (heatingDevRows[0].c >= 25) {
+                return res.status(400).json({ error: 'max_heating_devices_reached', message: 'Maximum limit of 25 heating devices reached for this home' });
+            }
+        }
+
+        if (!zoneId) {
+            const [heatingZoneRows] = await pool.execute("SELECT COUNT(*) as c FROM zones WHERE home_id = ? AND type = 'HEATING'", [parsedHomeId]);
+            if (heatingZoneRows[0].c >= 25) {
+                return res.status(400).json({ error: 'max_heating_rooms_reached', message: 'Maximum limit of 25 heating rooms reached for this home' });
+            }
+
+            const [zones] = await pool.execute('SELECT COUNT(*) as c FROM zones WHERE home_id = ?', [parsedHomeId]);
+            const newZoneName = `Zone ${zones[0].c + 1}`;
+
+            const [zoneRows] = await pool.execute('SELECT id FROM zones WHERE home_id = ? ORDER BY id ASC', [parsedHomeId]);
+            const existingIds = zoneRows.map(r => r.id);
+            let newZoneId = 1;
+            while (existingIds.includes(newZoneId)) {
+                newZoneId++;
+            }
+
+            await pool.execute(
+                `INSERT INTO zones (
+                    id, home_id, name, type, date_created, default_overlay_type, default_overlay_duration, 
+                    heating_circuit, fallback_value, measuring_device_serial,
+                    min_temp, max_temp, step_temp, open_window_enabled, open_window_timeout, 
+                    dazzle_enabled, early_start_enabled
+                ) VALUES (?, ?, ?, 'HEATING', ?, 'TADO_MODE', 0, null, 0, ?, 5.0, 25.0, 0.5, 1, 900, 1, 0)`,
+                [newZoneId, parsedHomeId, newZoneName, new Date().toISOString(), upperSerialNo]
+            );
+            zoneId = newZoneId;
+        } else if (isHeatingDev) {
+            const [roomDevRows] = await pool.execute(
+                "SELECT COUNT(*) as c FROM devices WHERE home_id = ? AND zone_id = ? AND device_type NOT LIKE 'IB%' AND device_type NOT LIKE 'GW%' AND device_type != 'BRIDGE'",
+                [parsedHomeId, zoneId]
+            );
+            if (roomDevRows[0].c >= 7) {
+                return res.status(400).json({ error: 'max_room_devices_reached', message: 'Maximum limit of 7 heating devices per room reached' });
+            }
+        }
+
+        await pool.execute(
+            `INSERT INTO devices (
+                serial_no, home_id, zone_id, current_fw_version, 
+                connection_state, battery_state, device_type, in_pairing_mode, 
+                cap_inside_temp_measurement, cap_identify, cap_radio_encryption_key_access, 
+                field_0140, connection_state_timestamp
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+                upperSerialNo, parsedHomeId, zoneId, '54.2', 
+                1, 'NORMAL', derivedType, 0,
+                derivedType.startsWith('IB') ? 0 : 1, 
+                derivedType.startsWith('IB') ? 0 : 1, 
+                1, 
+                0.0, new Date().toISOString()
+            ]
+        );
+
+        const [bridgeRows] = await pool.execute("SELECT serial_no FROM devices WHERE home_id = ? AND device_type LIKE 'IB%' LIMIT 1", [parsedHomeId]);
+        const bridgeSerial = bridgeRows.length > 0 ? bridgeRows[0].serial_no : null;
+
+        if (!devBypass && bridgeSerial && upperSerialNo !== bridgeSerial) {
+            const commandApi = require('../../lib/command-api');
+            await commandApi.pushDevicePair(bridgeSerial, true).catch(err => {
+                _log('warn', `Failed to push pair enable to bridge ${bridgeSerial}: ${err.message}`);
+            });
+        }
+
+        res.status(201).json({ serialNo: upperSerialNo });
+    } catch (err) {
+        _log('error', `Failed to create device: ${err.message}`);
+        res.status(500).json({ error: 'internal_error' });
+    }
+}
+
+async function deleteDevice(req, res) {
+    try {
+        const { deviceId } = req.params;
+        const homeId = await verifyDeviceHome(req, deviceId);
+        const pool = db.getPool();
+
+        const [devices] = await pool.execute('SELECT zone_id, home_id, device_type FROM devices WHERE serial_no = ? AND home_id = ?', [deviceId, homeId]);
+        if (devices.length === 0) return res.status(204).end();
+        const { zone_id, device_type } = devices[0];
+
+        if (device_type && (device_type.startsWith('IB') || device_type.includes('GW') || device_type.includes('BRIDGE'))) {
+            return res.status(403).json({ error: 'cannot_delete_bridge', message: 'Internet Bridge devices cannot be removed.' });
+        }
+        if (device_type && device_type.startsWith('RU')) {
+            return res.status(403).json({ error: 'cannot_delete_ru', message: 'Reconfiguring or removing a RU device should be done using the Tado app (in proxy mode)' });
+        }
+
+        const { isReadOnly, devBypass } = await checkZoneConfigReadonly(homeId);
+        if (isReadOnly && !devBypass) {
+            return res.status(403).json({ error: 'zone_config_readonly', message: 'Zone configuration is read-only' });
+        }
+
+        if (zone_id) {
+            const [zone] = await pool.execute('SELECT measuring_device_serial FROM zones WHERE id = ? AND home_id = ?', [zone_id, homeId]);
+            if (zone.length > 0 && zone[0].measuring_device_serial === deviceId) {
+                const [otherDevs] = await pool.execute('SELECT serial_no FROM devices WHERE zone_id = ? AND home_id = ? AND serial_no != ?', [zone_id, homeId, deviceId]);
+                const newMeasurer = otherDevs.length > 0 ? otherDevs[0].serial_no : null;
+                await pool.execute('UPDATE zones SET measuring_device_serial = ? WHERE id = ? AND home_id = ?', [newMeasurer, zone_id, homeId]);
+            }
+        }
+
+        const [bridgeRows] = await pool.execute("SELECT serial_no FROM devices WHERE home_id = ? AND device_type LIKE 'IB%' LIMIT 1", [homeId]);
+        const bridgeSerial = bridgeRows.length > 0 ? bridgeRows[0].serial_no : null;
+
+        if (!devBypass) {
+            const commandApi = require('../../lib/command-api');
+            await commandApi.pushDeviceUnassociation(homeId, deviceId).catch(err => {
+                _log('warn', `Failed to push un-association config to device ${deviceId}: ${err.message}`);
+            });
+
+            if (bridgeSerial) {
+                await commandApi.pushDevicePair(bridgeSerial, false).catch(err => {
+                    _log('warn', `Failed to push unpair to bridge ${bridgeSerial}: ${err.message}`);
+                });
+            }
+        }
+
+        await pool.execute('DELETE FROM devices WHERE serial_no = ? AND home_id = ?', [deviceId, homeId]);
+
+        if (zone_id) {
+            const [counts] = await pool.execute('SELECT COUNT(*) as c FROM devices WHERE zone_id = ? AND home_id = ?', [zone_id, homeId]);
+            if (counts[0].c === 0) {
+                await db.purgeZone(homeId, zone_id);
+            }
+        }
+
+        res.status(204).end();
+    } catch (err) {
+        _log('error', `Failed to delete device: ${err.message}`);
+        res.status(500).json({ error: 'internal_error' });
+    }
+}
+
+async function setActuatorLimits(req, res) {
+    try {
+        const { deviceId } = req.params;
+        const { lowSteps, highSteps, driveConstant } = req.body;
+        const homeId = await verifyDeviceHome(req, deviceId);
+        const pool = db.getPool();
+
+        const [existing] = await pool.execute('SELECT * FROM devices WHERE serial_no = ? AND home_id = ?', [deviceId, homeId]);
+        if (existing.length === 0) return res.status(404).json({ error: 'Device not found' });
+
+        const updates = [];
+        const params = [];
+        if (lowSteps !== undefined && lowSteps !== null) { updates.push('field_0273 = ?'); params.push(Number(lowSteps)); }
+        if (highSteps !== undefined && highSteps !== null) { updates.push('field_027c = ?'); params.push(Number(highSteps)); }
+        if (driveConstant !== undefined && driveConstant !== null) { updates.push('field_0280 = ?'); params.push(Number(driveConstant)); }
+        
+        if (updates.length > 0) {
+            params.push(deviceId);
+            params.push(homeId);
+            await pool.execute(`UPDATE devices SET ${updates.join(', ')} WHERE serial_no = ? AND home_id = ?`, params);
+        }
+
+        await commandApi.pushActuatorLimits(deviceId, { lowSteps, highSteps, driveConstant }).catch(err => {
+            _log('warn', `Failed to push actuator limits for ${deviceId}: ${err.message}`);
+        });
+
+        const mqttHaDiscovery = require('../../lib/mqtt-ha-discovery');
+        mqttHaDiscovery.publishAllDiscovery().catch(() => {});
+
+        res.json({ success: true });
+    } catch (err) {
+        if (err.statusCode) return res.status(err.statusCode).json({ error: err.message.toLowerCase() });
+        _log('error', `Actuator limits update error: ${err.message}`);
+        res.status(500).json({ error: 'internal_error' });
+    }
+}
+
+async function setDisplaySettings(req, res) {
+    try {
+        const { deviceId } = req.params;
+        const { displayBrightness, displayContrast, displayActiveTimeout, brightness, wakeSensitivity, temperatureUnit } = req.body;
+        const homeId = await verifyDeviceHome(req, deviceId);
+        const pool = db.getPool();
+
+        const [existing] = await pool.execute('SELECT * FROM devices WHERE serial_no = ? AND home_id = ?', [deviceId, homeId]);
+        if (existing.length === 0) return res.status(404).json({ error: 'Device not found' });
+
+        if (brightness !== undefined || wakeSensitivity !== undefined || temperatureUnit !== undefined) {
+            await commandApi.pushDisplaySettings(deviceId, { brightness, wakeSensitivity, temperatureUnit });
+            return res.json({ success: true });
+        }
+
+        const updates = [];
+        const params = [];
+        const configFields = {};
+
+        if (displayBrightness !== undefined && displayBrightness !== null) {
+            updates.push('field_019e = ?');
+            params.push(Number(displayBrightness));
+            configFields['0x019e'] = Number(displayBrightness);
+        }
+        if (displayContrast !== undefined && displayContrast !== null) {
+            updates.push('field_019d = ?');
+            params.push(Number(displayContrast));
+            configFields['0x019d'] = Number(displayContrast);
+        }
+        if (displayActiveTimeout !== undefined && displayActiveTimeout !== null) {
+            updates.push('field_02b2 = ?');
+            params.push(Number(displayActiveTimeout));
+            configFields['0x02b2'] = Number(displayActiveTimeout);
+        }
+
+        if (updates.length > 0) {
+            params.push(deviceId);
+            params.push(homeId);
+            await pool.execute(`UPDATE devices SET ${updates.join(', ')} WHERE serial_no = ? AND home_id = ?`, params);
+            
+            // Merge into config
+            await db.updateDeviceConfig(deviceId, configFields);
+        }
+
+        await commandApi.pushConfigRefresh(deviceId).catch(err => {
+            _log('warn', `Failed to push config refresh for ${deviceId}: ${err.message}`);
+        });
+
+        res.json({ success: true });
+    } catch (err) {
+        if (err.statusCode) return res.status(err.statusCode).json({ error: err.message.toLowerCase() });
+        _log('error', `Display settings update error: ${err.message}`);
+        res.status(500).json({ error: 'internal_error' });
+    }
+}
+
+async function setFriendlyName(req, res) {
+    try {
+        const { deviceId } = req.params;
+        const friendlyName = req.body.friendlyName || null;
+        const homeId = await verifyDeviceHome(req, deviceId);
+        const pool = db.getPool();
+
+        await pool.execute('UPDATE devices SET friendly_name = ? WHERE serial_no = ? AND home_id = ?', [friendlyName, deviceId, homeId]);
+
+        const mqttHaDiscovery = require('../../lib/mqtt-ha-discovery');
+        mqttHaDiscovery.publishAllDiscovery().catch(() => {});
+
+        res.json({ friendlyName });
+    } catch (err) {
+        if (err.statusCode) return res.status(err.statusCode).json({ error: err.message.toLowerCase() });
+        _log('error', `Friendly name update error: ${err.message}`);
+        res.status(500).json({ error: 'internal_error' });
+    }
+}
+
+async function unassociateNeighbor(req, res) {
+    try {
+        const { deviceId } = req.params;
+        const homeId = await verifyDeviceHome(req, deviceId);
+        const { neighborIpv6 } = req.body || {};
+        if (!neighborIpv6) return res.status(400).json({ error: 'neighborIpv6_required' });
+
+        await commandApi.pushUnassociateNeighborByIp(homeId, neighborIpv6);
+        res.json({ ok: true, message: `Unassociate requested for neighbor ${neighborIpv6}` });
+    } catch (err) {
+        if (err.statusCode) return res.status(err.statusCode).json({ error: err.message.toLowerCase() });
+        _log('error', `Unassociate neighbor error: ${err.message}`);
+        res.status(500).json({ error: 'internal_error', message: err.message });
+    }
+}
+
+router.get('/:homeId/devices', getDeviceList);
+router.get('/:homeId/deviceList', getDeviceList);
+router.post('/:homeId/devices', createDevice);
+router.get('/:homeId/devices/:deviceId', getDevice);
+router.delete('/:homeId/devices/:deviceId', deleteDevice);
+router.get('/:homeId/devices/:deviceId/temperatureOffset', getTemperatureOffset);
+router.put('/:homeId/devices/:deviceId/temperatureOffset', setTemperatureOffset);
+router.post('/:homeId/devices/:deviceId/identify', identifyDevice);
+router.put('/:homeId/devices/:deviceId/childLock', setChildLock);
+router.post('/:homeId/devices/:deviceId/orientation', setOrientation);
+router.post('/:homeId/devices/:deviceId/pairing', setPairing);
+router.delete('/:homeId/devices/:deviceId/pairing', deletePairing);
+router.put('/:homeId/devices/:deviceId/actuatorLimits', setActuatorLimits);
+router.put('/:homeId/devices/:deviceId/displaySettings', setDisplaySettings);
+router.put('/:homeId/tanoclo/devices/:deviceId/friendlyName', setFriendlyName);
+router.post('/:homeId/devices/:deviceId/unassociate-neighbor', unassociateNeighbor);
+
+router.get('/:deviceId', getDevice);
+router.delete('/:deviceId', deleteDevice);
+router.get('/:deviceId/temperatureOffset', getTemperatureOffset);
+router.put('/:deviceId/temperatureOffset', setTemperatureOffset);
+router.post('/:deviceId/identify', identifyDevice);
+router.get('/:deviceId/childLock', getChildLock);
+router.put('/:deviceId/childLock', setChildLock);
+router.post('/:deviceId/orientation', setOrientation);
+router.post('/:deviceId/pairing', setPairing);
+router.delete('/:deviceId/pairing', deletePairing);
+router.put('/:deviceId/actuatorLimits', setActuatorLimits);
+router.put('/:deviceId/displaySettings', setDisplaySettings);
+router.put('/tanoclo/devices/:deviceId/friendlyName', setFriendlyName);
+router.post('/:deviceId/unassociate-neighbor', unassociateNeighbor);
+
+module.exports = router;

@@ -1,0 +1,22 @@
+{
+  "DB_HOST": "127.0.0.1",
+  "DB_NAME": "tanoclo",
+  "DB_USER": "tanoclo",
+  "DB_PASS": "password",
+  "WS_URL": "wss://127.0.0.1:988/hw/v2",
+  "CMD_API": "http://127.0.0.1:3111",
+  "API_URL": "https://my.tanoclo.example.com",
+  "AUTH_URL": "https://my.tanoclo.example.com",
+  "API_USER": "admin",
+  "API_PASS": "password",
+  "API_TOKEN": "",
+  "DEVICE_ID": "IB0000000001",
+  "HOME_ID": "999999",
+  "ZONE_ID": "1",
+  "TEST_API_USER": "admin",
+  "TEST_API_PASS": "admin123",
+  "TEST_DEVICE_ID": "IB0000000001",
+  "TEST_HOME_ID": "999999",
+  "TEST_ZONE_ID": "1",
+  "JWT_SECRET": "fallback_secret_for_tanoclo_development"
+}

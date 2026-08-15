@@ -1,0 +1,39 @@
+{
+  "name": "tanoclo-ws-server",
+  "version": "0.2.0",
+  "description": "TaNoClo server",
+  "main": "server.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "test:e2e": "node test/test_e2e_roundtrip.js",
+    "test:e2e:push": "node test/test_e2e_push_verify.js",
+    "test:ws": "node test/test_ws_comprehensive.js",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "acorn": "^8.17.0",
+    "adm-zip": "^0.5.16",
+    "bcryptjs": "^3.0.3",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "crc": "^4.3.2",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.5.2",
+    "helmet": "^8.2.0",
+    "jsonwebtoken": "^9.0.3",
+    "mqtt": "^5.15.1",
+    "mysql2": "^3.22.5",
+    "swagger-ui-express": "^5.0.1",
+    "uWebSockets.js": "uNetworking/uWebSockets.js#v20.68.0",
+    "ws": "^8.21.0",
+    "yaml": "^2.9.0"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.9"
+  }
+}

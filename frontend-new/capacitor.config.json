@@ -1,0 +1,16 @@
+{
+  "appId": "com.tanoclo.app",
+  "appName": "TaNoClo",
+  "webDir": "../ws-server/frontend-dist",
+  "server": {
+    "cleartext": true
+  },
+  "android": {
+    "useLegacyBridge": true
+  },
+  "plugins": {
+    "CapacitorUpdater": {
+      "autoUpdate": false
+    }
+  }
+}

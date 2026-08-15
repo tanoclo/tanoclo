@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+    <title>TaNoClo</title>
+    <script>
+      (function() {
+        // Intercept global asset loading errors (404s on missing js/css bundles from old cached index.html)
+        window.addEventListener('error', function(e) {
+          var target = e.target || e.srcElement;
+          if (target && (target.tagName === 'SCRIPT' || target.tagName === 'LINK')) {
+            var url = target.src || target.href || '';
+            if (url.indexOf('/assets/') !== -1 || url.indexOf('index-') !== -1) {
+              var lastReload = sessionStorage.getItem('tanoclo_asset_error_reload');
+              var now = Date.now();
+              // Rate-limit auto-reload to once per 10 seconds to avoid infinite loops
+              if (!lastReload || (now - parseInt(lastReload, 10)) > 10000) {
+                sessionStorage.setItem('tanoclo_asset_error_reload', now.toString());
+                if ('serviceWorker' in navigator) {
+                  navigator.serviceWorker.getRegistrations().then(function(regs) {
+                    for (var i = 0; i < regs.length; i++) regs[i].unregister();
+                  });
+                }
+                if ('caches' in window) {
+                  caches.keys().then(function(keys) {
+                    for (var i = 0; i < keys.length; i++) caches.delete(keys[i]);
+                  });
+                }
+                setTimeout(function() {
+                  window.location.replace(window.location.pathname + '?_v=' + Date.now());
+                }, 100);
+              }
+            }
+          }
+        }, true);
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

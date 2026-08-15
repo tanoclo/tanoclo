@@ -1,0 +1,8 @@
+# ==============================================================================
+# build.yaml
+# Description: Defines the base Debian Docker images used for multi-architecture
+#              compilations (amd64, aarch64) in Home Assistant Addon builds.
+# ==============================================================================
+build_from:
+  amd64: "ghcr.io/home-assistant/amd64-base-debian:latest"
+  aarch64: "ghcr.io/home-assistant/aarch64-base-debian:latest"

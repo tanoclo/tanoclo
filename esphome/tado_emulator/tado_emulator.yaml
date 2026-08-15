@@ -1,0 +1,36 @@
+esphome:
+  name: tado-emulator
+  friendly_name: "TaNoClo Tado Device Emulator"
+
+esp32:
+  board: ttgo-lora32-v1
+  framework:
+    type: esp-idf
+
+wifi:
+  ssid: "YourSSID"
+  password: "YourPassword"
+
+logger:
+  level: INFO
+
+web_server_base:
+
+# Configure SPI for SX1276 (TTGO LoRa32 pins)
+spi:
+  clk_pin: 5
+  mosi_pin: 27
+  miso_pin: 19
+
+external_components:
+  - source: components
+
+tado_emulator:
+  id: tado_rf_emulator
+  cs_pin: 18
+  rst_pin: 23
+  dio0_pin: 26
+  channel: 26
+  server_url: "http://YOUR_SERVER_IP:3000"
+  api_key: "YOUR_ESP32_NODE_API_KEY"
+

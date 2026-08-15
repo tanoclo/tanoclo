@@ -1,0 +1,11 @@
+/certs/*.cer
+/certs/*.pem
+/certs/*.json
+/frontend/*
+/log/*
+/node_modules/*
+/scratch/*
+/tmp/*
+/test/*.json
+/check.js
+/data/ota/*
