@@ -21,7 +21,8 @@ export default function ClimateQualityHero({ freshness, weather }) {
   const { t } = useTranslation();
 
   const getFreshnessDetails = (val) => {
-    switch (val?.toUpperCase()) {
+    const v = val?.toUpperCase();
+    switch (v) {
       case 'POOR':
         return {
           label: t('air_comfort.freshness_poor'),
@@ -36,6 +37,7 @@ export default function ClimateQualityHero({ freshness, weather }) {
           bg: 'var(--warning-glow)',
           desc: t('air_comfort.desc_fair')
         };
+      case 'GOOD':
       case 'FRESH':
       default:
         return {
@@ -81,7 +83,7 @@ export default function ClimateQualityHero({ freshness, weather }) {
           border: `1px solid ${freshDetails.color}`,
           color: freshDetails.color
         }}>
-          {freshness?.value === 'FRESH' ? <Smile size={32} /> : <Wind size={32} />}
+          {freshness?.value === 'FRESH' || freshness?.value === 'GOOD' ? <Smile size={32} /> : <Wind size={32} />}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
           <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 500 }}>

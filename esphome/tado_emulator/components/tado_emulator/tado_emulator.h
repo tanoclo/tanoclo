@@ -102,6 +102,17 @@ struct EmulatedDevice {
   // CoAP CON retry tracking
   bool token_refresh_pending{false};
   std::vector<PendingRequest> pending_requests;
+
+  // IEEE 802.15.4 short address (derived from MAC, used in operational dispatch)
+  uint16_t short_addr{0};
+
+  void derive_short_addr() {
+    // Deterministic 16-bit short address from MAC bytes (non-zero, avoids 0x0000/0xFFFF)
+    uint16_t h = 0x1234;
+    for (int i = 0; i < 8; i++) h = (h * 31) + mac_addr[i];
+    if (h == 0x0000 || h == 0xFFFF) h = 0x0E82; // Fallback to IB-style address
+    short_addr = h;
+  }
 };
 
 struct ExposeInternalPin : public InternalGPIOPin {
@@ -570,8 +581,9 @@ class TadoEmulatorComponent : public Component,
       pt.push_back(0x33); pt.push_back(0xF0); pt.push_back(0x16); pt.push_back(0x33); pt.push_back(0x0F); pt.push_back(0xA5);
       pt.push_back(0x00); pt.push_back(0x00); // UDP Checksum
     } else {
-      // Tado Custom Dispatch: Operational mode (0x0000, 0x007A)
-      pt.push_back(0x00); pt.push_back(0x00); pt.push_back(0x00); pt.push_back(0x7A);
+      // Tado Custom Dispatch: Operational mode (short_addr LE, 0x007A)
+      pt.push_back(dev->short_addr & 0xFF); pt.push_back((dev->short_addr >> 8) & 0xFF);
+      pt.push_back(0x00); pt.push_back(0x7A);
       // 6LoWPAN UDP NHC Header (7 Bytes: operational CoAP ports 5683 <-> 5683)
       pt.push_back(0xF7); pt.push_back(0x00); pt.push_back(0xF0); pt.push_back(0x16); pt.push_back(0x33); pt.push_back(0x16); pt.push_back(0x33);
     }
@@ -648,35 +660,65 @@ class TadoEmulatorComponent : public Component,
       this->write_reg(REG_BITRATE_MSB, 0x02);
       this->write_reg(REG_BITRATE_LSB, 0x80);
 
-      // Frequency Deviation: 25 kHz -> 0x019A
+      // Frequency Deviation: 25.39 kHz -> 0x01A0 (matches CC110L / sniffer)
       this->write_reg(REG_FDEV_MSB, 0x01);
-      this->write_reg(REG_FDEV_LSB, 0x9A);
+      this->write_reg(REG_FDEV_LSB, 0xA0);
 
-      // Frequency: 868.323 MHz (Channel 26) -> 0xD9, 0x14, 0xBC
-      this->write_reg(REG_FRF_MSB, 0xD9);
-      this->write_reg(REG_FRF_MID, 0x14);
-      this->write_reg(REG_FRF_LSB, 0xBC);
+      // Frequency: Channel 26 (868.323 MHz) — computed via set_tado_channel()
+      {
+        uint32_t f_hz = 863125000UL + ((uint32_t)this->channel_ * 199951UL);
+        uint32_t frf = (uint32_t)((double)f_hz / 61.03515625 + 0.5);
+        this->write_reg(REG_FRF_MSB, (frf >> 16) & 0xFF);
+        this->write_reg(REG_FRF_MID, (frf >> 8) & 0xFF);
+        this->write_reg(REG_FRF_LSB, frf & 0xFF);
+      }
 
-      // Receiver Bandwidth: 100 kHz
+      // LNA: Maximum gain + LNA Boost for maximum sensitivity
+      this->write_reg(0x0C, 0x23);
+
+      // RX Config: AfcAutoOn, AgcAutoOn, RxTrigger=PreambleDetect+RSSI
+      this->write_reg(REG_RX_CONFIG, 0x1E);
+
+      // Receiver Bandwidth: 100 kHz (Mant=20, Exp=2)
       this->write_reg(REG_RX_BW, 0x0A);
-      this->write_reg(REG_AFC_BW, 0x0A);
+      // AFC Bandwidth: 166.67 kHz (Mant=24, Exp=1)
+      this->write_reg(REG_AFC_BW, 0x01);
 
-      // Sync Word: 0x550F7100
-      this->write_reg(REG_SYNC_CONFIG, 0x93);
-      this->write_reg(REG_SYNC_VALUE_1, 0x55);
-      this->write_reg(REG_SYNC_VALUE_2, 0x0F);
-      this->write_reg(REG_SYNC_VALUE_3, 0x71);
-      this->write_reg(REG_SYNC_VALUE_4, 0x00);
+      // AFC auto-clear on RX start
+      this->write_reg(0x1A, 0x20);
+      // RSSI Threshold: -105 dBm
+      this->write_reg(0x10, 0xD2);
 
-      // Packet Config: Variable length, CRC on, whitening on
-      this->write_reg(REG_PACKET_CONFIG_1, 0x98);
+      // TX Preamble: 4 bytes
+      this->write_reg(0x25, 0x00);
+      this->write_reg(0x26, 0x04);
+
+      // 3-byte preamble detection, tolerance=10
+      this->write_reg(REG_PREAMBLE_DETECT, 0xCA);
+
+      // Sync Word: D3 91 D3 91 (4-byte, matches Tado CC110L reference)
+      this->write_reg(REG_SYNC_CONFIG, 0x73);
+      this->write_reg(REG_SYNC_VALUE_1, 0xD3);
+      this->write_reg(REG_SYNC_VALUE_2, 0x91);
+      this->write_reg(REG_SYNC_VALUE_3, 0xD3);
+      this->write_reg(REG_SYNC_VALUE_4, 0x91);
+
+      // Packet Config: Variable length, CRC ON, CrcAutoClearOff=1, CCITT CRC
+      this->write_reg(REG_PACKET_CONFIG_1, 0x99);
       this->write_reg(REG_PACKET_CONFIG_2, 0x40);
-      this->write_reg(REG_PAYLOAD_LENGTH, 0x40);
+      this->write_reg(REG_PAYLOAD_LENGTH, 0x7F); // Max 127 bytes
+
+      // PA_BOOST at maximum output power
+      this->write_reg(REG_PA_CONFIG, 0x8F);
+      // GFSK shaping BT=1.0 (matches CC110L)
+      this->write_reg(REG_PARAMP, 0x29);
+      // FIFO Threshold = 14, TxStartCondition = FIFO Not Empty
+      this->write_reg(REG_FIFO_THRESH, 0x8E);
 
       // Continuous Receive Mode
       this->write_reg(REG_OP_MODE, 0x05);
       xSemaphoreGive(this->spi_mutex_);
-      ESP_LOGI(TAG, "SX1276 Transceiver configured for 868.323 MHz FSK (Channel 26)");
+      ESP_LOGI(TAG, "SX1276 Transceiver configured for Channel %d (%.3f MHz)", this->channel_, (863125000.0 + this->channel_ * 199951.0) / 1e6);
     }
 
     if (this->dio0_pin_ != nullptr) {
@@ -839,29 +881,47 @@ class TadoEmulatorComponent : public Component,
     }
 
     // Handle Pairing Step 1 response (auth/key -> extracts operational AES-128 key)
+    // ws-server responds with FID 0x0262 (server key, 16 bytes)
     if (target_dev->pairing_state == STATE_PAIRING_KEY && (coap_code == 69 || coap_code == 67 || coap_code == 65)) {
-      for (size_t i = coap_offset + 4; i + 18 < decrypted.size(); i++) {
-        if ((decrypted[i] == 0x00 && (decrypted[i+1] == 0x01 || decrypted[i+1] == 0x02 || decrypted[i+1] == 0x03)) && decrypted[i+2] == 16) {
+      // Scan CoAP payload for TLV with FID 0x0262 and length 16
+      size_t payload_start_key = 0;
+      for (size_t s = coap_offset + 4; s < decrypted.size(); s++) {
+        if (decrypted[s] == 0xFF) { payload_start_key = s + 1; break; }
+      }
+      if (payload_start_key == 0) payload_start_key = coap_offset + 4; // No payload marker, scan from options
+      for (size_t i = payload_start_key; i + 18 < decrypted.size(); i++) {
+        uint16_t fid = ((uint16_t)decrypted[i] << 8) | decrypted[i+1];
+        uint8_t flen = decrypted[i+2];
+        if (fid == 0x0262 && flen == 16) {
           memcpy(target_dev->op_key, &decrypted[i+3], 16);
           target_dev->has_op_key = true;
           this->save_to_nvs();
-          ESP_LOGI(TAG, "✓ Received operational key for %s. Progressing to auth/token", target_dev->serial_no.c_str());
+          ESP_LOGI(TAG, "✓ Received operational key (FID 0x0262) for %s. Progressing to auth/token", target_dev->serial_no.c_str());
           this->send_auth_token_request(target_dev);
           xSemaphoreGiveRecursive(this->devices_mutex_);
           return;
         }
+        if (i + 3 + flen <= decrypted.size()) i += 2 + flen; // Skip to next TLV (loop will +1)
       }
     }
 
     // Handle Pairing Step 2 / Token Refresh response (auth/token -> session token)
+    // ws-server responds with FID 0x025E (session token, 8 bytes)
     if ((target_dev->pairing_state == STATE_PAIRING_TOKEN || target_dev->token_refresh_pending) && coap_code == 69) {
-      for (size_t i = coap_offset + 4; i + 10 < decrypted.size(); i++) {
-        if (decrypted[i] == 0x00 && decrypted[i+1] == 0x06 && decrypted[i+2] == 8) {
+      size_t payload_start_tok = 0;
+      for (size_t s = coap_offset + 4; s < decrypted.size(); s++) {
+        if (decrypted[s] == 0xFF) { payload_start_tok = s + 1; break; }
+      }
+      if (payload_start_tok == 0) payload_start_tok = coap_offset + 4;
+      for (size_t i = payload_start_tok; i + 10 < decrypted.size(); i++) {
+        uint16_t fid = ((uint16_t)decrypted[i] << 8) | decrypted[i+1];
+        uint8_t flen = decrypted[i+2];
+        if (fid == 0x025E && flen == 8) {
           memcpy(target_dev->session_token, &decrypted[i+3], 8);
           target_dev->has_session_token = true;
           if (target_dev->token_refresh_pending) {
             target_dev->token_refresh_pending = false;
-            ESP_LOGI(TAG, "✓ Session token refreshed for %s", target_dev->serial_no.c_str());
+            ESP_LOGI(TAG, "✓ Session token (FID 0x025E) refreshed for %s", target_dev->serial_no.c_str());
           } else {
             target_dev->pairing_state = STATE_PAIRED;
             ESP_LOGI(TAG, "✓ Paired %s! Executing onboarding sequence...", target_dev->serial_no.c_str());
@@ -875,6 +935,7 @@ class TadoEmulatorComponent : public Component,
           xSemaphoreGiveRecursive(this->devices_mutex_);
           return;
         }
+        if (i + 3 + flen <= decrypted.size()) i += 2 + flen; // Skip to next TLV
       }
     }
 
@@ -1004,6 +1065,7 @@ class TadoEmulatorComponent : public Component,
           } else {
             this->derive_mac_from_serial(dev.serial_no, dev.mac_addr);
           }
+          dev.derive_short_addr();
 
           // Load persisted zone peer IPv6s
           char peers_key[20];
@@ -1235,6 +1297,7 @@ class TadoEmulatorComponent : public Component,
           } else {
             this->derive_mac_from_serial(new_ser, new_dev.mac_addr);
           }
+          new_dev.derive_short_addr();
           this->devices_.push_back(new_dev);
           existing = &this->devices_.back();
         } else {
@@ -1243,6 +1306,7 @@ class TadoEmulatorComponent : public Component,
           if (!ipv6_str.empty()) {
             existing->ipv6_address = ipv6_str;
             this->derive_mac_from_ipv6(ipv6_str, existing->mac_addr);
+            existing->derive_short_addr();
           }
         }
         this->save_to_nvs();

@@ -21,7 +21,7 @@ export default function ClimateQualityCard({ climateQuality, onClick }) {
   const rawFreshness = climateQuality?.freshness?.value?.toUpperCase();
   const freshness = !climateQuality 
     ? 'LOADING' 
-    : (rawFreshness === 'FRESH' || rawFreshness === 'GOOD' ? 'GOOD' : (rawFreshness || 'GOOD'));
+    : (rawFreshness === 'POOR' ? 'POOR' : (rawFreshness === 'FAIR' ? 'FAIR' : 'GOOD'));
 
   // Dynamic Background: emerald for good, amber for fair, red for poor, slate for loading
   const getCardStyle = () => {
@@ -83,7 +83,7 @@ export default function ClimateQualityCard({ climateQuality, onClick }) {
       }}
     >
       {/* Top Header Row */}
-      <div style={{ display: 'flex', justifycontent: 'space-between', alignItems: 'center', width: '100%', zIndex: 1 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', zIndex: 1 }}>
         <div style={{ 
           display: 'flex', 
           alignItems: 'center', 

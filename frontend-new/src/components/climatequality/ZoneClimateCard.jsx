@@ -85,17 +85,22 @@ export default function ZoneClimateCard({ name, comfort, state, outsideTemp }) {
   const explanation = getExplanation(temperatureLevel, humidityLevel);
 
   // Status Badge styles
-  const getStatusBadge = (tL, hL) => {
-    if (tL === 'COMFY' && hL === 'COMFY') {
-      return { label: t('air_comfort.freshness_good'), color: 'var(--success)' };
-    }
-    if (tL === 'TOO_COLD' || tL === 'TOO_DRY' || hL === 'TOO_HUMID') {
+  const getStatusBadge = (tL, hL, zoneFreshness) => {
+    const f = zoneFreshness?.toUpperCase() || (
+      (tL === 'TOO_COLD' || tL === 'HOT' || tL === 'TOO_HOT' || hL === 'TOO_DRY' || hL === 'TOO_HUMID') ? 'POOR' :
+      (tL === 'COLD' || tL === 'WARM' || hL === 'DRY' || hL === 'HUMID') ? 'FAIR' :
+      'GOOD'
+    );
+    if (f === 'POOR') {
       return { label: t('air_comfort.freshness_poor'), color: 'var(--danger)' };
     }
-    return { label: t('air_comfort.freshness_fair'), color: 'var(--warning)' };
+    if (f === 'FAIR') {
+      return { label: t('air_comfort.freshness_fair'), color: 'var(--warning)' };
+    }
+    return { label: t('air_comfort.freshness_good'), color: 'var(--success)' };
   };
 
-  const badge = getStatusBadge(temperatureLevel, humidityLevel);
+  const badge = getStatusBadge(temperatureLevel, humidityLevel, comfort.freshness);
 
   return (
     <Card style={{

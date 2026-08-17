@@ -27,31 +27,12 @@ const getAirComfortHandler = async (req, res) => {
         const isV1 = req.headers['user-agent']?.includes('Tado/1') || req.originalUrl.includes('/v1/') || req.originalUrl.includes('/acme/');
         const pool = db.getPool();
 
-        // Dynamic Freshness Calculation
+        // Informational last open window
         const [lastWindow] = await pool.execute(
             'SELECT timestamp FROM zone_measurements WHERE home_id = ? AND open_window_detected = 1 ORDER BY timestamp DESC LIMIT 1',
             [homeId]
         );
         const lastOpenWindow = lastWindow.length > 0 ? lastWindow[0].timestamp : null;
-
-        let freshnessValue = 'FRESH';
-        const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-        const [recentHumid] = await pool.execute(
-            'SELECT COUNT(*) as high_hum FROM zone_measurements WHERE home_id = ? AND timestamp > ? AND field_0135 > 60',
-            [homeId, twentyFourHoursAgo]
-        );
-        if (recentHumid[0].high_hum > 0) {
-            freshnessValue = 'FAIR';
-        }
-        if (lastOpenWindow) {
-            const lastWinDate = new Date(lastOpenWindow);
-            if (Date.now() - lastWinDate.getTime() > 48 * 60 * 60 * 1000) {
-                // If it's been more than 2 days since any window was opened, downgrade freshness if humidity was high
-                if (freshnessValue === 'FAIR') freshnessValue = 'POOR';
-            }
-        }
-
-        const hac = { freshness: freshnessValue, last_open_window: lastOpenWindow };
 
         const [zones] = await pool.execute('SELECT id, type, name FROM zones WHERE home_id = ?', [homeId]);
         const zoneComforts = [];
@@ -75,8 +56,12 @@ const getAirComfortHandler = async (req, res) => {
             measurementsMap.set(row.zone_id, row);
         }
 
+        let poorCount = 0;
+        let fairCount = 0;
+        let evaluatedHeatingZones = 0;
+
         for (const zone of zones) {
-            if (zone.type === 'HOT_WATER') continue;
+            if (zone.type === 'HOT_WATER' || zone.type === 'DHW') continue;
 
             const m = measurementsMap.get(zone.id) || { field_012d: 21.0, field_0135: 45.0 };
 
@@ -90,18 +75,45 @@ const getAirComfortHandler = async (req, res) => {
             let radial = Math.sqrt(dx * dx + dy * dy);
             let angular = (Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360;
 
-            // Mapping to levels
+            // Standard comfort thresholds
             let tempLevel = 'COMFY';
-            if (temp < 16) tempLevel = 'TOO_COLD';
-            else if (temp < 18) tempLevel = 'COLD';
-            else if (temp > 25) tempLevel = 'HOT';
-            else if (temp > 23) tempLevel = 'WARM';
+            let tempSeverity = 0;
+            if (temp < 15.5) {
+                tempLevel = 'TOO_COLD';
+                tempSeverity = 2;
+            } else if (temp < 18.0) {
+                tempLevel = 'COLD';
+                tempSeverity = 1;
+            } else if (temp > 26.5) {
+                tempLevel = 'HOT';
+                tempSeverity = 2;
+            } else if (temp > 24.0) {
+                tempLevel = 'WARM';
+                tempSeverity = 1;
+            }
 
             let humLevel = 'COMFY';
-            if (hum < 25) humLevel = 'TOO_DRY';
-            else if (hum < 30) humLevel = 'DRY';
-            else if (hum > 70) humLevel = 'TOO_HUMID';
-            else if (hum > 60) humLevel = 'HUMID';
+            let humSeverity = 0;
+            if (hum < 30.0) {
+                humLevel = 'TOO_DRY';
+                humSeverity = 2;
+            } else if (hum < 38.0) {
+                humLevel = 'DRY';
+                humSeverity = 1;
+            } else if (hum > 70.0) {
+                humLevel = 'TOO_HUMID';
+                humSeverity = 2;
+            } else if (hum > 60.0) {
+                humLevel = 'HUMID';
+                humSeverity = 1;
+            }
+
+            const zoneSeverity = Math.max(tempSeverity, humSeverity);
+            const zoneFreshness = zoneSeverity === 2 ? 'POOR' : (zoneSeverity === 1 ? 'FAIR' : 'GOOD');
+
+            evaluatedHeatingZones++;
+            if (zoneFreshness === 'POOR') poorCount++;
+            else if (zoneFreshness === 'FAIR') fairCount++;
 
             if (isV1) {
                 let message = null;
@@ -129,6 +141,7 @@ const getAirComfortHandler = async (req, res) => {
                     roomId: parseInt(zone.id, 10),
                     temperatureLevel: tempLevel,
                     humidityLevel: humLevel,
+                    freshness: zoneFreshness,
                     coordinate: {
                         radial: parseFloat(Math.min(1.0, radial).toFixed(2)),
                         angular: Math.round(angular)
@@ -173,16 +186,22 @@ const getAirComfortHandler = async (req, res) => {
                 }
             });
         } else {
-            // V2 Freshness logic (FAIR if any window recently opened or humidity issues)
-            let freshnessValue = hac.freshness || 'FRESH';
-            if (freshnessValue === 'FRESH' && zoneComforts.some(c => c.humidityLevel.includes('HUMID'))) {
-                freshnessValue = 'FAIR';
+            // Aggregated Home IAQ Freshness: directly reflects the status of all heating zones
+            let homeFreshness = 'GOOD';
+            if (evaluatedHeatingZones > 0) {
+                if (poorCount >= Math.ceil(evaluatedHeatingZones * 0.5) || poorCount >= 2) {
+                    homeFreshness = 'POOR';
+                } else if (poorCount > 0 || fairCount >= Math.ceil(evaluatedHeatingZones * 0.35) || (fairCount > 0 && evaluatedHeatingZones <= 2)) {
+                    homeFreshness = 'FAIR';
+                } else {
+                    homeFreshness = 'GOOD';
+                }
             }
 
             res.json({
                 freshness: {
-                    value: freshnessValue,
-                    lastOpenWindow: hac.last_open_window ? (typeof hac.last_open_window === 'string' ? hac.last_open_window : hac.last_open_window.toISOString()) : null
+                    value: homeFreshness,
+                    lastOpenWindow: lastOpenWindow ? (typeof lastOpenWindow === 'string' ? lastOpenWindow : lastOpenWindow.toISOString()) : null
                 },
                 comfort: zoneComforts
             });

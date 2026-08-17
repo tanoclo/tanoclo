@@ -132,7 +132,13 @@ async function handleAuthKey(ws, frame, coapMsg, decoded, peerInfo, rawData) {
         return;
     }
 
-    const serverKey = crypto.createHash('md5').update('tanoclo-server-key').digest();
+    // Generate per-home deterministic RF key (16 bytes) so each home has a unique key
+    // but it's reproducible across server restarts
+    const homeId = dbDev.home_id || 0;
+    const serverKey = crypto.createHmac('sha256', 'tanoclo-rf-key-seed')
+        .update(`home:${homeId}`)
+        .digest()
+        .subarray(0, 16);
 
     const responsePayload = tlv.encode([
         { fid: 0x0260, value: Buffer.from(deviceId || 'IB0000000000', 'utf8') },
