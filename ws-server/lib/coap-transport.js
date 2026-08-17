@@ -68,12 +68,6 @@ function findBridgeForHome(homeId) {
         }
     }
 
-    for (const [deviceId, info] of _clients.entries()) {
-        if (deviceId.startsWith('IB') || deviceId.startsWith('GW') || deviceId.includes('BRIDGE')) {
-            return { bridgeId: deviceId, bridgeClient: info };
-        }
-    }
-
     return null;
 }
 
