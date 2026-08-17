@@ -1,6 +1,5 @@
-// @vitest-environment jsdom
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { renderToString } from 'react-dom/server';
 import ZoneSettings from '../../components/settings/ZoneSettings';
 import * as useHomeModule from '../../context/HomeContext';
 
@@ -58,7 +57,7 @@ vi.mock('../../api/heating', () => ({
 describe('ZoneSettings - Advanced Settings Visibility', () => {
   it('renders Advanced Settings card for HEATING zones', () => {
     const heatingZone = { id: 1, name: 'Living Room', type: 'HEATING' };
-    render(
+    const html = renderToString(
       <ZoneSettings
         homeId={1}
         zoneId={1}
@@ -68,12 +67,12 @@ describe('ZoneSettings - Advanced Settings Visibility', () => {
         onNavigateToDevice={vi.fn()}
       />
     );
-    expect(screen.getByText('Advanced Settings')).toBeInTheDocument();
+    expect(html).toContain('Advanced Settings');
   });
 
   it('does NOT render Advanced Settings card for HOT_WATER (DHW) zones', () => {
     const dhwZone = { id: 2, name: 'Hot Water', type: 'HOT_WATER' };
-    render(
+    const html = renderToString(
       <ZoneSettings
         homeId={1}
         zoneId={2}
@@ -83,12 +82,12 @@ describe('ZoneSettings - Advanced Settings Visibility', () => {
         onNavigateToDevice={vi.fn()}
       />
     );
-    expect(screen.queryByText('Advanced Settings')).toBeNull();
+    expect(html).not.toContain('Advanced Settings');
   });
 
   it('does NOT render Advanced Settings card for DHW typed zones', () => {
     const dhwZone = { id: 3, name: 'DHW Zone', type: 'DHW' };
-    render(
+    const html = renderToString(
       <ZoneSettings
         homeId={1}
         zoneId={3}
@@ -98,7 +97,7 @@ describe('ZoneSettings - Advanced Settings Visibility', () => {
         onNavigateToDevice={vi.fn()}
       />
     );
-    expect(screen.queryByText('Advanced Settings')).toBeNull();
+    expect(html).not.toContain('Advanced Settings');
   });
 });
 
@@ -110,7 +109,7 @@ describe('ZoneSettings - Read-Only Notice', () => {
     });
 
     const heatingZone = { id: 1, name: 'Living Room', type: 'HEATING' };
-    render(
+    const html = renderToString(
       <ZoneSettings
         homeId={1}
         zoneId={1}
@@ -120,6 +119,6 @@ describe('ZoneSettings - Read-Only Notice', () => {
         onNavigateToDevice={vi.fn()}
       />
     );
-    expect(screen.getByRole('status')).toBeInTheDocument();
+    expect(html).toContain('role="status"');
   });
 });

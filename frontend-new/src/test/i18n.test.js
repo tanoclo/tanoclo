@@ -1,19 +1,29 @@
-// @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../utils/logger', () => ({
   default: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
+let cookieStore = '';
+if (typeof globalThis.document === 'undefined') {
+  globalThis.document = {
+    get cookie() { return cookieStore; },
+    set cookie(val) {
+      if (val.includes('expires=Thu, 01 Jan 1970')) {
+        cookieStore = '';
+      } else {
+        const parts = val.split(';')[0];
+        cookieStore = parts;
+      }
+    }
+  };
+}
+
 describe('i18n/index.js', () => {
   beforeEach(() => {
     vi.resetModules();
-    window.localStorage.clear();
-    // Clear any cookies
-    document.cookie.split(';').forEach(c => {
-      const name = c.split('=')[0].trim();
-      if (name) document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
-    });
+    if (typeof localStorage !== 'undefined') localStorage.clear();
+    cookieStore = '';
   });
 
   it('loads and initializes without errors', async () => {
@@ -35,7 +45,7 @@ describe('i18n/index.js', () => {
   });
 
   it('reads language from localStorage when no cookie', async () => {
-    window.localStorage.setItem('tado_locale', 'nl');
+    localStorage.setItem('tado_locale', 'nl');
     const i18n = (await import('../i18n')).default;
     expect(i18n.language).toBe('nl');
   });
@@ -43,7 +53,7 @@ describe('i18n/index.js', () => {
   it('syncs language change to both cookie and localStorage', async () => {
     const i18n = (await import('../i18n')).default;
     await i18n.changeLanguage('fr');
-    expect(window.localStorage.getItem('tado_locale')).toBe('fr');
+    expect(localStorage.getItem('tado_locale')).toBe('fr');
     expect(document.cookie).toContain('tado_locale=fr');
   });
 

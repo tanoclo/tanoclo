@@ -137,6 +137,7 @@ test('legacy test suite runs successfully', async () => {
   
       // 1. Mock DB stubs
       const mockDb = {
+          isOffline: () => false,
           getDevicesInZone: async (homeId, zoneId) => [
               { serial_no: 'IB0000000001', device_type: 'IB01', home_id: homeId, zone_id: zoneId, ipv6_address: 'fd00::1' },
               { serial_no: 'VA0000000001', device_type: 'VA01', home_id: homeId, zone_id: zoneId, ipv6_address: 'fd00::2' }
@@ -176,6 +177,8 @@ test('legacy test suite runs successfully', async () => {
           updateZoneOpenWindow: async () => ({}),
           updateLastConfigJsonFromLive: async () => ({}),
           calculateVADeviceETag: () => 0x1e38,
+          generateEtag: db.generateEtag,
+          unmapOrientation: db.unmapOrientation,
           getPool: () => ({
               execute: async (query, params) => {
                   if (query.includes('FROM homes')) {
@@ -188,7 +191,7 @@ test('legacy test suite runs successfully', async () => {
                       return [[{ number: 1, driver_serial_no: 'IB0000000001' }]];
                   }
                   if (query.includes('FROM devices')) {
-                      return [[{ serial_no: 'VA0000000001' }]];
+                      return [[{ serial_no: 'IB0000000001', device_type: 'IB01' }]];
                   }
                   if (query.includes('FROM zone_timetables')) {
                       return [[{ id: 45 }]];
@@ -371,22 +374,23 @@ test('legacy test suite runs successfully', async () => {
           let responseStatus = null;
           let responseJson = null;
           const res = {
+              writeHead: (code) => { responseStatus = code; return res; },
               status: (code) => { responseStatus = code; return res; },
               json: (data) => { responseJson = data; return res; },
               setHeader: () => res,
-              end: () => res
+              end: (data) => { if (data) try { responseJson = JSON.parse(data); } catch(e) {} return res; }
           };
 
           await commandApi.handleRfKeyRefresh(req, res, 'IB0000000001');
           assert.strictEqual(responseStatus, 200);
           assert.ok(lastSentFrame, 'No frame was sent');
 
-          const frame = wsBridge.parse(lastSentFrame);
+          const frame = wsBridge.parse(lastSentFrame.wsFrame);
           assert.strictEqual(frame.direction, 'server_to_client');
-          assert.strictEqual(frame.ipv6, 'fe80::1'); // Bridge IPv6
+          assert.strictEqual(frame.ipv6, 'fd00:0:0:0:0:0:0:1'); // Bridge IPv6
 
           const coapMsg = coap.parse(frame.coapBytes);
-          assert.strictEqual(coapMsg.code, '0.01'); // GET
+          assert.strictEqual(coap.codeStr(coapMsg.code), 'GET'); // GET
           assert.strictEqual(coap.uriPath(coapMsg), 'd/rfkey');
           assert.strictEqual(coapMsg.token.length, 8); // 8-byte random token
 
@@ -404,13 +408,10 @@ test('legacy test suite runs successfully', async () => {
       });
   
       console.log(`\n═══ command-api.js Tests Completed: Passed ${passed}/${passed + failed} ═══`);
-      await db.close();
+      if (!process.env.VITEST) await db.close();
       if (failed > 0) throw new Error('Some tests failed');
   }
-  
-  runTests().catch(err => {
-      console.error('Fatal test error:', err);
-      throw new Error('Test failed');
-  });
+
+  await runTests();
   
 });

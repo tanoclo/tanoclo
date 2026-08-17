@@ -371,15 +371,12 @@ test('legacy test suite runs successfully', async () => {
           if (server) {
               await new Promise(resolve => server.close(resolve));
           }
-          await db.close();
+          if (!process.env.VITEST) await db.close();
       }
   
       if (failed > 0) throw new Error('Some tests failed');
   }
   
-  runTests().catch(err => {
-      console.error('Fatal API test error:', err);
-      throw new Error('Test failed');
-  });
+  await runTests();
   
 });

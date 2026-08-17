@@ -362,7 +362,7 @@ test('legacy test suite runs successfully', async () => {
       } finally {
           if (server) server.close();
           try {
-              await db.close();
+              if (!process.env.VITEST) await db.close();
           } catch (dbErr) {
               console.error('Failed to close DB:', dbErr.message);
           }

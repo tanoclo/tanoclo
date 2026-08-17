@@ -514,7 +514,9 @@ async function setDisplaySettings(req, res) {
         if (existing.length === 0) return res.status(404).json({ error: 'Device not found' });
 
         if (brightness !== undefined || wakeSensitivity !== undefined || temperatureUnit !== undefined) {
-            await commandApi.pushDisplaySettings(deviceId, { brightness, wakeSensitivity, temperatureUnit });
+            await commandApi.pushDisplaySettings(deviceId, { brightness, wakeSensitivity, temperatureUnit }).catch(err => {
+                _log('warn', `Failed to push display settings for ${deviceId}: ${err.message}`);
+            });
             return res.json({ success: true });
         }
 

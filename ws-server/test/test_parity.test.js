@@ -844,10 +844,6 @@ test('legacy test suite runs successfully', async () => {
       if (failed + errors > 0) throw new Error('Some tests failed');
   }
   
-  main().catch(e => {
-      console.error(`Fatal: ${e.message}`);
-      console.error(e.stack);
-      throw new Error('Test failed');
-  });
+  await main();
   
 });

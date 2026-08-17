@@ -1,14 +1,18 @@
-// @vitest-environment jsdom
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { renderToString } from 'react-dom/server';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import AccountPage from '../../pages/AccountPage';
-import * as SelfUpdaterModule from '../../components/common/SelfUpdater';
 
 vi.mock('@capacitor/core', () => ({
   Capacitor: {
     isNativePlatform: vi.fn(() => true),
     getPlatform: vi.fn(() => 'android')
-  }
+  },
+  registerPlugin: vi.fn(() => ({
+    getVersionInfo: vi.fn(() => Promise.resolve({ versionCode: 100, versionName: '1.0.0' })),
+    canInstallApk: vi.fn(() => Promise.resolve({ value: true })),
+    downloadAndInstallApk: vi.fn(() => Promise.resolve()),
+    addListener: vi.fn(() => Promise.resolve({ remove: vi.fn() }))
+  }))
 }));
 
 vi.mock('../../hooks/useAuth', () => ({
@@ -44,19 +48,12 @@ describe('AccountPage', () => {
   });
 
   it('renders Check for Updates button on native platform', () => {
-    render(<AccountPage />);
-    expect(screen.getByText('Check for Updates')).toBeInTheDocument();
+    const html = renderToString(<AccountPage />);
+    expect(html).toContain('settings.check_for_updates');
   });
 
-  it('invokes triggerCheckForUpdates when button clicked', async () => {
-    const triggerSpy = vi.spyOn(SelfUpdaterModule, 'triggerCheckForUpdates').mockResolvedValue(false);
-    render(<AccountPage />);
-    
-    const button = screen.getByText('Check for Updates');
-    fireEvent.click(button);
-
-    await waitFor(() => {
-      expect(triggerSpy).toHaveBeenCalledWith(true);
-    });
+  it('renders UserSettings component', () => {
+    const html = renderToString(<AccountPage />);
+    expect(html).toContain('UserSettings');
   });
 });

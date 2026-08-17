@@ -252,7 +252,7 @@ test('legacy test suite runs successfully', async () => {
                   console.error('Cleanup failed:', cleanupErr.message);
               }
               try {
-                  await db.close();
+                  if (!process.env.VITEST) await db.close();
               } catch (dbErr) {
                   console.error('Failed to close DB:', dbErr.message);
               }

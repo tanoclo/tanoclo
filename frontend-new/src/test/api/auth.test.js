@@ -1,4 +1,3 @@
-// @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock fetch globally
@@ -9,6 +8,9 @@ describe('api/auth.js', () => {
     vi.resetModules();
     localStorage.clear();
     fetch.mockReset();
+    globalThis.window = globalThis.window || {};
+    globalThis.window.location = { href: 'http://localhost:5173/', origin: 'http://localhost:5173' };
+    globalThis.location = globalThis.window.location;
     // Mock crypto for PKCE
     if (!globalThis.crypto?.subtle) {
       globalThis.crypto = {
@@ -109,10 +111,8 @@ describe('api/auth.js', () => {
 
   describe('initiateLoginFlow', () => {
     it('stores PKCE verifier and state in localStorage, redirects', async () => {
-      // Mock window.location
-      const originalHref = window.location.href;
-      delete window.location;
-      window.location = { href: 'http://localhost:5173/', origin: 'http://localhost:5173' };
+      globalThis.window.location = { href: 'http://localhost:5173/', origin: 'http://localhost:5173' };
+      globalThis.location = globalThis.window.location;
 
       const { initiateLoginFlow } = await import('../../api/auth');
       await initiateLoginFlow();
@@ -123,9 +123,6 @@ describe('api/auth.js', () => {
       expect(localStorage.getItem('pkce_redirect_uri')).toBe('http://localhost:5173/');
       expect(window.location.href).toContain('/oauth2/authorize');
       expect(window.location.href).toContain('code_challenge_method=S256');
-
-      // Restore
-      window.location = { href: originalHref };
     });
   });
 });

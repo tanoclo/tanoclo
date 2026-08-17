@@ -103,10 +103,10 @@ test('legacy test suite runs successfully', async () => {
           const applyDeviceConfigOverrides = testCmdApi.applyDeviceConfigOverrides;
           
           // Find a device that is assigned to a zone
-          const [devRows] = await p.execute('SELECT serial_no, zone_id FROM devices WHERE zone_id IS NOT NULL LIMIT 1');
+          const [devRows] = await p.execute('SELECT serial_no, zone_id, home_id FROM devices WHERE zone_id IS NOT NULL LIMIT 1');
           if (devRows.length > 0) {
               const dev = devRows[0];
-              const [zoneRows] = await p.execute('SELECT dazzle_enabled, offline_schedule_enabled FROM zones WHERE id = ?', [dev.zone_id]);
+              const [zoneRows] = await p.execute('SELECT dazzle_enabled, offline_schedule_enabled FROM zones WHERE id = ? AND home_id = ?', [dev.zone_id, dev.home_id]);
               if (zoneRows.length > 0) {
                   const zone = zoneRows[0];
                   const testFields = {};
@@ -140,7 +140,7 @@ test('legacy test suite runs successfully', async () => {
           throw new Error('Test failed');
       } finally {
           try {
-              await db.close();
+              if (!process.env.VITEST) await db.close();
           } catch (dbErr) {
               console.error('Failed to close DB:', dbErr.message);
           }

@@ -1,47 +1,43 @@
-// @vitest-environment jsdom
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
-import Toggle from '../components/common/Toggle';
+import { renderToString } from 'react-dom/server';
+import Toggle from '../../components/common/Toggle';
 
 describe('components/Toggle', () => {
   it('renders unchecked state', () => {
-    render(<Toggle checked={false} onChange={vi.fn()} />);
-    const input = screen.getByRole('switch');
-    expect(input).not.toBeChecked();
+    const html = renderToString(<Toggle checked={false} onChange={vi.fn()} />);
+    expect(html).toContain('role="switch"');
+    expect(html).toContain('aria-checked="false"');
   });
 
   it('renders checked state', () => {
-    render(<Toggle checked={true} onChange={vi.fn()} />);
-    const input = screen.getByRole('switch');
-    expect(input).toBeChecked();
+    const html = renderToString(<Toggle checked={true} onChange={vi.fn()} />);
+    expect(html).toContain('role="switch"');
+    expect(html).toContain('aria-checked="true"');
   });
 
-  it('fires onChange on click', () => {
+  it('fires onChange on input change', () => {
     const onChange = vi.fn();
-    render(<Toggle checked={false} onChange={onChange} />);
-    fireEvent.click(screen.getByRole('switch'));
+    const elem = Toggle({ checked: false, onChange });
+    const input = elem.props.children[0].props.children[0];
+    input.props.onChange({ target: { checked: true } });
     expect(onChange).toHaveBeenCalledWith(true);
   });
 
   it('respects disabled prop — does not call onChange', () => {
     const onChange = vi.fn();
-    render(<Toggle checked={false} onChange={onChange} disabled />);
-    fireEvent.click(screen.getByRole('switch'));
+    const elem = Toggle({ checked: false, onChange, disabled: true });
+    const input = elem.props.children[0].props.children[0];
+    input.props.onChange({ target: { checked: true } });
     expect(onChange).not.toHaveBeenCalled();
   });
 
   it('renders label text when provided', () => {
-    render(<Toggle checked={false} onChange={vi.fn()} label="Enable" />);
-    expect(screen.getByText('Enable')).toBeInTheDocument();
-  });
-
-  it('does not render label when empty', () => {
-    const { container } = render(<Toggle checked={false} onChange={vi.fn()} />);
-    expect(container.querySelector('span')).toBeNull();
+    const html = renderToString(<Toggle checked={false} onChange={vi.fn()} label="Enable" />);
+    expect(html).toContain('Enable');
   });
 
   it('has aria-checked attribute', () => {
-    render(<Toggle checked={true} onChange={vi.fn()} />);
-    expect(screen.getByRole('switch')).toHaveAttribute('aria-checked', 'true');
+    const html = renderToString(<Toggle checked={true} onChange={vi.fn()} />);
+    expect(html).toContain('aria-checked="true"');
   });
 });

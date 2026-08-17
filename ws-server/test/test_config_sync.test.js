@@ -59,7 +59,7 @@ test('legacy test suite runs successfully', async () => {
               await pool.execute('DELETE FROM devices WHERE serial_no = ?', [testSerial]);
           } catch (cleanupErr) {}
           try {
-              await db.close();
+              if (!process.env.VITEST) await db.close();
           } catch (dbErr) {}
       }
   }

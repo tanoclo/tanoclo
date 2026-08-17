@@ -13,9 +13,11 @@ export default defineConfig({
         globals: true,
         testTimeout: 60000, // Increase timeout to 60s for slow DB queries on some environments
         fileParallelism: false, // Run test files sequentially to prevent database locks/deadlocks
+        isolate: false,
         pool: 'forks',
-        maxWorkers: 1,
         include: ['test/**/*.test.js'],
         environment: 'node',
+        globalTeardown: './test/globalTeardown.js',
     },
 });
+

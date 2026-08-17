@@ -159,10 +159,6 @@ test('legacy test suite runs successfully', async () => {
       // process.exit(0);
   }
   
-  test().catch(err => {
-      console.error('FAIL: Path classification tests failed!');
-      console.error(err);
-      throw new Error('Test failed');
-  });
-  
+  await test();
+
 });

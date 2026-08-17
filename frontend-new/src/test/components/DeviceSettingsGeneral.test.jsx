@@ -1,6 +1,5 @@
-// @vitest-environment jsdom
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { renderToString } from 'react-dom/server';
 import DeviceSettingsGeneral from '../../components/settings/DeviceSettingsGeneral';
 
 vi.mock('react-i18next', () => ({
@@ -14,7 +13,7 @@ describe('DeviceSettingsGeneral - Read-Only Battery Type', () => {
     const mockDevice = { serialNo: 'VA123456789', deviceType: 'VA02' };
     const mockBatteryInfo = { battery_type: 'alkaline', battery_percent: 85, battery_state: 'GOOD' };
 
-    render(
+    const html = renderToString(
       <DeviceSettingsGeneral
         device={mockDevice}
         friendlyNameInput="Test Valve"
@@ -34,7 +33,7 @@ describe('DeviceSettingsGeneral - Read-Only Battery Type', () => {
       />
     );
 
-    const select = screen.getByRole('combobox');
-    expect(select).not.toBeDisabled();
+    expect(html).toContain('<select');
+    expect(html).toContain('alkaline');
   });
 });

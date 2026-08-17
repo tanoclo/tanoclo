@@ -69,16 +69,13 @@ test('legacy test suite runs successfully', async () => {
           `Expected: ${rawCircuitConfigHex}\n  Got:      ${reencodedCircuitBuf.toString('hex')}`);
   
       // Clean up
-      await db.close();
-  
+      if (!process.env.VITEST) await db.close();
+
       console.log('\n══ RESULTS ══');
       console.log(`  Passed: ${passed} | Failed: ${failed}`);
       if (failed > 0) throw new Error('Some tests failed');
   }
   
-  run().catch(err => {
-      console.error('Unhandled rejection:', err);
-      throw new Error('Test failed');
-  });
-  
+  await run();
+
 });
