@@ -11,6 +11,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: tanoclo-workflows-queue
+  cancel-in-progress: false
+
 jobs:
   ota-web-build:
     runs-on: ubuntu-latest

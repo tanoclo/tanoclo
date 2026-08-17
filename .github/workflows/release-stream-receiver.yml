@@ -12,6 +12,10 @@ permissions:
   contents: write
   packages: write
 
+concurrency:
+  group: tanoclo-workflows-queue
+  cancel-in-progress: false
+
 env:
   VERSION: ${{ github.event.inputs.version }}
 

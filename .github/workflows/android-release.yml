@@ -11,6 +11,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: tanoclo-workflows-queue
+  cancel-in-progress: false
+
 jobs:
   build-native-apk:
     runs-on: ubuntu-latest
