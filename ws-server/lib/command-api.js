@@ -186,7 +186,7 @@ async function checkZoneConfigReadonly(homeId) {
 
 function sortConfigFields(fields) {
     const CONFIG_FIDS_ORDER = [
-        0x0143, 0x0140, 0x015d, 0x015c, 0x02b3, 0x021a, 0x0149, 0x015e, 0x0158, 0x015a
+        0x0143, 0x0140, 0x015d, 0x015c, 0x019d, 0x019e, 0x02b2, 0x02b3, 0x021a, 0x0149, 0x015e, 0x0158, 0x015a
     ];
 
     const getFid = (key) => {
@@ -822,7 +822,7 @@ function getRouter(opts) {
 module.exports = {
     initialize, start, stop, getRouter, findBestDeviceIdForPing,
     findBridgeForHome, queryDeviceConfig, waitForAck, ZS_SCHEMA,
-    isTaNoCloOriginatedMid, sendViaBridge, internalPushViabridge,
+    getNextMid, isTaNoCloOriginatedMid, sendViaBridge, internalPushViabridge,
     handleAckReceived, clearPendingRetries, checkZoneConfigReadonly,
     sortConfigFields, sortZoneStateFields, getCommandStatus, getCommandHistory,
     jsonResponse, handleGetClients, handleSend, handleSendRaw, handleCircuitConfig,

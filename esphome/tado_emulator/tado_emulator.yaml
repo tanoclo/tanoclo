@@ -14,7 +14,8 @@ wifi:
 logger:
   level: INFO
 
-web_server_base:
+web_server:
+  port: 80
 
 # Configure SPI for SX1276 (TTGO LoRa32 pins)
 spi:
@@ -32,5 +33,5 @@ tado_emulator:
   dio0_pin: 26
   channel: 26
   server_url: "http://YOUR_SERVER_IP:3000"
-  api_key: "YOUR_ESP32_NODE_API_KEY"
+  api_key: ""
 

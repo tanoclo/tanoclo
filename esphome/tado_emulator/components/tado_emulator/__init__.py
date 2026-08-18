@@ -22,7 +22,7 @@ CONFIG_SCHEMA = cv.Schema({
     cv.Optional(CONF_CHANNEL, default=26): cv.int_,
     cv.Optional('server_url', default=''): cv.string,
     cv.Optional('api_key', default=''): cv.string,
-    cv.Optional(CONF_WEB_SERVER_BASE_ID): cv.use_id(web_server_base.WebServerBase),
+    cv.GenerateID(CONF_WEB_SERVER_BASE_ID): cv.use_id(web_server_base.WebServerBase),
 }).extend(cv.COMPONENT_SCHEMA).extend(spi.spi_device_schema(False))
 
 async def to_code(config):
@@ -38,8 +38,7 @@ async def to_code(config):
     
     cg.add(var.set_channel(config[CONF_CHANNEL]))
     
-    if CONF_WEB_SERVER_BASE_ID in config:
-        server = await cg.get_variable(config[CONF_WEB_SERVER_BASE_ID])
-        cg.add(var.set_server_base(server))
+    server = await cg.get_variable(config[CONF_WEB_SERVER_BASE_ID])
+    cg.add(var.set_server_base(server))
     cg.add(var.set_server_url(config['server_url']))
     cg.add(var.set_api_key(config['api_key']))

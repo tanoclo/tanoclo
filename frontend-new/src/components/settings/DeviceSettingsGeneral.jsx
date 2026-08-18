@@ -115,7 +115,13 @@ export default function DeviceSettingsGeneral({
               </strong>
             )}
           </div>
-          {!isBridge && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
+            <span style={{ color: 'var(--text-secondary)' }}>{t('settings.emulated_device', { defaultValue: 'Emulated Device' })}</span>
+            <strong style={{ color: device?.isEmulated ? 'var(--primary)' : 'var(--text-primary)' }}>
+              {device?.isEmulated ? t('common.yes', { defaultValue: 'Yes' }) : t('common.no', { defaultValue: 'No' })}
+            </strong>
+          </div>
+          {!isBridge && !device?.isEmulated && (
             <>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
                 <span style={{ color: 'var(--text-secondary)' }}>{t('settings.battery_type')}</span>

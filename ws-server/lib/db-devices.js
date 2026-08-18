@@ -15,7 +15,10 @@ const { getPool, _log, safeJsonParse, extractShortSerial, mapOrientation, unmapO
 async function getDeviceBySerial(shortSerial) {
     const p = getPool();
     const [rows] = await p.execute(
-        'SELECT * FROM devices WHERE serial_no = ? OR serial_no LIKE CONCAT(?, "%") LIMIT 1',
+        `SELECT d.*, ed.mode AS emulated_mode, (ed.serial_no IS NOT NULL) AS is_emulated 
+         FROM devices d 
+         LEFT JOIN emulated_devices ed ON d.serial_no = ed.serial_no 
+         WHERE d.serial_no = ? OR d.serial_no LIKE CONCAT(?, "%") LIMIT 1`,
         [shortSerial, shortSerial]
     );
     return rows.length > 0 ? rows[0] : null;
@@ -24,7 +27,10 @@ async function getDeviceBySerial(shortSerial) {
 async function getDeviceByFullSerial(fullSerial) {
     const p = getPool();
     const [rows] = await p.execute(
-        'SELECT * FROM devices WHERE serial_no = ? LIMIT 1',
+        `SELECT d.*, ed.mode AS emulated_mode, (ed.serial_no IS NOT NULL) AS is_emulated 
+         FROM devices d 
+         LEFT JOIN emulated_devices ed ON d.serial_no = ed.serial_no 
+         WHERE d.serial_no = ? LIMIT 1`,
         [fullSerial]
     );
     return rows.length > 0 ? rows[0] : null;
@@ -33,7 +39,10 @@ async function getDeviceByFullSerial(fullSerial) {
 async function getDevicesForHome(homeId) {
     const p = getPool();
     const [rows] = await p.execute(
-        'SELECT * FROM devices WHERE home_id = ?',
+        `SELECT d.*, ed.mode AS emulated_mode, (ed.serial_no IS NOT NULL) AS is_emulated 
+         FROM devices d 
+         LEFT JOIN emulated_devices ed ON d.serial_no = ed.serial_no 
+         WHERE d.home_id = ?`,
         [homeId]
     );
     return rows;
@@ -42,7 +51,10 @@ async function getDevicesForHome(homeId) {
 async function getDevicesInZone(homeId, zoneId) {
     const p = getPool();
     const [rows] = await p.execute(
-        'SELECT * FROM devices WHERE home_id = ? AND zone_id = ?',
+        `SELECT d.*, ed.mode AS emulated_mode, (ed.serial_no IS NOT NULL) AS is_emulated 
+         FROM devices d 
+         LEFT JOIN emulated_devices ed ON d.serial_no = ed.serial_no 
+         WHERE d.home_id = ? AND d.zone_id = ?`,
         [homeId, zoneId]
     );
     return rows;
@@ -66,6 +78,13 @@ async function updateDeviceConnectionState(shortSerial, isConnected, batteryStat
     query += ' WHERE serial_no = ?';
     params.push(shortSerial);
     await p.execute(query, params);
+
+    if (isConnected) {
+        try {
+            await p.execute('UPDATE emulated_devices SET pairing_state = "PAIRED" WHERE serial_no = ? AND pairing_state = "PAIRING_RF"', [shortSerial]);
+            await p.execute('UPDATE devices SET in_pairing_mode = 0 WHERE serial_no = ? AND in_pairing_mode = 1', [shortSerial]);
+        } catch (_) { }
+    }
 }
 
 async function updateDeviceIPv6(deviceId, ipv6) {
@@ -369,13 +388,18 @@ async function getEsp32NodeById(id) {
     return rows[0] || null;
 }
 
-async function createEsp32Node({ name, ip_address, api_port = 80, api_key = null }) {
+async function createEsp32Node({ name, ip_address, api_port = 80, api_key = null, status = 'UNKNOWN' }) {
     const p = getPool();
     const [result] = await p.execute(
         'INSERT INTO esp32_nodes (name, ip_address, api_port, api_key, status, last_seen) VALUES (?, ?, ?, ?, ?, ?)',
-        [name, ip_address, api_port, api_key, 'ONLINE', new Date().toISOString()]
+        [name, ip_address, api_port, api_key, status, new Date().toISOString()]
     );
     return getEsp32NodeById(result.insertId);
+}
+
+async function updateEsp32NodeStatus(id, status) {
+    const p = getPool();
+    await p.execute('UPDATE esp32_nodes SET status = ?, last_seen = ? WHERE id = ?', [status, new Date().toISOString(), id]);
 }
 
 async function deleteEsp32Node(id) {
@@ -394,7 +418,7 @@ async function getAllEmulatedDevices() {
     return rows;
 }
 
-async function createEmulatedDevice({ serial_no, esp32_node_id, device_type = 'RU02', mode = 'WIRELESS_SENSOR', home_id, zone_id = null, ipv6_address, pairing_state = 'PAIRING_IB' }) {
+async function createEmulatedDevice({ serial_no, esp32_node_id, device_type = 'RU02', mode = 'WIRELESS_SENSOR', home_id, zone_id = null, ipv6_address, pairing_state = 'PAIRING_IB', factory_key = null }) {
     const p = getPool();
     const now = new Date().toISOString();
 
@@ -402,28 +426,30 @@ async function createEmulatedDevice({ serial_no, esp32_node_id, device_type = 'R
     await p.execute(`
         INSERT INTO devices (
             serial_no, device_type, home_id, zone_id, current_fw_version,
-            connection_state, connection_state_timestamp, ipv6_address, in_pairing_mode
-        ) VALUES (?, ?, ?, ?, ?, 1, ?, ?, 1)
+            connection_state, connection_state_timestamp, ipv6_address, in_pairing_mode, factory_key
+        ) VALUES (?, ?, ?, ?, ?, 1, ?, ?, 1, ?)
         ON DUPLICATE KEY UPDATE
             home_id = VALUES(home_id),
             zone_id = VALUES(zone_id),
             ipv6_address = VALUES(ipv6_address),
+            factory_key = VALUES(factory_key),
             in_pairing_mode = 1
-    `, [serial_no, device_type, home_id, zone_id, '95.1', now, ipv6_address]);
+    `, [serial_no, device_type, home_id, zone_id, '95.1', now, ipv6_address, factory_key]);
 
     // 2. Insert into emulated_devices tracking table
     await p.execute(`
         INSERT INTO emulated_devices (
-            serial_no, esp32_node_id, device_type, mode, home_id, zone_id, ipv6_address, pairing_state
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            serial_no, esp32_node_id, device_type, mode, home_id, zone_id, ipv6_address, pairing_state, factory_key
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE
             esp32_node_id = VALUES(esp32_node_id),
             mode = VALUES(mode),
             home_id = VALUES(home_id),
             zone_id = VALUES(zone_id),
             ipv6_address = VALUES(ipv6_address),
-            pairing_state = VALUES(pairing_state)
-    `, [serial_no, esp32_node_id, device_type, mode, home_id, zone_id, ipv6_address, pairing_state]);
+            pairing_state = VALUES(pairing_state),
+            factory_key = VALUES(factory_key)
+    `, [serial_no, esp32_node_id, device_type, mode, home_id, zone_id, ipv6_address, pairing_state, factory_key]);
 
     const [rows] = await p.execute('SELECT * FROM emulated_devices WHERE serial_no = ? LIMIT 1', [serial_no]);
     return rows[0] || null;
@@ -473,6 +499,7 @@ module.exports = {
     getAllEsp32Nodes,
     getEsp32NodeById,
     createEsp32Node,
+    updateEsp32NodeStatus,
     deleteEsp32Node,
     getAllEmulatedDevices,
     createEmulatedDevice,

@@ -621,9 +621,11 @@ async function pushUnassociateNeighborByIp(homeId, targetIpv6) {
 
     api._log('info', `[cmd-api] Pushing unassociation config to neighbor IP ${targetIpv6} via bridge ${bridge.bridgeId}`);
 
-    const matchingDevSerial = await api._db.getDeviceByIPv6(targetIpv6);
-    if (matchingDevSerial) {
-        await api._db.updateDeviceConnectionState(matchingDevSerial, false);
+    if (typeof api._db?.getDeviceByIPv6 === 'function') {
+        const matchingDevSerial = await api._db.getDeviceByIPv6(targetIpv6);
+        if (matchingDevSerial && typeof api._db?.updateDeviceConnectionState === 'function') {
+            await api._db.updateDeviceConnectionState(matchingDevSerial, false);
+        }
     }
 
     const coapBytes = coap.buildRequest({

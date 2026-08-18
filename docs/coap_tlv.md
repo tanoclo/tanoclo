@@ -100,8 +100,8 @@ Tado-specific protocol options are mapped to standard and custom identifiers:
 | **4** | `OPT_ETAG` | `bytes` | Resource version ETag (2-byte hash block or 8-byte MD5 slice). |
 | **7** | `OPT_LOCATION_PATH` | `bytes` | Also used in `/auth/token` for raw 16-byte operational key exchange. |
 | **11** | `OPT_URI_PATH` | `string` | Repeating path segments (e.g. `d`, `config` for `/d/config`). |
-| **12** | `OPT_CONTENT_FORMAT`| `uint` | Payload format: `42` = Binary TLV, `0` = text/plain. |
-| **15** | `OPT_URI_QUERY` | `string` | Repeating query parameters (e.g. `v=1`). |
+| **12** | `OPT_CONTENT_FORMAT`| `uint` | Payload format: `42` (`0x2A`) = Binary TLV (`application/octet-stream`), `0` = `text/plain`. **Mandatory on all CoAP `2.05 Content` and `2.04 Changed` responses**; omitting Option 12 (`0xC1 0x2A`) causes the Internet Bridge to reject ACKs and drop devices from `DEV_NEIGHBORS`. |
+| **15** | `OPT_URI_QUERY` | `string` | Repeating query parameters (e.g. `v=1`, `lid=1`). |
 | **17** | `OPT_ACCEPT` | `uint` | Client-accepted payload format. |
 | **23** | `OPT_BLOCK2` | `uint` | Downlink pagination parameter (requested block index, SZX). |
 | **27** | `OPT_BLOCK1` | `uint` | Uplink pagination parameter (sent block index, M flag, SZX). |
@@ -565,3 +565,24 @@ An 8-bit unsigned byte (`u8`) representing hardware reset flags retrieved from t
 Used for reporting user rotation and touch interactions on the physical device interface:
 *   **Dial Encoder Steps (`0x0137`)**: Represents relative rotation step offset. The value resets to a baseline offset of `0x7f` ($127$) after each reported period. A value $> 127$ indicates clockwise rotation steps, while a value $< 127$ indicates counter-clockwise steps.
 *   **Dial Click/Touch Action (`0x027a`)**: Enumerates the click or capacitive touch interaction type registered on the dial overlay.
+
+---
+
+## 7. Topology & Neighbor Discovery Endpoints
+
+### 7.1 Neighbor Topology Report (`/d/{id}/neighbors` / `DEV_NEIGHBORS`)
+Periodically uploaded by the Internet Bridge to report its active 6LoWPAN mesh / link neighbors:
+*   **`0x01d0` (`neighbor_self_ipv6`)**: 16-byte link-local IPv6 address of the Internet Bridge (`fe80::21b:c507:31xx:xxxx`).
+*   **`0x01d1` (`neighbor_entry`)**: Repeated sub-TLV container representing each neighboring device. Contains:
+    *   **`0x01d2` (`neighbor_ipv6`)**: 16-byte link-local IPv6 address of the neighboring node.
+*   **`0x01d3` (`neighbor_data`)**: Link quality, RSSI, and transmission metrics byte array corresponding to the preceding neighbor entry.
+
+### 7.2 Zone Leader Presence Ping (`/z/p?lid=1`)
+Transmitted periodically (every 15 minutes) by zone measuring devices (Valve Actuators and Room Units) to the Zone Controller or Internet Bridge:
+*   **URI**: `/z/p?lid=1` (`OPT_URI_PATH = "z"`, `"p"`, `OPT_URI_QUERY = "lid=1"`)
+*   **Method**: `PUT` (CON)
+*   **Payload**: TLV containing:
+    *   **`0x4060`**: Current room target / demand setpoint ($0.01^\circ\text{C}$).
+    *   **`0x40a0`**: Heat demand output ($0-100\%$).
+    *   **`0x0135`**: Ambient relative humidity ($0.01\%$).
+

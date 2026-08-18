@@ -89,10 +89,9 @@ async function getDevice(req, res) {
     try {
         const { deviceId } = req.params;
         const homeId = await verifyDeviceHome(req, deviceId);
-        const pool = db.getPool();
-        const [devices] = await pool.execute('SELECT * FROM devices WHERE serial_no = ? AND home_id = ?', [deviceId, homeId]);
-        if (devices.length === 0) return res.status(404).json({ error: 'Device not found' });
-        res.json(mapDevice(devices[0]));
+        const dev = await db.getDeviceByFullSerial(deviceId);
+        if (!dev || dev.home_id !== homeId) return res.status(404).json({ error: 'Device not found' });
+        res.json(mapDevice(dev));
     } catch (err) {
         if (err.statusCode) return res.status(err.statusCode).json({ error: err.message.toLowerCase() });
         res.status(500).json({ error: 'internal_error' });

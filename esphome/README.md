@@ -2,9 +2,10 @@
 
 This directory contains the custom ESPHome-based RF components and host-side analysis utilities designed to interface with the proprietary Tado RF protocol using a **TTGO LoRa32 V1** development board (ESP32 + Semtech SX1276 FSK/LoRa transceiver).
 
-To ensure high performance and clean operations, the toolkit is split into two distinct, dedicated ESPHome components:
+To ensure high performance and clean operations, the toolkit is split into three dedicated ESPHome components:
 1. **`tado_pairing`**: An active, reset-VA mimicry agent used to quickly extract the operational RF network key from the Internet Bridge without completing or registering pairing.
-2. **`tado_sniffer`**: A passive packet capturing and UDP streaming component used to sniff operational packets and stream them in real-time to the host.
+2. **`tado_sniffer`**: A passive packet capturing and TCP streaming component used to sniff operational packets and stream them in real-time to the host.
+3. **`tado_emulator`**: An active multi-device emulator enabling an ESP32 to act as multiple Room Units (RU) and Wireless Temperature Sensors on your network with full REST API and Setup Dashboard integration.
 
 ---
 
@@ -171,3 +172,31 @@ You can also set the following environment variables:
 * `MQTT_HOST`: Broker URL.
 * `MQTT_TOPIC`: Base topic.
 * `MQTT_USERNAME` / `MQTT_PASSWORD`: Broker credentials.
+
+---
+
+## 6. Multi-Device Hardware Emulation: `tado_emulator`
+
+The `tado_emulator` component allows a single ESP32 development board (TTGO LoRa32) to emulate multiple virtual Tado Room Units (RU) and Wireless Temperature Sensors simultaneously.
+
+### 6.1 Features
+- **Multi-Device Support**: Emulate multiple independent serial numbers on a single physical radio.
+- **Full CoAP & 6LoWPAN Stack**: Implements AES-128-CCM encryption, CoAP Option 12 (`Content-Format: 42`), ICMPv6 Echo, and CSL receiver handling.
+- **REST API Integration**: Direct HMAC-authenticated HTTP control between the TaNoClo server and the ESP32 node.
+- **NVRAM Persistence**: Operational keys, session tokens, and telemetry setpoints persist across power cycles using ESP32 `Preferences`.
+- **Automatic Unassociation Handling**: Listens for unassociation commands (`d/config` with `0x0158 == 0`), erases the device from NVRAM, and notifies the server.
+
+### 6.2 Flashing the Emulator Firmware
+Compile and flash the emulator component:
+```bash
+esphome run tado_emulator/tado_emulator.yaml
+```
+
+### 6.3 Registering & Controlling via Setup Portal
+1. Open the **TaNoClo Setup Portal** (`https://setup.tanoclo.YOUR_DOMAIN.com`).
+2. Navigate to **Emulated Devices & ESP32 Nodes**.
+3. Add the ESP32 node IP and API key.
+4. Click **Create & Initiate Pairing** to automatically pair the emulated RU with your Internet Bridge.
+5. Control ambient temperature and humidity dynamically via Setup Dashboard sliders or Home Assistant MQTT topics (`tado/tanoclo/emulated/<serial>/set/temp`).
+
+For comprehensive architectural details and protocol specifications, see [docs/emulated_devices.md](../docs/emulated_devices.md).

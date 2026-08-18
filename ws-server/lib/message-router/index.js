@@ -691,6 +691,9 @@ async function handleMessage(ws, message, isBinary, isDownlink = false) {
                 case 'time':
                     await handlers.handleTimeSync(ws, frame, coapMsg, decoded, peerInfo);
                     break;
+                case 'pair_found':
+                    await handlers.handlePairFound(ws, frame, coapMsg, decoded, peerInfo, coapMsg.payload);
+                    break;
                 default:
                     handlers.sendCoAPAck(ws, coapMsg, peerInfo, frame.directionU16);
                     log('warn', `Unknown path: /${uriPathStr}, ACK'd`);

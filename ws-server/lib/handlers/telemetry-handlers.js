@@ -86,12 +86,6 @@ async function handleSensorData(ws, frame, coapMsg, decoded, peerInfo, pathInfo)
     const shortSerial = extractShortSerial(deviceId);
     if (!shortSerial) return;
 
-    const zone = await db.getZoneForDevice(shortSerial);
-    if (!zone) {
-        log('warn', `Device ${shortSerial} has no zone assignment`);
-        return;
-    }
-
     let batteryState = null;
     let batteryPercent = null;
 
@@ -108,7 +102,10 @@ async function handleSensorData(ws, frame, coapMsg, decoded, peerInfo, pathInfo)
         }
     }
 
-    if (tempC != null) {
+    const zone = await db.getZoneForDevice(shortSerial);
+    const homeId = zone?.homeId || pathInfo?.homeId || await db.getHomeForDevice(shortSerial);
+
+    if (zone && tempC != null) {
         const isLeader = !zone.measuringSerial || zone.measuringSerial === deviceId || zone.measuringSerial === shortSerial;
         log('debug', `Zone ${zone.zoneId} Telemetry: deviceId=${deviceId} shortSerial=${shortSerial} measuringSerial=${zone.measuringSerial} isLeader=${isLeader}`);
 
@@ -134,21 +131,25 @@ async function handleSensorData(ws, frame, coapMsg, decoded, peerInfo, pathInfo)
         } else {
             log('debug', `Device ${deviceId} is in zone ${zone.zoneId} but NOT the leader. Skipping zone_measurements update.`);
         }
+    } else if (!zone) {
+        log('warn', `Device ${shortSerial} has no zone assignment`);
     }
 
-    await db.insertDeviceMeasurement(shortSerial, zone.homeId, zone.zoneId, f);
+    if (homeId) {
+        await db.insertDeviceMeasurement(shortSerial, homeId, zone ? zone.zoneId : null, f);
+    }
     await db.updateDeviceConnectionState(shortSerial, true, batteryState, batteryPercent);
 
-    if (mqttPublisher) {
+    if (mqttPublisher && homeId) {
         db.getDeviceBySerial(shortSerial).then(dev => {
-            mqttPublisher.publishDeviceTelemetry(shortSerial, zone.homeId, zone.zoneId, f, dev).catch(() => { });
+            mqttPublisher.publishDeviceTelemetry(shortSerial, homeId, zone ? zone.zoneId : null, f, dev).catch(() => { });
         }).catch(() => {
-            mqttPublisher.publishDeviceTelemetry(shortSerial, zone.homeId, zone.zoneId, f, null).catch(() => { });
+            mqttPublisher.publishDeviceTelemetry(shortSerial, homeId, zone ? zone.zoneId : null, f, null).catch(() => { });
         });
 
         mqttPublisher.publishDeviceAvailability(shortSerial, true).catch(() => { });
 
-        if (tempC != null && (!zone.measuringSerial || zone.measuringSerial === deviceId || zone.measuringSerial === shortSerial)) {
+        if (tempC != null && zone && (!zone.measuringSerial || zone.measuringSerial === deviceId || zone.measuringSerial === shortSerial)) {
             db.getPool().execute('SELECT * FROM zone_measurements WHERE zone_id = ? ORDER BY id DESC LIMIT 1', [zone.zoneId])
                 .then(([rows]) => {
                     if (rows.length > 0) {

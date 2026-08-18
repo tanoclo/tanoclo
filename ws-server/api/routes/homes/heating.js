@@ -102,7 +102,9 @@ router.get('/:homeId/heatingCircuits', async (req, res) => {
             `SELECT d.*, z.heating_circuit 
              FROM devices d
              LEFT JOIN zones z ON d.zone_id = z.id
-             WHERE d.home_id = ? AND d.device_type IN ('RU01', 'RU02', 'BU01')`,
+             LEFT JOIN emulated_devices ed ON d.serial_no = ed.serial_no
+             WHERE d.home_id = ? AND d.device_type IN ('RU01', 'RU02', 'BU01')
+               AND (ed.mode IS NULL OR ed.mode != 'WIRELESS_SENSOR')`,
             [homeId]
         );
 

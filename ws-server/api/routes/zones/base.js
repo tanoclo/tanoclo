@@ -36,7 +36,7 @@ router.get('/:homeId/zones', async (req, res) => {
         const [zonesData] = await pool.execute('SELECT * FROM zones WHERE home_id = ? ORDER BY display_order ASC', [homeId]);
         const sortedZones = zonesData;
 
-        const [allDevices] = await pool.execute('SELECT * FROM devices WHERE home_id = ?', [homeId]);
+        const allDevices = await db.getDevicesForHome(homeId);
         let boilerDevice = allDevices.find(d => ['RU01', 'RU02', 'BU01'].includes(d.device_type));
 
         const zoneDevices = new Map();
@@ -371,7 +371,7 @@ router.get('/:homeId/zones/:zoneId/control', async (req, res) => {
         if (zones.length === 0) return res.status(404).json({ error: 'Zone not found' });
         const zone = zones[0];
 
-        const [allDevices] = await pool.execute('SELECT * FROM devices WHERE home_id = ?', [homeId]);
+        const allDevices = await db.getDevicesForHome(homeId);
         const zoneDevices = allDevices.filter(d => d.zone_id == zoneId);
 
         if (zone.type === 'HOT_WATER') {

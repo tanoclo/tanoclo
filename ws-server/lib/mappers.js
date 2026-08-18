@@ -62,10 +62,12 @@ function mapDevice(d) {
         displayBrightness: d.field_019e !== null && d.field_019e !== undefined ? parseInt(d.field_019e, 10) : 112,
         displayContrast: d.field_019d !== null && d.field_019d !== undefined ? parseInt(d.field_019d, 10) : 128,
         displayActiveTimeout: d.field_02b2 !== null && d.field_02b2 !== undefined ? parseInt(d.field_02b2, 10) : 0,
-        ipv6Address: d.ipv6_address || null
+        ipv6Address: d.ipv6_address || null,
+        isEmulated: Boolean(d.is_emulated || d.emulated_mode),
+        emulatedMode: d.emulated_mode || null
     };
 
-    if (d.device_type && d.device_type.startsWith('IB')) {
+    if ((d.device_type && d.device_type.startsWith('IB')) || mapped.isEmulated) {
         delete mapped.batteryState;
     }
 

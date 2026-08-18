@@ -230,3 +230,23 @@ sequenceDiagram
 2. **Trigger Pairing Mode**: Press the physical pairing button on the Internet Bridge until the Link LED flashes.
 3. **Wait for the IB MAC to be captured**: The IB will broadcast its MAC address in a unicast Echo Request.
 4. **Execute Challenge**: Click the "Retrieve RF key" button on the sniffer interface. The sniffer automatically extracts the plaintext Operational Key from the resulting offline CoAP `/d/pair` (TLV `0x12`) packet.
+
+---
+
+## 8. Multi-Device Emulation Pairing & Registration Workflow (`tado_emulator`)
+
+When pairing a virtual device from the TaNoClo Setup Portal or REST API:
+
+1. **Step 1: Place IB in Pairing Mode**:
+   The server issues `pushDevicePair` over WebSocket to the Internet Bridge, setting its pairing timeout to 120 seconds.
+2. **Step 2: Trigger ESP32 Node**:
+   The server sends an authenticated HTTP request (`POST /setup/emulated/devices/pair`) to the ESP32 node.
+3. **Step 3: RF Key & Token Negotiation**:
+   - The node transmits a Unicast ICMPv6 Echo Request / Router Solicitation to the IB under the static `tado pairing key`.
+   - The IB transmits `POST /d/pair` containing the operational key (or the node executes `POST /auth/token` with FID `0x0260`).
+   - The node ACKs with `2.04 Changed` / `2.05 Content` (including mandatory CoAP Option 12 `0xC1 0x2A`) and stores the operational key in NVRAM.
+   - The node receives its session token (`0x025E`, 8 bytes) and transitions to state `PAIRED`.
+4. **Step 4: Onboarding Handshake & State Auto-Promotion**:
+   - The node transmits an ICMPv6 Echo Request (`0x80`) under `op_key` to establish its link in the IB's neighbor cache.
+   - The node sends `PUT /d/{serial}/fw` (firmware `13762`, build `c54baf8`, hardware rev `4`), `GET /d/{serial}/config`, and `PUT /d/{serial}/sen` telemetry.
+   - Upon receiving the telemetry packet, `ws-server` updates the database record and marks `pairing_state = 'PAIRED'`.

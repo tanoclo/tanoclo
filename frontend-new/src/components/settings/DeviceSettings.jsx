@@ -598,68 +598,70 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
           )}
 
           {/* Diagnostic Actions */}
-          <Card style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <h3 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0 }}>{t('settings.diagnostic_actions')}</h3>
+          {!device?.isEmulated && (
+            <Card style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <h3 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0 }}>{t('settings.diagnostic_actions')}</h3>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <strong>{t('settings.identify_device')}</strong>
-                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '2px 0 0' }}>
-                  {t('settings.identify_device_desc')}
-                </p>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <strong>{t('settings.identify_device')}</strong>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '2px 0 0' }}>
+                    {t('settings.identify_device_desc')}
+                  </p>
+                </div>
+                <Button variant="secondary" onClick={handleIdentify} disabled={isIdentifying}>
+                  <Eye size={14} />
+                  <span>{isIdentifying ? t('settings.identify_blinking') : t('settings.identify_blink_display')}</span>
+                </Button>
               </div>
-              <Button variant="secondary" onClick={handleIdentify} disabled={isIdentifying}>
-                <Eye size={14} />
-                <span>{isIdentifying ? t('settings.identify_blinking') : t('settings.identify_blink_display')}</span>
-              </Button>
-            </div>
 
-            {/* Reboot Button */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
-              <div>
-                <strong>{t('settings.reboot_device', 'Reboot Device')}</strong>
-                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '2px 0 0' }}>
-                  {t('settings.reboot_device_desc', { name: device.friendlyName || device.serialNo })}
-                </p>
+              {/* Reboot Button */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
+                <div>
+                  <strong>{t('settings.reboot_device', 'Reboot Device')}</strong>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '2px 0 0' }}>
+                    {t('settings.reboot_device_desc', { name: device.friendlyName || device.serialNo })}
+                  </p>
+                </div>
+                <Button 
+                  variant="secondary" 
+                  onClick={async () => {
+                    try {
+                      await rebootDevice(homeId, device.serialNo);
+                      showToast(t('settings.reboot_sent'));
+                    } catch (e) {
+                      showToast(e.message || t('settings.failed_reboot'), 'error');
+                    }
+                  }}
+                >
+                  {t('settings.reboot')}
+                </Button>
               </div>
-              <Button 
-                variant="secondary" 
-                onClick={async () => {
-                  try {
-                    await rebootDevice(homeId, device.serialNo);
-                    showToast(t('settings.reboot_sent'));
-                  } catch (e) {
-                    showToast(e.message || t('settings.failed_reboot'), 'error');
-                  }
-                }}
-              >
-                {t('settings.reboot')}
-              </Button>
-            </div>
 
-            {/* Force Sync Config */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
-              <div>
-                <strong>{t('settings.force_config_sync')}</strong>
-                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '2px 0 0' }}>
-                  {t('settings.force_config_sync_desc')}
-                </p>
+              {/* Force Sync Config */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
+                <div>
+                  <strong>{t('settings.force_config_sync')}</strong>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '2px 0 0' }}>
+                    {t('settings.force_config_sync_desc')}
+                  </p>
+                </div>
+                <Button 
+                  variant="secondary" 
+                  onClick={async () => {
+                    try {
+                      await refreshDeviceConfig(homeId, device.serialNo);
+                      showToast(t('settings.config_refresh_sent'));
+                    } catch (e) {
+                      showToast(e.message || t('settings.failed_config_refresh'), 'error');
+                    }
+                  }}
+                >
+                  {t('settings.sync_config')}
+                </Button>
               </div>
-              <Button 
-                variant="secondary" 
-                onClick={async () => {
-                  try {
-                    await refreshDeviceConfig(homeId, device.serialNo);
-                    showToast(t('settings.config_refresh_sent'));
-                  } catch (e) {
-                    showToast(e.message || t('settings.failed_config_refresh'), 'error');
-                  }
-                }}
-              >
-                {t('settings.sync_config')}
-              </Button>
-            </div>
-          </Card>
+            </Card>
+          )}
 
 
           {/* Child Lock, Orientation */}
@@ -676,7 +678,7 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
           />
 
           {/* Advanced Settings Click-through */}
-          {!isBridge && (
+          {!isBridge && !device?.isEmulated && (
             <Card 
               onClick={() => setView('advanced')} 
               style={{ 

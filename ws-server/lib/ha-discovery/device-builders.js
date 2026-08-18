@@ -67,41 +67,54 @@ function buildDeviceDiscovery(publishEntity, devices, config) {
             device: hwDev
         });
 
+        // Emulated Device Binary Sensor
+        publishEntity('binary_sensor', `tanoclo_${serial}_emulated`, {
+            unique_id: `tanoclo_${serial}_emulated`,
+            name: 'Emulated Device',
+            state_topic: `tado/tanoclo/h/${dev.home_id}/d/${shortSerial}/is_emulated`,
+            icon: 'mdi:robot-outline',
+            value_template: '{{ value }}',
+            availability_topic: devAvailTopic,
+            device: hwDev
+        });
+
         if (isVA || isRU) {
-            // Battery level
-            publishEntity('sensor', `tanoclo_${serial}_battery_level`, {
-                unique_id: `tanoclo_${serial}_battery_level`,
-                name: 'Battery Level',
-                state_topic: `tado/tanoclo/h/${dev.home_id}/d/${shortSerial}/battery_percent`,
-                device_class: 'battery',
-                unit_of_measurement: '%',
-                state_class: 'measurement',
-                availability_topic: devAvailTopic,
-                device: hwDev
-            });
+            if (!dev.is_emulated) {
+                // Battery level
+                publishEntity('sensor', `tanoclo_${serial}_battery_level`, {
+                    unique_id: `tanoclo_${serial}_battery_level`,
+                    name: 'Battery Level',
+                    state_topic: `tado/tanoclo/h/${dev.home_id}/d/${shortSerial}/battery_percent`,
+                    device_class: 'battery',
+                    unit_of_measurement: '%',
+                    state_class: 'measurement',
+                    availability_topic: devAvailTopic,
+                    device: hwDev
+                });
 
-            // Battery voltage
-            publishEntity('sensor', `tanoclo_${serial}_battery_mv`, {
-                unique_id: `tanoclo_${serial}_battery_mv`,
-                name: 'Battery Voltage',
-                state_topic: `tado/tanoclo/h/${dev.home_id}/d/${shortSerial}/battery_mv`,
-                device_class: 'voltage',
-                unit_of_measurement: 'V',
-                state_class: 'measurement',
-                availability_topic: devAvailTopic,
-                device: hwDev
-            });
+                // Battery voltage
+                publishEntity('sensor', `tanoclo_${serial}_battery_mv`, {
+                    unique_id: `tanoclo_${serial}_battery_mv`,
+                    name: 'Battery Voltage',
+                    state_topic: `tado/tanoclo/h/${dev.home_id}/d/${shortSerial}/battery_mv`,
+                    device_class: 'voltage',
+                    unit_of_measurement: 'V',
+                    state_class: 'measurement',
+                    availability_topic: devAvailTopic,
+                    device: hwDev
+                });
 
-            // Battery binary sensor
-            publishEntity('binary_sensor', `tanoclo_${serial}_battery`, {
-                unique_id: `tanoclo_${serial}_battery`,
-                name: 'Battery Status',
-                state_topic: `tado/tanoclo/h/${dev.home_id}/d/${shortSerial}/battery_state`,
-                device_class: 'battery',
-                value_template: "{% if value == 'LOW' or value == 'CRITICAL' or value == 'DEPLETED' %}ON{% else %}OFF{% endif %}",
-                availability_topic: devAvailTopic,
-                device: hwDev
-            });
+                // Battery binary sensor
+                publishEntity('binary_sensor', `tanoclo_${serial}_battery`, {
+                    unique_id: `tanoclo_${serial}_battery`,
+                    name: 'Battery Status',
+                    state_topic: `tado/tanoclo/h/${dev.home_id}/d/${shortSerial}/battery_state`,
+                    device_class: 'battery',
+                    value_template: "{% if value == 'LOW' or value == 'CRITICAL' or value == 'DEPLETED' %}ON{% else %}OFF{% endif %}",
+                    availability_topic: devAvailTopic,
+                    device: hwDev
+                });
+            }
 
             // Temperature
             publishEntity('sensor', `tanoclo_${serial}_temperature`, {

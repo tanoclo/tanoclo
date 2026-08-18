@@ -56,6 +56,7 @@ const SIMPLE_ROUTES = [
     { match: 'lock', type: 'lock', extract: 'device' },
     { match: 'reboot', type: 'device_reboot', extract: 'device' },
     { match: 'time', type: 'time', extract: 'none' },
+    { match: 'found', type: 'pair_found', extract: 'none' },
     { match: 'pair', type: 'pair', extract: 'none' },
     { match: 'identify', type: 'identify', extract: 'none' },
     { match: 'extui', type: 'zone_extui', extract: 'zone' },

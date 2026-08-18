@@ -1558,7 +1558,7 @@ router.get('/dashboard', adminAuth, async (req, res) => {
                                     '<td><strong>' + n.name + '</strong></td>' +
                                     '<td><code>' + n.ip_address + '</code></td>' +
                                     '<td>' + n.api_port + '</td>' +
-                                    '<td><span class="badge bg-success">' + n.status + '</span></td>' +
+                                    '<td><span class="badge ' + (n.status === 'ONLINE' ? 'bg-success' : (n.status === 'OFFLINE' ? 'bg-danger' : 'bg-warning')) + '">' + n.status + '</span></td>' +
                                     '<td class="small text-white-50">' + (n.last_seen ? new Date(n.last_seen).toLocaleTimeString() : '-') + '</td>' +
                                     '<td><button class="btn btn-outline-danger btn-sm py-0 px-2" onclick="deleteEsp32Node(' + n.id + ')">Del</button></td>' +
                                 '</tr>').join('');

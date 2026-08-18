@@ -498,7 +498,8 @@ async function publishDeviceTelemetry(shortSerial, homeId, zoneId, sensorFields,
         
         // Only VA, RU, and SU have battery (not IB, BP, BR, WR)
         const isIBOrReceiver = dev && dev.device_type && (dev.device_type.startsWith('IB') || dev.device_type.startsWith('BP') || dev.device_type.startsWith('BR') || dev.device_type.startsWith('WR'));
-        if (!isIBOrReceiver) {
+        const isEmulated = Boolean(dev && (dev.is_emulated || dev.emulated_mode));
+        if (!isIBOrReceiver && !isEmulated) {
             _pub(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/battery_voltage`, volt);
             _pubDebug(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/field_0162`, volt);
             
@@ -540,6 +541,7 @@ async function publishDeviceTelemetry(shortSerial, homeId, zoneId, sensorFields,
         const errFlags = dev.field_01a3;
 
         _pub(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/connection_state`, dev.connection_state === 1 ? 'ON' : 'OFF');
+        _pub(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/is_emulated`, (dev.is_emulated || dev.emulated_mode) ? 'ON' : 'OFF');
         _pub(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/firmware_version`, dev.current_fw_version);
         _pub(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/device_type`, dev.device_type);
 

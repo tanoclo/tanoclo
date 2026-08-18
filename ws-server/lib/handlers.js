@@ -140,9 +140,71 @@ async function handleAuthKey(ws, frame, coapMsg, decoded, peerInfo, rawData) {
         .digest()
         .subarray(0, 16);
 
+    let keyPayload = serverKey;
+    if (dbDev.factory_key && dbDev.factory_key.length === 32) {
+        try {
+            const cipher = crypto.createCipheriv('aes-128-ecb', Buffer.from(dbDev.factory_key, 'hex'), null);
+            cipher.setAutoPadding(false);
+            keyPayload = Buffer.concat([cipher.update(serverKey), cipher.final()]);
+        } catch (e) {
+            log('warn', `Failed to encrypt operational key with factory_key: ${e.message}`);
+        }
+    }
+
     const responsePayload = tlv.encode([
         { fid: 0x0260, value: Buffer.from(deviceId || 'IB0000000000', 'utf8') },
-        { fid: 0x0262, value: serverKey },
+        { fid: 0x0261, value: keyPayload },
+    ]);
+
+    const ackBytes = coap.buildAckWithPayload(coapMsg, coap.CODE_CONTENT, responsePayload);
+    coapHelpers.sendWrappedCoAP(ws, ackBytes, peerInfo, wsBridge.DIR_SERVER_TO_CLIENT);
+}
+
+async function handlePairFound(ws, frame, coapMsg, decoded, peerInfo, rawData) {
+    log('info', `PAIR_FOUND received from Bridge: ipv6=${peerInfo.ipv6} payloadHex=${coapMsg.payload ? coapMsg.payload.toString('hex') : 'empty'}`);
+
+    let targetIpv6 = null;
+    let targetDevice = null;
+    let factoryKey = null;
+
+    if (coapMsg.payload && coapMsg.payload.length >= 18) {
+        for (let i = 0; i + 17 < coapMsg.payload.length; i++) {
+            if (coapMsg.payload[i] === 0x05 && coapMsg.payload[i + 1] === 0x10) {
+                const ipBuf = coapMsg.payload.subarray(i + 2, i + 18);
+                targetIpv6 = wsBridge.ipv6FromBytes(ipBuf);
+                break;
+            }
+        }
+    }
+
+    log('info', `PAIR_FOUND: Discovered device target IPv6 = ${targetIpv6}`);
+
+    if (targetIpv6) {
+        targetDevice = await db.getDeviceByIPv6(targetIpv6);
+    }
+
+    if (!targetDevice) {
+        const pool = db.getPool();
+        const [rows] = await pool.execute('SELECT * FROM emulated_devices WHERE pairing_state != "PAIRED" ORDER BY created_at DESC LIMIT 1');
+        if (rows && rows.length > 0) {
+            targetDevice = rows[0];
+            if (targetIpv6 && !targetDevice.ipv6_address) {
+                await pool.execute('UPDATE emulated_devices SET ipv6_address = ? WHERE serial_no = ?', [targetIpv6, targetDevice.serial_no]);
+            }
+        }
+    }
+
+    if (targetDevice && targetDevice.factory_key) {
+        factoryKey = targetDevice.factory_key;
+    } else {
+        factoryKey = '8ee8b8fc9693c412f253be8f02e608d7';
+    }
+
+    log('info', `PAIR_FOUND: Supplying factory key ${factoryKey} for device ${targetDevice ? targetDevice.serial_no : 'unknown'} to Bridge`);
+
+    const responsePayload = Buffer.concat([
+        Buffer.from([0x06, 0x10]),
+        Buffer.from(factoryKey, 'hex')
     ]);
 
     const ackBytes = coap.buildAckWithPayload(coapMsg, coap.CODE_CONTENT, responsePayload);
@@ -260,6 +322,7 @@ module.exports = {
     handleTimeSync,
     handleAuthKey,
     handleAuthToken,
+    handlePairFound,
     handleDeviceInfo: deviceHandlers.handleDeviceInfo,
     handleZoneExtui: zoneHandlers.handleZoneExtui,
     handleSensorData: telemetryHandlers.handleSensorData,

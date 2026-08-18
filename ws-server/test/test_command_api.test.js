@@ -177,6 +177,8 @@ test('legacy test suite runs successfully', async () => {
           updateZoneOpenWindow: async () => ({}),
           updateLastConfigJsonFromLive: async () => ({}),
           calculateVADeviceETag: () => 0x1e38,
+          getDeviceByIPv6: async () => null,
+          updateDeviceConnectionState: async () => ({}),
           generateEtag: db.generateEtag,
           unmapOrientation: db.unmapOrientation,
           getPool: () => ({
@@ -405,6 +407,35 @@ test('legacy test suite runs successfully', async () => {
 
           const opt2048 = coapMsg.options.find(o => o.num === 2048);
           assert.strictEqual(opt2048, undefined, 'Option 2048 must NOT be present on GET /d/rfkey');
+      });
+
+      await test('pushUnassociateNeighborByIp', async () => {
+          lastSentFrame = null;
+          assert.strictEqual(typeof commandApi.getNextMid, 'function');
+          const midBefore = commandApi.getNextMid();
+          assert.ok(typeof midBefore === 'number' && midBefore >= 0);
+
+          const dummyIpv6 = 'fe80:0:0:0:200:ff:fe00:1';
+          await commandApi.pushUnassociateNeighborByIp(999999, dummyIpv6);
+          assert.ok(lastSentFrame, 'No frame was sent for unassociate neighbor');
+
+          const frame = wsBridge.parse(lastSentFrame.wsFrame);
+          assert.strictEqual(frame.direction, 'server_to_client');
+          assert.strictEqual(frame.ipv6, dummyIpv6);
+
+          const coapMsg = coap.parse(frame.coapBytes);
+          assert.strictEqual(coap.codeStr(coapMsg.code), 'PUT');
+          assert.strictEqual(coap.uriPath(coapMsg), 'd/config');
+          assert.ok(coapMsg.mid >= 0);
+          assert.ok(coapMsg.payload && coapMsg.payload.length > 0);
+
+          const decoded = tlv.decode(coapMsg.payload);
+          assert.ok(decoded.ok, 'Failed to decode TLV payload');
+          assert.strictEqual(decoded.fields['0x0140'], 0);
+          assert.strictEqual(decoded.fields['0x019e'], 112);
+          assert.strictEqual(decoded.fields['0x0149'], 0);
+          assert.strictEqual(decoded.fields['0x0158'], 0);
+          assert.strictEqual(decoded.fields['0x0143'], false);
       });
   
       console.log(`\n═══ command-api.js Tests Completed: Passed ${passed}/${passed + failed} ═══`);

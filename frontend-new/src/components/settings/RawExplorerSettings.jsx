@@ -8,11 +8,14 @@
  */
 
 import { useState } from 'react';
+import useSWR from 'swr';
 import Card from '../common/Card';
 import Button from '../common/Button';
 import Spinner from '../common/Spinner';
 import { useHome } from '../../context/HomeContext';
 import { getRawZoneData, getRawDeviceData } from '../../api/tanoclo';
+import { getDevices } from '../../api/devices';
+import { SWR_KEYS } from '../../utils/swrKeys';
 import { RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import logger from '../../utils/logger';
@@ -61,6 +64,7 @@ const parseTimestampToDate = (ts) => {
 export default function RawExplorerSettings() {
   const { t } = useTranslation();
   const { activeHomeId, zones, homeInfo } = useHome();
+  const { data: allDevices } = useSWR(activeHomeId ? SWR_KEYS.devices(activeHomeId) : null, () => getDevices(activeHomeId));
   
   const homeTimeZone = homeInfo?.dateTimeZone || 'UTC';
   
@@ -178,19 +182,27 @@ export default function RawExplorerSettings() {
                 }}
               >
                 <option value="">{t('tanoclo_ex.choose_device')}</option>
-                {(() => {
-                  const seen = new Set();
-                  const uniqueDevices = [];
-                  zones?.flatMap(z => z.devices || []).forEach(d => {
-                    if (d && d.serialNo && !seen.has(d.serialNo)) {
-                      seen.add(d.serialNo);
-                      uniqueDevices.push(d);
-                    }
-                  });
-                  return uniqueDevices.map(d => (
-                    <option key={d.serialNo} value={d.serialNo}>{d.serialNo} ({d.deviceType})</option>
-                  ));
-                })()}
+                {allDevices && allDevices.length > 0 ? (
+                  allDevices.map(d => (
+                    <option key={d.serialNo} value={d.serialNo}>
+                      {d.friendlyName ? `${d.friendlyName} (${d.serialNo})` : `${d.serialNo} (${d.deviceType})`}
+                    </option>
+                  ))
+                ) : (
+                  (() => {
+                    const seen = new Set();
+                    const uniqueDevices = [];
+                    zones?.flatMap(z => z.devices || []).forEach(d => {
+                      if (d && d.serialNo && !seen.has(d.serialNo)) {
+                        seen.add(d.serialNo);
+                        uniqueDevices.push(d);
+                      }
+                    });
+                    return uniqueDevices.map(d => (
+                      <option key={d.serialNo} value={d.serialNo}>{d.serialNo} ({d.deviceType})</option>
+                    ));
+                  })()
+                )}
               </select>
             </div>
           )}

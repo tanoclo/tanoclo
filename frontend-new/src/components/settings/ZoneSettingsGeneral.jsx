@@ -176,7 +176,10 @@ export default function ZoneSettingsGeneral({
             >
               <option value="none">{t('settings.none_no_controller')}</option>
               {(() => {
-                const zoneControllers = devices?.filter(d => d.deviceType?.startsWith('RU') || d.deviceType?.startsWith('WR')) || [];
+                const zoneControllers = devices?.filter(d => 
+                  (d.deviceType?.startsWith('RU') || d.deviceType?.startsWith('WR')) && 
+                  d.emulatedMode !== 'WIRELESS_SENSOR'
+                ) || [];
                 const zcRoomsCount = (zones || []).filter(z => z.type === 'HEATING' && (z.heatingCircuit !== null && z.heatingCircuit !== undefined && z.heatingCircuit !== '') && z.id !== zone?.id).length;
                 const isZcFull = zcRoomsCount >= 10 && (!controllerSerial || controllerSerial === 'none');
                 return zoneControllers.map(ctrl => (
