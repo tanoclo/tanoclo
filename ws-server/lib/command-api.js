@@ -73,6 +73,12 @@ async function internalPush(deviceId, clientInfo, code, path, payload = Buffer.a
 
     _log('debug', `[cmd-api] CoAP TX hex: ${coapBytes.toString('hex')}`);
     _log('debug', `[cmd-api] Raw TX hex: ${wsFrame.toString('hex')}`);
+
+    const cache = coapTransport.getProxyMidCache();
+    if (path && cache) {
+        cache.set(mid, { path, ts: Date.now() });
+    }
+
     _sendFn(deviceId, wsFrame);
     return mid;
 }
@@ -287,7 +293,8 @@ function initialize(opts) {
         db: _db,
         clients: _clients,
         sendFn: _sendFn,
-        log: _log
+        log: _log,
+        proxyMidCache: opts.proxyMidCache
     });
 }
 

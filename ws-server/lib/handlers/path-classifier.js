@@ -65,12 +65,15 @@ const SIMPLE_ROUTES = [
     { match: 'ow', type: 'open_window', extract: 'zone' }
 ];
 
-async function classifyPath(uriPathStr, queryOptions = [], activeDeviceId = null) {
-    const parts = uriPathStr.split('/').filter(p => p.length > 0);
-    let result = { type: 'unknown', deviceId: activeDeviceId };
+async function classifyPath(uriPathStr = '', queryOptions = [], activeDeviceId = null) {
+    const parts = (uriPathStr || '').split('/').filter(p => p.length > 0);
+    let result;
 
+    if (parts.length === 0) {
+        result = { type: 'root', deviceId: activeDeviceId };
+    }
     // 1. Complex/special route logic
-    if (parts.includes('auth')) {
+    else if (parts.includes('auth')) {
         const deviceId = extractDeviceId(parts, 'auth', activeDeviceId);
         const homeId = extractHomeId(parts);
         if (parts.includes('key')) {
@@ -88,16 +91,24 @@ async function classifyPath(uriPathStr, queryOptions = [], activeDeviceId = null
                 const circuitId = extractCircuitId(parts);
                 const homeId = extractHomeId(parts);
                 result = { type: 'circuit_actuator', circuitId, homeId, deviceId: activeDeviceId };
-            } else if (prevPrev === 'd' || parts.indexOf('d') >= 0) {
+            } else if (parts.includes('d')) {
                 const deviceId = extractDeviceId(parts, 'act', activeDeviceId);
                 const homeId = extractHomeId(parts);
                 result = { type: 'device_actuator', deviceId, homeId };
-            } else if (prevPrev === 'z' || parts.indexOf('z') >= 0) {
+            } else if (parts.includes('z')) {
                 const zIdx = parts.indexOf('z');
                 const zoneId = zIdx >= 0 && zIdx + 1 < parts.length ? parts[zIdx + 1] : null;
                 const homeId = extractHomeId(parts);
                 result = { type: 'zone_actuator', zoneId, homeId, deviceId: activeDeviceId };
+            } else {
+                const deviceId = extractDeviceId(parts, 'act', activeDeviceId);
+                const homeId = extractHomeId(parts);
+                result = { type: 'device_actuator', deviceId, homeId };
             }
+        } else {
+            const deviceId = extractDeviceId(parts, 'act', activeDeviceId);
+            const homeId = extractHomeId(parts);
+            result = { type: 'device_actuator', deviceId, homeId };
         }
     }
     else if (parts.includes('config')) {
@@ -114,13 +125,20 @@ async function classifyPath(uriPathStr, queryOptions = [], activeDeviceId = null
             result = { type: 'zone_config', zoneId, homeId, deviceId: activeDeviceId };
         } else if (parts.includes('hvac')) {
             result = { type: 'hvac_config', homeId, deviceId: activeDeviceId };
+        } else {
+            const deviceId = extractDeviceId(parts, 'config', activeDeviceId);
+            result = { type: 'device_config', deviceId, homeId };
         }
     }
-    else if (parts.includes('fw') && parts.includes('state')) {
+    else if (parts.includes('fw')) {
         const pathDeviceId = getDeviceIdFromPath(parts);
-        const deviceId = (pathDeviceId && pathDeviceId !== 'fw' && pathDeviceId !== 'state') ? pathDeviceId : activeDeviceId;
+        const deviceId = (pathDeviceId && pathDeviceId !== 'fw' && pathDeviceId !== 'state' && pathDeviceId !== 'rq') ? pathDeviceId : activeDeviceId;
         const homeId = extractHomeId(parts);
-        result = { type: 'firmware_state', deviceId, homeId };
+        if (parts.includes('rq')) {
+            result = { type: 'firmware_request', deviceId, homeId };
+        } else {
+            result = { type: 'firmware_state', deviceId, homeId };
+        }
     }
     else if (parts.includes('fallback')) {
         const homeId = extractHomeId(parts);
@@ -183,8 +201,10 @@ async function classifyPath(uriPathStr, queryOptions = [], activeDeviceId = null
     }
     // 2. Declarative lookup for simple/flat routes
     else {
+        let matched = false;
         for (const route of SIMPLE_ROUTES) {
             if (parts.includes(route.match)) {
+                matched = true;
                 const homeId = extractHomeId(parts);
                 if (route.extract === 'device') {
                     result = { type: route.type, deviceId: extractDeviceId(parts, route.match, activeDeviceId), homeId };
@@ -195,6 +215,25 @@ async function classifyPath(uriPathStr, queryOptions = [], activeDeviceId = null
                     result = { type: route.type, deviceId: activeDeviceId };
                 }
                 break;
+            }
+        }
+
+        // 3. Fallback for unlisted structural routes
+        if (!matched) {
+            const homeId = extractHomeId(parts);
+            if (parts.includes('z')) {
+                const zoneId = extractZoneId(parts, queryOptions);
+                result = { type: 'zone_state', zoneId, homeId, deviceId: activeDeviceId };
+            } else if (parts.includes('c')) {
+                const circuitId = extractCircuitId(parts);
+                result = { type: 'circuit_actuator', circuitId, homeId, deviceId: activeDeviceId };
+            } else if (parts.includes('d')) {
+                const deviceId = extractDeviceId(parts, '', activeDeviceId);
+                result = { type: 'device_info', deviceId, homeId };
+            } else if (parts.includes('h')) {
+                result = { type: 'home', homeId, deviceId: activeDeviceId };
+            } else {
+                result = { type: parts[parts.length - 1] || 'root', deviceId: activeDeviceId, homeId };
             }
         }
     }

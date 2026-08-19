@@ -500,7 +500,8 @@ async function startServer() {
         clients,
         sendToDevice,
         broadcastTime,
-        log
+        log,
+        proxyMidCache
     });
 
     cron.start({

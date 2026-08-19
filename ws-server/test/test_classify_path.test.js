@@ -153,6 +153,32 @@ test('legacy test suite runs successfully', async () => {
       // 3. Fallback homeId inference
       const deviceOnly = await handlers.classifyPath('/d/IB_MOCK_DEV/info', [], null);
       assert.deepStrictEqual(deviceOnly, { type: 'device_info', deviceId: 'IB_MOCK_DEV', homeId: '456' });
+
+      // 4. Root / Empty / Response paths
+      const emptyPath = await handlers.classifyPath('', [], 'IB_ACTIVE');
+      assert.deepStrictEqual(emptyPath, { type: 'root', deviceId: 'IB_ACTIVE' });
+
+      const slashPath = await handlers.classifyPath('/', [], 'IB_ACTIVE');
+      assert.deepStrictEqual(slashPath, { type: 'root', deviceId: 'IB_ACTIVE' });
+
+      // 5. Firmware Request
+      const fwRq = await handlers.classifyPath('/d/IB123/fw/rq', [], 'IB_ACTIVE');
+      assert.deepStrictEqual(fwRq, { type: 'firmware_request', deviceId: 'IB123', homeId: null });
+
+      // 6. Flat command paths (d/reboot, d/lock, d/config, etc.)
+      const flatReboot = await handlers.classifyPath('d/reboot', [], 'IB_ACTIVE');
+      assert.deepStrictEqual(flatReboot, { type: 'device_reboot', deviceId: 'IB_ACTIVE', homeId: null });
+
+      const flatLock = await handlers.classifyPath('d/lock', [], 'IB_ACTIVE');
+      assert.deepStrictEqual(flatLock, { type: 'lock', deviceId: 'IB_ACTIVE', homeId: null });
+
+      const flatConfig = await handlers.classifyPath('d/config', [], 'IB_ACTIVE');
+      assert.deepStrictEqual(flatConfig, { type: 'device_config', deviceId: 'IB_ACTIVE', homeId: null });
+
+      // 7. Guarantee no path returns type unknown
+      const arbitraryPath = await handlers.classifyPath('/custom/route/endpoint', [], 'IB_ACTIVE');
+      assert.notStrictEqual(arbitraryPath.type, 'unknown');
+      assert.strictEqual(arbitraryPath.type, 'endpoint');
   
       console.log('\x1b[32m✔ All path classification tests passed!\x1b[0m');
   

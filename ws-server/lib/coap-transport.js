@@ -30,11 +30,14 @@ let _serverMid = 0xB000;
 
 let _tanocloMidsSweepInterval = null;
 
+let _proxyMidCache = null;
+
 function init(deps) {
     _db = deps.db || deps._db;
     _clients = deps.clients || deps._clients;
     _sendFn = deps.sendFn || deps._sendFn;
     _log = deps.log || deps._log || getLogger('cmd-api');
+    if (deps.proxyMidCache) _proxyMidCache = deps.proxyMidCache;
 
     // Periodic sweep: evict _tanocloMids entries older than 2 minutes
     if (!_tanocloMidsSweepInterval) {
@@ -48,7 +51,9 @@ function init(deps) {
     }
 }
 
-
+function getProxyMidCache() {
+    return _proxyMidCache;
+}
 
 function getNextMid() {
     return (_serverMid++) & 0xFFFF;
@@ -84,14 +89,18 @@ function sendViaBridge(bridgeId, bridgeClient, targetIpv6, targetPort, coapBytes
     _log('debug', `[cmd-api] CoAP TX hex: ${coapBytes.toString('hex')}`);
     _log('debug', `[cmd-api] Raw TX hex: ${wsFrame.toString('hex')}`);
 
-    const coapPath = coap.uriPath(coap.parse(coapBytes)) || commandLabel || 'unknown';
-    commandLog.logWsCommand(bridgeId, commandLabel || 'unlabeled', coapPath, coapBytes, wsFrame);
+    const coapPath = coap.uriPath(coap.parse(coapBytes)) || commandLabel || '';
+    commandLog.logWsCommand(bridgeId, commandLabel || 'unlabeled', coapPath || 'unlabeled', coapBytes, wsFrame);
 
     _sendFn(bridgeId, wsFrame);
     metrics.inc('commands_sent');
 
     if (coapBytes.length >= 4) {
         const mid = coapBytes.readUInt16BE(2);
+        _tanocloMids.set(mid, Date.now());
+        if (coapPath && _proxyMidCache) {
+            _proxyMidCache.set(mid, { path: coapPath, ts: Date.now() });
+        }
         scheduleRetry(mid, bridgeId, wsFrame, 0);
 
         if (commandLabel) {
@@ -321,6 +330,7 @@ async function queryDeviceConfig(deviceSerial, coapPath) {
 
 module.exports = {
     init,
+    getProxyMidCache,
     getNextMid,
     isTaNoCloOriginatedMid,
     findBridgeForHome,
