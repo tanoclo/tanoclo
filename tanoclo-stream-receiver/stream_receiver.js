@@ -25,6 +25,8 @@ const config = {
     tcpPort: 9999,
     tcpHost: "0.0.0.0", // default bind address
     fileLogging: true,
+    maxLogSizeMb: 5,
+    maxRotatedLogs: 1,
     consoleLogging: true,
     autoExclusion: true,
     keys: {
@@ -47,6 +49,18 @@ if (fs.existsSync(configPath)) {
         const fileConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
         if (fileConfig.tcpPort !== undefined) config.tcpPort = fileConfig.tcpPort;
         if (fileConfig.fileLogging !== undefined) config.fileLogging = fileConfig.fileLogging;
+        if (fileConfig.maxLogSizeMb !== undefined) config.maxLogSizeMb = Number(fileConfig.maxLogSizeMb);
+        if (fileConfig.max_log_size_mb !== undefined) config.maxLogSizeMb = Number(fileConfig.max_log_size_mb);
+        if (fileConfig.maxLogSize !== undefined) {
+            const sz = Number(fileConfig.maxLogSize);
+            config.maxLogSizeMb = sz > 1024 ? sz / (1024 * 1024) : sz;
+        }
+        if (fileConfig.max_log_size !== undefined) {
+            const sz = Number(fileConfig.max_log_size);
+            config.maxLogSizeMb = sz > 1024 ? sz / (1024 * 1024) : sz;
+        }
+        if (fileConfig.maxRotatedLogs !== undefined) config.maxRotatedLogs = parseInt(fileConfig.maxRotatedLogs, 10);
+        if (fileConfig.max_rotated_logs !== undefined) config.maxRotatedLogs = parseInt(fileConfig.max_rotated_logs, 10);
         if (fileConfig.consoleLogging !== undefined) config.consoleLogging = fileConfig.consoleLogging;
         if (fileConfig.autoExclusion !== undefined) config.autoExclusion = !!fileConfig.autoExclusion;
         if (fileConfig.auto_exclusion !== undefined) config.autoExclusion = !!fileConfig.auto_exclusion;
@@ -82,6 +96,17 @@ if (process.env.MQTT_TOPIC) config.mqtt.topic = process.env.MQTT_TOPIC;
 if (process.env.MQTT_USERNAME) config.mqtt.username = process.env.MQTT_USERNAME;
 if (process.env.MQTT_PASSWORD) config.mqtt.password = process.env.MQTT_PASSWORD;
 if (process.env.FILE_LOGGING !== undefined) config.fileLogging = process.env.FILE_LOGGING === 'true';
+if (process.env.MAX_LOG_SIZE_MB !== undefined) {
+    const mb = parseFloat(process.env.MAX_LOG_SIZE_MB);
+    if (!isNaN(mb) && mb > 0) config.maxLogSizeMb = mb;
+} else if (process.env.MAX_LOG_SIZE !== undefined) {
+    const sz = parseFloat(process.env.MAX_LOG_SIZE);
+    if (!isNaN(sz) && sz > 0) config.maxLogSizeMb = sz > 1024 ? sz / (1024 * 1024) : sz;
+}
+if (process.env.MAX_ROTATED_LOGS !== undefined) {
+    const val = parseInt(process.env.MAX_ROTATED_LOGS, 10);
+    if (!isNaN(val) && val >= 0) config.maxRotatedLogs = val;
+}
 if (process.env.CONSOLE_LOGGING !== undefined) config.consoleLogging = process.env.CONSOLE_LOGGING === 'true';
 if (process.env.AUTO_EXCLUSION !== undefined) config.autoExclusion = process.env.AUTO_EXCLUSION === 'true' || process.env.AUTO_EXCLUSION === '1';
 
@@ -111,6 +136,12 @@ for (let i = 0; i < args.length; i++) {
         config.mqtt.username = args[i + 1];
     } else if (args[i] === '--mqtt-pass' && args[i + 1]) {
         config.mqtt.password = args[i + 1];
+    } else if (args[i] === '--max-log-size' && args[i + 1]) {
+        const sz = parseFloat(args[i + 1]);
+        if (!isNaN(sz) && sz > 0) config.maxLogSizeMb = sz > 1024 ? sz / (1024 * 1024) : sz;
+    } else if (args[i] === '--max-rotated-logs' && args[i + 1]) {
+        const val = parseInt(args[i + 1], 10);
+        if (!isNaN(val) && val >= 0) config.maxRotatedLogs = val;
     } else if (args[i] === '--auto-exclusion' && args[i + 1]) {
         config.autoExclusion = args[i + 1] === 'true' || args[i + 1] === '1';
     } else if (args[i] === '--no-auto-exclusion') {
@@ -142,7 +173,6 @@ if (fs.existsSync('/share')) {
     LOG_DIR = '/data';
 }
 const LIVE_LOG_PATH = path.resolve(LOG_DIR, 'live_decrypted.log');
-const MAX_LOG_SIZE = 5 * 1024 * 1024; // 5 MB
 
 // Whitelisted PAN IDs for our network
 const explicitPanSet = new Set(
@@ -747,13 +777,26 @@ function logToFile(msg) {
     if (!config.fileLogging) return;
     const time = new Date().toISOString();
     try {
-        // Rotate log if it exceeds MAX_LOG_SIZE
+        const maxLogBytes = Math.round((config.maxLogSizeMb || 5) * 1024 * 1024);
+        const maxRotatedLogs = config.maxRotatedLogs !== undefined ? config.maxRotatedLogs : 1;
+        // Rotate log if it exceeds maxLogBytes
         if (fs.existsSync(LIVE_LOG_PATH)) {
             const stats = fs.statSync(LIVE_LOG_PATH);
-            if (stats.size > MAX_LOG_SIZE) {
-                const rotated = LIVE_LOG_PATH + '.1';
-                if (fs.existsSync(rotated)) fs.unlinkSync(rotated);
-                fs.renameSync(LIVE_LOG_PATH, rotated);
+            if (stats.size > maxLogBytes) {
+                if (maxRotatedLogs <= 0) {
+                    fs.unlinkSync(LIVE_LOG_PATH);
+                } else {
+                    const oldest = `${LIVE_LOG_PATH}.${maxRotatedLogs}`;
+                    if (fs.existsSync(oldest)) fs.unlinkSync(oldest);
+                    for (let i = maxRotatedLogs - 1; i >= 1; i--) {
+                        const current = `${LIVE_LOG_PATH}.${i}`;
+                        const next = `${LIVE_LOG_PATH}.${i + 1}`;
+                        if (fs.existsSync(current)) {
+                            fs.renameSync(current, next);
+                        }
+                    }
+                    fs.renameSync(LIVE_LOG_PATH, `${LIVE_LOG_PATH}.1`);
+                }
             }
         }
         fs.appendFileSync(LIVE_LOG_PATH, `[${time}] ${msg}\n`, 'utf-8');

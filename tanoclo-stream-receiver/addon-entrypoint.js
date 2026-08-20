@@ -32,6 +32,9 @@ if (options.mqtt_username) env.MQTT_USERNAME = options.mqtt_username;
 if (options.mqtt_password) env.MQTT_PASSWORD = options.mqtt_password;
 if (options.mqtt_ha_path) env.MQTT_HA_PATH = options.mqtt_ha_path;
 env.FILE_LOGGING = options.file_logging !== false ? 'true' : 'false';
+if (options.max_log_size_mb !== undefined) env.MAX_LOG_SIZE_MB = String(options.max_log_size_mb);
+else if (options.max_log_size !== undefined) env.MAX_LOG_SIZE = String(options.max_log_size);
+if (options.max_rotated_logs !== undefined) env.MAX_ROTATED_LOGS = String(options.max_rotated_logs);
 env.CONSOLE_LOGGING = options.console_logging !== false ? 'true' : 'false';
 env.AUTO_EXCLUSION = options.auto_exclusion !== false ? 'true' : 'false';
 

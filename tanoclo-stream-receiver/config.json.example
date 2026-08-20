@@ -1,6 +1,8 @@
 {
   "tcpPort": 9999,
   "fileLogging": true,
+  "maxLogSizeMb": 5,
+  "maxRotatedLogs": 1,
   "auto_exclusion": true,
   "keys": {
     "IB1234567890": "aabbccddeeff00112233445566778899",

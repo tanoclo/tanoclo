@@ -31,6 +31,8 @@ options:
   mqtt_topic: "tado/sniffer"
   mqtt_ha_path: "homeassistant"
   file_logging: false
+  max_log_size_mb: 5
+  max_rotated_logs: 1
   stats: false
   console_logging: false
   auto_exclusion: true
@@ -45,6 +47,8 @@ schema:
   mqtt_topic: "str"
   mqtt_ha_path: "str"
   file_logging: "bool"
+  max_log_size_mb: "int?"
+  max_rotated_logs: "int?"
   stats: "bool"
   console_logging: "bool"
   auto_exclusion: "bool?"

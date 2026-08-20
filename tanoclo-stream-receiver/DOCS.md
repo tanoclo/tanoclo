@@ -97,6 +97,8 @@ Now you can install the sniffer receiver itself.
    * **MQTT Topic:** `tado/sniffer` (Prefix for the raw state topics)
    * **MQTT HA Path:** `homeassistant` (Prefix for MQTT Discovery configs)
    * **File Logging:** `true` (Logs decrypted payloads to `/share/tanoclo/live_decrypted.log`, accessible via Samba Share or File Editor)
+   * **Max Log Size (MB):** `5` (Maximum size of `live_decrypted.log` in megabytes before rotation)
+   * **Max Rotated Logs:** `1` (Maximum number of rotated archive files to keep, e.g. `.log.1`, `.log.2`)
    * **Stats:** `true` (Enables periodic diagnostic logs and sensor metrics for the receiver itself)
    * **Auto Exclusion:** `true` (Automatically excludes PAN IDs that fail decryption with all configured keys to optimize processing)
 7. Save settings and click **Start**.
