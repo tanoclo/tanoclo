@@ -8,6 +8,7 @@
 const coap = require('../coap');
 const tlv = require('../tlv');
 const crypto = require('crypto');
+const { getNextMid } = require('../coap-transport');
 const api = require('../command-api');
 
 function updateFieldInMap(fields, key, value) {
@@ -632,7 +633,7 @@ async function pushUnassociateNeighborByIp(homeId, targetIpv6) {
         code: coap.CODE_PUT,
         path: 'd/config',
         token: crypto.randomBytes(4),
-        mid: api.getNextMid(),
+        mid: (typeof api.getNextMid === 'function' ? api.getNextMid() : getNextMid()),
         type: coap.TYPE_CON,
         payload: modifiedPayload,
         extraOptions

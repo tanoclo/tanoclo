@@ -62,13 +62,20 @@ enum PairingState {
 };
 
 /**
- * Tracks an unACKed CoAP CON request for retry with exponential backoff
+ * Tracks an unACKed CoAP CON request for retry with exponential backoff.
+ * Stores enough state to rebuild the frame with a fresh seq on each retry.
  */
 struct PendingRequest {
   uint16_t mid;
+  uint8_t seq;
   uint32_t sent_ts;
   uint8_t retry_count;
-  std::vector<uint8_t> frame; // Full RF frame for retransmission
+  std::vector<uint8_t> frame;   // Current RF frame (rebuilt on each retry)
+  // Fields for frame rebuild on retry:
+  std::vector<uint8_t> coap;    // CoAP datagram (unchanged across retries)
+  uint8_t key[16];              // Encryption key
+  uint8_t dest_mac[8];          // Destination MAC
+  uint8_t src_mac[8];           // Source MAC (device)
 };
 
 /**
@@ -114,6 +121,10 @@ struct EmulatedDevice {
   // CoAP CON retry tracking
   bool token_refresh_pending{false};
   std::vector<PendingRequest> pending_requests;
+
+  // Staggered bootup & startup sequence tracking (1000ms intervals)
+  uint8_t startup_stage{0};
+  uint32_t last_startup_step_ms{0};
 
   // IEEE 802.15.4 short address (derived from MAC, used in operational dispatch)
   uint16_t short_addr{0};
@@ -192,7 +203,9 @@ class TadoEmulatorComponent : public Component,
     if (xSemaphoreTakeRecursive(this->devices_mutex_, pdMS_TO_TICKS(50)) == pdTRUE) {
       uint32_t now = millis() / 1000;
       uint32_t now_ms = millis();
-      for (auto &dev : this->devices_) {
+      bool another_device_starting_up = false;
+      for (size_t dev_idx = 0; dev_idx < this->devices_.size(); ++dev_idx) {
+        auto &dev = this->devices_[dev_idx];
         // 1. Discovery Phase: Broadcast Router Solicitation (every 2.5s)
         if (dev.pairing_state == STATE_PAIR_MIMIC_BROADCAST_RS) {
           if (now_ms - dev.last_pair_tx_time_ >= 2500) {
@@ -229,21 +242,58 @@ class TadoEmulatorComponent : public Component,
         // 4. Operational Phase: Normal Periodic Telemetry & Maintenance
         else if (dev.pairing_state == STATE_PAIRED) {
           if (now > 0) {
-            // Immediately transmit initial telemetry & time sync upon pairing
-            if (dev.last_telemetry_ts == 0) {
-              dev.last_telemetry_ts = now;
-              dev.last_config_check_ts = now;
-              dev.last_token_refresh_ts = now;
-              dev.last_time_sync_ts = now;
-              ESP_LOGI(TAG, "✓ Device %s fully paired! Sending link probe, initial telemetry, fw state & time sync to IB...", dev.serial_no.c_str());
-              this->send_unicast_echo_packet(&dev);
-              this->send_telemetry_put(&dev, dev.target_temp_celsius, dev.target_humidity_pct, dev.target_battery_mv);
-              this->send_fw_state_put(&dev);
-              this->send_time_get(&dev);
-              if (dev.zone_id != 0) {
-                this->send_zone_p_put(&dev);
+            uint32_t now_ms = millis();
+            // Stagger initial link probe, telemetry, time sync and zone presence (1000ms intervals)
+            // Multi-device serialization: only one device runs startup at a time
+            if (dev.startup_stage < 6) {
+              if (another_device_starting_up) {
+                // Another device is actively progressing through startup stages, wait for it
+                continue;
               }
-            } else if (now > dev.last_telemetry_ts && (now - dev.last_telemetry_ts >= 900)) {
+              another_device_starting_up = true;
+
+              if (dev.startup_stage == 0) {
+                ESP_LOGI(TAG, "✓ Device %s (%u/%u) fully paired! Commencing staggered startup sync...",
+                         dev.serial_no.c_str(), (unsigned int)(dev_idx + 1), (unsigned int)this->devices_.size());
+                this->send_unicast_echo_packet(&dev);
+                dev.startup_stage = 1;
+                dev.last_startup_step_ms = now_ms;
+              } else if (now_ms - dev.last_startup_step_ms >= 1000) {
+                if (dev.startup_stage == 1) {
+                  // Stage 1: PUT d/config (device registration on IB boot)
+                  this->send_device_config_put(&dev);
+                  dev.startup_stage = 2;
+                  dev.last_startup_step_ms = now_ms;
+                } else if (dev.startup_stage == 2) {
+                  // Stage 2: PUT d/{serial}/sen (telemetry)
+                  this->send_telemetry_put(&dev, dev.target_temp_celsius, dev.target_humidity_pct, dev.target_battery_mv);
+                  dev.startup_stage = 3;
+                  dev.last_startup_step_ms = now_ms;
+                } else if (dev.startup_stage == 3) {
+                  // Stage 3: PUT d/{serial}/err (error flags)
+                  this->send_error_flags_put(&dev);
+                  dev.startup_stage = 4;
+                  dev.last_startup_step_ms = now_ms;
+                } else if (dev.startup_stage == 4) {
+                  // Stage 4: GET time
+                  this->send_time_get(&dev);
+                  dev.startup_stage = 5;
+                  dev.last_startup_step_ms = now_ms;
+                } else if (dev.startup_stage == 5) {
+                  // Stage 5: PUT z/p (zone presence, if assigned)
+                  if (dev.zone_id != 0) {
+                    this->send_zone_p_put(&dev);
+                  }
+                  dev.startup_stage = 6; // Startup completed!
+                  dev.last_telemetry_ts = now + (dev_idx * 20); // Stagger 15-min telemetry across devices
+                  dev.last_config_check_ts = now + (dev_idx * 60);
+                  dev.last_token_refresh_ts = now + (dev_idx * 120);
+                  dev.last_time_sync_ts = now + (dev_idx * 180);
+                  ESP_LOGI(TAG, "✓ Device %s (%u/%u) startup sequence complete. Entering normal 15-min periodic cycle (offset %us).",
+                           dev.serial_no.c_str(), (unsigned int)(dev_idx + 1), (unsigned int)this->devices_.size(), (unsigned int)(dev_idx * 20));
+                }
+              }
+            } else if (dev.startup_stage >= 6 && now > dev.last_telemetry_ts && (now - dev.last_telemetry_ts >= 900)) {
               // Periodic Telemetry Heartbeat (every 15 mins / 900s)
               dev.last_telemetry_ts = now;
               this->send_telemetry_put(&dev, dev.target_temp_celsius, dev.target_humidity_pct, dev.target_battery_mv);
@@ -284,8 +334,12 @@ class TadoEmulatorComponent : public Component,
             } else {
               it->retry_count++;
               it->sent_ts = now;
-              ESP_LOGI(TAG, "[RF] %s: Retry #%u for MID=0x%04X (backoff %us)",
-                       dev.serial_no.c_str(), it->retry_count, it->mid, 2u << it->retry_count);
+              // Rebuild frame with fresh seq to avoid stale-seq MAC ACK ambiguity
+              uint8_t new_seq = dev.seq_num++;
+              it->seq = new_seq;
+              it->frame = this->rebuild_pending_frame(*it, &dev, new_seq);
+              ESP_LOGI(TAG, "[RF] %s: Retry #%u for MID=0x%04X (backoff %us, new seq=%u)",
+                       dev.serial_no.c_str(), it->retry_count, it->mid, 2u << it->retry_count, new_seq);
               this->send_raw_rf_frame(it->frame);
               ++it;
             }
@@ -470,6 +524,17 @@ class TadoEmulatorComponent : public Component,
   // -------------------------------------------------------------------------
   // Outgoing RU CoAP Transmissions
   // -------------------------------------------------------------------------
+
+  /**
+   * PUT /d/config — device registration push sent after IB reboot.
+   * Contains device capabilities (firmware TLVs) so the IB re-registers
+   * this node in its neighbor/routing table.
+   */
+  void send_device_config_put(EmulatedDevice *dev) {
+    std::vector<uint8_t> payload = build_d_fw_state_payload();
+    this->send_coap_request(dev, 3 /* PUT */, "d/config", payload);
+    ESP_LOGI(TAG, "[RF TX] %s: PUT d/config (device registration)", dev->serial_no.c_str());
+  }
 
   void send_telemetry_put(EmulatedDevice *dev, float temp_c, float hum_pct, uint16_t battery_mv) {
     dev->target_temp_celsius = temp_c;
@@ -663,7 +728,7 @@ class TadoEmulatorComponent : public Component,
   }
 
   void send_unicast_echo_packet(EmulatedDevice *dev) {
-    dev->beacon_seq_++;
+    uint8_t echo_seq = dev->seq_num++; // Unified seq counter (was beacon_seq_)
 
     uint8_t icmp[8];
     icmp[0] = 0x80; // Echo Request
@@ -682,7 +747,7 @@ class TadoEmulatorComponent : public Component,
 
     uint8_t frame_header[16];
     frame_header[0] = 0x69; frame_header[1] = 0xEC;
-    frame_header[2] = dev->beacon_seq_;
+    frame_header[2] = echo_seq;
     uint16_t pan = dev->get_ib_pan();
     frame_header[3] = pan & 0xFF;
     frame_header[4] = (pan >> 8) & 0xFF;
@@ -696,7 +761,7 @@ class TadoEmulatorComponent : public Component,
     plaintext[pt_len++] = dev->mac_addr[6];
     plaintext[pt_len++] = dev->mac_addr[7];
     plaintext[pt_len++] = 0x04;
-    plaintext[pt_len++] = dev->beacon_seq_;
+    plaintext[pt_len++] = echo_seq;
     plaintext[pt_len++] = 0x00;
     plaintext[pt_len++] = 0x00;
     plaintext[pt_len++] = 0x00;
@@ -733,7 +798,7 @@ class TadoEmulatorComponent : public Component,
 
     this->send_raw_rf_frame(frame);
     ESP_LOGI(TAG, "[Mimic] [Unicast Echo] %s: Transmitted Echo Request #%d (seq=%d, DestPAN=0x%04X, DestMAC=%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X, SrcMAC=%02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X)",
-             dev->serial_no.c_str(), dev->pair_tx_count_, dev->beacon_seq_, pan,
+             dev->serial_no.c_str(), dev->pair_tx_count_, echo_seq, pan,
              dev->ib_mac[0], dev->ib_mac[1], dev->ib_mac[2], dev->ib_mac[3],
              dev->ib_mac[4], dev->ib_mac[5], dev->ib_mac[6], dev->ib_mac[7],
              dev->mac_addr[0], dev->mac_addr[1], dev->mac_addr[2], dev->mac_addr[3],
@@ -1011,16 +1076,16 @@ class TadoEmulatorComponent : public Component,
     pt.push_back(frame_seq); pt.push_back(0x00); pt.push_back(0x00); pt.push_back(0x00);
     // Tado Custom Dispatch: 6LoWPAN UDP (0x7E)
     pt.push_back(0x7E);
-    // 6LoWPAN NHC (Port 5683 <-> 5683)
-    pt.push_back(0x33); pt.push_back(0xF0); pt.push_back(0x16); pt.push_back(0x33); pt.push_back(0x16); pt.push_back(0x33);
+    // 6LoWPAN NHC (Port 5683 -> 4005): ACK responses go back to the requester's port
+    pt.push_back(0x33); pt.push_back(0xF0); pt.push_back(0x16); pt.push_back(0x33); pt.push_back(0x0F); pt.push_back(0xA5);
 
-    // Compute IPv6 UDP Checksum
+    // Compute IPv6 UDP Checksum (src=5683, dst=4005)
     uint8_t src_ip[16], dst_ip[16];
     get_link_local_ip(dev->mac_addr, src_ip);
     get_link_local_ip((dest_mac && (dest_mac[0] != 0xFF || dest_mac[7] != 0xFF)) ? dest_mac : dev->ib_mac, dst_ip);
     std::vector<uint8_t> udp_pkt(8 + coap.size(), 0);
-    udp_pkt[0] = 0x16; udp_pkt[1] = 0x33;
-    udp_pkt[2] = 0x16; udp_pkt[3] = 0x33;
+    udp_pkt[0] = 0x16; udp_pkt[1] = 0x33; // src port 5683
+    udp_pkt[2] = 0x0F; udp_pkt[3] = 0xA5; // dst port 4005
     uint16_t udp_len = 8 + coap.size();
     udp_pkt[4] = (udp_len >> 8) & 0xFF; udp_pkt[5] = udp_len & 0xFF;
     memcpy(udp_pkt.data() + 8, coap.data(), coap.size());
@@ -1107,12 +1172,20 @@ class TadoEmulatorComponent : public Component,
       start = slash + 1;
     }
 
+    // Option 12: Content-Format = 42 (0x11 0x2A) if payload is non-empty
+    if (!payload.empty()) {
+      coap.push_back(0x11); // Delta=1 (12 - 11), Length=1
+      coap.push_back(0x2A); // Content-Format = 42 (Binary TLV)
+      last_opt = 12;
+    }
+
     // Option 2048 (Session Token) if applicable
-    // Delta from option 11 = 2048 - 11 = 2037; extended 2-byte: 2037 - 269 = 1768 = 0x06E8
     if (use_token && dev->has_session_token) {
+      uint16_t delta_2048 = 2048 - last_opt; // 2036 if last_opt=12, 2037 if last_opt=11
+      uint16_t ext_delta = delta_2048 - 269; // 1767 (0x06E7) or 1768 (0x06E8)
       coap.push_back(0xE8); // Delta=14(ext 2-byte), Length=8
-      coap.push_back(0x06); // Extended delta MSB (1768 >> 8)
-      coap.push_back(0xE8); // Extended delta LSB (1768 & 0xFF)
+      coap.push_back((ext_delta >> 8) & 0xFF); // Extended delta MSB
+      coap.push_back(ext_delta & 0xFF);        // Extended delta LSB
       for (int i = 0; i < 8; i++) coap.push_back(dev->session_token[i]);
     }
 
@@ -1211,15 +1284,20 @@ class TadoEmulatorComponent : public Component,
     frame.insert(frame.end(), encrypted.begin(), encrypted.end());
     frame.push_back(mic[0]); frame.push_back(mic[1]); frame.push_back(mic[2]); frame.push_back(mic[3]);
 
-    // Register pending request for CoAP CON retry
+    // Register pending request for CoAP CON retry (with rebuild state)
     if (dev->pending_requests.size() >= 8) {
       dev->pending_requests.erase(dev->pending_requests.begin());
     }
     PendingRequest pr;
     pr.mid = mid;
+    pr.seq = frame_seq;
     pr.sent_ts = millis() / 1000;
     pr.retry_count = 0;
     pr.frame = frame;
+    pr.coap = coap; // Store CoAP datagram for rebuild
+    memcpy(pr.key, key, 16);
+    memcpy(pr.dest_mac, dest_mac, 8);
+    memcpy(pr.src_mac, dev->mac_addr, 8);
     dev->pending_requests.push_back(pr);
 
     // Transmit frame over SX1276 RF
@@ -1230,6 +1308,89 @@ class TadoEmulatorComponent : public Component,
     if (!data || len == 0 || len > 255) return false;
     std::vector<uint8_t> frame(data, data + len);
     return this->send_raw_rf_frame(frame);
+  }
+
+  /**
+   * Rebuilds a PendingRequest frame with a fresh sequence number.
+   * Re-encrypts using the stored CoAP datagram, key, and MAC addresses,
+   * so the Bridge sees a unique seq and matching nonce on each retry.
+   */
+  std::vector<uint8_t> rebuild_pending_frame(const PendingRequest &pr, EmulatedDevice *dev, uint8_t new_seq) {
+    // 1. Build frame header with new seq
+    uint8_t frame_header[16];
+    frame_header[0] = 0x69;
+    frame_header[1] = 0xEC;
+    frame_header[2] = new_seq;
+    if (pr.dest_mac[0] != 0xFF || pr.dest_mac[7] != 0xFF) {
+      uint16_t pan = dev->get_ib_pan();
+      frame_header[3] = pan & 0xFF;
+      frame_header[4] = (pan >> 8) & 0xFF;
+      memcpy(frame_header + 5, pr.dest_mac + 2, 6);
+    } else {
+      memset(frame_header + 3, 0xFF, 8);
+    }
+    frame_header[11] = pr.src_mac[0];
+    frame_header[12] = pr.src_mac[1];
+    frame_header[13] = pr.src_mac[2];
+    frame_header[14] = pr.src_mac[3];
+    frame_header[15] = pr.src_mac[4];
+
+    // 2. Build plaintext with new seq
+    std::vector<uint8_t> pt;
+    pt.push_back(pr.src_mac[5]);
+    pt.push_back(pr.src_mac[6]);
+    pt.push_back(pr.src_mac[7]);
+    pt.push_back(0x04);
+    pt.push_back(new_seq); pt.push_back(0x00); pt.push_back(0x00); pt.push_back(0x00);
+
+    // 3. 6LoWPAN NHC header + UDP checksum + CoAP
+    bool is_bcast = (pr.dest_mac[0] == 0xFF && pr.dest_mac[7] == 0xFF);
+    uint16_t dst_port = 4005;
+    uint8_t src_ip[16], dst_ip[16];
+    get_link_local_ip(pr.src_mac, src_ip);
+    get_link_local_ip(is_bcast ? dev->ib_mac : pr.dest_mac, dst_ip);
+
+    std::vector<uint8_t> udp_pkt;
+    udp_pkt.push_back(0x16); udp_pkt.push_back(0x33);
+    udp_pkt.push_back((dst_port >> 8) & 0xFF); udp_pkt.push_back(dst_port & 0xFF);
+    uint16_t ulen = 8 + pr.coap.size();
+    udp_pkt.push_back((ulen >> 8) & 0xFF); udp_pkt.push_back(ulen & 0xFF);
+    udp_pkt.push_back(0x00); udp_pkt.push_back(0x00);
+    udp_pkt.insert(udp_pkt.end(), pr.coap.begin(), pr.coap.end());
+    uint16_t ucsum = compute_ipv6_checksum(src_ip, dst_ip, 17, udp_pkt.data(), udp_pkt.size());
+
+    pt.push_back(0x7E);
+    pt.push_back(0x33); pt.push_back(0xF0); pt.push_back(0x16); pt.push_back(0x33);
+    pt.push_back((dst_port >> 8) & 0xFF); pt.push_back(dst_port & 0xFF);
+    pt.push_back((ucsum >> 8) & 0xFF); pt.push_back(ucsum & 0xFF);
+    pt.insert(pt.end(), pr.coap.begin(), pr.coap.end());
+
+    // 4. CRC
+    std::vector<uint8_t> crc_data;
+    crc_data.insert(crc_data.end(), frame_header, frame_header + 16);
+    crc_data.insert(crc_data.end(), pt.begin(), pt.end());
+    uint16_t crc_val = compute_crc16_kermit(crc_data.data(), crc_data.size());
+    pt.push_back(crc_val & 0xFF);
+    pt.push_back((crc_val >> 8) & 0xFF);
+
+    // 5. Encrypt
+    uint8_t nonce[13], aad[16];
+    memcpy(nonce, frame_header, 13);
+    memcpy(aad, frame_header, 16);
+    std::vector<uint8_t> encrypted(pt.size());
+    uint8_t mic[4];
+    mbedtls_ccm_context ccm;
+    mbedtls_ccm_init(&ccm);
+    mbedtls_ccm_setkey(&ccm, MBEDTLS_CIPHER_ID_AES, pr.key, 128);
+    mbedtls_ccm_encrypt_and_tag(&ccm, pt.size(), nonce, 13, aad, 16, pt.data(), encrypted.data(), mic, 4);
+    mbedtls_ccm_free(&ccm);
+
+    // 6. Assemble frame
+    std::vector<uint8_t> frame;
+    frame.insert(frame.end(), frame_header, frame_header + 16);
+    frame.insert(frame.end(), encrypted.begin(), encrypted.end());
+    frame.push_back(mic[0]); frame.push_back(mic[1]); frame.push_back(mic[2]); frame.push_back(mic[3]);
+    return frame;
   }
 
   bool send_raw_rf_frame(const std::vector<uint8_t> &frame) {
@@ -1628,7 +1789,18 @@ class TadoEmulatorComponent : public Component,
 
     // Handle 802.15.4 MAC ACK (Type 0x02)
     if ((fcf & 0x07) == 0x02) {
-      ESP_LOGI(TAG, "[RF MAC ACK RX] Received 802.15.4 ACK for Seq=%d (0x%02X)", seq, seq);
+      ESP_LOGD(TAG, "[RF MAC ACK RX] Received 802.15.4 ACK for Seq=%d (0x%02X)", seq, seq);
+      for (auto &dev : this->devices_) {
+        for (auto it = dev.pending_requests.begin(); it != dev.pending_requests.end(); ) {
+          if (it->seq == seq) {
+            ESP_LOGI(TAG, "[RF MAC Confirmed] %s: Frame Seq=%d (MID=0x%04X) confirmed by Bridge MAC ACK",
+                     dev.serial_no.c_str(), seq, it->mid);
+            it = dev.pending_requests.erase(it);
+          } else {
+            ++it;
+          }
+        }
+      }
       xSemaphoreGiveRecursive(this->devices_mutex_);
       return;
     }
@@ -1649,34 +1821,35 @@ class TadoEmulatorComponent : public Component,
           break;
         }
       }
-    } else if (dst_mode == 2 && buf_len >= 5) {
-      size_t dst_offset = pan_compress ? 3 : 5;
-      if (buf_len >= dst_offset + 2) {
-        uint16_t dest_short = buffer_data[dst_offset] | ((uint16_t)buffer_data[dst_offset + 1] << 8);
-        if (dest_short == 0xFFFF) {
-          is_broadcast = true;
-        } else {
-          for (auto &dev : this->devices_) {
-            if (dev.short_addr == dest_short) {
-              target_dev = &dev;
-              break;
-            }
+    } else if (dst_mode == 2 && buf_len >= 7) {
+      uint16_t dest_short = buffer_data[5] | ((uint16_t)buffer_data[6] << 8);
+      if (dest_short == 0xFFFF) {
+        is_broadcast = true;
+      } else {
+        for (auto &dev : this->devices_) {
+          if (dev.short_addr == dest_short) {
+            target_dev = &dev;
+            break;
           }
         }
       }
     } else if (dst_mode == 3 && buf_len >= 11) {
-      size_t dst_offset = pan_compress ? 3 : 5;
-      if (buf_len >= dst_offset + 8) {
-        bool all_ff = true;
-        for (size_t i = dst_offset; i < dst_offset + 8; i++) { if (buffer_data[i] != 0xFF) { all_ff = false; break; } }
-        if (all_ff) {
-          is_broadcast = true;
-        } else {
-          for (auto &dev : this->devices_) {
-            if (memcmp(dev.mac_addr, buffer_data + dst_offset, 8) == 0) {
-              target_dev = &dev;
-              break;
-            }
+      // In 802.15.4 Data frames, Dest PAN is at bytes 3..4, Dest Address starts at byte 5
+      bool all_ff = true;
+      for (size_t i = 5; i < 5 + 6 && i < buf_len; i++) { if (buffer_data[i] != 0xFF) { all_ff = false; break; } }
+      if (all_ff) {
+        is_broadcast = true;
+      } else {
+        for (auto &dev : this->devices_) {
+          // Check 6-byte compressed extended MAC at bytes 5..10 (standard Tado data frames)
+          if (memcmp(dev.mac_addr + 2, buffer_data + 5, 6) == 0) {
+            target_dev = &dev;
+            break;
+          }
+          // Check 8-byte full extended MAC at bytes 5..12
+          if (buf_len >= 13 && memcmp(dev.mac_addr, buffer_data + 5, 8) == 0) {
+            target_dev = &dev;
+            break;
           }
         }
       }
@@ -1817,6 +1990,7 @@ class TadoEmulatorComponent : public Component,
           uint16_t dest_pan = buffer_data[3] | ((uint16_t)buffer_data[4] << 8);
           target_dev->ib_pan_id = (dest_pan == 0xFFFF) ? 0xABCD : dest_pan;
           target_dev->beacon_seq_ = buffer_data[2];
+          target_dev->seq_num = buffer_data[2]; // Seed operational seq from RA frame
           target_dev->pairing_state = STATE_PAIR_MIMIC_UNICAST_RS;
           target_dev->pair_tx_count_ = 0;
           target_dev->last_pair_tx_time_ = 0;
