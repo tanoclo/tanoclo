@@ -13,7 +13,7 @@ permissions:
 
 concurrency:
   group: tanoclo-workflows-queue
-  cancel-in-progress: false
+  queue: max
 
 jobs:
   build-native-apk:

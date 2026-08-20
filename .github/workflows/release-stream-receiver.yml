@@ -14,7 +14,7 @@ permissions:
 
 concurrency:
   group: tanoclo-workflows-queue
-  cancel-in-progress: false
+  queue: max
 
 env:
   VERSION: ${{ github.event.inputs.version }}
