@@ -4,7 +4,7 @@
 
 # Home Assistant Add-on: TaNoClo RF Sniffer Receiver
 
-![Version](https://img.shields.io/badge/version-v0.2.0-blue.svg)
+![Version](https://img.shields.io/badge/version-v0.2.1-blue.svg)
 ![Supports aarch64 Architecture](https://img.shields.io/badge/aarch64-yes-green.svg)
 ![Supports amd64 Architecture](https://img.shields.io/badge/amd64-yes-green.svg)
 
