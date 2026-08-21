@@ -56,17 +56,8 @@ function buildEmulatedDeviceDiscovery(publishEntity, emulatedDevices) {
             device: hwDev
         });
 
-        // 3. Battery Voltage Sensor
-        publishEntity('sensor', `tanoclo_emulated_${serial}_battery`, {
-            unique_id: `tanoclo_emulated_${serial}_battery`,
-            name: 'Battery Voltage',
-            state_topic: stateTopic,
-            value_template: '{{ value_json.battery_mv }}',
-            unit_of_measurement: 'mV',
-            device_class: 'voltage',
-            icon: 'mdi:battery',
-            device: hwDev
-        });
+        // 3. Purge redundant Battery Voltage Sensor from HA
+        publishEntity('sensor', `tanoclo_emulated_${serial}_battery`, null);
 
         // 4. Trigger Telemetry Push Button
         publishEntity('button', `tanoclo_emulated_${serial}_push`, {

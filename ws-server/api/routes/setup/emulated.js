@@ -9,6 +9,7 @@ const crypto = require('crypto');
 const http = require('http');
 const router = express.Router();
 const dbDevices = require('../../../lib/db-devices');
+const db = require('../../../lib/db');
 const commandApi = require('../../../lib/command-api');
 
 /**
@@ -355,6 +356,86 @@ router.post('/devices/:serialNo/telemetry', async (req, res) => {
         });
 
         res.json({ success: true, esp32Response: espRes });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Get real latest registered sensor state for emulated device bootup sync
+router.get('/devices/:serialNo/state', async (req, res) => {
+    try {
+        const serialNo = req.params.serialNo;
+        const mqttCommands = require('../../../lib/mqtt-commands');
+        let tempC = 21.5;
+        let humidity = 50.0;
+        let batteryMv = 4500;
+        let foundMeasurement = false;
+
+        // 1. Check latest historical measurement from device_measurements table
+        try {
+            if (db && db.getPool) {
+                const [measRows] = await db.getPool().execute(
+                    'SELECT field_012d, field_0135, field_0162 FROM device_measurements WHERE device_serial = ? AND (field_012d IS NOT NULL OR field_0135 IS NOT NULL) ORDER BY id DESC LIMIT 1',
+                    [serialNo]
+                );
+                if (measRows && measRows.length > 0) {
+                    const m = measRows[0];
+                    if (m.field_012d != null) { tempC = parseFloat(m.field_012d); foundMeasurement = true; }
+                    if (m.field_0135 != null) { humidity = parseFloat(m.field_0135); foundMeasurement = true; }
+                    if (m.field_0162 != null && m.field_0162 > 0) batteryMv = parseInt(m.field_0162, 10);
+                }
+            }
+        } catch (dbErr) {
+            console.warn(`[Emulated] Warning querying device_measurements for ${serialNo}: ${dbErr.message}`);
+        }
+
+        // 2. Check cached in-memory MQTT commands state (user HA slider overrides)
+        if (mqttCommands && mqttCommands.getEmulatedState) {
+            const cached = mqttCommands.getEmulatedState(serialNo);
+            if (cached) {
+                if (!foundMeasurement) {
+                    if (cached.temp_celsius !== undefined) tempC = cached.temp_celsius;
+                    if (cached.humidity_percent !== undefined) humidity = cached.humidity_percent;
+                    if (cached.battery_mv !== undefined) batteryMv = cached.battery_mv;
+                }
+            }
+        }
+
+        let zoneId = null;
+        let peers = [];
+        const dbDev = await dbDevices.getDeviceByFullSerial(serialNo) || await dbDevices.getDeviceBySerial(serialNo);
+        if (dbDev && dbDev.zone_id) {
+            zoneId = parseInt(dbDev.zone_id, 10);
+            try {
+                if (db && db.getPool) {
+                    const [peerRows] = await db.getPool().execute(
+                        "SELECT serial_no, ipv6_address FROM devices WHERE home_id = ? AND zone_id = ? AND serial_no != ? AND (device_type LIKE 'VA%' OR device_type LIKE 'RU%' OR device_type LIKE 'WR%')",
+                        [dbDev.home_id, dbDev.zone_id, serialNo]
+                    );
+                    if (peerRows && peerRows.length > 0) {
+                        for (const row of peerRows) {
+                            if (row.ipv6_address) {
+                                let ip = row.ipv6_address;
+                                if (!ip.startsWith('coap://')) ip = `coap://[${ip}]/z/p`;
+                                peers.push(ip);
+                            }
+                        }
+                    }
+                }
+            } catch (pErr) {
+                console.warn(`[Emulated] Error querying peers for ${serialNo}: ${pErr.message}`);
+            }
+        }
+
+        res.json({
+            success: true,
+            serial: serialNo,
+            temp_celsius: tempC,
+            humidity_percent: humidity,
+            battery_mv: batteryMv,
+            zone_id: zoneId,
+            peers: peers
+        });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }

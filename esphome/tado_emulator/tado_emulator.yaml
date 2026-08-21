@@ -6,10 +6,16 @@ esp32:
   board: ttgo-lora32-v1
   framework:
     type: esp-idf
-
+    advanced:
+      sram1_as_iram: true
+      
 wifi:
   ssid: "YourSSID"
   password: "YourPassword"
+
+ota:
+  - platform: esphome
+    password: "YourOTAPassword"
 
 logger:
   level: INFO
@@ -32,6 +38,7 @@ tado_emulator:
   rst_pin: 23
   dio0_pin: 26
   channel: 26
-  server_url: "http://YOUR_SERVER_IP:3000"
+  server_url: "http://192.168.0.10:3111"
+  auto_mac_ack: true
   api_key: ""
 

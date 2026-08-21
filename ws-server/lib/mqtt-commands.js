@@ -13,6 +13,8 @@ let commandApi = null;
 let mqttPublisher = null;
 let log = null;
 
+const emulatedStates = new Map();
+
 function init(_mqttClient, _db, _commandApi, _mqttPublisher, _log) {
     mqttClient = _mqttClient;
     db = _db;
@@ -45,6 +47,38 @@ function init(_mqttClient, _db, _commandApi, _mqttPublisher, _log) {
             if (log) log('error', `[mqtt-commands] Error handling emulated telemetry for topic ${topic}: ${err.message}`);
         });
     });
+
+    // Preload persisted emulated device states from DB (prioritize latest real measurements)
+    if (db && db.getPool) {
+        db.getPool().execute(`
+            SELECT d.serial_no, 
+                   COALESCE(dm.field_012d, d.field_012d) AS field_012d, 
+                   COALESCE(dm.field_0135, d.field_0135) AS field_0135,
+                   COALESCE(dm.field_0162, 4500) AS field_0162
+            FROM devices d
+            LEFT JOIN (
+                SELECT dm1.* FROM device_measurements dm1
+                INNER JOIN (
+                    SELECT device_serial, MAX(id) AS max_id 
+                    FROM device_measurements 
+                    WHERE field_012d IS NOT NULL OR field_0135 IS NOT NULL
+                    GROUP BY device_serial
+                ) dm2 ON dm1.id = dm2.max_id
+            ) dm ON d.serial_no = dm.device_serial
+        `).then(([devs]) => {
+            for (const dev of devs) {
+                if (dev.field_012d != null || dev.field_0135 != null) {
+                    emulatedStates.set(dev.serial_no, {
+                        temp_celsius: dev.field_012d != null ? parseFloat(dev.field_012d) : 21.5,
+                        humidity_percent: dev.field_0135 != null ? parseFloat(dev.field_0135) : 50.0,
+                        battery_mv: dev.field_0162 != null && dev.field_0162 > 0 ? parseInt(dev.field_0162, 10) : 4500
+                    });
+                }
+            }
+        }).catch(err => {
+            if (log) log('warn', `[mqtt-commands] Failed to preload emulated device states: ${err.message}`);
+        });
+    }
 }
 
 async function handleCommand(topic, payload) {
@@ -625,8 +659,8 @@ async function handleCommand(topic, payload) {
           if (log) log('warn', `[mqtt-commands] Overlay push failed: ${err.message}`);
       });
   }
-  
-  async function handleEmulatedCommand(topic, payloadStr) {
+
+async function handleEmulatedCommand(topic, payloadStr) {
     const segs = topic.split('/');
     if (segs.length < 4 || segs[2] !== 'emulated') return;
 
@@ -641,17 +675,25 @@ async function handleCommand(topic, payload) {
         return;
     }
 
+    if (!emulatedStates.has(serial)) {
+        emulatedStates.set(serial, {
+            temp_celsius: 21.5,
+            humidity_percent: 50.0,
+            battery_mv: 4500
+        });
+    }
+    const state = emulatedStates.get(serial);
+
     const payload = String(payloadStr).trim();
-    let tempC = 21.5;
-    let humidity = 50.0;
-    let batteryMv = 3050;
+    let shouldPushToEsp32 = false;
 
     if (segs[4] === 'telemetry') {
         try {
             const data = JSON.parse(payload);
-            if (data.temp_celsius !== undefined) tempC = parseFloat(data.temp_celsius);
-            if (data.humidity_percent !== undefined) humidity = parseFloat(data.humidity_percent);
-            if (data.battery_mv !== undefined) batteryMv = parseInt(data.battery_mv, 10);
+            if (data.temp_celsius !== undefined) state.temp_celsius = parseFloat(data.temp_celsius);
+            if (data.humidity_percent !== undefined) state.humidity_percent = parseFloat(data.humidity_percent);
+            if (data.battery_mv !== undefined) state.battery_mv = parseInt(data.battery_mv, 10);
+            shouldPushToEsp32 = true;
         } catch (e) {
             if (log) log('warn', `[mqtt-commands] Invalid JSON payload for emulated device ${serial} telemetry`);
             return;
@@ -659,11 +701,38 @@ async function handleCommand(topic, payload) {
     } else if (segs[4] === 'set') {
         const action = segs[5];
         if (action === 'temp') {
-            tempC = parseFloat(payload) || 21.5;
+            const val = parseFloat(payload);
+            if (!isNaN(val)) state.temp_celsius = val;
         } else if (action === 'humidity') {
-            humidity = parseFloat(payload) || 50.0;
+            const val = parseFloat(payload);
+            if (!isNaN(val)) state.humidity_percent = val;
+        } else if (action === 'push') {
+            shouldPushToEsp32 = true;
         }
     }
+
+    // Persist latest state to devices table
+    try {
+        const db = require('./db');
+        if (db && db.getPool) {
+            const p = db.getPool();
+            p.execute(
+                'UPDATE devices SET field_012d = ?, field_0135 = ? WHERE serial_no = ?',
+                [state.temp_celsius, state.humidity_percent, serial]
+            ).catch(() => {});
+        }
+    } catch (_) {}
+
+    // Publish updated state back to MQTT state topic immediately so HA sliders remain in sync
+    _pub(`tado/tanoclo/emulated/${serial}/state`, JSON.stringify({
+        serial,
+        temp_celsius: state.temp_celsius,
+        humidity_percent: state.humidity_percent,
+        battery_mv: state.battery_mv,
+        updated_at: new Date().toISOString()
+    }));
+
+    if (!shouldPushToEsp32) return;
 
     // Trigger HTTP JSON RPC command to assigned ESP32 hardware node with HMAC signature
     try {
@@ -673,12 +742,17 @@ async function handleCommand(topic, payload) {
         const bodyData = JSON.stringify({
             cmd: 'send_telemetry',
             serial: serial,
-            params: { temp_celsius: tempC, humidity_percent: humidity, battery_mv: batteryMv }
+            params: {
+                temp_celsius: state.temp_celsius,
+                humidity_percent: state.humidity_percent,
+                battery_mv: state.battery_mv
+            }
         });
 
+        const postData = 'plain=' + encodeURIComponent(bodyData);
         const headers = {
-            'Content-Type': 'application/json',
-            'Content-Length': Buffer.byteLength(bodyData),
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Content-Length': Buffer.byteLength(postData),
             'X-Timestamp': timestamp
         };
 
@@ -702,20 +776,15 @@ async function handleCommand(topic, payload) {
             if (log) log('warn', `[mqtt-commands] Error sending telemetry to ESP32 for ${serial}: ${err.message}`);
         });
 
-        req.write(bodyData);
+        req.write(postData);
         req.end();
-
-        // Publish updated state back to MQTT state topic
-        _pub(`tado/tanoclo/emulated/${serial}/state`, JSON.stringify({
-            serial,
-            temp_celsius: tempC,
-            humidity_percent: humidity,
-            battery_mv: batteryMv,
-            updated_at: new Date().toISOString()
-        }));
     } catch (err) {
         if (log) log('error', `[mqtt-commands] Error dispatching emulated telemetry: ${err.message}`);
     }
+}
+
+function getEmulatedState(serial) {
+    return emulatedStates.get(serial) || null;
 }
 
 function _pub(topic, value) {
@@ -725,5 +794,6 @@ function _pub(topic, value) {
 }
 
 module.exports = {
-    init
+    init,
+    getEmulatedState
 };

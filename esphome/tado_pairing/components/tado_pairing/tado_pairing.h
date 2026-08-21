@@ -853,7 +853,8 @@ class TadoPairing : public Component, public spi::SPIDevice<spi::BIT_ORDER_MSB_F
     write_reg_fast(REG_AFC_BW, 0x01);    // AFC bandwidth: 166.67 kHz
     write_reg_fast(0x1A, 0x20);          // AfcAutoClearOn=1
     write_reg_fast(0x10, 0xD2);          // RegRssiThresh = -105 dBm
-    write_reg_fast(0x25, 0x00); write_reg_fast(0x26, 0x10); // 16 preamble bytes TX (2.56ms at 50kbps)
+    //write_reg_fast(0x25, 0x00); write_reg_fast(0x26, 0x10); // 16 preamble bytes TX (2.56ms at 50kbps)
+    write_reg_fast(0x25, 0x00); write_reg_fast(0x26, 0x04); // 4 preamble bytes TX (640µs at 50kbps — matches native CC110L MDMCFG1=0x22)
     write_reg_fast(REG_PREAMBLE_DETECT, 0xCA); // 3-byte preamble detection
     write_reg_fast(REG_SYNC_CONFIG, 0x73); // 4-byte sync D391D391 (matches CC110L 30/32 mode), AutoRestartRx=01, PreamblePolarity=0x55
     write_reg_fast(REG_SYNC_VALUE_1, 0xD3); write_reg_fast(REG_SYNC_VALUE_2, 0x91);

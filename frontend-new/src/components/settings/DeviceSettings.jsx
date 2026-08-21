@@ -27,7 +27,7 @@ import {
   addDeviceToZone, removeDeviceFromZone, createZone 
 } from '../../api/zones';
 import { 
-  getDeviceBatteryData, getBridge, updateDeviceBatteryType
+  getDeviceBatteryData, getBridge, updateDeviceBatteryType, getCircuits
 } from '../../api/tanoclo';
 import { useHome } from '../../context/HomeContext';
 import { 
@@ -85,6 +85,12 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
   const { data: allDevices } = useSWR(
     homeId ? SWR_KEYS.devices(homeId) : null,
     () => getDevices(homeId)
+  );
+
+  // Fetch all circuits in the home
+  const { data: circuits } = useSWR(
+    homeId ? `/homes/${homeId}/tanoclo/circuits` : null,
+    () => getCircuits(homeId)
   );
 
   const { zones, mutateZones, homeInfo } = useHome();
@@ -191,7 +197,36 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
       return;
     }
 
-    if (targetValue !== 'none') {
+    if (targetValue === 'none') {
+      const isAssigned = device && device.zoneId !== null && device.zoneId !== undefined && device.zoneId !== 'none';
+      if (isAssigned) {
+        const currentZone = zones?.find(z => String(z.id) === String(device.zoneId));
+        const isZoneController = Boolean(
+          circuits?.some(c => (c.driver_serial_no === device.serialNo || c.driverSerialNo === device.serialNo)) ||
+          currentZone?.devices?.some(d => d.serialNo === device.serialNo && d.duties?.includes('CIRCUIT_DRIVER')) ||
+          device.duties?.includes('CIRCUIT_DRIVER')
+        );
+        const measuringLeader = currentZone?.devices?.find(d => d.duties?.includes('ZONE_LEADER'));
+        const measuringSerial = currentZone?.measuringDeviceSerial || currentZone?.measuring_device_serial || measuringLeader?.serialNo;
+        const isMeasuringDevice = Boolean(
+          (measuringSerial && measuringSerial === device.serialNo) ||
+          measuringLeader?.serialNo === device.serialNo ||
+          device.duties?.includes('ZONE_LEADER')
+        );
+        const zoneDevices = (allDevices || currentZone?.devices || []).filter(
+          d => String(d.zoneId) === String(device.zoneId) &&
+               !d.deviceType?.startsWith('IB') &&
+               !d.deviceType?.startsWith('GW') &&
+               d.deviceType !== 'BRIDGE'
+        );
+        const isOnlyDeviceInZone = zoneDevices.length <= 1;
+
+        if (isZoneController || isMeasuringDevice || isOnlyDeviceInZone) {
+          showToast(t('settings.error_cannot_unassign_device', { defaultValue: 'Device cannot be unassigned from zone.' }), 'error');
+          return;
+        }
+      }
+    } else {
       const targetZoneId = parseInt(targetValue, 10);
       const roomDevCount = (allDevices || []).filter(d => d.zoneId === targetZoneId && !d.deviceType?.startsWith('IB') && !d.deviceType?.startsWith('GW') && d.deviceType !== 'BRIDGE').length;
       if (!isBridge && roomDevCount >= 7 && String(device.zoneId) !== String(targetZoneId)) {
@@ -507,6 +542,7 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
             isReadOnly={isReadOnly}
             zones={zones}
             devices={allDevices}
+            circuits={circuits}
             t={t}
           />
 

@@ -44,8 +44,35 @@ export default function DeviceSettingsGeneral({
   isReadOnly,
   zones,
   devices,
+  circuits,
   t
 }) {
+  const isAssigned = device && device.zoneId !== null && device.zoneId !== undefined && device.zoneId !== 'none';
+  const currentZone = isAssigned ? zones?.find(z => String(z.id) === String(device.zoneId)) : null;
+
+  const isZoneController = Boolean(
+    circuits?.some(c => (c.driver_serial_no === device?.serialNo || c.driverSerialNo === device?.serialNo)) ||
+    currentZone?.devices?.some(d => d.serialNo === device?.serialNo && d.duties?.includes('CIRCUIT_DRIVER')) ||
+    device?.duties?.includes('CIRCUIT_DRIVER')
+  );
+
+  const measuringLeader = currentZone?.devices?.find(d => d.duties?.includes('ZONE_LEADER'));
+  const measuringSerial = currentZone?.measuringDeviceSerial || currentZone?.measuring_device_serial || measuringLeader?.serialNo;
+  const isMeasuringDevice = Boolean(
+    (measuringSerial && measuringSerial === device?.serialNo) ||
+    measuringLeader?.serialNo === device?.serialNo ||
+    device?.duties?.includes('ZONE_LEADER')
+  );
+
+  const zoneDevices = (devices || currentZone?.devices || []).filter(
+    d => String(d.zoneId) === String(device?.zoneId) &&
+         !d.deviceType?.startsWith('IB') &&
+         !d.deviceType?.startsWith('GW') &&
+         d.deviceType !== 'BRIDGE'
+  );
+  const isOnlyDeviceInZone = zoneDevices.length <= 1;
+
+  const canUnassign = !isAssigned || (!isZoneController && !isMeasuringDevice && !isOnlyDeviceInZone);
   return (
     <>
       {/* Friendly Name Card */}
@@ -192,7 +219,7 @@ export default function DeviceSettingsGeneral({
                 width: '100%'
               }}
             >
-              {(!device || device.zoneId === null || device.zoneId === undefined) && (
+              {canUnassign && (
                 <option value="none">{t('settings.unassigned_none')}</option>
               )}
               {zones

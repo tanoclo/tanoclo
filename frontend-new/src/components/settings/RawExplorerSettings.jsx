@@ -41,7 +41,7 @@ const FRIENDLY_LABELS = {
   field_027a: 'Dial Interaction Result',
   field_0160: 'Reset Reason',
   field_0161: 'HVAC Link Status Flags',
-  field_0162: 'Sensor Frame Counter',
+  field_0162: 'Battery Voltage (mV)',
   field_0136: 'Encoder Raw Pulses',
   link_state: 'Link State',
   tado_mode: 'Auto Mode',

@@ -232,6 +232,24 @@ async function publishFullState() {
             _pubAvailability(`${BASE_TOPIC}/h/${dev.home_id}/d/${dev.serial_no}/availability`, dev.connection_state === 1);
         }
 
+        // 3b. Fetch and publish emulated devices states
+        const [emulatedDevices] = await pool.execute('SELECT * FROM emulated_devices');
+        for (const emDev of emulatedDevices) {
+            const dev = devices.find(d => d.serial_no === emDev.serial_no);
+            const tempC = (dev && dev.field_012d != null) ? parseFloat(dev.field_012d) : 21.5;
+            const humPct = (dev && dev.field_0135 != null) ? parseFloat(dev.field_0135) : 50.0;
+            const battMv = 4500;
+
+            const stateTopic = `tado/tanoclo/emulated/${emDev.serial_no}/state`;
+            _batchPublish(stateTopic, JSON.stringify({
+                serial: emDev.serial_no,
+                temp_celsius: tempC,
+                humidity_percent: humPct,
+                battery_mv: battMv,
+                updated_at: new Date().toISOString()
+            }), { retain: true, qos: 0 });
+        }
+
         // 4. Fetch heating circuits
         for (const c of circuits) {
             const fields = {
