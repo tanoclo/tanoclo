@@ -127,6 +127,7 @@ async function handleDeviceConfig(ws, frame, coapMsg, decoded, peerInfo, pathInf
 
     if (deviceId) {
         await db.updateDeviceConfig(deviceId, decoded.fields, decoded.fields);
+        await db.updateDeviceFirmware(deviceId, decoded.fields);
         const shortSerial = extractShortSerial(deviceId);
         if (shortSerial) {
             await db.updateDeviceConnectionState(shortSerial, true);

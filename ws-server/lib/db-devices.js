@@ -149,6 +149,10 @@ function formatFirmwareVersion(value) {
 
 async function updateDeviceFirmware(serial, fields) {
     const p = getPool();
+    const dbDev = await getDeviceByFullSerial(serial) || await getDeviceBySerial(serial);
+    if (!dbDev) return;
+    const targetSerial = dbDev.serial_no;
+
     const updates = [];
     const params = [];
 
@@ -164,7 +168,7 @@ async function updateDeviceFirmware(serial, fields) {
     if (fields['0x003c'] !== undefined) { updates.push('field_003c=?'); params.push(fields['0x003c']); }
 
     if (updates.length === 0) return;
-    params.push(serial);
+    params.push(targetSerial);
     await p.execute(`UPDATE devices SET ${updates.join(', ')} WHERE serial_no = ?`, params);
 }
 
