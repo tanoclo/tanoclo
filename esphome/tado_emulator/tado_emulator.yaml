@@ -19,6 +19,8 @@ ota:
 
 logger:
   level: INFO
+  tx_buffer_size: 4096
+  task_log_buffer_size: 2048
 
 web_server:
   port: 80

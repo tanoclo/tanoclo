@@ -78,6 +78,10 @@ router.get('/:homeId/zones', async (req, res) => {
             if (!leaderAssigned && mappedDevices.length > 0) {
                 mappedDevices[0].duties.push('ZONE_LEADER');
                 mappedDevices[0].duties = Array.from(new Set(mappedDevices[0].duties));
+                const firstSerial = mappedDevices[0].shortSerialNo || mappedDevices[0].serialNo;
+                if (firstSerial && zone.type !== 'HOT_WATER') {
+                    pool.execute('UPDATE zones SET measuring_device_serial = ? WHERE id = ? AND home_id = ?', [firstSerial, zone.id, homeId]).catch(() => {});
+                }
             }
 
             return {

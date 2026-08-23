@@ -14,6 +14,7 @@ let mqttPublisher = null;
 let log = null;
 
 const emulatedStates = new Map();
+const pendingEsp32Retries = new Map();
 
 function init(_mqttClient, _db, _commandApi, _mqttPublisher, _log) {
     mqttClient = _mqttClient;
@@ -52,8 +53,8 @@ function init(_mqttClient, _db, _commandApi, _mqttPublisher, _log) {
     if (db && db.getPool) {
         db.getPool().execute(`
             SELECT d.serial_no, 
-                   COALESCE(dm.field_012d, d.field_012d) AS field_012d, 
-                   COALESCE(dm.field_0135, d.field_0135) AS field_0135,
+                   COALESCE(dm.field_012d, 21.5) AS field_012d, 
+                   COALESCE(dm.field_0135, 50.0) AS field_0135,
                    COALESCE(dm.field_0162, 4500) AS field_0162
             FROM devices d
             LEFT JOIN (
@@ -711,18 +712,6 @@ async function handleEmulatedCommand(topic, payloadStr) {
         }
     }
 
-    // Persist latest state to devices table
-    try {
-        const db = require('./db');
-        if (db && db.getPool) {
-            const p = db.getPool();
-            p.execute(
-                'UPDATE devices SET field_012d = ?, field_0135 = ? WHERE serial_no = ?',
-                [state.temp_celsius, state.humidity_percent, serial]
-            ).catch(() => {});
-        }
-    } catch (_) {}
-
     // Publish updated state back to MQTT state topic immediately so HA sliders remain in sync
     _pub(`tado/tanoclo/emulated/${serial}/state`, JSON.stringify({
         serial,
@@ -732,9 +721,17 @@ async function handleEmulatedCommand(topic, payloadStr) {
         updated_at: new Date().toISOString()
     }));
 
-    if (!shouldPushToEsp32) return;
+    if (shouldPushToEsp32) {
+        dispatchEsp32Telemetry(dev, serial, state, 0);
+    }
+}
 
-    // Trigger HTTP JSON RPC command to assigned ESP32 hardware node with HMAC signature
+function dispatchEsp32Telemetry(dev, serial, state, attempt = 0) {
+    if (attempt === 0 && pendingEsp32Retries.has(serial)) {
+        clearTimeout(pendingEsp32Retries.get(serial));
+        pendingEsp32Retries.delete(serial);
+    }
+
     try {
         const http = require('http');
         const crypto = require('crypto');
@@ -761,6 +758,25 @@ async function handleEmulatedCommand(topic, payloadStr) {
             headers['X-Signature'] = crypto.createHmac('sha256', dev.api_key).update(`${timestamp}.${bodyData}`).digest('hex');
         }
 
+        let handled = false;
+        const scheduleRetry = (reason) => {
+            if (handled) return;
+            handled = true;
+            if (attempt < 3) {
+                const delayMs = Math.min(16000, 2000 * Math.pow(2, attempt));
+                if (log) log('info', `[mqtt-commands] Telemetry push for ${serial} failed (${reason}). Scheduling retry #${attempt + 1} in ${delayMs / 1000}s`);
+                const timer = setTimeout(() => {
+                    pendingEsp32Retries.delete(serial);
+                    const latestState = emulatedStates.get(serial) || state;
+                    dispatchEsp32Telemetry(dev, serial, latestState, attempt + 1);
+                }, delayMs);
+                pendingEsp32Retries.set(serial, timer);
+            } else {
+                pendingEsp32Retries.delete(serial);
+                if (log) log('warn', `[mqtt-commands] Failed to deliver telemetry to ESP32 for ${serial} after 4 attempts (${reason})`);
+            }
+        };
+
         const req = http.request({
             hostname: dev.esp32_ip,
             port: dev.esp32_port || 80,
@@ -769,11 +785,22 @@ async function handleEmulatedCommand(topic, payloadStr) {
             headers,
             timeout: 5000
         }, (res) => {
-            if (log) log('info', `[mqtt-commands] Triggered telemetry push for emulated ${serial} via ESP32 ${dev.esp32_ip} (HTTP ${res.statusCode})`);
+            if (res.statusCode >= 200 && res.statusCode < 300) {
+                handled = true;
+                pendingEsp32Retries.delete(serial);
+                if (log) log('info', `[mqtt-commands] Triggered telemetry push for emulated ${serial} via ESP32 ${dev.esp32_ip} (HTTP ${res.statusCode})`);
+            } else {
+                scheduleRetry(`HTTP ${res.statusCode}`);
+            }
+        });
+
+        req.on('timeout', () => {
+            req.destroy();
+            scheduleRetry('timeout');
         });
 
         req.on('error', (err) => {
-            if (log) log('warn', `[mqtt-commands] Error sending telemetry to ESP32 for ${serial}: ${err.message}`);
+            scheduleRetry(err.message);
         });
 
         req.write(postData);
