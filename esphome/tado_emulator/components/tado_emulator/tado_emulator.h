@@ -584,11 +584,7 @@ class TadoEmulatorComponent : public Component,
   }
 
   /**
-   * Builds d/sen TLV payload based on real captured Room Unit measurements:
-   * 0x012d: temperature_ambient (int16, degC * 100)
-   * Builds exact d/sen payload matching Real RU (6 TLVs):
-   * 0x0161: ambient_light_adc (uint16, e.g. 6249 / 0x1869)
-   * Builds exact d/sen payload matching Real RU (6 TLVs):
+   * Builds exact d/sen payload matching Real RU:
    * 0x0161: ambient_light_adc (uint16, e.g. 6249 / 0x1869)
    * 0x0162: battery_mv (uint16, mV)
    * 0x012d: temp_celsius (int16, temp * 100)
