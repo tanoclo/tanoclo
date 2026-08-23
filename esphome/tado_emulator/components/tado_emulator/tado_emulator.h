@@ -118,8 +118,9 @@ struct EmulatedDevice {
   // Cached sensor telemetry values
   float target_temp_celsius{21.5f};
   float target_humidity_pct{50.0f};
-  uint16_t target_battery_mv{4500}; // Default full battery (4.5V)
-  uint8_t target_ambient_light{6};  // Default normal ambient light
+  uint16_t target_battery_mv{4500};     // Default full battery (4.5V)
+  uint16_t target_ambient_light{6249};  // Default ambient light ADC (matches Real RU ~0x1869)
+  uint8_t reset_counter{6};             // Default reset counter (1 byte uint8)
 
   // CoAP CON retry tracking
   bool token_refresh_pending{false};
@@ -581,22 +582,26 @@ class TadoEmulatorComponent : public Component,
   /**
    * Builds d/sen TLV payload based on real captured Room Unit measurements:
    * 0x012d: temperature_ambient (int16, degC * 100)
-   * 0x012e: aux_temperature_1 (int16, follows ambient)
-   * 0x0135: humidity_percent (int16, % * 100)
+   * Builds exact d/sen payload matching Real RU (6 TLVs):
+   * 0x0161: ambient_light_adc (uint16, e.g. 6249 / 0x1869)
    * 0x0162: battery_mv (uint16, mV)
-   * 0x0136: ambient_light_level (uint8, default 6)
+   * 0x012d: temp_celsius (int16, temp * 100)
+   * 0x012e: aux_temp_celsius (int16, follows ambient)
+   * 0x0135: humidity_percent (uint16, % * 10, e.g. 50.0% -> 500)
+   * 0x0136: reset_counter / status (uint8, 1 byte matching Real RU)
    */
-  static std::vector<uint8_t> build_d_sen_payload(float temp_c, float humidity_pct, uint16_t battery_mv, uint8_t light_level = 6) {
+  static std::vector<uint8_t> build_d_sen_payload(float temp_c, float humidity_pct, uint16_t battery_mv, uint16_t light_adc = 6249, uint8_t reset_count = 6) {
     std::vector<uint8_t> tlv;
     int16_t temp_val = (int16_t)(temp_c * 100.0f);
-    int16_t aux_temp_val = temp_val; // Aux temperature follows ambient sensor
-    int16_t hum_val = (int16_t)(humidity_pct * 100.0f);
+    int16_t aux_temp_val = temp_val;
+    uint16_t hum_val = (uint16_t)(humidity_pct * 10.0f);
 
+    append_tlv_uint16(tlv, 0x0161, light_adc);
     append_tlv_uint16(tlv, 0x0162, battery_mv);
     append_tlv_int16(tlv, 0x012d, temp_val);
     append_tlv_int16(tlv, 0x012e, aux_temp_val);
-    append_tlv_int16(tlv, 0x0135, hum_val);
-    append_tlv_uint16(tlv, 0x0136, (uint16_t)light_level);
+    append_tlv_uint16(tlv, 0x0135, hum_val);
+    append_tlv_uint8(tlv, 0x0136, reset_count);
     return tlv;
   }
 
@@ -667,10 +672,11 @@ class TadoEmulatorComponent : public Component,
     dev->target_humidity_pct = hum_pct;
     dev->target_battery_mv = battery_mv;
 
-    std::vector<uint8_t> payload = build_d_sen_payload(temp_c, hum_pct, battery_mv, dev->target_ambient_light);
+    std::vector<uint8_t> payload = build_d_sen_payload(temp_c, hum_pct, battery_mv, dev->target_ambient_light, dev->reset_counter);
     std::string path = "d/" + dev->serial_no + "/sen";
     this->send_coap_request(dev, 3 /* PUT */, path, payload);
-    ESP_LOGI(TAG, "  └─ Telemetry payload: Temp=%.2fC, Hum=%.1f%%, Batt=%umV", temp_c, hum_pct, battery_mv);
+    ESP_LOGI(TAG, "  └─ Telemetry payload: Temp=%.2fC, Hum=%.1f%%, Batt=%umV, Light=%uADC, Reset=%u",
+             temp_c, hum_pct, battery_mv, dev->target_ambient_light, dev->reset_counter);
   }
 
   void send_fw_state_put(EmulatedDevice *dev) {
@@ -2539,7 +2545,11 @@ class TadoEmulatorComponent : public Component,
         target_dev->startup_stage = 6; // Complete
         target_dev->stage_ack_received = false;
         target_dev->last_startup_step_ms = millis();
-        target_dev->last_telemetry_ts = (uint32_t)(esp_timer_get_time() / 1000000ULL);
+        uint32_t now_sec = (uint32_t)(esp_timer_get_time() / 1000000ULL);
+        target_dev->last_telemetry_ts = now_sec;
+        target_dev->last_config_check_ts = now_sec;
+        target_dev->last_token_refresh_ts = now_sec;
+        target_dev->last_link_probe_ts = now_sec;
         // Clear all handshake requests (0x9000..0x9003)
         for (auto it = target_dev->pending_requests.begin(); it != target_dev->pending_requests.end(); ) {
           if (it->mid >= 0x9000 && it->mid <= 0x9003) it = target_dev->pending_requests.erase(it);
@@ -2755,7 +2765,9 @@ class TadoEmulatorComponent : public Component,
           ESP_LOGI(TAG, "✓ Inbound GET /d/info answered with 2.05 Content (%u bytes) for %s",
                    (unsigned int)resp_payload.size(), target_dev->serial_no.c_str());
         } else {
-          resp_payload = build_d_sen_payload(target_dev->target_temp_celsius, target_dev->target_humidity_pct, target_dev->target_battery_mv, target_dev->target_ambient_light);
+          resp_payload = build_d_sen_payload(target_dev->target_temp_celsius, target_dev->target_humidity_pct,
+                                             target_dev->target_battery_mv, target_dev->target_ambient_light,
+                                             target_dev->reset_counter);
           ESP_LOGI(TAG, "✓ Inbound GET poll answered with 2.05 Content (%u bytes) for %s",
                    (unsigned int)resp_payload.size(), target_dev->serial_no.c_str());
         }

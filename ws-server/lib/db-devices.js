@@ -340,17 +340,24 @@ async function isDeviceAlive(serial) {
 async function getZoneForDevice(shortSerial) {
     const p = getPool();
     const [rows] = await p.execute(
-        `SELECT d.zone_id, d.home_id, z.measuring_device_serial 
+        `SELECT d.zone_id, d.home_id, z.measuring_device_serial,
+                (SELECT COUNT(*) FROM devices d2 WHERE d2.zone_id = d.zone_id AND d2.home_id = d.home_id AND d2.serial_no = z.measuring_device_serial) AS leader_valid
          FROM devices d
          LEFT JOIN zones z ON d.zone_id = z.id AND d.home_id = z.home_id
          WHERE d.serial_no = ? OR d.serial_no LIKE CONCAT(?, "%") LIMIT 1`,
         [shortSerial, shortSerial]
     );
     if (rows.length > 0 && rows[0].zone_id) {
+        let measuringSerial = rows[0].measuring_device_serial;
+        // If measuringSerial points to a device that is no longer in this zone, self-heal to this device
+        if (measuringSerial && !rows[0].leader_valid) {
+            measuringSerial = rows[0].serial_no || shortSerial;
+            p.execute('UPDATE zones SET measuring_device_serial = ? WHERE id = ? AND home_id = ?', [measuringSerial, rows[0].zone_id, rows[0].home_id]).catch(() => {});
+        }
         return {
             zoneId: rows[0].zone_id,
             homeId: rows[0].home_id,
-            measuringSerial: rows[0].measuring_device_serial
+            measuringSerial: measuringSerial
         };
     }
     return null;
@@ -469,6 +476,17 @@ async function updateEmulatedDevicePairingState(serialNo, pairingState) {
 
 async function deleteEmulatedDevice(serialNo) {
     const p = getPool();
+    // Check if device was measuring leader in any zone before deleting
+    const [devs] = await p.execute('SELECT home_id, zone_id FROM devices WHERE serial_no = ?', [serialNo]);
+    if (devs.length > 0 && devs[0].zone_id) {
+        const { home_id, zone_id } = devs[0];
+        const [zone] = await p.execute('SELECT measuring_device_serial FROM zones WHERE id = ? AND home_id = ?', [zone_id, home_id]);
+        if (zone.length > 0 && zone[0].measuring_device_serial === serialNo) {
+            const [otherDevs] = await p.execute('SELECT serial_no FROM devices WHERE zone_id = ? AND home_id = ? AND serial_no != ?', [zone_id, home_id, serialNo]);
+            const newMeasurer = otherDevs.length > 0 ? otherDevs[0].serial_no : null;
+            await p.execute('UPDATE zones SET measuring_device_serial = ? WHERE id = ? AND home_id = ?', [newMeasurer, zone_id, home_id]);
+        }
+    }
     await p.execute('DELETE FROM emulated_devices WHERE serial_no = ?', [serialNo]);
     await p.execute('DELETE FROM devices WHERE serial_no = ?', [serialNo]);
 }
