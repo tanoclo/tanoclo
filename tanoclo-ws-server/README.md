@@ -4,7 +4,7 @@
 
 # Home Assistant Add-on: TaNoClo WebSocket Server
 
-![Version](https://img.shields.io/badge/version-v0.2.3-blue.svg)
+![Version](https://img.shields.io/badge/version-v0.2.4-blue.svg)
 ![Supports aarch64 Architecture](https://img.shields.io/badge/aarch64-yes-green.svg)
 ![Supports amd64 Architecture](https://img.shields.io/badge/amd64-yes-green.svg)
 
