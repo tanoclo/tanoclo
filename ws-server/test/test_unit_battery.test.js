@@ -165,7 +165,7 @@ describe('filterBatteryMv — battery voltage drop guard', () => {
     expect(battery.filterBatteryMv('RU001', 4192)).toBe(4192);
   });
 
-  test('transient single drop suppressed (RU 3-cell, threshold 300mV)', () => {
+  test('transient single drop suppressed (RU 3-cell, threshold 150mV)', () => {
     // Establish baseline
     battery.filterBatteryMv('RU001', 4192);
     // Single drop of 517 mV — should be suppressed
@@ -193,20 +193,31 @@ describe('filterBatteryMv — battery voltage drop guard', () => {
 
   test('gradual drain accepted immediately (drop < threshold)', () => {
     battery.filterBatteryMv('RU001', 4192);
-    // 50 mV drop — well below 300 mV threshold for RU
+    // 50 mV drop — well below 150 mV threshold for RU
     expect(battery.filterBatteryMv('RU001', 4142)).toBe(4142);
-    // Another small drop
+    // Another small drop (42 mV drop)
     expect(battery.filterBatteryMv('RU001', 4100)).toBe(4100);
   });
 
-  test('VA device uses 200mV threshold (2-cell)', () => {
+  test('VA device uses 100mV threshold (2-cell)', () => {
     battery.filterBatteryMv('VA001', 3000);
-    // Drop of 250 mV — exceeds 200 mV threshold, should be suppressed
-    expect(battery.filterBatteryMv('VA001', 2750)).toBe(3000);
-    // Drop of 150 mV — below threshold, accepted immediately
+    // Drop of 150 mV — exceeds 100 mV threshold, should be suppressed
+    expect(battery.filterBatteryMv('VA001', 2850)).toBe(3000);
+    // Drop of 80 mV — below threshold, accepted immediately
     battery.resetBatteryGuardState('VA001');
     battery.filterBatteryMv('VA001', 3000);
-    expect(battery.filterBatteryMv('VA001', 2850)).toBe(2850);
+    expect(battery.filterBatteryMv('VA001', 2920)).toBe(2920);
+  });
+
+  test('seedBatteryGuardState pre-populates baseline', () => {
+    battery.seedBatteryGuardState([
+      { device_serial: 'RU001', field_0162: 4200 },
+      { serial_no: 'VA001', battery_mv: 2900 }
+    ]);
+    // Single drop of 516 mV on seeded RU device — should be suppressed
+    expect(battery.filterBatteryMv('RU001', 3684)).toBe(4200);
+    // Single drop of 150 mV on seeded VA device — should be suppressed
+    expect(battery.filterBatteryMv('VA001', 2750)).toBe(2900);
   });
 
   test('drop counter resets on recovery', () => {

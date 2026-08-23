@@ -51,10 +51,13 @@ async function handleSensorData(ws, frame, coapMsg, decoded, peerInfo, pathInfo)
     const clientInfo = clients.get(deviceId);
     if (clientInfo) clientInfo.lastMessageAt = new Date().toISOString();
 
+    const shortSerial = extractShortSerial(deviceId);
+    if (!shortSerial) return;
+
     let tempAmbient = f['0x012d'] ?? null;
     let humidity = f['0x0135'] ?? null;
     const rawBatteryMv = f['0x0162'] ?? null;
-    const batteryMv = rawBatteryMv != null ? battery.filterBatteryMv(deviceId, rawBatteryMv) : null;
+    const batteryMv = rawBatteryMv != null ? battery.filterBatteryMv(shortSerial, rawBatteryMv) : null;
     const lightLevel = f['0x0136'] ?? null;
     const otVolt = f['0x0161'] ?? null;
     const resetReason = f['0x0160'] ?? null;
@@ -79,12 +82,9 @@ async function handleSensorData(ws, frame, coapMsg, decoded, peerInfo, pathInfo)
         : (resetReason !== null ? resetReason : 'null');
 
     if (rawBatteryMv != null && batteryMv !== rawBatteryMv) {
-        log('info', `BATTERY GUARD ${deviceId}: raw=${rawBatteryMv}mV guarded=${batteryMv}mV (transient drop suppressed)`);
+        log('info', `BATTERY GUARD ${shortSerial}: raw=${rawBatteryMv}mV guarded=${batteryMv}mV (transient drop suppressed)`);
     }
-    log('debug', `SENSOR ${deviceId}: temp=${tempC}°C hum=${humPct}% bat=${batteryMv}mV light=${lightLevel} ot_volt=${otVoltV}V reset=${resetStr}`);
-
-    const shortSerial = extractShortSerial(deviceId);
-    if (!shortSerial) return;
+    log('debug', `SENSOR ${shortSerial}: temp=${tempC}°C hum=${humPct}% bat=${batteryMv}mV light=${lightLevel} ot_volt=${otVoltV}V reset=${resetStr}`);
 
     let batteryState = null;
     let batteryPercent = null;

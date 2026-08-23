@@ -150,7 +150,7 @@ function filterBatteryMv(deviceId, rawMv, requiredReports) {
     }
 
     const cells = _cellsFor(deviceId, rawMv);
-    const dropThreshold = cells * 100; // mV
+    const dropThreshold = cells * 50; // mV (50mV per cell: 150mV for RU 3-cell, 100mV for VA 2-cell)
     const drop = state.confirmedMv - rawMv;
 
     if (drop < dropThreshold) {
@@ -176,6 +176,35 @@ function filterBatteryMv(deviceId, rawMv, requiredReports) {
 }
 
 /**
+ * Seed the guard state from persistent storage (e.g. database latest readings on startup).
+ * @param {Array<{device_serial?: string, serial_no?: string, field_0162?: number, battery_mv?: number}>|Map<string, number>|Object} data
+ */
+function seedBatteryGuardState(data) {
+    if (!data) return;
+    if (Array.isArray(data)) {
+        for (const row of data) {
+            const serial = row.device_serial || row.serial_no || row.serial;
+            const mv = Number(row.field_0162 || row.mv || row.battery_mv);
+            if (serial && mv > 0) {
+                _guardState.set(String(serial), { confirmedMv: mv, dropCount: 0 });
+            }
+        }
+    } else if (data instanceof Map) {
+        for (const [serial, mv] of data.entries()) {
+            if (serial && Number(mv) > 0) {
+                _guardState.set(String(serial), { confirmedMv: Number(mv), dropCount: 0 });
+            }
+        }
+    } else if (typeof data === 'object') {
+        for (const [serial, mv] of Object.entries(data)) {
+            if (serial && Number(mv) > 0) {
+                _guardState.set(String(serial), { confirmedMv: Number(mv), dropCount: 0 });
+            }
+        }
+    }
+}
+
+/**
  * Reset guard state for a specific device or all devices.
  * Useful for testing or when a device is re-paired.
  * @param {string} [deviceId]  If omitted, clears all state
@@ -189,5 +218,6 @@ module.exports = {
     getBatteryPercent,
     inferCellsFromMv,
     filterBatteryMv,
+    seedBatteryGuardState,
     resetBatteryGuardState
 };

@@ -383,6 +383,22 @@ async function getAllDevices() {
     return rows;
 }
 
+async function getLatestBatteryVoltages() {
+    const p = getPool();
+    const query = `
+        SELECT dm.device_serial, dm.field_0162 
+        FROM device_measurements dm
+        INNER JOIN (
+            SELECT MAX(id) AS max_id 
+            FROM device_measurements 
+            WHERE field_0162 IS NOT NULL AND field_0162 > 0 
+            GROUP BY device_serial
+        ) latest ON dm.id = latest.max_id
+    `;
+    const [rows] = await p.execute(query);
+    return rows;
+}
+
 // ---------------------------------------------------------------------------
 // ESP32 Hardware Nodes & Emulated Devices
 // ---------------------------------------------------------------------------
@@ -518,6 +534,7 @@ module.exports = {
     getHomeForDevice,
     updateDeviceFallback,
     getAllDevices,
+    getLatestBatteryVoltages,
     getAllEsp32Nodes,
     getEsp32NodeById,
     createEsp32Node,

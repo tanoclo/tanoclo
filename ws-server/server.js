@@ -120,6 +120,16 @@ async function populateIpv6Map() {
     }
 }
 
+async function seedBatteryGuard() {
+    try {
+        const voltages = await db.getLatestBatteryVoltages();
+        battery.seedBatteryGuardState(voltages);
+        log('debug', `Seeded battery guard state for ${voltages.length} devices`);
+    } catch (e) {
+        log('warn', `Failed to seed battery guard state: ${e.message}`);
+    }
+}
+
 async function sendToDevice(deviceId, wsMessage) {
     if (db.isOffline()) return;
 
@@ -280,6 +290,7 @@ async function startServer() {
     await dbMigrate.runPending(db.getPool(), log);
 
     await populateIpv6Map();
+    await seedBatteryGuard();
     await config.loadFromDb();
     log('debug', `Starting TaNoClo WS Server on wss://0.0.0.0:${config.wsPort}...`);
 
