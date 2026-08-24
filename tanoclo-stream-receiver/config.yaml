@@ -5,7 +5,7 @@
 #              and architecture capabilities.
 # ==============================================================================
 name: "TaNoClo RF Sniffer Receiver"
-version: "0.2.2"
+version: "0.2.3"
 slug: "tanoclo-stream-receiver"
 description: "Decrypts, parses, and publishes Tado RF Sniffer packets to MQTT with Home Assistant Discovery"
 url: "https://github.com/tanoclo/tanoclo"
