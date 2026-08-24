@@ -116,7 +116,7 @@ describe('ZoneClimateCard', () => {
     expect(html).toContain('POOR');
   });
 
-  it('renders FAIR badge when conditions are slightly off', () => {
+  it('renders FAIR badge and single humidity condition when temp is comfy', () => {
     const comfort = {
       roomId: 1,
       temperatureLevel: 'COMFY',
@@ -134,6 +134,28 @@ describe('ZoneClimateCard', () => {
     const html = renderToString(<ZoneClimateCard name="Bathroom" comfort={comfort} state={state} outsideTemp={15.0} />);
     expect(html).toContain('Bathroom');
     expect(html).toContain('FAIR');
+    expect(html).toContain('The zone is humid.');
+    expect(html).not.toContain('comfy temperature');
+  });
+
+  it('renders combined condition when both temperature and humidity are off', () => {
+    const comfort = {
+      roomId: 1,
+      temperatureLevel: 'COLD',
+      humidityLevel: 'HUMID',
+      freshness: 'POOR',
+      coordinate: { radial: 0.8, angular: 315 }
+    };
+    const state = {
+      sensorDataPoints: {
+        insideTemperature: { celsius: 16.5 },
+        humidity: { percentage: 72.0 }
+      }
+    };
+
+    const html = renderToString(<ZoneClimateCard name="Bedroom" comfort={comfort} state={state} outsideTemp={12.0} />);
+    expect(html).toContain('Bedroom');
+    expect(html).toContain('The zone is cold and humid.');
   });
 });
 

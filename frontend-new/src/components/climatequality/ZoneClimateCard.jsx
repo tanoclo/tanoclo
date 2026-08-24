@@ -33,33 +33,38 @@ export default function ZoneClimateCard({ name, comfort, state, outsideTemp }) {
 
   // Formulate comfort evaluation sentence
   const getExplanation = (tL, hL) => {
-    const tText = (tL === 'TOO_COLD' || tL === 'COLD') ? t('air_comfort.explanation.cold')
-                : (tL === 'HOT' || tL === 'WARM') ? t('air_comfort.explanation.warm')
-                : t('air_comfort.explanation.comfy_temp');
+    const isCold = tL === 'TOO_COLD' || tL === 'COLD';
+    const isWarm = tL === 'HOT' || tL === 'WARM' || tL === 'TOO_HOT';
+    const isHumid = hL === 'TOO_HUMID' || hL === 'HUMID';
+    const isDry = hL === 'TOO_DRY' || hL === 'DRY';
 
-    const hText = (hL === 'TOO_DRY' || hL === 'DRY') ? t('air_comfort.explanation.dry')
-                : (hL === 'TOO_HUMID' || hL === 'HUMID') ? t('air_comfort.explanation.humid')
-                : t('air_comfort.explanation.comfy_humidity');
-
-    if (tL === 'COMFY' && hL === 'COMFY') {
+    if (!isCold && !isWarm && !isHumid && !isDry) {
       return t('air_comfort.explanation.balanced');
     }
 
-    const conditions = `${tText} ${t('common.and')} ${hText}`;
+    const tText = isCold ? t('air_comfort.explanation.cold')
+                : isWarm ? t('air_comfort.explanation.warm')
+                : null;
 
-    if (hL.includes('HUMID')) {
+    const hText = isHumid ? t('air_comfort.explanation.humid')
+                : isDry ? t('air_comfort.explanation.dry')
+                : null;
+
+    const conditions = (tText && hText) ? `${tText} ${t('common.and')} ${hText}` : (tText || hText);
+
+    if (isHumid) {
       return t('air_comfort.explanation.room_is_vent', { conditions });
     }
 
-    if (hL.includes('DRY')) {
+    if (isDry) {
       return t('air_comfort.explanation.room_is_humidify', { conditions });
     }
 
-    if (tL.includes('COLD')) {
+    if (isCold) {
       return t('air_comfort.explanation.room_is_cold', { condition: tText });
     }
 
-    if (tL.includes('HOT') || tL.includes('WARM')) {
+    if (isWarm) {
       const powerState = state.setting?.power;
       const target = state.setting?.temperature?.celsius;
       const isHeatingActive = powerState !== 'OFF' && target != null && target >= temp;
