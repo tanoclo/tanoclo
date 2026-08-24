@@ -9,7 +9,11 @@ __pycache__/
 /frontend-new/dist/
 /check.js
 /CLAUDE.md
-node_modules/*
+node_modules/
 /manifest.json
 release.keystore
 test_config.json
+.discovered_devices.json
+.discovered_ha_entities.json
+*.log
+*.log.*

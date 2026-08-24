@@ -1,34 +1,108 @@
 /**
  * @file lib/tlv.js
  * @brief Parses Type-Length-Value (TLV) dynamic configurations and telemetry properties.
- * 
- * Interrogates field IDs (FIDs) and decodes values into strings, signed/unsigned integers,
- * floating points, and boolean states, applying scale modifiers where configured.
  */
+
+'use strict';
 
 let _labels = {};
 
 /**
- * Initialize TLV decoder with labels from the database
+ * Initialize TLV decoder with labels from database/JSON
  */
 function init(labels) {
     _labels = labels || {};
 }
 
-/**
- * Get the loaded labels
- */
 function getLabels() {
     return _labels;
 }
 
-/**
- * Get the label info for a field ID
- */
 function getLabel(fid) {
     if (fid === null || fid === undefined) return null;
     const key = '0x' + fid.toString(16).toLowerCase().padStart(4, '0');
     return _labels[key] || null;
+}
+
+/**
+ * Decode STM32 RCC CSR reset reason flags.
+ */
+function decodeResetReason(code) {
+    if (code === null || code === undefined) return null;
+    const val = Number(code);
+    if (isNaN(val) || val === 0) return 'None';
+    const parts = [];
+    if (val & 1) parts.push('PIN');
+    if (val & 2) parts.push('POR/PDR');
+    if (val & 4) parts.push('Software');
+    if (val & 8) parts.push('IWDG');
+    if (val & 16) parts.push('WWDG');
+    if (val & 32) parts.push('Low-Power');
+    return parts.length > 0 ? parts.join('+') : 'None';
+}
+
+/**
+ * Decode Room Unit / Valve Actuator hardware error flags.
+ */
+function decodeErrorFlags(flags) {
+    if (flags === null || flags === undefined) return 'None';
+    const val = Number(flags);
+    if (isNaN(val) || val === 0) return 'None';
+    const parts = [];
+    if (val & 0x2) parts.push('Orphaned/No Route');
+    if (val & 0x4) parts.push('NVM Write Fault');
+    if (val & 0x8) parts.push('NVM Verification Fault');
+    if (val & 0x80) parts.push('Link Loss/Offline');
+    if (val & 0x800) parts.push('Motor Blocked');
+    if (val & 0x1000) parts.push('Valve Travel Too Short');
+    if (val & 0x2000) parts.push('Calibration Fault');
+    if (val & 0x4000) parts.push('Mount/Contact Fault');
+    if (val & 0x100000) parts.push('Low Battery');
+    if (val & 0x200000) parts.push('Hardware Reset');
+
+    const remaining = val & ~(0x2 | 0x4 | 0x8 | 0x80 | 0x800 | 0x1000 | 0x2000 | 0x4000 | 0x100000 | 0x200000);
+    if (remaining > 0) {
+        parts.push(`RAW_0x${remaining.toString(16).toUpperCase()}`);
+    }
+    return parts.length > 0 ? parts.join(', ') : 'None';
+}
+
+/**
+ * Calculates valve position percentage.
+ */
+function calculateValvePositionPct(current, limitLow, limitHigh) {
+    if (current == null || limitLow == null || limitHigh == null) return null;
+    const cur = Number(current);
+    const low = Number(limitLow);
+    const high = Number(limitHigh);
+    const range = low - high;
+    if (range === 0) return 0;
+    const pct = ((low - cur) / range) * 100;
+    return Math.round(Math.max(0, Math.min(100, pct)));
+}
+
+/**
+ * Decode mount state.
+ */
+function decodeMountState(val) {
+    if (val === null || val === undefined) return 'UNKNOWN';
+    if (typeof val === 'string') return val;
+    const num = Number(val);
+    switch (num) {
+        case 0: return 'UNMOUNTED';
+        case 1: return 'CALIBRATING';
+        case 2: return 'MOUNTED';
+        case 3: return 'FAULT';
+        default: return `STATE_${num}`;
+    }
+}
+
+/**
+ * Decode display orientation.
+ */
+function decodeOrientation(val) {
+    if (val === 1 || val === '1' || val === 'HORIZONTAL') return 'HORIZONTAL';
+    return 'VERTICAL';
 }
 
 /**
@@ -87,9 +161,11 @@ function interpretValue(valueBuf, label) {
 }
 
 /**
- * Decode a TLV payload buffer into an array of named fields
+ * Decode a TLV payload buffer into named items and fields.
+ * Format per entry: [FID: 2 bytes Big-Endian][Length: 1 byte][Value: Length bytes]
+ * 
  * @param {Buffer} payload - Raw TLV bytes
- * @returns {{ ok: boolean, fields: Object, items: Array }}
+ * @returns {{ ok: boolean, fields: object, items: Array }}
  */
 function decode(payload) {
     if (!Buffer.isBuffer(payload)) payload = Buffer.from(payload);
@@ -99,41 +175,35 @@ function decode(payload) {
     let cur = 0;
 
     while (cur + 3 <= payload.length) {
-        const fid = payload.readUInt16BE(cur); cur += 2;
-        const len = payload[cur]; cur += 1;
+        const fid = payload.readUInt16BE(cur);
+        const len = payload[cur + 2];
+        cur += 3;
 
         if (cur + len > payload.length) {
-            break;
+            return { ok: false, error: 'TLV field length exceeds payload boundary', items, fields };
         }
 
-        const valueBuf = Buffer.from(payload.subarray(cur, cur + len));
+        const valueBuf = payload.subarray(cur, cur + len);
         cur += len;
 
-        const fidHex = '0x' + (fid ? fid.toString(16).toLowerCase().padStart(4, '0') : '0000');
+        const hexId = '0x' + fid.toString(16).toLowerCase().padStart(4, '0');
         const label = getLabel(fid);
         const interpreted = interpretValue(valueBuf, label);
 
-        const item = {
-            fid: fidHex,
-            fidNum: fid,
-            name: label ? label.name : fidHex,
+        const name = label && label.name ? label.name : hexId;
+        const entry = {
+            fid: hexId,
+            name,
             type: label ? label.type : 'bytes',
-            unit: label ? (label.unit || null) : null,
-            rawHex: valueBuf.toString('hex'),
-            len,
             value: interpreted.value,
+            raw: interpreted.raw,
+            length: len
         };
 
-        items.push(item);
-
-        const key = fidHex;
-        if (fields[key] !== undefined) {
-            if (!Array.isArray(fields[key])) {
-                fields[key] = [fields[key]];
-            }
-            fields[key].push(item.value);
-        } else {
-            fields[key] = item.value;
+        items.push(entry);
+        fields[hexId] = interpreted.value;
+        if (label && label.name) {
+            fields[label.name] = interpreted.value;
         }
     }
 
@@ -141,136 +211,91 @@ function decode(payload) {
 }
 
 /**
- * Encode a set of TLV fields into a binary payload
- * @param {Array<{fid: number, value: Buffer}>} entries 
+ * Encode an array of field objects into a binary TLV Buffer.
+ * @param {Array<{fid: number|string, type: string, value: any, scale?: number}>} entries
  * @returns {Buffer}
  */
 function encode(entries) {
-    const bufs = [];
-    for (const entry of entries) {
-        const fid = entry.fid;
-        const val = Buffer.isBuffer(entry.value) ? entry.value : Buffer.from(entry.value);
-        const hdr = Buffer.alloc(3);
-        hdr.writeUInt16BE(fid, 0);
-        hdr[2] = val.length;
-        bufs.push(hdr, val);
-    }
-    return Buffer.concat(bufs);
-}
-
-/**
- * Encode a single field value based on its type
- */
-function encodeValue(value, type) {
-    switch (type) {
-        case 'u8': {
-            const b = Buffer.alloc(1);
-            b[0] = value & 0xFF;
-            return b;
-        }
-        case 'u16be': {
-            const b = Buffer.alloc(2);
-            b.writeUInt16BE(value & 0xFFFF, 0);
-            return b;
-        }
-        case 'u32be': {
-            const b = Buffer.alloc(4);
-            b.writeUInt32BE(value >>> 0, 0);
-            return b;
-        }
-        case 's16be': {
-            const b = Buffer.alloc(2);
-            b.writeInt16BE(value, 0);
-            return b;
-        }
-        case 's32be': {
-            const b = Buffer.alloc(4);
-            b.writeInt32BE(value, 0);
-            return b;
-        }
-        case 'string':
-            return Buffer.from(String(value), 'utf-8');
-        case 'bool': {
-            return Buffer.from([value ? 1 : 0]);
-        }
-        case 'empty':
-            return Buffer.alloc(0);
-        case 'bytes':
-        default:
-            if (typeof value === 'number') {
-                // Defensive: encode numeric values as appropriately-sized integers
-                if (value <= 0xFF) return Buffer.from([value & 0xFF]);
-                if (value <= 0xFFFF) { const b = Buffer.alloc(2); b.writeUInt16BE(value & 0xFFFF, 0); return b; }
-                const b = Buffer.alloc(4); b.writeUInt32BE(value >>> 0, 0); return b;
-            }
-            if (typeof value === 'string') return Buffer.from(value, 'hex');
-            return Buffer.isBuffer(value) ? value : Buffer.from(value);
-    }
-}
-
-/**
- * Find a field ID by its label name
- * @param {string} name 
- * @returns {number|null}
- */
-function getFidByLabelName(name) {
-    for (const [fid, info] of Object.entries(_labels)) {
-        if (info.name === name) {
-            return parseInt(fid, 16);
-        }
-    }
-    return null;
-}
-
-/**
- * Encode a nested fields object back into a binary TLV payload.
- * Supports both named fields and hex-prefixed field IDs.
- * @param {Object} fields 
- * @returns {Buffer}
- */
-function encodeFromFields(fields) {
-    const entries = [];
-    for (const [key, val] of Object.entries(fields)) {
-        let fid;
-        let type = 'bytes';
-        let scale = null;
-
-        if (key.startsWith('0x')) {
-            fid = parseInt(key, 16);
-            const label = getLabel(fid);
-            if (label) {
-                type = label.type || 'bytes';
-                scale = label.scale;
-            }
+    const buffers = [];
+    for (const item of entries) {
+        let fidNum;
+        if (typeof item.fid === 'string') {
+            fidNum = parseInt(item.fid.replace(/^0x/i, ''), 16);
         } else {
-            fid = getFidByLabelName(key);
-            const label = getLabel(fid);
-            if (label) {
-                type = label.type;
-                scale = label.scale;
-            }
+            fidNum = item.fid;
         }
 
-        if (fid == null) continue;
-        if (val === null || val === undefined) continue;
+        let valBuf;
+        const t = item.type || 'bytes';
+        let v = item.value;
 
-        const valArray = Array.isArray(val) ? val : [val];
-
-        for (const v of valArray) {
-            let encodeVal = v;
-            // Apply inverse scaling if needed
-            if (scale != null && typeof v === 'number') {
-                encodeVal = Math.round(v / scale);
-            }
-            try {
-                entries.push({ fid, value: encodeValue(encodeVal, type) });
-            } catch (err) {
-                console.error(`[tlv] Error encoding key="${key}" fid=0x${fid.toString(16)} type="${type}" val=${v}:`, err.message);
-                throw err;
-            }
+        if (item.scale != null && typeof v === 'number') {
+            v = Math.round(v / item.scale);
         }
+
+        switch (t) {
+            case 'u8':
+                valBuf = Buffer.from([v & 0xFF]);
+                break;
+            case 'u16':
+            case 'u16be':
+                valBuf = Buffer.alloc(2);
+                valBuf.writeUInt16BE(v & 0xFFFF, 0);
+                break;
+            case 'u32be':
+                valBuf = Buffer.alloc(4);
+                valBuf.writeUInt32BE(v >>> 0, 0);
+                break;
+            case 's16':
+            case 's16be':
+                valBuf = Buffer.alloc(2);
+                valBuf.writeInt16BE(v, 0);
+                break;
+            case 's32be':
+                valBuf = Buffer.alloc(4);
+                valBuf.writeInt32BE(v, 0);
+                break;
+            case 'string':
+            case 'string_ascii':
+                valBuf = Buffer.from(String(v), 'utf-8');
+                break;
+            case 'bool':
+            case 'flag':
+                valBuf = Buffer.from([v ? 1 : 0]);
+                break;
+            case 'empty':
+                valBuf = Buffer.alloc(0);
+                break;
+            case 'bytes':
+            default:
+                if (Buffer.isBuffer(v)) {
+                    valBuf = v;
+                } else if (typeof v === 'string') {
+                    valBuf = Buffer.from(v.replace(/\s+/g, ''), 'hex');
+                } else {
+                    valBuf = Buffer.alloc(0);
+                }
+                break;
+        }
+
+        const header = Buffer.alloc(3);
+        header.writeUInt16BE(fidNum, 0);
+        header[2] = valBuf.length;
+        buffers.push(header, valBuf);
     }
-    return encode(entries);
+    return Buffer.concat(buffers);
 }
 
-module.exports = { init, getLabels, getLabel, getFidByLabelName, decode, encode, encodeValue, interpretValue, encodeFromFields };
+module.exports = {
+    init,
+    getLabels,
+    getLabel,
+    interpretValue,
+    decode,
+    encode,
+    decodeResetReason,
+    decodeErrorFlags,
+    calculateValvePositionPct,
+    decodeMountState,
+    decodeOrientation
+};

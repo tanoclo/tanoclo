@@ -1,16 +1,9 @@
 /**
  * @file lib/coap.js
- * @brief CoAP (RFC 7252) message parser and serializer.
- * 
- * Provides utility methods to decode and encode binary CoAP packages, map option headers,
- * handle response/request status codes, and serialize payloads with custom vendor options.
- * 
- * Header format (4 bytes):
- *   [ver:2][type:2][tkl:4] [code:8] [message_id:16]
- *   [token: tkl bytes]
- *   [options...]
- *   [0xFF payload_marker] [payload...]
+ * @brief RFC 7252 CoAP parser and serializer with Tado protocol customizations.
  */
+
+'use strict';
 
 // CoAP types
 const TYPE_CON = 0; // Confirmable
@@ -25,12 +18,18 @@ const CODE_PUT = 3;
 const CODE_DELETE = 4;
 
 // CoAP response codes
-const CODE_CREATED = 0x41;  // 2.01
-const CODE_DELETED = 0x42;  // 2.02
-const CODE_VALID = 0x43;  // 2.03
-const CODE_CHANGED = 0x44;  // 2.04
-const CODE_CONTENT = 0x45;  // 2.05
-const CODE_CONTINUE = 0x5F; // 2.31
+const CODE_CREATED = 0x41;         // 2.01
+const CODE_DELETED = 0x42;         // 2.02
+const CODE_VALID = 0x43;           // 2.03
+const CODE_CHANGED = 0x44;         // 2.04
+const CODE_CONTENT = 0x45;         // 2.05
+const CODE_CONTINUE = 0x5F;        // 2.31
+const CODE_BAD_REQUEST = 0x80;     // 4.00
+const CODE_UNAUTHORIZED = 0x81;    // 4.01
+const CODE_BAD_OPTION = 0x82;      // 4.02
+const CODE_FORBIDDEN = 0x83;       // 4.03
+const CODE_NOT_FOUND = 0x84;       // 4.04
+const CODE_METHOD_NOT_ALLOWED = 0x85; // 4.05
 const CODE_GATEWAY_TIMEOUT = 0xA4; // 5.04
 
 // Option numbers
@@ -48,7 +47,7 @@ const OPT_BLOCK1 = 27;
 const OPT_VENDOR_2048 = 2048;
 
 /**
- * Format a CoAP code byte as "C.DD" string
+ * Format a CoAP code byte as "C.DD" string or METHOD name.
  */
 function codeStr(code) {
     if (code >= 1 && code <= 4) {
@@ -72,16 +71,27 @@ function isRequest(code) {
 function encOptUint(val) {
     if (val === 0) return Buffer.alloc(0);
     if (val <= 0xFF) return Buffer.from([val]);
-    if (val <= 0xFFFF) { const b = Buffer.alloc(2); b.writeUInt16BE(val); return b; }
-    if (val <= 0xFFFFFF) { const b = Buffer.alloc(3); b[0] = (val >> 16) & 0xFF; b.writeUInt16BE(val & 0xFFFF, 1); return b; }
-    const b = Buffer.alloc(4); b.writeUInt32BE(val); return b;
+    if (val <= 0xFFFF) {
+        const b = Buffer.alloc(2);
+        b.writeUInt16BE(val);
+        return b;
+    }
+    if (val <= 0xFFFFFF) {
+        const b = Buffer.alloc(3);
+        b[0] = (val >> 16) & 0xFF;
+        b.writeUInt16BE(val & 0xFFFF, 1);
+        return b;
+    }
+    const b = Buffer.alloc(4);
+    b.writeUInt32BE(val);
+    return b;
 }
 
 /**
  * Decode a CoAP option value as unsigned integer
  */
 function decOptUint(buf) {
-    if (buf.length === 0) return 0;
+    if (!buf || buf.length === 0) return 0;
     if (buf.length === 1) return buf[0];
     if (buf.length === 2) return buf.readUInt16BE(0);
     if (buf.length === 3) return (buf[0] << 16) | buf.readUInt16BE(1);
@@ -90,105 +100,166 @@ function decOptUint(buf) {
 }
 
 /**
- * Parse a CoAP message from binary data
+ * Validates whether a parsed CoAP struct is semantically valid according to RFC 7252.
+ */
+function isValidCoap(parsed) {
+    if (!parsed || !parsed.ok) return false;
+    if (parsed.ver !== 1) return false;
+
+    // Type must be 0-3 (CON, NON, ACK, RST)
+    if (parsed.type < 0 || parsed.type > 3) return false;
+
+    // Code class must be 0 (Request), 2 (Success), 4 (Client Error), or 5 (Server Error)
+    const cls = (parsed.code >> 5) & 0x07;
+    if (cls !== 0 && cls !== 2 && cls !== 4 && cls !== 5) return false;
+
+    // Empty message validation
+    if (parsed.code === 0) {
+        // Empty message MUST have type ACK (2) or RST (3)
+        if (parsed.type !== 2 && parsed.type !== 3) return false;
+        // Empty message MUST NOT have a token
+        if (parsed.tkl !== 0) return false;
+        // Empty message MUST NOT have options
+        if (parsed.options && parsed.options.length > 0) return false;
+        // Empty message MUST NOT have payload
+        if (parsed.payload && parsed.payload.length > 0) return false;
+    } else {
+        // Non-empty message MUST NOT be type RST (3)
+        if (parsed.type === 3) return false;
+    }
+
+    return true;
+}
+
+/**
+ * Deterministically locates the start offset of a CoAP message within an inner UDP payload.
+ * Prevents false positives from 6LoWPAN / UDP header bytes.
+ */
+function findCoapOffset(payload) {
+    if (!payload || payload.length <= 4) return -1;
+    const firstByte = payload[4];
+
+    // 1. Check known deterministic UDP NHC header offsets
+    const candidates = [];
+    if (firstByte === 0x33) {
+        candidates.push(12); // Standard Tado 6LoWPAN UDP NHC
+    } else if (firstByte === 0xF7) {
+        candidates.push(13);
+    } else if (firstByte === 0xF5) {
+        candidates.push(21);
+    } else if (firstByte === 0xD7) {
+        candidates.push(22);
+    }
+
+    for (const offset of candidates) {
+        if (offset <= payload.length - 4) {
+            const parsed = parse(payload.subarray(offset));
+            if (isValidCoap(parsed)) {
+                return offset;
+            }
+        }
+    }
+
+    // 2. Fallback scan starting at offset 10 to avoid matching on outer headers
+    for (let i = 10; i <= payload.length - 4; i++) {
+        const parsed = parse(payload.subarray(i));
+        if (isValidCoap(parsed)) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+/**
+ * Parse a CoAP message from binary data with Tado Option 15 defensive fallback.
  * @param {Buffer} data - Raw CoAP bytes
- * @returns {Object} Parsed CoAP message
+ * @returns {object} Parsed CoAP object
  */
 function parse(data) {
     if (!Buffer.isBuffer(data)) data = Buffer.from(data);
 
     if (data.length < 4) {
-        return { ok: false, err: `CoAP message too short: ${data.length}` };
+        return { ok: false, error: 'CoAP message too short (< 4 bytes)' };
     }
 
     const byte0 = data[0];
     const ver = (byte0 >> 6) & 0x3;
     const type = (byte0 >> 4) & 0x3;
-    const tkl = byte0 & 0x0F;
+    const tkl = byte0 & 0xF;
+
+    if (ver !== 1) {
+        return { ok: false, error: `Unsupported CoAP version: ${ver}` };
+    }
+
     const code = data[1];
     const mid = data.readUInt16BE(2);
 
-    let cur = 4;
-
-    // Token
-    if (cur + tkl > data.length) {
-        return { ok: false, err: `Token length ${tkl} exceeds data` };
+    if (4 + tkl > data.length) {
+        return { ok: false, error: 'Token length exceeds message size' };
     }
-    const token = data.subarray(cur, cur + tkl);
-    cur += tkl;
 
-    // Options
+    const token = data.subarray(4, 4 + tkl);
+    let offset = 4 + tkl;
+
     const options = [];
-    let optNum = 0;
+    let currentOptNum = 0;
 
-    while (cur < data.length) {
-        if (data[cur] === 0xFF) {
-            cur++; // payload marker
+    while (offset < data.length) {
+        if (data[offset] === 0xFF) {
+            offset++; // skip payload marker
             break;
         }
 
-        const delta4 = (data[cur] >> 4) & 0x0F;
-        const len4 = data[cur] & 0x0F;
-        cur++;
+        const optByte = data[offset++];
+        let delta = (optByte >> 4) & 0xF;
+        let length = optByte & 0xF;
 
-        // RFC 7252: nibble 15 is reserved. Tado sometimes uses options with
-        // reserved nibbles. Instead of failing, scan forward for 0xFF payload marker.
-        if (delta4 === 15 || len4 === 15) {
-            // Scan for 0xFF payload marker from current position
-            let found = false;
-            for (let j = cur; j < data.length; j++) {
-                if (data[j] === 0xFF) {
-                    cur = j + 1;
-                    found = true;
-                    break;
-                }
+        // Defensive Tado firmware workaround: if nibbles hit reserved 15, seek 0xFF payload marker
+        if (delta === 15 || length === 15) {
+            const markerIdx = data.indexOf(0xFF, offset);
+            if (markerIdx !== -1) {
+                offset = markerIdx + 1;
+            } else {
+                offset = data.length;
             }
-            if (!found) cur = data.length; // no payload marker found
             break;
         }
 
-        let delta, optLen;
-
-        // Delta
-        if (delta4 < 13) {
-            delta = delta4;
-        } else if (delta4 === 13) {
-            if (cur >= data.length) break;
-            delta = data[cur++] + 13;
-        } else if (delta4 === 14) {
-            if (cur + 1 >= data.length) break;
-            delta = data.readUInt16BE(cur) + 269;
-            cur += 2;
-        } else {
-            break;
+        if (delta === 13) {
+            if (offset >= data.length) return { ok: false, error: 'Truncated option delta (1 byte)' };
+            delta = data[offset++] + 13;
+        } else if (delta === 14) {
+            if (offset + 1 >= data.length) return { ok: false, error: 'Truncated option delta (2 bytes)' };
+            delta = data.readUInt16BE(offset) + 269;
+            offset += 2;
         }
 
-        // Length
-        if (len4 < 13) {
-            optLen = len4;
-        } else if (len4 === 13) {
-            if (cur >= data.length) break;
-            optLen = data[cur++] + 13;
-        } else if (len4 === 14) {
-            if (cur + 1 >= data.length) break;
-            optLen = data.readUInt16BE(cur) + 269;
-            cur += 2;
-        } else {
-            break;
+        if (length === 13) {
+            if (offset >= data.length) return { ok: false, error: 'Truncated option length (1 byte)' };
+            length = data[offset++] + 13;
+        } else if (length === 14) {
+            if (offset + 1 >= data.length) return { ok: false, error: 'Truncated option length (2 bytes)' };
+            length = data.readUInt16BE(offset) + 269;
+            offset += 2;
         }
 
-        optNum += delta;
+        currentOptNum += delta;
 
-        if (cur + optLen > data.length) break;
+        if (offset + length > data.length) {
+            return { ok: false, error: 'Option value exceeds message size' };
+        }
 
-        const optValue = Buffer.from(data.subarray(cur, cur + optLen));
-        cur += optLen;
+        const value = data.subarray(offset, offset + length);
+        offset += length;
 
-        options.push({ num: optNum, value: optValue });
+        options.push({
+            num: currentOptNum,
+            name: getOptionName(currentOptNum),
+            value
+        });
     }
 
-    // Payload
-    const payload = cur < data.length ? Buffer.from(data.subarray(cur)) : Buffer.alloc(0);
+    const payload = offset < data.length ? data.subarray(offset) : Buffer.alloc(0);
 
     return {
         ok: true,
@@ -197,303 +268,138 @@ function parse(data) {
         tkl,
         code,
         mid,
-        token: Buffer.from(token),
+        token,
         options,
-        payload,
+        payload
     };
 }
 
 /**
- * Get the URI path from parsed CoAP options
- */
-function uriPath(coap) {
-    const segments = coap.options
-        .filter(o => o.num === OPT_URI_PATH)
-        .map(o => o.value.toString('utf-8'));
-    return segments.join('/');
-}
-
-/**
- * Get all values for a specific option number
- */
-function optionValues(coap, optNum) {
-    return coap.options.filter(o => o.num === optNum).map(o => o.value);
-}
-
-/**
- * Get the first value for a specific option as uint
- */
-function optionUint(coap, optNum) {
-    const vals = optionValues(coap, optNum);
-    if (vals.length === 0) return null;
-    return decOptUint(vals[0]);
-}
-
-/**
- * Get the first raw value for a specific option
- */
-function optionFirst(coap, optNum) {
-    const vals = optionValues(coap, optNum);
-    return vals.length > 0 ? vals[0] : null;
-}
-
-/**
- * Get the Vendor 2048 (Session Token) option value
- */
-function getOptionVendor2048(coap) {
-    return optionFirst(coap, OPT_VENDOR_2048);
-}
-
-/**
- * Serialize a CoAP message to binary
- * @param {Object} msg - {ver, type, code, mid, token, options: [{num, value}], payload}
- * @returns {Buffer}
+ * Serialize a CoAP message into binary Buffer.
+ * @param {object} msg - CoAP message descriptor
+ * @returns {Buffer} Serialized CoAP bytes
  */
 function serialize(msg) {
+    const ver = msg.ver !== undefined ? msg.ver : 1;
+    const type = msg.type || 0;
+    const code = msg.code || 0;
+    const mid = msg.mid || 0;
     const token = msg.token || Buffer.alloc(0);
     const tkl = token.length;
-    const payload = msg.payload || Buffer.alloc(0);
 
-    // Sort options by number
-    const sortedOpts = [...(msg.options || [])].sort((a, b) => a.num - b.num);
+    const sortedOptions = (msg.options || []).slice().sort((a, b) => a.num - b.num);
 
-    // Calculate option bytes
-    const optBufs = [];
+    const optionBufs = [];
     let prevNum = 0;
 
-    for (const opt of sortedOpts) {
-        let delta = opt.num - prevNum;
+    for (const opt of sortedOptions) {
+        const delta = opt.num - prevNum;
         prevNum = opt.num;
-        const value = opt.value || Buffer.alloc(0);
-        const vLen = value.length;
 
-        // Encode delta
-        let deltaField, deltaExt;
+        const val = opt.value || Buffer.alloc(0);
+        const len = val.length;
+
+        let deltaNibble, deltaExt = [];
         if (delta < 13) {
-            deltaField = delta;
-            deltaExt = Buffer.alloc(0);
+            deltaNibble = delta;
         } else if (delta < 269) {
-            deltaField = 13;
-            deltaExt = Buffer.from([delta - 13]);
+            deltaNibble = 13;
+            deltaExt = [delta - 13];
         } else {
-            deltaField = 14;
-            deltaExt = Buffer.alloc(2);
-            deltaExt.writeUInt16BE(delta - 269);
+            deltaNibble = 14;
+            const diff = delta - 269;
+            deltaExt = [(diff >> 8) & 0xFF, diff & 0xFF];
         }
 
-        // Encode length
-        let lenField, lenExt;
-        if (vLen < 13) {
-            lenField = vLen;
-            lenExt = Buffer.alloc(0);
-        } else if (vLen < 269) {
-            lenField = 13;
-            lenExt = Buffer.from([vLen - 13]);
+        let lenNibble, lenExt = [];
+        if (len < 13) {
+            lenNibble = len;
+        } else if (len < 269) {
+            lenNibble = 13;
+            lenExt = [len - 13];
         } else {
-            lenField = 14;
-            lenExt = Buffer.alloc(2);
-            lenExt.writeUInt16BE(vLen - 269);
+            lenNibble = 14;
+            const diff = len - 269;
+            lenExt = [(diff >> 8) & 0xFF, diff & 0xFF];
         }
 
-        const header = Buffer.from([(deltaField << 4) | lenField]);
-        optBufs.push(header, deltaExt, lenExt, value);
+        const optHeader = (deltaNibble << 4) | lenNibble;
+        optionBufs.push(Buffer.from([optHeader, ...deltaExt, ...lenExt]));
+        optionBufs.push(val);
     }
 
-    const optBytes = Buffer.concat(optBufs);
+    const header = Buffer.alloc(4);
+    header[0] = ((ver & 0x3) << 6) | ((type & 0x3) << 4) | (tkl & 0xF);
+    header[1] = code;
+    header.writeUInt16BE(mid, 2);
 
-    // Header (4 bytes) + token + options + optional payload marker + payload
-    const hasPayload = payload.length > 0;
-    const totalLen = 4 + tkl + optBytes.length + (hasPayload ? 1 + payload.length : 0);
-    const buf = Buffer.alloc(totalLen);
-    let off = 0;
-
-    buf[off++] = ((msg.ver ?? 1) << 6) | (((msg.type != null ? msg.type : TYPE_ACK)) << 4) | tkl;
-
-    let code = msg.code;
-    if (typeof code === 'string') {
-        if (code.includes('.')) {
-            const [c, d] = code.split('.').map(Number);
-            code = (c << 5) | d;
-        } else {
-            code = Number(code);
-        }
-    }
-    buf[off++] = code;
-    buf.writeUInt16BE(msg.mid, off); off += 2;
-    token.copy(buf, off); off += tkl;
-    optBytes.copy(buf, off); off += optBytes.length;
-
-    if (hasPayload) {
-        buf[off++] = 0xFF;
-        payload.copy(buf, off);
+    const parts = [header, token, ...optionBufs];
+    if (msg.payload && msg.payload.length > 0) {
+        parts.push(Buffer.from([0xFF])); // payload marker
+        parts.push(msg.payload);
     }
 
-    return buf;
+    return Buffer.concat(parts);
 }
 
-/**
- * Build a simple CoAP ACK response (2.04 Changed, no payload)
- */
-function buildAck(requestCoap, responseCode = CODE_CHANGED) {
-    return serialize({
-        ver: 1,
-        type: TYPE_ACK,
-        code: responseCode,
-        mid: requestCoap.mid,
-        token: requestCoap.token,
-        options: [],
-        payload: Buffer.alloc(0),
-    });
-}
-
-/**
- * Build a CoAP ACK response with TLV payload
- */
-function buildAckWithPayload(requestCoap, responseCode, payload) {
-    return serialize({
-        ver: 1,
-        type: TYPE_ACK,
-        code: responseCode,
-        mid: requestCoap.mid,
-        token: requestCoap.token,
-        options: [],
-        payload,
-    });
-}
-
-/**
- * Build a CoAP ACK response with custom options and optional payload.
- * Used for GET responses that need ETag, Block2, Content-Format, etc.
- */
-function buildAckWithOptions(requestCoap, responseCode, options = [], payload = Buffer.alloc(0)) {
-    return serialize({
-        ver: 1,
-        type: TYPE_ACK,
-        code: responseCode,
-        mid: requestCoap.mid,
-        token: requestCoap.token,
-        options,
-        payload,
-    });
-}
-
-/**
- * Build a CoAP response message (not tied to an incoming request MID).
- */
-function buildResponse({ code, token, mid, type = TYPE_NON, payload = Buffer.alloc(0), options = [] }) {
-    return serialize({
-        ver: 1,
-        type,
-        code,
-        mid: mid || 0,
-        token: token || Buffer.alloc(0),
-        options,
-        payload: payload || Buffer.alloc(0),
-    });
-}
-
-/**
- * Build a CoAP request message
- */
-function buildRequest({ code, path, token, mid, type = TYPE_NON, payload, contentFormat, query, extraOptions = [] }) {
-    const options = [];
-
-    const segments = path.replace(/^\/+/, '').split('/').filter(Boolean);
-    for (const seg of segments) {
-        options.push({ num: OPT_URI_PATH, value: Buffer.from(seg, 'utf-8') });
+function getOptionName(num) {
+    switch (num) {
+        case OPT_IF_MATCH: return 'If-Match';
+        case OPT_MAX_AGE: return 'Max-Age';
+        case OPT_URI_HOST: return 'Uri-Host';
+        case OPT_ETAG: return 'ETag';
+        case OPT_LOCATION_PATH: return 'Location-Path';
+        case OPT_URI_PATH: return 'Uri-Path';
+        case OPT_CONTENT_FORMAT: return 'Content-Format';
+        case OPT_URI_QUERY: return 'Uri-Query';
+        case OPT_ACCEPT: return 'Accept';
+        case OPT_BLOCK2: return 'Block2';
+        case OPT_BLOCK1: return 'Block1';
+        case OPT_VENDOR_2048: return 'Tado-Token-2048';
+        default: return `Option-${num}`;
     }
-
-    if (query != null) {
-        options.push({ num: OPT_URI_QUERY, value: Buffer.from(query, 'utf-8') });
-    }
-
-    if (contentFormat != null) {
-        options.push({ num: OPT_CONTENT_FORMAT, value: encOptUint(contentFormat) });
-    }
-
-    for (const opt of extraOptions) {
-        options.push(opt);
-    }
-
-    return serialize({
-        ver: 1,
-        type,
-        code,
-        mid: mid || 0,
-        token: token || Buffer.alloc(0),
-        options,
-        payload: payload || Buffer.alloc(0),
-    });
-}
-
-/**
- * Encode a Block2 option value.
- * @param {number} num - Block number
- * @param {number} more - More flag (0 or 1)
- * @param {number} szx - Size exponent (block size = 2^(szx+4))
- * @returns {Buffer}
- */
-function encodeBlock2(num, more, szx) {
-    const val = (num << 4) | ((more & 1) << 3) | (szx & 0x7);
-    return encOptUint(val);
-}
-
-/**
- * Decode a Block option (Block1 or Block2) value.
- * @param {Buffer} buf - Raw option value bytes
- * @returns {{ num: number, more: number, szx: number, blockSize: number } | null}
- */
-function decodeBlock(buf) {
-    if (!buf || buf.length === 0 || buf.length > 3) return null;
-    const x = decOptUint(buf);
-    const szx = x & 0x7;
-    const more = (x >> 3) & 0x1;
-    const num = x >> 4;
-    if (szx === 7) return null;
-    return { num, more, szx, blockSize: 1 << (szx + 4) };
-}
-
-/**
- * Decode a protobuf-encoded time payload (for /time endpoint).
- * Format: 0x0D tag (protobuf field 1, wire type 5 = fixed32) + LE u32 unix timestamp.
- *
- * @param {Buffer} payload - 5-byte protobuf time payload
- * @returns {{ ok: boolean, unix_s?: number, utc?: string, err?: string }}
- */
-function decodeTimeProtobuf(payload) {
-    if (!payload || payload.length !== 5) {
-        return { ok: false, err: 'expected 5 bytes' };
-    }
-    if (payload[0] !== 0x0D) {
-        return { ok: false, err: `expected tag 0x0D, got 0x${payload[0].toString(16)}` };
-    }
-    const unix_s = payload.readUInt32LE(1);
-    const utc = new Date(unix_s * 1000).toISOString().replace('.000Z', 'Z');
-    return { ok: true, unix_s, utc };
-}
-
-/**
- * Encode a Unix timestamp as a protobuf time payload (for /time endpoint).
- * @param {number} unixSeconds - Unix timestamp in seconds
- * @returns {Buffer} 5-byte protobuf payload
- */
-function encodeTimeProtobuf(unixSeconds) {
-    const buf = Buffer.alloc(5);
-    buf[0] = 0x0D; // protobuf tag: field 1, wire type 5 (fixed32)
-    buf.writeUInt32LE(unixSeconds >>> 0, 1);
-    return buf;
 }
 
 module.exports = {
-    parse, serialize, uriPath, optionValues, optionUint, optionFirst,
-    codeStr, isRequest, encOptUint, decOptUint,
-    buildAck, buildAckWithPayload, buildAckWithOptions, buildResponse, buildRequest,
-    encodeBlock2, decodeBlock,
-    decodeTimeProtobuf, encodeTimeProtobuf,
-    getOptionVendor2048,
-    TYPE_CON, TYPE_NON, TYPE_ACK, TYPE_RST,
-    CODE_GET, CODE_POST, CODE_PUT, CODE_DELETE,
-    CODE_CREATED, CODE_DELETED, CODE_VALID, CODE_CHANGED, CODE_CONTENT, CODE_CONTINUE, CODE_GATEWAY_TIMEOUT,
-    OPT_URI_PATH, OPT_CONTENT_FORMAT, OPT_URI_QUERY, OPT_ACCEPT,
-    OPT_BLOCK1, OPT_BLOCK2, OPT_ETAG, OPT_VENDOR_2048,
+    TYPE_CON,
+    TYPE_NON,
+    TYPE_ACK,
+    TYPE_RST,
+    CODE_GET,
+    CODE_POST,
+    CODE_PUT,
+    CODE_DELETE,
+    CODE_CREATED,
+    CODE_DELETED,
+    CODE_VALID,
+    CODE_CHANGED,
+    CODE_CONTENT,
+    CODE_CONTINUE,
+    CODE_BAD_REQUEST,
+    CODE_UNAUTHORIZED,
+    CODE_BAD_OPTION,
+    CODE_FORBIDDEN,
+    CODE_NOT_FOUND,
+    CODE_METHOD_NOT_ALLOWED,
+    CODE_GATEWAY_TIMEOUT,
+    OPT_IF_MATCH,
+    OPT_MAX_AGE,
+    OPT_URI_HOST,
+    OPT_ETAG,
+    OPT_LOCATION_PATH,
+    OPT_URI_PATH,
+    OPT_CONTENT_FORMAT,
+    OPT_URI_QUERY,
+    OPT_ACCEPT,
+    OPT_BLOCK2,
+    OPT_BLOCK1,
+    OPT_VENDOR_2048,
+    codeStr,
+    isRequest,
+    encOptUint,
+    decOptUint,
+    isValidCoap,
+    findCoapOffset,
+    parse,
+    serialize
 };

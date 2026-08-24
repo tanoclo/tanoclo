@@ -9,22 +9,12 @@
 const fs = require('fs');
 const path = require('path');
 
-// Dynamically locate mysql2 in sibling ws-server if not available locally
-try {
-    require.resolve('mysql2');
-} catch (e) {
-    const siblingNodeModules = path.resolve(__dirname, '../ws-server/node_modules');
-    if (fs.existsSync(siblingNodeModules)) {
-        module.paths.push(siblingNodeModules);
-    }
-}
-
 let mysql;
 try {
     mysql = require('mysql2/promise');
 } catch (err) {
-    console.error('Error: mysql2 package not found locally or in sibling ws-server.');
-    console.error('Please run "npm install mysql2" in this directory, or run this script from the workspace root / ws-server directory.');
+    console.error('Error: mysql2 package not found.');
+    console.error('Please run "npm install mysql2" in this directory.');
     process.exit(1);
 }
 

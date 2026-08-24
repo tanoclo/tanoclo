@@ -1,190 +1,83 @@
 /**
  * @file lib/ha-discovery.js
- * @brief Handles Home Assistant MQTT discovery configurations publishing for sniffer packets.
+ * @brief Home Assistant MQTT Auto-Discovery engine for passively sniffed Tado RF devices.
  * 
- * Auto-registers physical receiver nodes and battery-powered sensors (valves, wall thermostats)
- * in Home Assistant. Generates standard JSON config payloads under configured topic paths
- * (e.g. temperature, humidity, RSSI, battery voltages, dial steps).
+ * Generates 100% read-only discovery configurations in a segregated namespace (tanoclo_sniffer_*),
+ * avoiding any collision with devices provisioned by the primary websocket server.
  */
+
+'use strict';
 
 const fs = require('fs');
 const path = require('path');
+const mqttPublisher = require('./mqtt-publisher');
 
-let mqttClient = null;
 let config = null;
 let haPath = 'homeassistant';
-const registeredDevices = new Set();
-const deviceStates = new Map();
+const registeredEntities = new Set();
 
-// Determine persistent cache file location
-const discoveredDevicesFile = fs.existsSync('/data') 
-    ? '/data/discovered_devices.json' 
-    : path.join(__dirname, '../.discovered_devices.json');
+const cacheFile = fs.existsSync('/data')
+    ? '/data/discovered_ha_entities.json'
+    : path.join(__dirname, '../.discovered_ha_entities.json');
 
-// SENSOR DEFINITIONS FOR MQTT DISCOVERY
-const SENSOR_CONFIGS = {
-    // Ambient conditions
-    temperature_ambient: {
-        name: 'Ambient Temperature',
-        component: 'sensor',
-        extra: { device_class: 'temperature', unit_of_measurement: '°C', state_class: 'measurement' }
-    },
-    aux_temperature_1: {
-        name: 'Aux Temperature 1',
-        component: 'sensor',
-        extra: { device_class: 'temperature', unit_of_measurement: '°C', state_class: 'measurement' }
-    },
-    aux_temperature_2: {
-        name: 'Aux Temperature 2',
-        component: 'sensor',
-        extra: { device_class: 'temperature', unit_of_measurement: '°C', state_class: 'measurement' }
-    },
-    humidity_percent: {
-        name: 'Humidity',
-        component: 'sensor',
-        extra: { device_class: 'humidity', unit_of_measurement: '%', state_class: 'measurement' }
-    },
-    ambient_light_level: {
-        name: 'Ambient Light Level',
-        component: 'sensor',
-        extra: { icon: 'mdi:brightness-5', state_class: 'measurement' }
-    },
-    dial_encoder_steps: {
-        name: 'Dial Encoder Steps',
-        component: 'sensor',
-        extra: { icon: 'mdi:rotate-right' }
-    },
-    // Battery
-    battery_voltage: {
-        name: 'Battery Voltage',
-        component: 'sensor',
-        extra: { device_class: 'voltage', unit_of_measurement: 'V', state_class: 'measurement' }
-    },
-    battery_level: {
-        name: 'Battery Level',
-        component: 'sensor',
-        extra: { device_class: 'battery', unit_of_measurement: '%', state_class: 'measurement' }
-    },
-    battery_low: {
-        name: 'Battery Status Low',
-        component: 'binary_sensor',
-        extra: { device_class: 'battery' }
-    },
-    // Actuators & Valves
-    va_act_position_steps: {
-        name: 'Actuator Position Steps',
-        component: 'sensor',
-        extra: { icon: 'mdi:stepper', state_class: 'measurement' }
-    },
-    va_act_position2_steps: {
-        name: 'Secondary Actuator Position Steps',
-        component: 'sensor',
-        extra: { icon: 'mdi:stepper', state_class: 'measurement' }
-    },
-    va_mount_state: {
-        name: 'Mount State',
-        component: 'sensor',
-        extra: { icon: 'mdi:cog' }
-    },
-    demand_percent: {
-        name: 'Heat Demand',
-        component: 'sensor',
-        extra: { unit_of_measurement: '%', state_class: 'measurement', icon: 'mdi:radiator' }
-    },
-    // HVAC & Boiler (OpenTherm)
-    ot_ch_flow_temperature: {
-        name: 'CH Flow Temperature',
-        component: 'sensor',
-        extra: { device_class: 'temperature', unit_of_measurement: '°C', state_class: 'measurement' }
-    },
-    ot_ch_return_temperature: {
-        name: 'CH Return Temperature',
-        component: 'sensor',
-        extra: { device_class: 'temperature', unit_of_measurement: '°C', state_class: 'measurement' }
-    },
-    ot_outside_temperature: {
-        name: 'OT Outside Temperature',
-        component: 'sensor',
-        extra: { device_class: 'temperature', unit_of_measurement: '°C', state_class: 'measurement' }
-    },
-    ot_dhw_flow_rate: {
-        name: 'DHW Flow Rate',
-        component: 'sensor',
-        extra: { unit_of_measurement: 'L/min', state_class: 'measurement', icon: 'mdi:water-pump' }
-    },
-    water_pressure: {
-        name: 'Water Pressure',
-        component: 'sensor',
-        extra: { device_class: 'pressure', unit_of_measurement: 'bar', state_class: 'measurement' }
-    },
-    dhw_target_temperature: {
-        name: 'DHW Target Temperature',
-        component: 'sensor',
-        extra: { device_class: 'temperature', unit_of_measurement: '°C', state_class: 'measurement' }
-    },
-    boiler_active: {
-        name: 'Boiler Active',
-        component: 'binary_sensor',
-        extra: { device_class: 'running' }
-    },
-    // Zone
-    schedule_target_temp: {
-        name: 'Schedule Target Temperature',
-        component: 'sensor',
-        extra: { device_class: 'temperature', unit_of_measurement: '°C', state_class: 'measurement' }
-    },
-    overlay_target_temp: {
-        name: 'Overlay Target Temperature',
-        component: 'sensor',
-        extra: { device_class: 'temperature', unit_of_measurement: '°C', state_class: 'measurement' }
-    },
-    // Sniffer RSSI
-    rssi: {
-        name: 'Signal Strength (RSSI)',
-        component: 'sensor',
-        extra: { device_class: 'signal_strength', unit_of_measurement: 'dBm', state_class: 'measurement' }
-    }
-};
-
-function loadDiscoveredDevices() {
-    if (fs.existsSync(discoveredDevicesFile)) {
+function loadRegisteredCache() {
+    if (fs.existsSync(cacheFile)) {
         try {
-            const list = JSON.parse(fs.readFileSync(discoveredDevicesFile, 'utf8'));
+            const list = JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
             if (Array.isArray(list)) {
-                list.forEach(mac => registeredDevices.add(mac));
+                list.forEach(k => registeredEntities.add(k));
             }
-            console.log(`[HA Discovery] Loaded ${registeredDevices.size} registered entities from cache`);
         } catch (e) {
-            console.warn(`[HA Discovery] Error reading ${discoveredDevicesFile}:`, e.message);
+            // Ignore
         }
     }
 }
 
-function saveDiscoveredDevice(key) {
-    registeredDevices.add(key);
+function saveRegisteredEntity(key) {
+    registeredEntities.add(key);
     try {
-        fs.writeFileSync(discoveredDevicesFile, JSON.stringify(Array.from(registeredDevices)), 'utf8');
+        fs.writeFileSync(cacheFile, JSON.stringify(Array.from(registeredEntities)), 'utf8');
     } catch (e) {
-        // Silently ignore errors (e.g. read-only filesystem)
+        // Ignore
     }
 }
 
-function init(_mqttClient, _config) {
-    mqttClient = _mqttClient;
-    config = _config;
-    haPath = process.env.MQTT_HA_PATH || (config.mqtt && config.mqtt.haPath) || 'homeassistant';
-    loadDiscoveredDevices();
+let explicitMqttClient = null;
+
+function setMqttClient(client) {
+    explicitMqttClient = client;
 }
 
+function clearCache() {
+    registeredEntities.clear();
+}
+
+function init(_config) {
+    config = _config;
+    haPath = process.env.MQTT_HA_PATH || (config.mqtt && config.mqtt.haPath) || 'homeassistant';
+    loadRegisteredCache();
+}
+
+function publishEntity(domain, entityId, payload) {
+    const client = explicitMqttClient || mqttPublisher.getClient();
+    if (!client || !client.connected) return;
+    const topic = `${haPath}/${domain}/${entityId}/config`;
+    client.publish(topic, JSON.stringify(payload), { retain: true, qos: 1 });
+}
+
+/**
+ * Publish Home Assistant Discovery for the Sniffer Receiver hardware node.
+ */
 function publishReceiverDiscovery() {
-    if (!mqttClient) return;
-    
+    const client = mqttPublisher.getClient();
+    if (!client || !client.connected) return;
+
     const statsTopic = 'tado/sniffer/receiver/stats';
     const receiverDev = {
         identifiers: ['tanoclo_sniffer_receiver'],
         name: 'TaNoClo RF Sniffer Receiver',
         manufacturer: 'TaNoClo',
-        model: 'RF Sniffer Receiver',
+        model: 'RF Sniffer Stream Receiver',
         sw_version: '1.0.0'
     };
 
@@ -200,10 +93,9 @@ function publishReceiverDiscovery() {
     statsSensors.forEach(sensor => {
         const entityId = `tanoclo_sniffer_receiver_${sensor.key}`;
         const configKey = `receiver:${sensor.key}`;
-        
-        if (!registeredDevices.has(configKey)) {
-            const topic = `${haPath}/sensor/${entityId}/config`;
-            const payload = {
+
+        if (!registeredEntities.has(configKey)) {
+            publishEntity('sensor', entityId, {
                 unique_id: entityId,
                 name: sensor.name,
                 state_topic: statsTopic,
@@ -212,143 +104,207 @@ function publishReceiverDiscovery() {
                 unit_of_measurement: sensor.unit,
                 state_class: 'measurement',
                 device: receiverDev
-            };
-            mqttClient.publish(topic, JSON.stringify(payload), { retain: true, qos: 1 });
-            saveDiscoveredDevice(configKey);
+            });
+            saveRegisteredEntity(configKey);
         }
     });
-
-    // Auto Exclusion Switch entity
-    const switchEntityId = 'tanoclo_sniffer_receiver_auto_exclusion';
-    const switchConfigKey = 'receiver:auto_exclusion_switch';
-    if (!registeredDevices.has(switchConfigKey)) {
-        const switchTopic = `${haPath}/switch/${switchEntityId}/config`;
-        const switchPayload = {
-            unique_id: switchEntityId,
-            name: 'Auto Exclusion',
-            state_topic: 'tado/sniffer/state/auto_exclusion',
-            command_topic: 'tado/sniffer/set/auto_exclusion',
-            payload_on: 'ON',
-            payload_off: 'OFF',
-            icon: 'mdi:shield-cancel',
-            device: receiverDev
-        };
-        mqttClient.publish(switchTopic, JSON.stringify(switchPayload), { retain: true, qos: 1 });
-        saveDiscoveredDevice(switchConfigKey);
-    }
-}
-
-function publishReceiverStats(stats) {
-    if (!mqttClient) return;
-    const statsTopic = 'tado/sniffer/receiver/stats';
-    const payload = {
-        total_tcp_received: stats.statsTcpReceived,
-        bad_crc_packets: stats.statsCrcFailed,
-        duplicate_raw_packets: stats.statsDuplicateRaw,
-        decryption_failures: stats.statsDecryptionFailed,
-        successfully_decoded_coap: stats.statsDecodedCoap,
-        active_whitelisted_pans: stats.whitelistedPanIdsSize
-    };
-    mqttClient.publish(statsTopic, JSON.stringify(payload), { qos: 0 });
-}
-
-function publishSensorDiscovery(mac, sensorKey, sensorConfig) {
-    const registryKey = `${mac}:${sensorKey}`;
-    if (registeredDevices.has(registryKey)) return; // already registered
-
-    const cleanMac = mac.replace(/:/g, '').toUpperCase();
-    const shortMac = mac.split(':').slice(4).join('');
-    const isIb = mac.includes(':31:55:') || mac.endsWith('(IB)');
-    const deviceTypeStr = isIb ? 'IB' : 'VA/RU';
-    
-    const hwDev = {
-        identifiers: [`tanoclo_sniffer_${cleanMac}`],
-        name: `Tado ${deviceTypeStr} (${shortMac})`,
-        manufacturer: 'Tado',
-        model: isIb ? 'Internet Bridge' : 'Thermostat/Valve',
-        via_device: 'tanoclo_sniffer_receiver'
-    };
-
-    const entityId = `tanoclo_sniffer_${cleanMac}_${sensorKey}`;
-    const topic = `${haPath}/${sensorConfig.component || 'sensor'}/${entityId}/config`;
-    
-    const payload = {
-        unique_id: entityId,
-        name: sensorConfig.name,
-        state_topic: `tado/sniffer/device/${mac}/state`,
-        value_template: `{{ value_json.${sensorKey} }}`,
-        device: hwDev,
-        ...sensorConfig.extra
-    };
-
-    mqttClient.publish(topic, JSON.stringify(payload), { retain: true, qos: 1 });
-    saveDiscoveredDevice(registryKey);
 }
 
 /**
- * @brief Processes an incoming RF sniffer packet.
+ * Publishes read-only discovery configurations for a sniffed physical or emulated device.
  * 
- * Extracts TLV metrics, maps battery/pressure sub-values, updates internal device
- * state maps, and publishes discovery config states to MQTT when changes are detected.
- * 
- * @param {object} packet - Decoded packet object.
- * @param {string} type - Packet completeness type ('unfragmented' or 'complete').
- * @param {object} meta - Packet metadata containing RSSI info.
+ * @param {object} deviceRecord - Device entry from DeviceRegistry
  */
-function handlePacket(packet, type, meta) {
-    if (!mqttClient) return;
-    if (type !== 'unfragmented' && type !== 'complete') return;
-    
-    const senderMac = packet.macInfo.src.split(' ')[0];
-    
-    // Extract TLV values
-    const updates = {};
-    if (packet.tlv && packet.tlv.items) {
-        packet.tlv.items.forEach(item => {
-            updates[item.name] = item.value;
-            
-            // Battery helpers
-            if (item.name === 'battery_mv' && typeof item.value === 'number') {
-                updates.battery_voltage = parseFloat((item.value / 1000.0).toFixed(3));
-                updates.battery_level = Math.max(0, Math.min(100, Math.round((item.value - 2000) / 10)));
-                updates.battery_low = item.value < 2400 ? 'ON' : 'OFF';
-            }
-            
-            // Water pressure helper
-            if (item.name === 'hvac_water_pressure_mbar' && typeof item.value === 'number') {
-                updates.water_pressure = parseFloat((item.value / 1000.0).toFixed(3));
-            }
-        });
-    }
-    
-    if (meta && meta.rssi !== undefined) {
-        updates.rssi = meta.rssi;
-    }
+function publishDeviceDiscovery(deviceRecord) {
+    const client = explicitMqttClient || mqttPublisher.getClient();
+    if (!client || !client.connected || !deviceRecord) return;
 
-    if (Object.keys(updates).length > 0) {
-        if (!deviceStates.has(senderMac)) {
-            deviceStates.set(senderMac, {});
+    const devIdStr = deviceRecord.serial || deviceRecord.cleanMac;
+    if (!devIdStr) return;
+
+    const prefix = mqttPublisher.getDeviceTopicPrefix(deviceRecord);
+    const availTopic = `${prefix}/availability`;
+
+    const deviceType = deviceRecord.deviceType || 'UNKNOWN';
+    const isVA = deviceType.startsWith('VA');
+    const isRU = deviceType.startsWith('RU') || deviceType.startsWith('SU');
+    const isIB = deviceType.startsWith('IB') || deviceType.startsWith('BP') || deviceType.startsWith('BR') || deviceType.startsWith('WR');
+
+    const devHw = {
+        identifiers: [`tanoclo_sniffer_dev_${devIdStr}`],
+        name: deviceRecord.friendlyName ? `Sniffed ${deviceRecord.friendlyName} (${devIdStr})` : `Sniffed ${deviceType} (${devIdStr})`,
+        manufacturer: 'TaNoClo (Sniffed)',
+        model: `${deviceType} (Sniffed RF)`,
+        sw_version: deviceRecord.fwVersion || undefined,
+        via_device: 'tanoclo_sniffer_receiver'
+    };
+
+    const registerSensor = (sensorKey, domain, name, extra = {}) => {
+        const entityId = `tanoclo_sniffer_${devIdStr}_${sensorKey}`;
+        const registryKey = `${devIdStr}:${sensorKey}`;
+        if (registeredEntities.has(registryKey)) return;
+
+        const payload = {
+            unique_id: entityId,
+            name,
+            state_topic: `${prefix}/${sensorKey}`,
+            availability_topic: availTopic,
+            device: devHw,
+            ...extra
+        };
+
+        publishEntity(domain, entityId, payload);
+        saveRegisteredEntity(registryKey);
+    };
+
+    // 1. Core Connection & Status Sensors
+    registerSensor('connection_state', 'binary_sensor', 'Connection', {
+        device_class: 'connectivity',
+        value_template: '{{ value }}'
+    });
+    registerSensor('firmware_version', 'sensor', 'Firmware', { icon: 'mdi:chip' });
+    registerSensor('reset_reason', 'sensor', 'Reset Reason', { icon: 'mdi:restart' });
+    registerSensor('error_flags', 'sensor', 'Error Flags', { icon: 'mdi:alert-circle-outline' });
+    registerSensor('is_emulated', 'binary_sensor', 'Emulated Device', { icon: 'mdi:robot-outline', value_template: '{{ value }}' });
+    registerSensor('rssi', 'sensor', 'Signal Strength (RSSI)', {
+        device_class: 'signal_strength',
+        unit_of_measurement: 'dBm',
+        state_class: 'measurement'
+    });
+
+    // 2. Environmental & Battery (VA and RU)
+    if (isVA || isRU || !isIB) {
+        registerSensor('temperature', 'sensor', 'Temperature', {
+            device_class: 'temperature',
+            unit_of_measurement: '°C',
+            state_class: 'measurement'
+        });
+        registerSensor('aux_temperature', 'sensor', 'Aux Temperature', {
+            device_class: 'temperature',
+            unit_of_measurement: '°C',
+            state_class: 'measurement'
+        });
+        registerSensor('humidity', 'sensor', 'Humidity', {
+            device_class: 'humidity',
+            unit_of_measurement: '%',
+            state_class: 'measurement'
+        });
+        registerSensor('light_level', 'sensor', 'Light Level', {
+            icon: 'mdi:brightness-5',
+            state_class: 'measurement'
+        });
+
+        // Battery Sensors (suppressed only if explicitly emulated)
+        if (!deviceRecord.isEmulated) {
+            registerSensor('battery_level', 'sensor', 'Battery Level', {
+                device_class: 'battery',
+                unit_of_measurement: '%',
+                state_class: 'measurement'
+            });
+            registerSensor('battery_mv', 'sensor', 'Battery Voltage', {
+                device_class: 'voltage',
+                unit_of_measurement: 'V',
+                state_class: 'measurement'
+            });
+            registerSensor('battery_state', 'binary_sensor', 'Battery Low', {
+                device_class: 'battery',
+                value_template: "{% if value == 'LOW' or value == 'CRITICAL' or value == 'DEPLETED' %}ON{% else %}OFF{% endif %}"
+            });
         }
-        const state = deviceStates.get(senderMac);
-        Object.assign(state, updates);
-        state.last_seen = new Date().toISOString();
 
-        // Publish discovery configs for any new sensors
-        Object.keys(updates).forEach(key => {
-            if (SENSOR_CONFIGS[key]) {
-                publishSensorDiscovery(senderMac, key, SENSOR_CONFIGS[key]);
+        if (isRU) {
+            registerSensor('opentherm_voltage', 'sensor', 'OpenTherm Voltage', {
+                device_class: 'voltage',
+                unit_of_measurement: 'V',
+                state_class: 'measurement'
+            });
+        }
+    }
+
+    // 3. Valve Actuator specific read-only sensors
+    if (isVA) {
+        registerSensor('valve_position_pct', 'sensor', 'Valve Position', {
+            unit_of_measurement: '%',
+            icon: 'mdi:valve',
+            state_class: 'measurement'
+        });
+        registerSensor('valve_position', 'sensor', 'Raw Steps', {
+            unit_of_measurement: 'steps',
+            icon: 'mdi:stepper-motor',
+            state_class: 'measurement'
+        });
+        registerSensor('actuator_deviation', 'sensor', 'Actuator Deviation', {
+            unit_of_measurement: 'steps',
+            icon: 'mdi:arrow-expand-horizontal',
+            state_class: 'measurement'
+        });
+        registerSensor('actuator_active', 'binary_sensor', 'Actuator Active', {
+            icon: 'mdi:cog',
+            payload_on: 'ON',
+            payload_off: 'OFF'
+        });
+        registerSensor('mounting_state', 'sensor', 'Mounting State', { icon: 'mdi:cog' });
+
+        // PASSIVE READ-ONLY: child lock as binary_sensor (no switch)
+        registerSensor('child_lock', 'binary_sensor', 'Child Lock State', {
+            icon: 'mdi:lock',
+            payload_on: 'ON',
+            payload_off: 'OFF'
+        });
+
+        // PASSIVE READ-ONLY: orientation as sensor (no select)
+        registerSensor('orientation', 'sensor', 'Display Orientation', { icon: 'mdi:screen-rotation' });
+
+        // PASSIVE READ-ONLY: limits as diagnostic sensors (no number)
+        registerSensor('actuator_limit_low', 'sensor', 'Actuator Low Steps', {
+            icon: 'mdi:numeric',
+            unit_of_measurement: 'steps'
+        });
+        registerSensor('actuator_limit_high', 'sensor', 'Actuator High Steps', {
+            icon: 'mdi:numeric',
+            unit_of_measurement: 'steps'
+        });
+        registerSensor('actuator_drive_constant', 'sensor', 'Actuator Drive Constant', {
+            icon: 'mdi:numeric'
+        });
+    }
+
+    // 4. Boiler / HVAC read-only sensors (if RU or IB relays telemetry)
+    if (isRU || isIB) {
+        const boilerSensors = [
+            { key: 'boiler/flow_temperature', name: 'Flow Temperature', extra: { device_class: 'temperature', unit_of_measurement: '°C', state_class: 'measurement' } },
+            { key: 'boiler/return_temperature', name: 'Return Temperature', extra: { device_class: 'temperature', unit_of_measurement: '°C', state_class: 'measurement' } },
+            { key: 'boiler/water_pressure_bar', name: 'Water Pressure', extra: { device_class: 'pressure', unit_of_measurement: 'bar', state_class: 'measurement' } },
+            { key: 'boiler/boiler_active', name: 'Boiler Active', domain: 'binary_sensor', extra: { device_class: 'running', payload_on: 'ON', payload_off: 'OFF' } },
+            { key: 'boiler/dhw_target_temperature', name: 'DHW Target Temperature', extra: { device_class: 'temperature', unit_of_measurement: '°C', state_class: 'measurement' } },
+            { key: 'boiler/outside_temperature', name: 'Outside Temperature', extra: { device_class: 'temperature', unit_of_measurement: '°C', state_class: 'measurement' } },
+            { key: 'boiler/exhaust_temperature', name: 'Exhaust Temperature', extra: { device_class: 'temperature', unit_of_measurement: '°C', state_class: 'measurement' } },
+            { key: 'boiler/dhw_measured_temperature', name: 'DHW Measured Temperature', extra: { device_class: 'temperature', unit_of_measurement: '°C', state_class: 'measurement' } }
+        ];
+
+        boilerSensors.forEach(b => {
+            const cleanKey = b.key.replace(/\//g, '_');
+            const entityId = `tanoclo_sniffer_${devIdStr}_${cleanKey}`;
+            const registryKey = `${devIdStr}:${cleanKey}`;
+            if (!registeredEntities.has(registryKey)) {
+                publishEntity(b.domain || 'sensor', entityId, {
+                    unique_id: entityId,
+                    name: b.name,
+                    state_topic: `${prefix}/${b.key}`,
+                    availability_topic: availTopic,
+                    device: devHw,
+                    ...b.extra
+                });
+                saveRegisteredEntity(registryKey);
             }
         });
-        
-        // Publish flat state payload
-        const stateTopic = `tado/sniffer/device/${senderMac}/state`;
-        mqttClient.publish(stateTopic, JSON.stringify(state), { qos: 0 });
     }
 }
 
 module.exports = {
     init,
+    setMqttClient,
+    clearCache,
     publishReceiverDiscovery,
-    publishReceiverStats,
-    handlePacket
+    publishDeviceDiscovery
 };
