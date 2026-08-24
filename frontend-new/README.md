@@ -15,6 +15,21 @@ This directory contains **frontend-new**, a modern, responsive Single-Page Appli
    - **Security & Setup**: Manage whitelisted WebSocket hardware clients, system users, and set passwords.
 3. **Capacitor Mobile Compatibility**: Bundled with **Capacitor** to compile native Android (`.apk`) and iOS packages.
 
+<p align="center">
+  <img src="../docs/images/screenshots/dashboard_desktop.png" alt="Dashboard Desktop" width="49%" />
+  <img src="../docs/images/screenshots/zone_detail_desktop.png" alt="Zone Detail Desktop" width="49%" />
+</p>
+<p align="center">
+  <img src="../docs/images/screenshots/schedule_editor_desktop.png" alt="Schedule Editor Desktop" width="49%" />
+  <img src="../docs/images/screenshots/devices_settings_desktop.png" alt="Devices Settings Desktop" width="49%" />
+</p>
+<p align="center">
+  <img src="../docs/images/screenshots/dashboard_mobile.png" alt="Dashboard Mobile" width="23%" />
+  <img src="../docs/images/screenshots/zone_detail_mobile.png" alt="Zone Detail Mobile" width="23%" />
+  <img src="../docs/images/screenshots/schedule_editor_mobile.png" alt="Schedule Editor Mobile" width="23%" />
+  <img src="../docs/images/screenshots/climate_quality_mobile.png" alt="Climate Quality Mobile" width="23%" />
+</p>
+
 ---
 
 ## 🧪 Testing Strategy

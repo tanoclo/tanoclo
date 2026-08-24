@@ -17,6 +17,11 @@
 - **Local Cloud Emulation**: Full native replacement of Tado Internet Bridge WebSocket binary framing protocol (TLV over WSS).
 - **REST & Admin API**: Local web management interface and HTTP API endpoints on port 3111.
 - **MQTT Support**: Automatic discovery and state publishing for seamless Home Assistant dashboard control.
+- **Interactive UI Portal**: Built-in modern climate management dashboard.
+
+<p align="center">
+  <img src="../docs/images/screenshots/dashboard_desktop.png" alt="TaNoClo Portal Dashboard" width="100%" />
+</p>
 
 ## Quick Start & Setup
 

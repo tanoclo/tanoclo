@@ -121,11 +121,20 @@ TaNoClo includes an integrated MQTT client that automatically registers devices 
 - **Geofencing trackers**: Maps registered mobile devices to `device_tracker` entities.
  
 ### 2. Smart Climate Portal (frontend-new)
-The repository features a modern, clean-room React web management interface located in `frontend-new/`. Built with Vite and Tailwind/CSS:
-- **Climate Controls**: Dynamic climate cards.
-- **Schedules**: A complete editor to configure smart heating/cooling schedules.
-- **Capacitor Mobile App**: Bundled with Capacitor to build native Android/iOS apps.
-- **PWA Support**: Installable directly onto mobile home screens as a Progressive Web App.
+The repository features a modern, clean-room React web management interface located in `frontend-new/`. Built with Vite and modern CSS:
+- **Climate Controls**: Dynamic climate cards, interactive setpoint dials, presence modes, and rapid adjustments.
+- **Schedules**: A complete timetable editor to configure 1-day, 3-day, and 7-day smart heating schedules.
+- **Indoor Climate Quality**: Environmental freshness and comfort diagnostics across all zones.
+- **Capacitor Mobile App**: Bundled with Capacitor for native Android/iOS compilation and PWA support.
+
+<p align="center">
+  <img src="docs/images/screenshots/dashboard_desktop.png" alt="TaNoClo Dashboard Desktop" width="49%" />
+  <img src="docs/images/screenshots/zone_detail_desktop.png" alt="TaNoClo Zone Detail Desktop" width="49%" />
+</p>
+<p align="center">
+  <img src="docs/images/screenshots/schedule_editor_desktop.png" alt="TaNoClo Schedule Editor Desktop" width="49%" />
+  <img src="docs/images/screenshots/climate_quality_desktop.png" alt="TaNoClo Climate Quality Desktop" width="49%" />
+</p>
 
 ### 3. Tado REST API Parity
 TaNoClo maintains backward compatibility with Tado API client libraries:
