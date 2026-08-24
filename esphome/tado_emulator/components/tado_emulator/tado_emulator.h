@@ -122,9 +122,6 @@ struct EmulatedDevice {
   uint16_t target_battery_mv{4500};     // Default full battery (4.5V)
   uint16_t target_ambient_light{6249};  // Default ambient light ADC (matches Real RU ~0x1869)
   uint8_t reset_counter{6};             // Default reset counter (1 byte uint8)
-  uint16_t target_battery_mv{4500};     // Default full battery (4.5V)
-  uint16_t target_ambient_light{6249};  // Default ambient light ADC (matches Real RU ~0x1869)
-  uint8_t reset_counter{6};             // Default reset counter (1 byte uint8)
 
   // CoAP CON retry tracking
   bool token_refresh_pending{false};
@@ -333,9 +330,6 @@ class TadoEmulatorComponent : public Component,
               // Periodic Telemetry Heartbeat (every 15 mins / 900s)
               dev.last_telemetry_ts = now;
               this->send_telemetry_put(&dev, dev.target_temp_celsius, dev.target_humidity_pct, dev.target_battery_mv);
-              if (dev.zone_id != 0 && dev.is_measuring_leader) {
-                this->send_zone_p_put(&dev);
-              }
             }
             // Periodic Link Maintenance & Neighbor Discovery Keepalive (every 300s / 5 mins)
             // Real RU transmits periodic Neighbor Advertisements (0x88) and RS/RA beacons
@@ -591,27 +585,17 @@ class TadoEmulatorComponent : public Component,
    * 0x012e: aux_temp_celsius (int16, follows ambient)
    * 0x0135: humidity_percent (uint16, % * 10, e.g. 50.0% -> 500)
    * 0x0136: reset_counter / status (uint8, 1 byte matching Real RU)
-   * 0x012d: temp_celsius (int16, temp * 100)
-   * 0x012e: aux_temp_celsius (int16, follows ambient)
-   * 0x0135: humidity_percent (uint16, % * 10, e.g. 50.0% -> 500)
-   * 0x0136: reset_counter / status (uint8, 1 byte matching Real RU)
    */
-  static std::vector<uint8_t> build_d_sen_payload(float temp_c, float humidity_pct, uint16_t battery_mv, uint16_t light_adc = 6249, uint8_t reset_count = 6) {
   static std::vector<uint8_t> build_d_sen_payload(float temp_c, float humidity_pct, uint16_t battery_mv, uint16_t light_adc = 6249, uint8_t reset_count = 6) {
     std::vector<uint8_t> tlv;
     int16_t temp_val = (int16_t)(temp_c * 100.0f);
     int16_t aux_temp_val = temp_val;
     uint16_t hum_val = (uint16_t)(humidity_pct * 10.0f);
-    int16_t aux_temp_val = temp_val;
-    uint16_t hum_val = (uint16_t)(humidity_pct * 10.0f);
 
-    append_tlv_uint16(tlv, 0x0161, light_adc);
     append_tlv_uint16(tlv, 0x0161, light_adc);
     append_tlv_uint16(tlv, 0x0162, battery_mv);
     append_tlv_int16(tlv, 0x012d, temp_val);
     append_tlv_int16(tlv, 0x012e, aux_temp_val);
-    append_tlv_uint16(tlv, 0x0135, hum_val);
-    append_tlv_uint8(tlv, 0x0136, reset_count);
     append_tlv_uint16(tlv, 0x0135, hum_val);
     append_tlv_uint8(tlv, 0x0136, reset_count);
     return tlv;
@@ -686,11 +670,8 @@ class TadoEmulatorComponent : public Component,
     dev->last_telemetry_ts = (uint32_t)(esp_timer_get_time() / 1000000ULL);
 
     std::vector<uint8_t> payload = build_d_sen_payload(temp_c, hum_pct, battery_mv, dev->target_ambient_light, dev->reset_counter);
-    std::vector<uint8_t> payload = build_d_sen_payload(temp_c, hum_pct, battery_mv, dev->target_ambient_light, dev->reset_counter);
     std::string path = "d/" + dev->serial_no + "/sen";
     this->send_coap_request(dev, 3 /* PUT */, path, payload);
-    ESP_LOGI(TAG, "  └─ Telemetry payload: Temp=%.2fC, Hum=%.1f%%, Batt=%umV, Light=%uADC, Reset=%u",
-             temp_c, hum_pct, battery_mv, dev->target_ambient_light, dev->reset_counter);
     ESP_LOGI(TAG, "  └─ Telemetry payload: Temp=%.2fC, Hum=%.1f%%, Batt=%umV, Light=%uADC, Reset=%u",
              temp_c, hum_pct, battery_mv, dev->target_ambient_light, dev->reset_counter);
   }
@@ -713,6 +694,7 @@ class TadoEmulatorComponent : public Component,
     this->send_coap_request(dev, 3 /* PUT */, path, payload);
   }
 
+  //Not needed
   void send_zone_p_put(EmulatedDevice *dev) {
     std::vector<uint8_t> payload = build_z_p_payload(dev->target_temp_celsius);
     
@@ -3256,9 +3238,6 @@ class TadoEmulatorComponent : public Component,
             if (json_has_key(body, "battery_mv")) dev.target_battery_mv = (uint16_t)json_extract_num(body, "battery_mv", dev.target_battery_mv);
 
             this->send_telemetry_put(&dev, dev.target_temp_celsius, dev.target_humidity_pct, dev.target_battery_mv);
-            if (dev.zone_id != 0 && dev.is_measuring_leader) {
-              this->send_zone_p_put(&dev);
-            }
             xSemaphoreGiveRecursive(this->devices_mutex_);
             request->send(200, "application/json", "{\"ok\":true,\"message\":\"Telemetry dispatched over RF\"}");
             return;
