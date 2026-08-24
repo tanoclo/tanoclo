@@ -1,12 +1,12 @@
 # TaNoClo ESP32 Multi-Device Emulation & Integration Guide
 
-This document details the architecture, firmware mechanics, REST API protocol, and end-to-end integration for emulating Tado hardware (Room Units & Wireless Temperature Sensors) using ESP32 microcontrollers, the TaNoClo WebSocket/REST server, the Setup Dashboard, `frontend-new`, and Home Assistant MQTT.
+This document details the architecture, firmware mechanics, REST API protocol, and end-to-end integration for emulating Tado Room Units using ESP32 microcontrollers, the TaNoClo WebSocket/REST server, the Setup Dashboard, `frontend-new`, and Home Assistant MQTT.
 
 ---
 
 ## 1. Architecture Overview
 
-A single ESP32 development board (such as the **TTGO LoRa32 V1.6.1** with an SX1276 transceiver) running the `tado_emulator` ESPHome component can simultaneously emulate **multiple independent Tado devices** (e.g. `RU...` Room Units or Temperature Sensors) on your 868.3 MHz FSK RF network.
+A single ESP32 development board (such as the **TTGO LoRa32 V1.6.1** with an SX1276 transceiver) running the `tado_emulator` ESPHome component can simultaneously emulate **multiple independent Tado devices** (e.g. `RU...` Room Units) on your 868.3 MHz FSK RF network.
 
 ```
 +---------------------------------------------------------------------------------------+
@@ -57,24 +57,41 @@ A single ESP32 development board (such as the **TTGO LoRa32 V1.6.1** with an SX1
 
 ### 2.2 Device Personality & Firmware Alignment
 Emulated devices mimic genuine Tado hardware specifications:
-- **Device Type**: `RU01` / `RU02` (Room Unit / Temperature Sensor)
+- **Device Type**: `RU02` (Room Unit)
 - **Firmware Version**: `13762` (Display: `215.2`)
 - **Build Number**: `c54baf8`
 - **Hardware Revision (`0x0180`)**: `4`
 - **Supported Modes**:
   - `WIRELESS_SENSOR`: Operates as a measuring device for ambient temperature, humidity, and battery state. Cannot act as a zone controller or heating circuit driver.
-  - `ZONE_CONTROLLER`: Operates as a heating circuit driver or zone controller.
 
-### 2.3 Critical RF & CoAP Protocol Rules
-1. **CoAP Option 12 (`Content-Format: 42` = `0xC1 0x2A`)**:
-   Every `2.05 Content` or `2.04 Changed` response transmitted by an emulated device **must include Option 12**. Without Option 12, the Internet Bridge rejects the ACK/response, causing a 6x retransmission timeout and omitting the device from its active Neighbor Table (`DEV_NEIGHBORS`).
-2. **ICMPv6 Link Probing**:
-   Upon bootup or pairing completion, the node immediately sends a Unicast ICMPv6 Echo Request (`0x80`) under the home Operational Key (`op_key`) to prime the Bridge's 6LoWPAN neighbor table.
-3. **Proactive Firmware State Push**:
-   On initialization, the node pushes `PUT /d/{serial}/fw` containing firmware `13762`, build `c54baf8`, and hardware rev `4` to ensure the server reflects current firmware metadata.
-4. **Periodic Keepalive & Telemetry**:
-   - `PUT /d/{serial}/sen`: Ambient temperature (0.01°C), relative humidity (0.01%), and battery voltage (mV) pushed every 15 minutes (or immediately on slider adjustments).
-   - `PUT /z/p?lid=1`: Zone leader presence ping pushed every 15 minutes for assigned devices.
+### 2.3 RF & 6LoWPAN Protocol Stack
+
+#### 2.3.1 Physical & Link Layer (IEEE 802.15.4 FSK)
+- **Modulation**: 868.323 MHz (Channel 26), 250 kbps, 2-FSK on Semtech SX1276.
+- **Frame Addressing**: Standard 802.15.4 Data and ACK frames using 64-bit extended MAC addressing (`00:1a:22:...` / `fe80::21b:c507:...`) with PAN ID compression.
+- **MAC Layer Auto-ACKs**:
+  - The emulator automatically transmits Type `0x02` MAC ACKs for all incoming unicast frames addressed to its extended MAC.
+  - Outbound requests in the `pending_requests` queue clear their retry timers immediately upon receiving the Bridge's MAC ACK.
+- **AES-128-CCM Encryption**:
+  - Nonce is built deterministically from the 802.15.4 MAC header (`Bytes [0..12]`, containing Frame Control, Sequence Number, and Source/Destination MAC addresses).
+  - Encrypted with the home's 16-byte Operational Key (`op_key`) or Factory Key during pairing.
+
+#### 2.3.2 Staggered Startup Sequencer (1000ms Timeline)
+To prevent overflowing the Internet Bridge's single-frame Contiki `packetbuf`, the emulator enforces a 1000ms spacing between outbound startup transactions:
+1. **$T = 0\text{s}$ — Unicast ICMPv6 Link Probe**: Transmits an ICMPv6 Echo Request (`0x80`) to the Bridge's link-local IPv6 to prime the Bridge's `uip_ds6_nbr` neighbor routing table.
+2. **$T = 1\text{s}$ — Initial Telemetry Push (`PUT /d/{serial}/sen`)**: Uploads baseline ambient temperature, humidity, and battery voltage.
+3. **$T = 2\text{s}$ — Server Time Sync (`GET /time`)**: Requests the current server Unix timestamp.
+
+#### 2.3.3 CoAP Option 12 & Header Rules
+- **CoAP Option 12 (`Content-Format: 42` = `0xC1 0x2A` / `0x11 0x2A`)**:
+  - **Outbound Requests**: Every outbound request with a TLV payload (e.g. `/sen`, `/z/p`) includes Option 12 with dynamic Option 2048 delta adjustment.
+  - **Inbound Responses**: Every `2.05 Content` or `2.04 Changed` response transmitted by the emulator **must include Option 12**. Without Option 12, the Internet Bridge rejects the ACK/response, causing a retransmission timeout and omitting the node from its active Neighbor Table (`DEV_NEIGHBORS`).
+- **CoAP Option 2048 (Session Token)**: Appended to outbound authorized requests using the 8-byte session token acquired during authorization.
+
+#### 2.3.4 Periodic Keepalive & Scheduled Tasks
+- **Telemetry (`PUT /d/{serial}/sen`)**: Pushed every 15 minutes (or immediately on manual slider change in the dashboard).
+- **Config Polling (`GET /d/{serial}/config`)**: Scheduled hourly to validate configuration ETags with the server.
+- **Time Sync (`GET /time`)**: Refreshes device server timestamp hourly.
 
 ---
 
@@ -158,65 +175,30 @@ The **Setup Portal** (`https://setup.tanoclo.YOUR_DOMAIN.com`) provides dedicate
 
 ---
 
-## 5. Main Application Integration (`frontend-new`)
-
-The main TaNoClo frontend integrates emulated devices seamlessly into normal room heating workflows while enforcing hardware fidelity:
-
-### 5.1 Device Settings (`DeviceSettingsGeneral.jsx` & `DeviceSettings.jsx`)
-- **Emulated Device Badge**: Displays `Emulated Device: Yes` in device metadata.
-- **Suppressed Battery Fields**: Hides Battery Type, Battery Percentage, and Battery State since emulated hardware is virtual and powered continuously.
-- **Suppressed Maintenance Panels**: Hides `Diagnostic Actions` and `Advanced Settings` cards that apply only to real physical valves/relays.
-
-### 5.2 Zone Controller Filtering (`ZoneSettingsGeneral.jsx`)
-- Emulated devices in `WIRELESS_SENSOR` mode are automatically filtered out from the **Zone Controller** selection dropdown, preventing sensor-only emulators from being improperly assigned to drive heating circuits.
-
-### 5.3 Raw Explorer (`RawExplorerSettings.jsx`)
-- Unassigned emulated devices (`zone_id: null`) appear in the device measurement selector, allowing inspection of raw measurements even before zone assignment.
-
----
-
-## 6. Home Assistant MQTT Integration
+## 5. Home Assistant MQTT Integration
 
 When Home Assistant MQTT discovery is enabled in `ws-server`:
 
-### 6.1 Entity Discovery
+### 5.1 Entity Discovery
 
 | Entity Name | Domain | Description |
 |---|---|---|
 | `Emulated Device` | `binary_sensor` | Returns `ON` for emulated devices, `OFF` for physical hardware. |
 | `Emulated Temperature` | `number` | Dynamic slider (5.0°C – 30.0°C) to set ambient temperature. |
 | `Emulated Humidity` | `number` | Dynamic slider (10% – 95%) to set ambient relative humidity. |
-| `Battery Voltage` | `sensor` | Voltage reading in mV. |
 | `Send Telemetry Push` | `button` | Triggers immediate RF `PUT /d/{serial}/sen` push. |
 
 *Note: Standard battery level and battery state entities are automatically suppressed for emulated devices.*
 
-### 6.2 MQTT Control Topics
+### 5.2 MQTT Control Topics
 
 ```bash
 # Set ambient temperature
-mosquitto_pub -h localhost -t "tado/tanoclo/emulated/RU4729433753/set/temp" -m "21.5"
+mosquitto_pub -h localhost -t "tado/tanoclo/emulated/RU4200000001/set/temp" -m "21.5"
 
 # Set ambient humidity
-mosquitto_pub -h localhost -t "tado/tanoclo/emulated/RU4729433753/set/humidity" -m "55.0"
-
-# Set battery voltage
-mosquitto_pub -h localhost -t "tado/tanoclo/emulated/RU4729433753/set/battery" -m "3000"
+mosquitto_pub -h localhost -t "tado/tanoclo/emulated/RU4200000001/set/humidity" -m "55.0"
 
 # Send full JSON telemetry
-mosquitto_pub -h localhost -t "tado/tanoclo/emulated/RU4729433753/telemetry" -m '{"temp_celsius":21.5,"humidity_percent":55.0,"battery_mv":3000}'
+mosquitto_pub -h localhost -t "tado/tanoclo/emulated/RU4200000001/telemetry" -m '{"temp_celsius":21.5,"humidity_percent":55.0}'
 ```
-
----
-
-## 7. Troubleshooting & Verification
-
-1. **Device Missing from `DEV_NEIGHBORS`**:
-   - Verify that the firmware includes CoAP Option 12 (`0xC1 0x2A`) in all `send_coap_ack()` calls.
-   - Verify that the node transmits a Unicast ICMPv6 Echo Request (`0x80`) under `op_key` upon boot.
-2. **Pairing State Stays in `PAIRING_RF`**:
-   - Check ESP32 serial logs (`[RF RX]` and `[CoAP RX]`). Ensure the node extracts `op_key` from `/d/pair` or `0x0262` and receives `0x025E` session token on `POST auth/token`.
-   - Once active telemetry arrives at `ws-server`, `updateDeviceConnectionState` automatically promotes the state to `PAIRED`.
-3. **AST & Syntax Verification**:
-   - In `ws-server`, run `node check.js` to ensure zero AST or reference errors.
-   - Run `npx vitest run` to verify full test suite passes.

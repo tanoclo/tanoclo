@@ -132,13 +132,8 @@ async function handleAuthKey(ws, frame, coapMsg, decoded, peerInfo, rawData) {
         return;
     }
 
-    // Generate per-home deterministic RF key (16 bytes) so each home has a unique key
-    // but it's reproducible across server restarts
-    const homeId = dbDev.home_id || 0;
-    const serverKey = crypto.createHmac('sha256', 'tanoclo-rf-key-seed')
-        .update(`home:${homeId}`)
-        .digest()
-        .subarray(0, 16);
+    // Generate a cryptographically secure random 16-byte ephemeral challenge key for the session
+    const serverKey = crypto.randomBytes(16);
 
     let keyPayload = serverKey;
     if (dbDev.factory_key && dbDev.factory_key.length === 32) {
@@ -147,7 +142,7 @@ async function handleAuthKey(ws, frame, coapMsg, decoded, peerInfo, rawData) {
             cipher.setAutoPadding(false);
             keyPayload = Buffer.concat([cipher.update(serverKey), cipher.final()]);
         } catch (e) {
-            log('warn', `Failed to encrypt operational key with factory_key: ${e.message}`);
+            log('warn', `Failed to encrypt server challenge key with factory_key: ${e.message}`);
         }
     }
 

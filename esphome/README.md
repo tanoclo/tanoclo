@@ -1,15 +1,15 @@
 # ESPHome Tado RF Toolkit: Key Sniffer & Packet Analyzer
 
-This directory contains the custom ESPHome-based RF components and host-side analysis utilities designed to interface with the proprietary Tado RF protocol using a **TTGO LoRa32 V1** development board (ESP32 + Semtech SX1276 FSK/LoRa transceiver).
+This directory contains the custom ESPHome-based RF components designed to interface with the proprietary Tado RF protocol using a **TTGO LoRa32 V1** development board (ESP32 + Semtech SX1276 FSK/LoRa transceiver).
 
-To ensure high performance and clean operations, the toolkit is split into three dedicated ESPHome components:
+The toolkit is split into three dedicated ESPHome components:
 1. **`tado_pairing`**: An active, reset-VA mimicry agent used to quickly extract the operational RF network key from the Internet Bridge without completing or registering pairing.
-2. **`tado_sniffer`**: A passive packet capturing and TCP streaming component used to sniff operational packets and stream them in real-time to the host.
+2. **`tado_sniffer`**: A passive packet capturing and TCP streaming component used to sniff operational packets and stream them in real-time to a host.
 3. **`tado_emulator`**: An active multi-device emulator enabling an ESP32 to act as multiple Room Units (RU) and Wireless Temperature Sensors on your network with full REST API and Setup Dashboard integration.
 
 ---
 
-## 1. System Workflow
+## 1. System Workflow for Capturing Tado RF Traffic
 
 To capture and analyze secure traffic from a Tado network, follow this standard progression:
 
@@ -21,6 +21,8 @@ graph TD
     D --> E[Real-Time Decryption & Database Logging]
 ```
 
+Note that the RF key is easily retrievable using the TaNoClo web interface. Capture of the pairing key over RF is only needed if you do not want to use the TaNoClo websocket server.
+
 1. **Flash `tado_pairing`** to extract the 16-byte operational RF network key from the Internet Bridge (IB).
 2. **Flash `tado_sniffer`** to the same device once you have successfully captured the operational key.
 3. **Run `stream_receiver.js`** on your host server to receive, decrypt, reassemble (6LoWPAN), and decode (CoAP/TLV) the packet stream, with direct MariaDB integration.
@@ -29,7 +31,7 @@ graph TD
 
 ## 2. Hardware Configuration
 
-Both firmware components are pre-configured for the **TTGO LoRa32 V1.6.1** development board:
+All ESPHome firmware components are pre-configured for the **TTGO LoRa32 V1.6.1** development board:
 
 | SX1276 Pin | ESP32 GPIO | Role | Configuration in YAML |
 | :--- | :--- | :--- | :--- |
@@ -41,13 +43,13 @@ Both firmware components are pre-configured for the **TTGO LoRa32 V1.6.1** devel
 | **RST** | GPIO 14 | Transceiver Hardware Reset | `rst_pin: 14` |
 
 **NOTE**: It is highly recommended to get a better 868MHz antenna for the TTGO LoRa32 V1.6.1 board than the stock one, as it is not very good and will result in poor range and reliability. 
-Search for a "868MHz LoRa antenna SMA connector" with 5 or 10 dBi gain. This will improve the range and reliability of the sniffer.
+Search for a "868MHz LoRa antenna SMA connector" with 5 or 10 dBi gain. This will improve the range and reliability of the sniffer/emulator.
 
 ---
 
-## 3. Step-by-Step Guide: Sniffing the Operational RF Key (Offline Bypass Exploit)
+## 3. Step-by-Step Guide: Sniffing the Operational RF Key
 
-This allows you to proactively capture the operational RF key from the Tado Internet Bridge (IB) without interfering with your existing Valve Actuators. By mimicking an unregistered, factory-reset Valve Actuator at the radio layer (using a static fake MAC address) while the Internet Bridge is offline, we force the IB to proactively disclose the operational key in plaintext (TLV `0x12`), bypassing device-specific cloud-key encryption (Variant B / TLV `0x07`).
+This allows you to proactively capture the operational RF key from the Tado Internet Bridge (IB) without interfering with your existing Tado devices. By mimicking an unregistered, factory-reset Valve Actuator at the radio layer (using a static fake MAC address) while the Internet Bridge is offline, we force the IB to proactively disclose the operational key in plaintext (TLV `0x12`), bypassing device-specific cloud-key encryption (Variant B / TLV `0x07`).
 
 ### Step 3.1: Flash the Pairing Firmware
 Compile and flash the pairing component to your TTGO LoRa32 board:
@@ -85,7 +87,7 @@ esphome run tado_sniffer/tado_sniffer.yaml
 ### Step 4.2: Configuration Schema & UI Controls
 The sniffer is controlled via the ESPHome dashboard using the following controls:
 * **Sniffer Channel**: Tune the SX1276 carrier frequency (0 to 49). Standard operational channel is typically `26`.
-* **TCP Host**: Configure the host IP address where the `stream_receiver.js` is running (e.g., your local development PC/server).
+* **TCP Host**: Configure the host IP address where the `stream_receiver.js` is running (e.g., your local Home Assistant server/development PC).
 * **TCP Port**: Configure the port `stream_receiver.js` is listening on (default: `9999`).
 * **Log Raw Packets Switch**: Toggle to log raw hex packets (directly to the console and TCP stream).
 * **Print Diagnostic Stats Switch**: Periodically outputs reception/error statistics.
@@ -94,7 +96,7 @@ The sniffer is controlled via the ESPHome dashboard using the following controls
 
 ## 5. Host Analysis Suite: `stream_receiver.js`
 
-If you use Home Assistant refer to [tanoclo-stream-receiver/DOCS.md](../tanoclo-stream-receiver/DOCS.md) instead of the following instructions for setting up the stream receiver using a Home Assistant OS App/Addon.
+If you use Home Assistant refer to [tanoclo-stream-receiver/DOCS.md](../tanoclo-stream-receiver/DOCS.md) instead of the following instructions for setting up the stream receiver using a Home Assistant OS App.
 
 `stream_receiver.js` is a Node.js-based daemon that runs on the host to process the TCP packet stream sent by the `tado_sniffer` hardware.
 
@@ -105,7 +107,7 @@ If you use Home Assistant refer to [tanoclo-stream-receiver/DOCS.md](../tanoclo-
 - **Standalone Execution**: Run the receiver daemon with zero runtime database connections; maps TLV metadata from a local static [tlv_labels.json](../tanoclo-stream-receiver/tlv_labels.json) file.
 - **MQTT State Publishing**: Publishes successfully decoded unique CoAP packets to `tado/sniffer/{SENDER MAC}/{COAP PATH}`. The JSON payload maps field values to both raw hex IDs and friendly, human-readable names.
 - **Configurable File Logging**: Option to toggle live packet logging to `live_decrypted.log` on/off via configuration.
-- **Robust Statistical Tracking**: Divides packets into a mutually exclusive partitioning of status categories (duplicate raw, CRC failures, decryption errors, valid CoAP, etc.) so stats always balance perfectly.
+- **Statistical Tracking**: Divides packets into a mutually exclusive partitioning of status categories (duplicate raw, CRC failures, decryption errors, valid CoAP, etc.).
 
 ### 5.2 Database Synchronization
 To extract friendly TLV labels from the MariaDB server into the standalone JSON mapping, run:
@@ -177,14 +179,13 @@ You can also set the following environment variables:
 
 ## 6. Multi-Device Hardware Emulation: `tado_emulator`
 
-The `tado_emulator` component allows a single ESP32 development board (TTGO LoRa32) to emulate multiple virtual Tado Room Units (RU) and Wireless Temperature Sensors simultaneously.
+The `tado_emulator` component allows a single ESP32 development board (TTGO LoRa32) to emulate multiple virtual Tado Room Units (RU) as Wireless Temperature Sensors simultaneously.
 
 ### 6.1 Features
-- **Multi-Device Support**: Emulate multiple independent serial numbers on a single physical radio.
-- **Full CoAP & 6LoWPAN Stack**: Implements AES-128-CCM encryption, CoAP Option 12 (`Content-Format: 42`), ICMPv6 Echo, and CSL receiver handling.
+- **Multi-Device Support**: Emulate multiple room units (RUs) as Wireless Temperature Sensors on a single physical radio.
+- **Full CoAP & 6LoWPAN Stack**: Implements AES-128-CCM encryption, ICMPv6 Echo, and CSL receiver handling.
 - **REST API Integration**: Direct HMAC-authenticated HTTP control between the TaNoClo server and the ESP32 node.
-- **NVRAM Persistence**: Operational keys, session tokens, and telemetry setpoints persist across power cycles using ESP32 `Preferences`.
-- **Automatic Unassociation Handling**: Listens for unassociation commands (`d/config` with `0x0158 == 0`), erases the device from NVRAM, and notifies the server.
+- **NVRAM Persistence**: Operational keys, session tokens, and telemetry setpoints persist across power cycles.
 
 ### 6.2 Flashing the Emulator Firmware
 Compile and flash the emulator component:
@@ -195,8 +196,8 @@ esphome run tado_emulator/tado_emulator.yaml
 ### 6.3 Registering & Controlling via Setup Portal
 1. Open the **TaNoClo Setup Portal** (`https://setup.tanoclo.YOUR_DOMAIN.com`).
 2. Navigate to **Emulated Devices & ESP32 Nodes**.
-3. Add the ESP32 node IP and API key.
-4. Click **Create & Initiate Pairing** to automatically pair the emulated RU with your Internet Bridge.
+3. Add the ESP32 node IP.
+4. Click **Create & Auto-Pair** to automatically create a new emulated RU and pair the emulated RU with your Internet Bridge.
 5. Control ambient temperature and humidity dynamically via Setup Dashboard sliders or Home Assistant MQTT topics (`tado/tanoclo/emulated/<serial>/set/temp`).
 
 For comprehensive architectural details and protocol specifications, see [docs/emulated_devices.md](../docs/emulated_devices.md).

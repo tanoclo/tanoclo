@@ -24,11 +24,6 @@ The total header size is strictly **28 bytes**. The payload begins at byte index
 | **`[26-27]`** | 2 | `uint16` | `coap_len` | Length of the subsequent raw CoAP packet payload in bytes. |
 | **`[28+]`** | Variable | `bytes` | `coap_bytes` | The raw encapsulated CoAP packet. |
 
-> [!NOTE]
-> **Direction Constants:**
-> *   `0x0001` (`DIR_CLIENT_TO_SERVER`): Sent from the physical bridge to the server.
-> *   `0x0002` (`DIR_SERVER_TO_CLIENT`): Sent from the server, encapsulated by the bridge, and transmitted over the RF radio to the target device.
-
 ---
 
 ### 1.2 Binary Parsing and Building Mechanics
@@ -59,8 +54,8 @@ sequenceDiagram
     Note over Client,Server: TLS Established (wss://)
     
     Client (Bridge)->>Server (TaNoClo): POST /auth/key (CON, MID=0x1000)<br/>TLV Payload: 0x0260 (Serial)
-    Note over Server: Validates serial length<br/>Generates deterministic server key
-    Server-->>Client (Bridge): ACK 2.01 Created (MID=0x1000)<br/>TLV Payload: 0x0260 (Serial) + 0x0262 (Server Key)
+    Note over Server: Validates serial in DB<br/>Generates random 16-byte challenge key
+    Server-->>Client (Bridge): ACK 2.01 Created (MID=0x1000)<br/>TLV Payload: 0x0260 (Serial) + 0x0261 (Server Challenge Key)
 
     Client (Bridge)->>Server (TaNoClo): POST /auth/token (CON, MID=0x1001)<br/>TLV Payload: Credentials + 0x0260 (Serial)
     Note over Server: Whitelist check (Device serial / Home ID)<br/>Generates random 8-byte session token<br/>Persists token to MariaDB
@@ -73,10 +68,10 @@ sequenceDiagram
 
 1.  **Request**: The bridge sends a CoAP `POST /auth/key` message.
     *   **Payload (TLV)**: Contains the full device serial number under Field ID **`0x0260`** (e.g., `IB0000000000`).
-2.  **Server Response**: The server validates the serial and returns `2.01 Created`.
+2.  **Server Response**: The server validates the serial against the database and returns `2.01 Created`.
     *   **Payload (TLV)**:
         *   **`0x0260`**: Echoes the bridge serial number.
-        *   **`0x0262`**: Generates and sends a deterministic 16-byte server key (computed as the MD5 hash of `'tanoclo-server-key'`).
+        *   **`0x0261`**: Generates and sends a cryptographically secure 16-byte random ephemeral challenge key (`crypto.randomBytes(16)`), encrypted with the device's `factory_key` via AES-128-ECB if provisioned in the database.
 
 ---
 
@@ -168,7 +163,7 @@ Coordinates transparent proxy sockets for real Tado integration.
 
 ### 3.2 Transparent Proxy Mode & ETag Interception
 
-When a home's `is_proxied` flag is set to `1` in the database, the server initiates an upstream WebSocket connection to `ingress.tado.com` utilizing the authentic Tado Root CA certificate (`certs/tadoRootCA.cer`).
+When a home's `is_proxied` flag is set to `1` in the database, the server initiates an upstream WebSocket connection to `ingress.tado.com` utilizing the Tado Root CA certificate (`certs/tadoRootCA.cer`).
 
 ```mermaid
 sequenceDiagram
@@ -203,24 +198,17 @@ To prevent transparently-proxied devices from performing automated OTA firmware 
 *   **Block Transfer Interception**: Any Block1 or Block2 segmented CoAP transactions associated with standard `POST` or `CONTINUE` codes are blocked **only if they target a firmware-related path** (typical of large binary firmware chunks). Block transfers on other paths (like schedules or configs) are allowed to pass normally.
 
 #### Proxy Commands Routing (allow_commands_in_proxy)
-Normally, when a device is proxied, the TaNoClo server skips processing commands destined to the device locally (since commands should go to the real Tado API/cloud). However, a setting can be toggled on the admin portal dashboard ("Commands in Proxy") per home:
-1. **Setting Storage**: The state is stored in `homes.allow_commands_in_proxy` (`TINYINT(1)` default `0`) in MariaDB.
-2. **Bypass Filter (`server.js`)**: When the HTTP command API triggers a downlink push (`sendToDevice`), the server queries the home's proxy status:
-   * If `allow_commands_in_proxy` is `0`, the command is dropped, logging that the device is proxied.
-   * If `allow_commands_in_proxy` is `1`, the server allows the command:
-     - **Non-Config Commands** (e.g. `identify`, `reboot`, overlays) are sent directly to the device.
-     - **Config Commands** (e.g. `/config` or `/lock` modifications) are permitted only if read-only config mode (`config.zoneConfigReadonly`) is disabled. If read-only mode is active, config writes are blocked.
-3. **Response Blocker**: The device's response to these commands is intercepted and blocked from being forwarded to the upstream Tado cloud, keeping the cloud's view consistent.
+Normally, when a device is proxied, the TaNoClo server skips processing commands destined to the device locally (since commands should go to the real Tado API/cloud). However, a setting can be toggled on the admin portal dashboard ("Commands in Proxy") per home. When the HTTP command API triggers a downlink push, the server queries the home's proxy status. If `allow_commands_in_proxy` is disabled, the command is dropped, logging that the device is proxied. If `allow_commands_in_proxy` is enabled, the server allows the command. The device's response to these commands is intercepted and blocked from being forwarded to the upstream Tado cloud, keeping the cloud's view consistent.
 
 ---
 
 ## 4. CoAP Path Routing Table
 
-The CoAP server maps incoming URI paths through `classifyPath()` in `handlers.js`. This function processes segment tokens to assign request types, matching paths with handler operations and target database tables:
+The CoAP server maps incoming URI paths. This function processes segment tokens to assign request types, matching paths with handler operations and target database tables:
 
 | URI Pattern | Classified Type | Handled Direction | CoAP Code | DB / Protocol Operation |
 | :--- | :--- | :--- | :--- | :--- |
-| `/auth/key` | `auth_key` | Uplink | `POST` | Deterministic MD5 key challenge response. |
+| `/auth/key` | `auth_key` | Uplink | `POST` | Ephemeral server challenge key generation (`crypto.randomBytes`). |
 | `/auth/token` | `auth_token` | Uplink | `POST` | Whitelist check. Registers session token in DB. |
 | `/d/{id}/info` | `device_info` | Uplink / Downlink | `GET` / `POST` | Stores device firmware version, hardware info in DB. |
 | `/d/{id}/config` | `device_config` | Uplink / Downlink | `GET` / `PUT` | **GET**: Builds binary TLV of device configuration from DB.<br/>**PUT**: Persists configuration changes (e.g., offsets, LED) in DB. |
@@ -260,18 +248,18 @@ Running on internal port **`3111`**, this HTTP REST service translates external 
 *   `POST /api/time/broadcast`: Triggers an immediate time sync broadcast to all bridges.
 *   `POST /api/send`: Sends a custom CoAP message (accepts JSON payloads, serializes to TLV, injects token Option 2048, and pushes to device).
 *   `POST /api/send-raw`: Sends a raw hex WS bridge frame directly.
-*   `POST /api/devices/{id}/rfkey/refresh`: Pushes a GET request to `d/rfkey` with Option 7 set to `ffff` and ContentFormat set to `42`.
+*   `POST /api/devices/{id}/rfkey/refresh`: Pushes a GET request to `d/rfkey`.
 *   `POST /api/devices/{id}/config`: Pushes a full, updated configuration TLV to the target device, auto-generating a new ETag.
-*   `POST /api/devices/{id}/lock`: Toggles the child lock status of a TRV (`child_lock_enabled` in DB, pushes TLV 0x0290 over path `d/lock`).
-*   `POST /api/devices/{id}/identify`: Triggers the device's locate LED sequence (empty payload PUT over path `d/identify`).
-*   `POST /api/devices/{id}/reboot`: Reboots the target hardware device (empty payload PUT over path `d/reboot`).
-*   `POST /api/devices/{id}/pair`: Commands the bridge to enter pairing mode for a specific device serial (PUT over `d/I/{pairId}/pair`, carrying duration in `0x0104`).
-*   `POST /api/homes/{id}/c/{circuit}/config`: Configures Hot Water maximum temperature limit (encoded as $100 \times \text{temp}$ into `0x2040` over path `h/{homeId}/c/{circuitId}/config`).
+*   `POST /api/devices/{id}/lock`: Toggles the child lock status of a TRV.
+*   `POST /api/devices/{id}/identify`: Triggers the device's locate LED sequence.
+*   `POST /api/devices/{id}/reboot`: Reboots the target hardware device.
+*   `POST /api/devices/{id}/pair`: Commands the bridge to enter pairing mode for a specific device serial.
+*   `POST /api/homes/{id}/c/{circuit}/config`: Configures Hot Water maximum temperature limit.
 *   `POST /api/homes/{id}/z/{zone}/config`: Encodes and pushes updated settings to zone devices based on DB configurations.
 *   `POST /api/homes/{id}/z/{zone}/overlay`: Deploys a new zone temperature overlay (power, temperature setting, and termination).
-*   `DELETE /api/homes/{id}/z/{zone}/overlay`: Reverts a zone back to schedule mode (pushes `overlay_mode: 0` and `resume_schedule_event: 1` over `z/s`).
-*   `POST /api/homes/{id}/zones/{zone}/openWindow/activate`: Activates Open Window Detection state on zone devices (pushes `0x0c00 = 1`).
-*   `DELETE /api/homes/{id}/zones/{zone}/openWindow`: Cancels Open Window Detection state on zone devices (pushes `0x0c00 = 0`).
+*   `DELETE /api/homes/{id}/z/{zone}/overlay`: Reverts a zone back to schedule mode.
+*   `POST /api/homes/{id}/zones/{zone}/openWindow/activate`: Activates Open Window Detection state on zone devices.
+*   `DELETE /api/homes/{id}/zones/{zone}/openWindow`: Cancels Open Window Detection state on zone devices.
 
 ---
 
@@ -303,12 +291,12 @@ A dedicated background cron manager schedules and triggers maintenance actions:
     *   **Schedule Transitions**: Detects if a new schedule block has commenced. Updates DB tables and triggers states pushes.
     *   **Pending Offline Schedule Sync**: Detects if a zone has `offline_schedule_enabled = 1` and has a pending schedule update. If so, it pushes the offline schedule sync during the night (between 2:00 and 5:00 local time).
 *   **Time Synchronization (Every 4 hours)**: Performs a global time sync. Broadcasts current Unix epoch time to all bridges using a protobuf-encoded payload over `d/time`.
-*   **RF Key Broadcast (Every 4 hours)**: Triggers an RF key refresh query (`d/rfkey`) to all connected bridges.
+*   **RF Key Broadcast (Every 24 hours)**: Triggers an RF key refresh query (`d/rfkey`) to all connected bridges.
 *   **Weather Synchronization (Every 1 hour)**: Calls the `weather` module to poll outdoor temperature updates for homes, keeping local measurements synchronized.
 *   **Home Assistant Discovery Backup (Every 24 hours)**: Re-publishes all MQTT Home Assistant Auto-Discovery configuration mappings to Mosquitto.
 *   **Database & File Cleanup (Every 24 hours)**: Runs database and log maintenance:
-    *   `device_measurements`: Deletes historical records older than **30 days**.
-    *   `zone_measurements`: Deletes historical records older than **13 months**.
-    *   `home_weather`: Deletes records older than **13 months** (390 days).
+    *   `device_measurements`: Deletes historical records older than the set amount of days (default 30 days).
+    *   `zone_measurements`: Deletes historical records older than the set amount of months (default 13 months).
+    *   `home_weather`: Deletes historical records older than the set amount of months (default 13 months).
     *   `oauth_auth_codes`: Deletes expired OAuth authorization codes.
-    *   **Log Cleanup**: Deletes rotated debug log files (`debug.*.log`) older than **7 days**.
+    *   **Log Cleanup**: Deletes rotated debug log files (`debug.*.log`) older than the set amount of days (default 7 days).

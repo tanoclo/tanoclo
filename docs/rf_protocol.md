@@ -1,24 +1,27 @@
 # Tado RF Protocol Specification
 
-This document provides the specification of the radio frequency (RF) protocol used by Tado devices (including the Internet Bridge, Smart Radiator Thermostats (VA), and Smart Room Thermostats). 
+This document provides the specification of the radio frequency (RF) protocol used by Tado devices (including the Internet Bridge, Smart Radiator Thermostats (VA), and Smart Room Thermostats) and the Tanoclo RF Sniffer Receiver implementation details. It covers the physical layer, the Tado communication framework (CoAP and custom protocols), cryptographic details, and the complete RF packet structure from physical transmission to the application-layer payload.
+
+Based on real-world data and the [Tado Hardware Teardown Wiki](https://github.com/sdegeorgio/Tado_Hardware_Teardown/wiki).
 
 ---
 
 ## 1. Physical Layer (PHY)
 
-The Physical Layer of the sniffer is managed by a Semtech SX1276 LoRa/FSK transceiver operated in **FSK Packet Mode**. The radio configuration provides maximum sensitivity and robust reception in the 868 MHz ISM band.
+The Physical Layer for both sniffing and transmission (as implemented in `tado_emulator` and `tado_sniffer`) is managed by a Semtech SX1276 LoRa/FSK transceiver operated in **FSK Packet Mode**. The radio configuration provides maximum sensitivity and robust reception/transmission in the 868 MHz ISM band.
 
 ### 1.1 SX1276 Register Configuration
 
-The following table lists the definitive register configuration used to initialize the SX1276 transceiver:
+The following table lists the definitive register configuration used to initialize the SX1276 transceiver for both continuous reception and low-latency packet transmission:
 
 | Register Hex | Name | Value | Binary | Description / Rationale |
 | :--- | :--- | :--- | :--- | :--- |
-| `0x01` | `REG_OP_MODE` | `0x05` | `00000101` | Sets Mode to **RX (Receiver Mode)** (transiently set to SLEEP `0x00` during initialization). |
+| `0x01` | `REG_OP_MODE` | `0x05` | `00000101` | Sets Mode to **RX (Continuous Receiver Mode)** (transiently set to SLEEP `0x00` / TX `0x03` during transmission). |
 | `0x02` | `REG_BITRATE_MSB` | `0x02` | `00000010` | Bitrate MSB. Combined with LSB yields $Bitrate = \frac{F_{\text{osc}}}{BitRate} = 50,000\text{ bps}$ ($50\text{ kbps}$). |
 | `0x03` | `REG_BITRATE_LSB` | `0x80` | `10000000` | Bitrate LSB. Register value $0x0280 = 640$. $Bitrate = \frac{32,000,000}{640} = 50,000\text{ bps}$. |
 | `0x04` | `REG_FDEV_MSB` | `0x01` | `00000001` | Frequency Deviation MSB. Combined with LSB yields $25.39\text{ kHz}$ deviation. |
 | `0x05` | `REG_FDEV_LSB` | `0xA0` | `10100000` | Frequency Deviation LSB. Register value $0x01A0 = 416$. $F_{\text{dev}} = 416 \times 61.035\text{ Hz} \approx 25.39\text{ kHz}$ (aligned with CC110L). |
+| `0x09` | `REG_PA_CONFIG` | `0x8F` | `10001111` | Configures Power Amplifier to **PA_BOOST** at maximum output power (+17 dBm / +20 dBm). |
 | `0x0A` | `REG_PARAMP` | `0x29` | `00101001` | Enables **GFSK modulation shaping** with BT=1.0 (matches CC110L MDMCFG2=0x13). |
 | `0x0C` | `REG_LNA` | `0x23` | `00100011` | Sets LNA Gain to **G1 (Maximum Gain)** and enables **LNA Boost** for maximum sensitivity. |
 | `0x0D` | `REG_RX_CONFIG` | `0x1E` | `00011110` | Enables **AfcAutoOn**, **AgcAutoOn**, and triggers RX on **PreambleDetect + RSSI**. |
@@ -27,23 +30,25 @@ The following table lists the definitive register configuration used to initiali
 | `0x13` | `REG_AFC_BW` | `0x01` | `00000001` | AFC Bandwidth: **166.67 kHz** (Mantissa = 24, Exponent = 1). |
 | `0x1A` | `REG_AFC_FEI` | `0x20` | `00100000` | Enables **AfcAutoClearOn** (clears frequency offset at RX start). |
 | `0x1F` | `REG_PREAMBLE_DETECT` | `0xCA` | `11001010` | Enables **3-Byte Preamble Detector** with a detection size tolerance of 10. |
-| `0x27` | `REG_SYNC_CONFIG` | `0x73` | `01110011` | Sync Word Generation ON, **AutoRestartRx = 01** (Restart RX without PLL lock, preamble polarity matched to 0x55), **4-Byte Sync Word**. |
+| `0x25` | `REG_PREAMBLE_MSB` | `0x00` | `00000000` | TX Preamble MSB: Sets preamble length for transmission. |
+| `0x26` | `REG_PREAMBLE_LSB` | `0x04` | `00000100` | TX Preamble LSB: **4 bytes** (640 µs at 50 kbps, matching native CC110L MDMCFG1=0x22). |
+| `0x27` | `REG_SYNC_CONFIG` | `0x73` | `01110011` | Sync Word Generation ON, **AutoRestartRx = 01** (Restart RX without PLL lock), **4-Byte Sync Word**. |
 | `0x28` | `REG_SYNC_VALUE_1` | `0xD3` | `11010011` | Sync Word Byte 1: **`0xD3`** (Definitive Tado Sync Word MSB). |
 | `0x29` | `REG_SYNC_VALUE_2` | `0x91` | `10010001` | Sync Word Byte 2: **`0x91`** (Definitive Tado Sync Word LSB). |
 | `0x2A` | `REG_SYNC_VALUE_3` | `0xD3` | `11010011` | Sync Word Byte 3: **`0xD3`** (Definitive Tado Sync Word MSB). |
 | `0x2B` | `REG_SYNC_VALUE_4` | `0x91` | `10010001` | Sync Word Byte 4: **`0x91`** (Definitive Tado Sync Word LSB). |
 | `0x30` | `REG_PACKET_CONFIG_1` | `0x99` | `10011001` | **Variable Length Packets**, **Hardware CRC ON** (utilizes standard CCITT CRC polynomial for hardware-level validation), **CrcAutoClearOff = 1**. |
 | `0x31` | `REG_PACKET_CONFIG_2` | `0x40` | `01000000` | Enables **Packet Mode** (disables beacon, home control, and whitening). |
-| `0x32` | `REG_PAYLOAD_LENGTH` | `0x7F` | `01111111` | Sets Maximum Payload Length limit to **127 bytes** (optimizing FIFO streaming capture). |
-| `0x09` | `REG_PA_CONFIG` | `0x8F` | `10001111` | Configures Power Amplifier to **PA_BOOST** at maximum output power. |
-| `0x35` | `REG_FIFO_THRESH` | `0x8E` | `10001110` | **TxStartCondition = FIFO Not Empty** (begins transmission immediately), FIFO threshold = 14. |
+| `0x32` | `REG_PAYLOAD_LENGTH` | `0x7F` | `01111111` | Sets Maximum Payload Length limit to **127 bytes** (optimizing FIFO streaming capture and transmission). |
+| `0x35` | `REG_FIFO_THRESH` | `0x8E` | `10001110` | **TxStartCondition = FIFO Not Empty** (begins transmission immediately upon FIFO write), FIFO threshold = 14. |
+| `0x40` | `REG_DIO_MAPPING_1` | `0x0C` | `00001100` | Maps DIO0 to `PayloadReady` (RX) / `PacketSent` (TX) and DIO2 to `SyncAddress`. |
 
 > [!IMPORTANT]
 > **No Address Whitening:** Tado devices do **not** use hardware or software whitening on the RF link. Standard `REG_PACKET_CONFIG_2` is explicitly set to `0x40` (disabling address whitening and keeping standard packet mode).
 
 ### 1.2 Channel Tuning and Frequency Bands
 
-Tado is capable of transmitting on and receiving from 50 channels in the 868 MHz ISM band (numbered 0 to 49). In practise the Internet Bridge (IB) seems to always default to using channel 26.
+Tado is capable of transmitting on and receiving from 50 channels in the 868 MHz ISM band (numbered 0 to 49). In practice the Internet Bridge (IB) defaults to using **Channel 26** ($868.3237\text{ MHz}$).
 
 The exact carrier frequency for a given channel is calculated using the following formula:
 
@@ -54,23 +59,16 @@ In Megahertz, the tuning carrier frequency is:
 $$F_{\text{MHz}} = 863.125 + (\text{channel} \times 0.199951)$$
 
 #### SX1276 Frequency Register Synthesis ($F_{\text{rf}}$)
-To tune the SX1276 carrier frequency, the computed $F_{\text{Hz}}$ must be converted into a 24-bit register value ($F_{\text{rf}}$) and written to `REG_FRF_MSB` (`0x06`), `REG_FRF_MID` (`0x07`), and `REG_FRF_LSB` (`0x08`).
-The register value is calculated using a step size of $F_{\text{step}} = \frac{32,000,000}{2^{19}} = 61.03515625\text{ Hz}$:
+To tune the SX1276 carrier frequency, the computed $F_{\text{Hz}}$ is converted into a 24-bit register value ($F_{\text{rf}}$) written to `REG_FRF_MSB` (`0x06`), `REG_FRF_MID` (`0x07`), and `REG_FRF_LSB` (`0x08`).
+The register value uses a step size of $F_{\text{step}} = \frac{32,000,000}{2^{19}} = 61.03515625\text{ Hz}$:
 
-$$F_{\text{rf}} = \text{round}\left( \frac{F_{\text{Hz}} \times 16,384}{1,000,000} \right) = \text{round}\left( \frac{F_{\text{Hz}}}{61.03515625} \right)$$
-
-#### Exact Carrier Frequencies for Select Channels
-- **Channel 0:** $863.125000\text{ MHz}$ (Register: `0xDC9000`)
-- **Channel 1:** $863.324951\text{ MHz}$ (Register: `0xDCCB3F`)
-- **Channel 25:** $868.123775\text{ MHz}$ (Register: `0xDE0B2F`)
-- **Channel 26:** $868.323726\text{ MHz}$ (Register: `0xDE466F`)
-- **Channel 49:** $872.922599\text{ MHz}$ (Register: `0xDFECCD`)
+$$F_{\text{rf}} = \text{round}\left( \frac{F_{\text{Hz}}}{61.03515625} \right)$$
 
 ---
 
 ## 2. MAC Layer (IEEE 802.15.4)
 
-Tado devices encapsulate their physical payloads within standard **IEEE 802.15.4-2003** Data Frames. 
+Tado devices encapsulate physical radio payloads within standard **IEEE 802.15.4-2003** Data Frames.
 
 ### 2.1 MAC Frame Format
 
@@ -78,16 +76,16 @@ Tado devices encapsulate their physical payloads within standard **IEEE 802.15.4
 packet-beta
 title IEEE 802.15.4 MAC Frame Structure (16 Bytes Cleartext Header)
 0-1: "FCF (Frame Control Field) [0xEC69]"
-2: "Sequence Number"
-3-4: "Destination PAN ID"
-5-12: "Destination Extended Address (8 Bytes)"
-13-15: "Source Extended Address (Clear Prefix, 3 Bytes)"
-16-31: "Encrypted Payload (Ciphertext & MIC)"
+2: "Sequence Number (frame_seq)"
+3-4: "Destination PAN ID (ib_pan_id)"
+5-10: "Destination Extended Address (Middle 6 Bytes)"
+11-15: "Source Extended Address (Cleartext Prefix, 5 Bytes)"
+16-31: "Encrypted Payload (AES-128-CCM Ciphertext & 4-Byte MIC)"
 ```
 
 ### 2.2 Frame Control Field (FCF)
 
-The Frame Control Field consists of the first 2 bytes (`frame[0..1]`) and is hardcoded to **`0xEC69`** (transmitted as `0x69` then `0xEC`) for Data frames.
+The Frame Control Field consists of the first 2 bytes (`frame[0..1]`) and is hardcoded to **`0xEC69`** (transmitted over the air as `0x69` then `0xEC`) for all Data frames.
 
 Parsing the 16 bits of `0xEC69` (binary `1110 1100 0110 1001`) from LSB to MSB:
 - **Bits 0-2 (Frame Type):** `001` (Data Frame)
@@ -100,35 +98,26 @@ Parsing the 16 bits of `0xEC69` (binary `1110 1100 0110 1001`) from LSB to MSB:
 - **Bits 12-13 (Frame Version):** `00` (IEEE 802.15.4-2003)
 - **Bits 14-15 (Source Addressing Mode):** `11` (Extended 64-bit / 8-byte Address)
 
-> [!NOTE]
-> While all operational and pairing Data frames use FCF `0xEC69` (Type `0x01`), the Internet Bridge also transmits:
-> - **Type `0x02`** — IEEE 802.15.4 MAC Acknowledgement frames.
-> - **Type `0x05`** — IEEE 802.15.4 Multipurpose frames (used for CSL beacons).
->
-> These non-Data frames do not follow the standard Data frame structure and must not be passed to the AES decryption pipeline.
+### 2.3 Extended Addressing & Obfuscation
 
-### 2.3 Extended Addressing and Obfuscation
-
-Tado employs custom address optimization and obfuscation to compress the frame header:
-- **Destination Extended Address:** Reconstructed by combining the Destination PAN ID (`frame[3..4]`) with the 6 cleartext bytes in the MAC header (`frame[5..10]`). The first 2 bytes of the Destination Extended Address (LSB in little-endian format) are identical to the Destination PAN ID, which avoids transmitting them twice on the air.
-- **Source Extended Address:** Only the first **5 bytes** are transmitted in cleartext in the MAC header. The first 2 bytes are at `frame[11..12]` and the next 3 bytes are at `frame[13..15]`. The remaining **3 bytes** are hidden by placing them at the very beginning of the AES-128-CCM encrypted payload (`plaintext[0..2]`).
+Tado compresses and obfuscates addresses on the air:
+- **Destination Extended Address:** Reconstructed by combining Destination PAN ID (`frame[3..4]`) with the 6 cleartext bytes in the MAC header (`frame[5..10]`). The first 2 bytes of the Destination Extended Address (LSB in little-endian format) match the Destination PAN ID.
+- **Source Extended Address:** The first **5 bytes** are transmitted in cleartext in the MAC header (`frame[11..15]`). The remaining **3 bytes** are placed at the very start of the plaintext payload (`plaintext[0..2]`) before encryption.
 
 #### Address Reconstitution Algorithm
-Upon successful decryption of the ciphertext payload, the receiver reconstructs the full 8-byte Destination (`dst_ext`) and Source (`src_ext`) Extended Addresses as follows:
-
 ```
 dst_ext[0..1] = frame[3..4]     (Destination PAN ID)
 dst_ext[2..7] = frame[5..10]    (Cleartext Destination MAC suffix)
 
-src_ext[0..1] = frame[11..12]   (Cleartext Source MAC prefix)
-src_ext[2..4] = frame[13..15]   (Cleartext Source MAC middle)
-src_ext[5..7] = plaintext[0..2] (Decrypted Source MAC suffix)
+src_ext[0..4] = frame[11..15]   (Cleartext Source MAC prefix, 5 bytes)
+src_ext[5..7] = plaintext[0..2] (Decrypted Source MAC suffix, 3 bytes)
 ```
 
-The 2 bytes following the Source MAC suffix in the decrypted plaintext (`plaintext[3..4]`) form the **Inner Header** (typically containing `0x04` and the sequence number), and the application payload starts directly at `plaintext[5]`.
+### 2.4 IEEE 802.15.4 Short Address Derivation
 
-> [!TIP]
-> Tado Internet Bridge MAC addresses typically start with the OUI **`56:XX:XX`** or **`50:XX:XX`**. Knowing this cleartext prefix helps sniffers filter and identify the IB on the network.
+Tado devices derive their 16-bit 802.15.4 Short Address directly from the first 2 bytes of their wire little-endian EUI-64 MAC address:
+
+$$\text{short\_addr} = \text{mac\_addr}[0] \mid (\text{mac\_addr}[1] \ll 8)$$
 
 ---
 
@@ -142,7 +131,7 @@ All operational data payloads are encrypted and authenticated using **AES-128-CC
 - **Key Size:** 128 bits (16 bytes)
 - **Nonce Size:** 13 bytes (`frame[0..12]`)
 - **Additional Authenticated Data (AAD) Size:** 16 bytes (`frame[0..15]`, spanning the entire MAC header)
-- **Message Integrity Code (MIC) Size:** 4 bytes (appended immediately following the ciphertext payload)
+- **Message Integrity Code (MIC) Size:** 4 bytes (appended immediately following ciphertext)
 
 ```mermaid
 graph TD
@@ -167,79 +156,54 @@ graph TD
     AES_CCM -->|Success| PT[Plaintext Payload]
     AES_CCM -->|Failure| ERR[Discard Packet]
 ```
+### 3.2 Security Keys
 
-### 3.2 Decryption Mechanism
-
-The raw packet from the SX1276 (excluding the length byte) is parsed directly. The sniffer implementation invokes the `decrypt_packet()` function:
-
-```cpp
-bool decrypt_packet(const uint8_t* key, const uint8_t* frame, size_t len, uint8_t* plaintext_out, size_t& pt_len) {
-  if (len < 21) return false;
-  
-  uint16_t fcf = frame[0] | (frame[1] << 8);
-  if (!(fcf & 0x08)) return false; // Ensure Security Enabled bit is set
-  
-  uint8_t nonce[13];
-  memcpy(nonce, frame, 13);         // Nonce is exactly MAC bytes 0-12
-  
-  uint8_t aad[16];
-  memcpy(aad, frame, 16);           // AAD is exactly MAC bytes 0-15
-  
-  size_t ct_len = len - 20;         // 16 bytes header + 4 bytes MIC
-  const uint8_t* ciphertext = frame + 16;
-  const uint8_t* mic = frame + 16 + ct_len;
-  
-  mbedtls_ccm_context ctx;
-  mbedtls_ccm_init(&ctx);
-  
-  int ret = mbedtls_ccm_setkey(&ctx, MBEDTLS_CIPHER_ID_AES, key, 128);
-  if (ret != 0) {
-      mbedtls_ccm_free(&ctx);
-      return false;
-  }
-  
-  ret = mbedtls_ccm_auth_decrypt(&ctx, ct_len, nonce, 13, aad, 16, ciphertext, plaintext_out, mic, 4);
-  mbedtls_ccm_free(&ctx);
-  
-  if (ret == 0) {
-      pt_len = ct_len;
-      return true;
-  }
-  return false;
-}
-```
-
-### 3.3 Security Keys
-
-Tado uses two primary security keys depending on the state of the device:
-
-#### 1. Pairing Key
-Used exclusively during initial binding and pairing. This key is static, deterministic, and identical across all Tado hardware.
-- **ASCII Representation:** `"tado pairing key"`
-- **Hexadecimal Representation:** `74 61 64 6f 20 70 61 69 72 69 6e 67 20 6b 65 79`
-
-#### 2. Operational Key (Network RF Key)
-A static 128-bit key shared by all devices in a given Home network under the same Internet Bridge. It is generated once by the Internet Bridge and distributed to all pairing devices. It is stored permanently in the non-volatile memory of the devices.
-- **Internet Bridge Storage:** Stored in secure flash (NVRAM slot 7 globally, and also committed to slot range `0x1fe` to `0x20e` for each paired device registration).
-- **ESPHome Sniffer Storage:** Saved in ESP32 Flash NVRAM to survive restarts.
+1. **Pairing Key:** Static bootstrap key hardcoded in every Tado device:
+   - **ASCII:** `"tado pairing key"`
+   - **Hex:** `74 61 64 6f 20 70 61 69 72 69 6e 67 20 6b 65 79`
+2. **Operational Key ($K_{\text{op}}$):** Dynamic 128-bit network key shared across all devices in a Home, negotiated via `POST /d/pair`.
 
 ---
 
-## 4. Decrypted Plaintext Payload Structure
+## 4. Plaintext Payload Structure & Wire Framing
 
-Once a packet is successfully decrypted, the resulting plaintext contains nested network layers. A full operational packet is structured as follows:
+Once decrypted (or prior to encryption during transmission), the plaintext payload layout contains:
 
 | Offset (Bytes) | Field Name | Size (Bytes) | Description |
 | :--- | :--- | :--- | :--- |
-| `0..2` | `SRC_EXT_tail` | 3 | Last 3 bytes of the Source Extended Address. |
-| `3` | `Inner Protocol Header` | 1 | Identifies the encapsulation format: `0x04` for Standard/Operational, or `0x3B` for ICMPv6 Router Advertisement Broadcast. |
-| `4` | `Sequence Number` | 1 | Sequence number matching the MAC header's `beacon_seq`. |
-| `5..8` | `Tado Custom Dispatch` | 4 | Dictates the packet mode (Pairing vs. Operational). (Not present in `0x3B` RA broadcasts). |
-| `9..15` | `6LoWPAN UDP NHC Header` | 7 | Remaps ports and compresses IPv6/UDP fields. (Not present in `0x3B` RA broadcasts). |
-| `16+` | `CoAP Protocol Message` | Variable | Encapsulated standard CoAP payload. (For `0x3B` RA broadcasts, `plaintext[5]` is `0x01` (dispatch/alignment) and the ICMPv6 RA payload starts at offset 6). |
+| `0..2` | `SRC_EXT_tail` | 3 | Last 3 bytes of Source Extended MAC (`mac_addr[5..7]`). |
+| `3` | `Inner Protocol Header` | 1 | `0x04` for standard data/CoAP, `0x3B` for ICMPv6 RA broadcast. |
+| `4..7` | `Sequence Counter` | 4 | 4-byte sequence counter: `[frame_seq, 0x00, 0x00, 0x00]`. |
+| `8` | `Tado 6LoWPAN Dispatch` | 1 | `0x7E` (Tado Custom 6LoWPAN UDP encapsulation). |
+| `9..14` | `6LoWPAN UDP NHC Header` | 6 | Port compression: `0x33 0xF0 0x16 0x33 <dst_port_hi> <dst_port_lo>`. |
+| `15..16` | `IPv6 UDP Checksum` | 2 | Standard RFC 768 / RFC 2460 UDP checksum over link-local IPv6 pseudo-header. |
+| `17..N` | `CoAP Protocol Message` | Variable | Encapsulated standard RFC 7252 CoAP datagram. |
+| `N+1..N+2` | `CRC16-Kermit Trailer` | 2 | CRC-16 Kermit checksum computed over `frame_header (16B) + plaintext`. |
 
+### 4.1 IPv6 UDP Checksum Computation
 
-### 4.1 Tado Custom Dispatch
+The 2-byte UDP checksum at `plaintext[15..16]` is calculated over:
+1. **IPv6 Link-Local Pseudo-Header (40 bytes)**:
+   - Source IPv6 (`fe80::...` derived from source MAC)
+   - Destination IPv6 (`fe80::...` derived from dest MAC)
+   - Upper-Layer Packet Length (8 + CoAP size)
+   - Next Header (`17` for UDP)
+2. **UDP Header (8 bytes)**: Source port (`5683`), Destination port (e.g. `4005` or `5683`), Length, Zero Checksum.
+3. **CoAP Payload**.
+
+### 4.2 Frame CRC16-Kermit Trailer
+
+Tado hardware appends a 2-byte CRC16-Kermit checksum at the end of the plaintext buffer before AES encryption:
+- **Polynomial:** `0x1021` (reflected: `0x8408`), Initial value: `0x0000`.
+- **Data Covered:** The 16-byte cleartext frame header + entire plaintext data payload.
+
+### 4.3 Mandatory CoAP Option 12 on Acknowledgments (`0xC1 0x2A`)
+
+When answering incoming CoAP requests from the Internet Bridge (e.g., `POST /d/pair` or telemetry syncs):
+- The response ACK MUST include **CoAP Option 12 (`Content-Format: 42`)**, serialized as `0xC1 0x2A`.
+- If Option 12 is omitted, the Internet Bridge radio firmware treats the ACK as incomplete and repeatedly retransmits the request.
+
+### 4.4 Tado Custom Dispatch
 
 The 4-byte Tado Dispatch field determines the sender's identity and the operating context of the message:
 *   **Bytes 0-1 (Sender Short Address):** The little-endian representation of the transmitting device's short address.
@@ -252,7 +216,7 @@ The 4-byte Tado Dispatch field determines the sender's identity and the operatin
 
 Thus, common dispatch headers include `F0 00 00 7E` (VA pairing request), `1E 00 00 7E` (IB pairing response), and dynamic values like `0E 03 00 7A` (operational telemetry).
 
-### 4.2 6LoWPAN UDP Next Header Compression (NHC)
+### 4.5 6LoWPAN UDP Next Header Compression (NHC)
 
 To conserve bandwidth over the air, Tado implements standard 6LoWPAN UDP compression. The NHC header format varies dynamically depending on the source and destination ports:
 
@@ -271,7 +235,7 @@ Used for standard operational CoAP traffic where both source and destination por
 *   **`0x16 0x33`:** Source Port offset remapping ($0x1633 = 5683$).
 *   **`0x16 0x33`:** Destination Port offset remapping ($0x1633 = 5683$).
 
-### 4.3 Decrypted Plaintext Byte Layout (Fragmented vs Unfragmented)
+### 4.6 Decrypted Plaintext Byte Layout (Fragmented vs Unfragmented)
 
 The position of the 6LoWPAN dispatch byte differs between fragmented and unfragmented packets due to the interleaving of the fragmentation header:
 
@@ -409,7 +373,6 @@ $$\text{compressedOffset} = (\text{offset-field} \times 8) - \text{expansion}$$
 
 If a FRAGN arrives before its corresponding FRAG1 (and thus before the expansion is known), the reassembler should store it using a default estimated expansion (40 bytes is a safe fallback). When FRAG1 subsequently arrives and the precise expansion is calculated, all previously stored FRAGN offsets must be re-keyed using the corrected expansion value.
 
-
 ---
 
 ## 6. Packet Flow and Decoding Example
@@ -495,12 +458,12 @@ During pairing:
 
 ---
 
-## 8. Sniffer Stream Receiver Add-on (tanoclo-stream-receiver)
+## 8. Sniffer Stream Receiver App (tanoclo-stream-receiver)
 
-The sniffer hardware (ESP32) encapsulates successfully captured raw radio frames into length-prefixed TCP messages and streams them over Wi-Fi/Ethernet to the **TaNoClo RF Sniffer Receiver** Home Assistant Add-on (`tanoclo-stream-receiver/stream_receiver.js`). 
+The sniffer hardware (ESP32) encapsulates successfully captured raw radio frames into length-prefixed TCP messages and streams them over Wi-Fi/Ethernet to the **TaNoClo RF Sniffer Receiver** Home Assistant App (`tanoclo-stream-receiver/stream_receiver.js`). 
 
 ### 8.1 Modular Dependencies
-To operate inside the Home Assistant add-on container, the Stream Receiver features its own parsing and discovery dependencies located under `tanoclo-stream-receiver/lib/`:
+To operate inside the Home Assistant app container, the Stream Receiver features its own parsing and discovery dependencies located under `tanoclo-stream-receiver/lib/`:
 - `lib/coap.js`: Standard CoAP decoder extracting paths, codes, and raw payloads.
 - `lib/tlv.js`: Replicated TLV parsing engine supporting scale remapping.
 - `lib/ha-discovery.js`: Home Assistant MQTT Auto-Discovery engine to automatically register device entities.
@@ -528,4 +491,3 @@ Upon successful decryption and parsing of a unique packet, the Stream Receiver p
   - Raw decrypted hex strings.
   - Decoded CoAP header parameters.
   - An array of parsed TLVs with matched labels, friendly names, formatted values, and units.
-

@@ -2,7 +2,7 @@
   <img src="https://raw.githubusercontent.com/tanoclo/tanoclo/main/tanoclo-ws-server/logo.png" alt="TaNoClo WebSocket Server Logo" width="250">
 </p>
 
-# Home Assistant Add-on: TaNoClo WebSocket Server
+# Home Assistant App: TaNoClo WebSocket Server
 
 ![Version](https://img.shields.io/badge/version-v0.2.4-blue.svg)
 ![Supports aarch64 Architecture](https://img.shields.io/badge/aarch64-yes-green.svg)
@@ -16,9 +16,7 @@
 
 - **Local Cloud Emulation**: Full native replacement of Tado Internet Bridge WebSocket binary framing protocol (TLV over WSS).
 - **REST & Admin API**: Local web management interface and HTTP API endpoints on port 3111.
-- **MariaDB Integration**: Direct, high-performance database storage for room configurations, device telemetry, and pairing keys.
 - **MQTT Support**: Automatic discovery and state publishing for seamless Home Assistant dashboard control.
-- **TLS Termination**: Native TLS handshake support using patched Internet Bridge Root CA certificates.
 
 ## Quick Start & Setup
 

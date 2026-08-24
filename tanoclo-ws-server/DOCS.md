@@ -1,6 +1,6 @@
 # TaNoClo WebSocket Server Setup Guide
 
-This guide details how to configure the **TaNoClo WebSocket Server** add-on and its required companion services inside your Home Assistant ecosystem.
+This guide details how to configure the **TaNoClo WebSocket Server** app and its required companion services inside your Home Assistant ecosystem.
 
 ---
 
@@ -17,14 +17,14 @@ This guide details how to configure the **TaNoClo WebSocket Server** add-on and 
 | Home Assistant OS (Host)                                                        |
 |                                                                                 |
 |  +--------------------+    +---------------------+     +---------------------+  |
-|  |   AdGuard / PiHole |    |   Mosquitto Broker  |     |   MariaDB Add-on    |  |
+|  |   AdGuard / PiHole |    |   Mosquitto Broker  |     |   MariaDB App    |  |
 |  |   (DNS Redirects)  |    |     (MQTT Bus)      |     |     (Database)      |  |
 |  +--------------------+    +---------------------+     +---------------------+  |
 |            |                          ^                           ^             |
 |            | (DNS Resolves)           | (Discovery/States)        | (SQL)       |
 |            v                          |                           |             |
 |  +---------------------------------------------------------------------------+  |
-|  | TaNoClo Add-on (ws-server)                                                 |  |
+|  | TaNoClo App (ws-server)                                                 |  |
 |  |                                                                           |  |
 |  |  * Port 988 (WSS Native Server terminating TLS using certs in /ssl)       |  |
 |  |  * Port 3111 (REST HTTP API & setup web interface)                        |  |
@@ -48,7 +48,7 @@ The physical Internet Bridge verifies connections using an embedded Root CA cert
 During the firmware patching process, a cloned Root CA key is used to sign a leaf certificate for the local server (Default `tanoclo.tado.lan`).
 
 1. Locate the output folder of your firmware patching script (normally `./out/` or `./original/`).
-2. Copy the following three files into the Home Assistant `/ssl/` shared partition (using Samba or SSH add-on):
+2. Copy the following three files into the Home Assistant `/ssl/` shared partition (using Samba or SSH app):
    * `tanoclo_key.pem`
    * `tanoclo_cert.pem`
    * `tadoRootCA.cer`
@@ -57,10 +57,7 @@ During the firmware patching process, a cloned Root CA key is used to sign a lea
 ---
 
 ### 2. DNS Redirection Configuration (AdGuard Home or Pi-Hole)
-Your network must be setup (using DHCP) such that the Internet Bridge and clients can resolve the TaNoClo domains to the IP address of your Home Assistant host machine.
-The Home Assistant OS/Core should also be set to use the DNS provided by one of the Apps.
-For the Tado integration to work as well, you must also force the Tado API domains to the IP address of your Home Assistant host machine.
-If you want to access the TaNoClo frontend externally you should also setup your edge router to handle this (outside of the scope of this guide).
+Your network must be setup (using DHCP) such that the Internet Bridge and clients can resolve the TaNoClo domain (`tanoclo.tado.lan`) to the IP address of your Home Assistant host machine. If you want to access the TaNoClo frontend externally you should also setup your edge router to handle this (outside of the scope of this guide).
 
 #### Option A: AdGuard Home
 1. Open the **AdGuard Home** UI.
@@ -78,11 +75,11 @@ If you want to access the TaNoClo frontend externally you should also setup your
 
 ---
 
-### 3. Database Configuration (MariaDB Add-on)
+### 3. Database Configuration (MariaDB App)
 TaNoClo requires a MariaDB database to store configuration records, telemetry measurements, and device pairings.
 
-1. Install the official **MariaDB** add-on from the Home Assistant Add-on Store.
-2. In the **Configuration** tab of the MariaDB add-on, define the database `tanoclo` and user `tanoclo` with a strong password:
+1. Install the **MariaDB** app from the Home Assistant App Store.
+2. In the **Configuration** tab of the MariaDB app, define the database `tanoclo` and user `tanoclo` with a strong password:
    ```yaml
    databases:
      - tanoclo
@@ -93,24 +90,24 @@ TaNoClo requires a MariaDB database to store configuration records, telemetry me
      - database: tanoclo
        username: tanoclo
    ```
-3. (Re-)Start the MariaDB add-on.
-4. The TaNoClo Node server will automatically create the database `tanoclo` and seed the tables if the connection user has rights to do so and the database is empty.
+3. (Re-)Start the MariaDB app.
+4. The TaNoClo Node server will automatically create the database `tanoclo` and seed the tables if the connection user has rights to do so and the database is empty on first boot.
 
 ---
 
 ### 4. MQTT Configuration (Mosquitto Broker)
 TaNoClo publishes device states and metadata dynamically to MQTT to support Home Assistant Auto-Discovery.
 
-1. Install the official **Mosquitto broker** add-on from the Add-on Store and start it.
+1. Install the **Mosquitto broker** app from the Home Assistant App Store and start it.
 2. In Home Assistant, go to **Settings** -> **Devices & Services** -> **Add Integration** -> select **MQTT** to configure the connection to the local broker.
 3. Make sure the MQTT integration is running.
 
 ---
 
-### 5. TaNoClo Add-on Installation & Configuration
-Now you can install and configure the TaNoClo add-on itself.
+### 5. TaNoClo Installation & Configuration
+Now you can install and configure the TaNoClo app itself.
 
-1. Go to **Settings** -> **Add-ons** -> **Add-on Store**.
+1. Go to **Settings** -> **Apps** -> **App Store**.
 2. Click the three dots in the top-right corner and select **Repositories**.
 3. Add the URL of your Git repository: `https://github.com/tanoclo/tanoclo`.
 4. The list will reload, and you will see **TaNoClo WebSocket Server** under the repository category.
@@ -130,7 +127,7 @@ Now you can install and configure the TaNoClo add-on itself.
 You will need secure external HTTPS access to the TaNoClo Frontend, Setup & Management API (e.g. `https://app.tanoclo.yourdomain.com`).
 You can use Nginx Proxy Manager for this.
 
-1. Install the **Nginx Proxy Manager** add-on and open its Admin UI.
+1. Install the **Nginx Proxy Manager** app and open its Admin UI.
 2. Go to **Hosts** -> **Proxy Hosts** -> **Add Proxy Host**.
 3. Enter your domain details:
    * **Domain Names:** `*.tanoclo.yourdomain.com`
@@ -139,7 +136,7 @@ You can use Nginx Proxy Manager for this.
    * **Forward Port:** `3111`
 4. In the **SSL** tab, request a Let's Encrypt certificate (ACME) or upload your custom certificate. Since you need a wildcard certificate you will have to use DNS challenge. Save the settings.
 
-*(Note: The Internet Bridge TLS connections on port `988` bypass this proxy and connect directly to the add-on on port `988` which terminates TLS natively).*
+*(Note: The Internet Bridge TLS connections on port `988` bypass this proxy and connect directly to the app on port `988` which terminates TLS natively).*
 
 ### 7. Configure TaNoClo
 

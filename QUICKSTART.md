@@ -14,7 +14,7 @@ This guide details the step-by-step process to set up a fully self-hosted, offli
   * [AliExpress Option 1](https://de.aliexpress.com/item/1005007887384238.html)
   * [AliExpress Option 2](https://de.aliexpress.com/item/1005006609750088.html)
   * **CRITICAL:** You must select the **5 Pin / 5P, Double Row, 1.27mm spacing** version when ordering.
-* **Opening/Pry Tools:** A small plastic spudger or guitar pick to open the casing.
+* **Opening/Pry Tools:** A small plastic spudger or guitar pick to open the Internet Bridge casing.
 
 ### Software Requirements
 * **Home Assistant OS (HAOS)** or standard Linux OS.
@@ -28,7 +28,7 @@ This guide details the step-by-step process to set up a fully self-hosted, offli
 
 ## 2. Patching the Internet Bridge (IB) Firmware
 
-To redirect the Tado Internet Bridge (IB) to your local server, you must dump its original firmware, patch the endpoint and certificate checks, and flash it back.
+To redirect the Tado Internet Bridge (IB) to your local server, you must dump its original firmware, patch the endpoint and certificate checks, and flash it back. All of this is automated using included scripts.
 
 ### 2.1 Install Debugging Tools on your PC
 Before connecting the hardware, install the necessary flashing utility (`openocd`) and security engine (`openssl`) on your computer:
@@ -48,9 +48,9 @@ Before connecting the hardware, install the necessary flashing utility (`openocd
 > [!WARNING]
 > The bottom clear plastic housing on the clip-on programmer interferes with the physical reset button on the Internet Bridge board.
 >
-> 1. Disassemble the clip-on programmer by removing the small screw.
+> 1. Optionally disassemble the clip-on programmer by removing the small screw.
 > 2. File down the corner plastic on the bottom edge using a Dremel/multitool or a small hand saw. Refer to the photo in [patch_ib_firmware/README.md](patch_ib_firmware/README.md#53-solderless-method-clip-on-programmer) for the exact corner layout.
-> 3. Reassemble the clip-on. The spring-loaded clamp mechanism will still work perfectly.
+> 3. If you disassembled in step 1 reassemble the clip-on. The spring-loaded clamp mechanism should still work perfectly.
 
 ### 2.3 Opening the IB and Connecting Wires
 
@@ -89,17 +89,20 @@ The script will dump the internal and external flash memory, locate/extract the 
 > [!IMPORTANT]
 > **Backup your files!** Once finished, save a copy of the newly generated `patch_ib_firmware/out/` and `patch_ib_firmware/original/` directories. These contain your unique cryptographic server keys and factory firmware backup.
 
+> [!IMPORTANT]
+> **No direct connectivity with the Tado cloud after patching** Because the endpoint and Root CA have been changed, the Internet Bridge will no longer be able to communicate with the official Tado cloud without going through your TaNoClo WebSocket server, which can proxy connections to the cloud if configured to do so.
+
 ---
 
 ## 3. Setting Up Home Assistant
 
 Deploy the companion containers and reverse proxies inside your Home Assistant OS instance.
 
-### 3.1 Install the Add-on Repository
-1. Go to **Settings** → **Add-ons** → **Add-on Store**.
+### 3.1 Install the App Repository
+1. Go to **Settings** → **Apps** → **App Store**.
 2. Click the three dots in the top-right corner and select **Repositories**.
 3. Add the TaNoClo repository URL: `https://github.com/tanoclo/tanoclo`
-4. Search for **TaNoClo WebSocket Server** in the Add-on store list and click **Install**.
+4. Search for **TaNoClo WebSocket Server** in the App store list and click **Install**.
 
 ### 3.2 Prepare SSL Certificates
 The patched Internet Bridge checks certificates against your cloned Root CA. Copy the credentials to Home Assistant's secure storage:
@@ -155,7 +158,7 @@ For secure client access (web portal & mobile apps), configure a reverse proxy t
    * **Forward Host IP:** `homeassistant` (or your local HA IP)
    * **Forward Port:** `3111`
 3. Under the **SSL** tab:
-   * Select or request a Let's Encrypt Wildcard certificate. You must enable the **DNS Challenge** option to request wildcard (`*`) certificates.
+   * Select or request a (Let's Encrypt) Wildcard certificate. You must enable the **DNS Challenge** option to request wildcard (`*`) certificates.
 
 ### 3.7 Configure and Start the TaNoClo Add-on
 1. Navigate back to **Settings** → **Add-ons** → **TaNoClo WebSocket Server**.
@@ -168,7 +171,7 @@ For secure client access (web portal & mobile apps), configure a reverse proxy t
    * **tanoclo_domain:** `tanoclo.yourdomain.com`
    * **jwt_secret:** *(Leave blank to let the add-on generate one automatically)*
 3. Save settings and click **Start**.
-4. Check the logs to see if TaNoClo start successfully.
+4. Check the logs to see if TaNoClo started successfully.
 
 ---
 
@@ -189,7 +192,7 @@ Before running offline, import your existing Tado installation settings (homes, 
 1. Go to the portal dashboard's **Homes** section.
 2. Click **Start Tado Import**. An OAuth Device Authorization code and link will be displayed on screen.
 3. Click the link, log in with your official Tado Cloud account, and authorize the device connection.
-4. TaNoClo will automatically replicate your home layout, pairing records, temperature schedules, and user structures into your local MariaDB database.
+4. TaNoClo will automatically replicate your home layout, device records, temperature schedules, and user structures into your local MariaDB database.
 5. **Connect the IB to the network and power** by plugging the ethernet and power cable back in.
 
 ---
@@ -209,7 +212,7 @@ Now we capture the dynamic, active operational states of the valves as they comm
 ## 6. Accessing the Frontend & Apps
 
 ### Web Management UI
-Access your climate portal at `https://app.tanoclo.yourdomain.com` to manage temperatures, set overlays and adjust schedules. Login with the home's Tado administrator email address (imported while seeding) and password (default for all imported users: tanoclo2026). You can (and should) change the password on the user page of the frontend or the setup portal. 
+Access your climate portal at `https://app.tanoclo.yourdomain.com` to manage temperatures, set overlays and adjust schedules. Login with the home's Tado administrator email address (imported while seeding) and password (default for all imported users: tanoclo2026). You can (and should) change the passwords on the user page of the frontend or the setup portal. 
 
 ### Android Application
 1. Download the pre-built APK:

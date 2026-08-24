@@ -23,7 +23,7 @@ Run tests using Vitest:
 ```bash
 npx vitest run
 ```
-*Note: Unit and integration tests must be executed with `vitest run`.*
+*Note: Unit and integration tests must be executed with `npx vitest run`.*
 
 ---
 

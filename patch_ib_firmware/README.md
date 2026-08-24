@@ -1,6 +1,6 @@
 # Internet Bridge Firmware Patching Toolkit
 
-This directory contains the tools and scripts necessary to dump, patch, and re-flash the firmware of the Tado Internet Bridge (STM32F411-based). The primary goal of these patches is to redirect the device's secure WebSocket connection to your self-hosted **TaNoClo** WebSocket server instead of the official Tado Cloud.
+This directory contains the tools and scripts necessary to dump, patch, and re-flash the firmware of the Tado Internet Bridge (STM32F411-based). The primary goal of these patches is to redirect the device's secure WebSocket connection to your self-hosted **TaNoClo** WebSocket server instead of the Tado Cloud.
 
 > [!IMPORTANT]
 > **Supported Firmware Version:** Only firmware version **92.1** is supported. The toolkit automatically verifies this by scanning the running internal firmware dump (`unmodded.bin`). If the running version is not 92.1, it checks the external SPI flash dump (`unmodded_spi.bin`) for a copy of version 92.1 in either firmware slot, extracts it, and updates the internal image and bootloader descriptors accordingly.
@@ -54,7 +54,7 @@ graph TD
 | **ST-Link V2** programmer | ✅ | Or compatible clone. Connects to your PC via USB. |
 | **10-pin clip-on pogo programmer** | For solderless | 5×2 layout, 1.27mm pitch. Clips onto the board test points. |
 | **Opening tools** | ✅ | Phone repair pry tools or a small knife. |
-| **Soldering iron + thin wire** | For solder method | Only if you prefer a permanent connection. |
+| **Soldering iron + thin wire** | For solder method | If you prefer a permanent connection or don't want to buy a pogo clip. |
 
 ### Where to Buy
 
@@ -137,7 +137,7 @@ The board has a **10-pin test point cluster** (5×2 grid, 1.27mm pitch) used for
                             ↓ (programmer tail points down)
 ```
 
-Only **4 of the 10 pins** carry SWD signals:
+Only **4 of the 10 pins** carry the required SWD signals:
 
 | # | Signal | Location |
 |---|--------|----------|
@@ -256,7 +256,7 @@ The `endpoint_type` variable in `read_patch_flash.sh` / `read_patch_flash.ps1` c
 | `1` | `ws://ingress.tado.com:988` | Original Tado cloud domain on custom port 988 |
 | `2` **(default)** | `ws://tanoclo.tado.lan:988` | TaNoClo domain on port 988 |
 
-Note that whatever domain you choose the IB will not connect to the original server anymore because the Tado RootCA certificate is replaced. The IB will then only connect to a server that uses your cloned CA certificate. Using the TaNoClo server you can proxy the connection to the real Tado cloud though.
+Note that whatever domain you choose the IB will not connect to the original server anymore because the Tado RootCA certificate is replaced. The IB will then only connect to a server that uses your cloned CA certificate. Using the TaNoClo server you can proxy the connection to the Tado cloud though.
 
 ---
 
@@ -328,13 +328,13 @@ arm-none-eabi-nm -n spi_stub.elf | awk ' \
 
 ### 9.1 VA — Smart Radiator Thermostat (V2 / V3 / V3+)
 
-The VA uses the same STM32F411 and SWD test point layout as the Internet Bridge.
+The VA uses the same SWD test point layout as the Internet Bridge even though the chip is a nRF52832.
 
 **Opening the device:**
 
-Follow the [iFixit Tado Smart Radiator Thermostat v3+ Teardown](https://www.ifixit.com/Teardown/Tado+Smart+Radiator+Thermostat+v3+Plus+Teardown/129731) — **only steps 1, 2, and 3** are needed. The PCB can be left in place and the clip-on programmer connected in-situ.
+Follow the [iFixit Tado Smart Radiator Thermostat v3+ Teardown](https://www.ifixit.com/Teardown/Tado+Smart+Radiator+Thermostat+v3+Plus+Teardown/129731) — **only steps 1, 2, and 3** are needed. The PCB can be left in place and the clip-on programmer connected in place.
 
-<img src="images/va_programming.jpg" width="400" alt="VA with clip-on programmer connected in-situ">
+<img src="images/va_programming.jpg" width="400" alt="VA with clip-on programmer connected in place">
 
 **Connecting the clip-on programmer:**
 
@@ -347,7 +347,7 @@ openocd -f interface/stlink.cfg -f target/nrf52.cfg -f dump_va.tcl
 ```
 ### 9.2 RU — Room Unit
 
-The RU also uses the same STM32F411 and SWD test point layout.
+The RU also uses the same SWD test point layout even though the chip is a STM32L0.
 
 **Opening the device:**
 

@@ -1,6 +1,6 @@
 # TaNoClo RF Sniffer Receiver Setup Guide
 
-This guide details how to configure the **TaNoClo RF Sniffer Receiver** add-on, flash the ESP32 hardware using ESPHome, and integrate the sniffed telemetry into Home Assistant using MQTT Auto-Discovery.
+This guide details how to configure the **TaNoClo RF Sniffer Receiver** app, flash the ESP32 hardware using ESPHome, and integrate the sniffed telemetry into Home Assistant using MQTT Auto-Discovery.
 
 ---
 

@@ -1,20 +1,20 @@
 # TaNoClo WebSocket & REST API Server
 
-The **TaNoClo WebSocket & REST API Server** is the central backend engine of the recreated Tado ecosystem (TaNoClo). Written in Node.js and optimized for high performance, it acts as the translation layer between the custom, binary WebSocket protocol used by Tado Internet Bridges and standard HTTP/JSON REST APIs used by mobile and web clients.
+The **TaNoClo WebSocket & REST API Server** is the central backend engine for the TaNoClo project. Written in Node.js, it acts as the translation layer between the custom, binary WebSocket protocol used by the Internet Bridge and standard HTTP/JSON REST APIs used by mobile and web clients.
 
 ---
 
 ## 1. System Architecture & Routing Flow
 
 The server manages a master-child process IPC architecture:
-1.  **uWebSockets.js Binary Port (`988`):** The master process accepts TLS-encrypted WebSocket connections from patched Internet Bridges, decrypts the proprietary 28-byte bridge frames, and routes the encapsulated CoAP packets.
-2.  **Express REST Engine Child Process (`3111`):** Automatically spawned as a child process using Node's `child_process.fork()`. It exposes the Mobile REST API (mocking Tado's `api/v2` endpoints) to support the patched Android/iOS APKs, handles HTTP command APIs (port `3111`), and serves the compiled web management React SPA (from `frontend-dist/`). The master and child communicate via local IPC channels.
+1.  **uWebSockets.js Binary Port (`988`):** The master process accepts TLS-encrypted WebSocket connections from patched Internet Bridges, decrypts the bridge frames, and routes the encapsulated CoAP packets.
+2.  **Express REST Engine Child Process (`3111`):** Automatically spawned as a child process. It exposes the API, handles HTTP command APIs (port `3111`), and serves the web management SPA. The master and child communicate via local IPC channels.
 
 ```mermaid
 graph TD
     subgraph Clients ["Clients"]
         IB["Patched Internet Bridge"]
-        APK["Patched Android/iOS App"]
+        APK["Android/iOS App"]
         Web["Web Frontend Manager"]
     end
 
@@ -44,7 +44,7 @@ graph TD
 
     %% Network flows
     IB <-->|Binary WS Port 988| Proxy
-    APK <-->|HTTPS REST| Proxy
+    Mobile <-->|HTTPS REST| Proxy
     Web <-->|HTTPS REST| Proxy
     
     Proxy <-->|Local TLS Proxy| WS_Listen
@@ -113,7 +113,6 @@ The core routing and protocol layers are modularized into JavaScript files insid
     *   `zone.js`: Encodes zone temperature targets and overlays.
 *   **[`config-capture.js`](lib/config-capture.js):** Append-only logging driver that streams Bridge-submitted settings to a JSONL logging catalog.
 *   **[`config.js`](lib/config.js):** Loads, validates, and standardizes all system environment variables.
-*   **[`container.js`](lib/container.js):** Internal dependency injection container.
 *   **[`cron.js`](lib/cron.js):** Central background cron scheduler for time broadcasts, early start heating updates, and weather calculations.
 *   **[`db.js`](lib/db.js):** Primary database coordinator interface.
 *   **[`db-* Entity Drivers`](lib/):** Entity-specific database query modules.
@@ -124,7 +123,7 @@ The core routing and protocol layers are modularized into JavaScript files insid
     *   `db-migrate.js`: Migrates database schemas on startup.
     *   `db-snapshots.js`: State capture import, export, and snapshots.
     *   `db-utils.js`: Shared database query formatting helpers.
-    *   `db-zones.js`: Zone details, schedule blocks, and thermal layouts.
+    *   `db-zones/`: Subdivided zone query modules (`state.js`, `overlays.js`, `schedule.js`, `etags.js`).
 *   **[`device-manager.js`](lib/device-manager.js):** Coordinates active device states and checks.
 *   **[`energy.js`](lib/energy.js):** Accumulates heating demand percentages over time to calculate estimated gas/energy consumption.
 *   **[`geo-utils.js`](lib/geo-utils.js):** Implements Haversine distance formulas to support geolocation geofencing thresholds.
@@ -132,6 +131,7 @@ The core routing and protocol layers are modularized into JavaScript files insid
     *   `boiler-builders.js`: Generates OpenTherm telemetry sensors.
     *   `circuit-builders.js`: Generates heating circuit controls.
     *   `device-builders.js`: Generates physical TRV/Thermostat entities.
+    *   `emulated-builders.js`: Generates emulated virtual device sensors and controls.
     *   `home-builders.js`: Generates Home presence tracking.
     *   `mobile-builders.js`: Generates mobile geofencing entities.
     *   `zone-builders.js`: Generates zone climate cards.
@@ -145,34 +145,37 @@ The core routing and protocol layers are modularized into JavaScript files insid
 *   **[`logger.js`](lib/logger.js):** Console and file logging driver supporting rotation schemas.
 *   **[`mappers.js`](lib/mappers.js):** Data mappers translating raw DB structures to API JSON.
 *   **[`message-cache.js`](lib/message-cache.js):** Transmit caches that temporarily store outbound commands until a battery-operated device wakes up.
-*   **[`message-router.js`](lib/message-router.js):** Core router coordinating inbound/outbound messaging.
+*   **[`message-router/`](lib/message-router/):** Core router coordinating inbound/outbound messaging (`index.js`, `uplink.js`, `downlink.js`).
 *   **[`metrics.js`](lib/metrics.js):** Exposes runtime diagnostic metrics.
 *   **[`mqtt-client.js`](lib/mqtt-client.js):** Establishes connectivity to the local MQTT broker.
 *   **[`mqtt-commands.js`](lib/mqtt-commands.js):** Translates incoming MQTT topic requests into CoAP downlinks.
 *   **[`mqtt-ha-discovery.js`](lib/mqtt-ha-discovery.js):** Registers entities dynamically with Home Assistant.
 *   **[`mqtt-publisher.js`](lib/mqtt-publisher.js):** Publishes state changes to MQTT.
+*   **[`ota-sync.js`](lib/ota-sync.js):** Synchronizes and deploys web & mobile OTA update bundles.
 *   **[`owd-detector.js`](lib/owd-detector.js):** Computes open window triggers based on rapid temperature drops.
 *   **[`packet-worker.js`](lib/packet-worker.js):** Subprocess executing packet processing safely.
-*   **[`proxy-manager.js`](lib/proxy-manager.js):** Manages proxy routing to official Tado cloud.
+*   **[`presence-helper.js`](lib/presence-helper.js):** Evaluates home presence state from connected mobile geofencing reports.
+*   **[`proxy-manager.js`](lib/proxy-manager.js):** Manages proxy routing to Tado cloud.
 *   **[`state-restore.js`](lib/state-restore.js) & [`state-snapshot.js`](lib/state-snapshot.js):** Orchestrates full environment snapshot backups, imports, and exports.
-*   **[`tlv.js`](lib/tlv.js):** Encoders/decoders for Tado's proprietary binary Tag-Length-Value (TLV) payload buffers.
+*   **[`tlv.js`](lib/tlv.js):** Encoders/decoders for Tag-Length-Value (TLV) payload buffers.
 *   **[`utils.js`](lib/utils.js):** Basic data transformations and buffer reconstruction helpers.
 *   **[`weather.js`](lib/weather.js):** Fetches regional meteorological data for weather-compensation adjustments.
 *   **[`worker-pool.js`](lib/worker-pool.js):** Coordinates worker threads for parallel packet parsing.
-*   **[`ws-bridge.js`](lib/ws-bridge.js):** Encoders and decoders for the 28-byte uWS binary frame wrappers.
+*   **[`ws-bridge.js`](lib/ws-bridge.js):** Encoders and decoders for the WS binary frame wrappers.
 *   **[`zone-state-schema.js`](lib/zone-state-schema.js):** Holds schema metadata representing structural layouts of Zone State TLVs.
 
 ### 3.2 Mobile & Setup REST API Route Handlers (`ws-server/api/routes/`)
-The web backend endpoints (mocking the official Tado Mobile App API v2 layer) and portal endpoints are listed below:
+The web backend endpoints and portal endpoints are listed below:
 
-*   **[`auth.js`](api/routes/auth.js):** Handles OAuth2 credential verification, access token generation, and mobile device authorization.
+*   **[`auth.js`](api/routes/auth.js):** Handles OAuth2 credential verification, access token generation, and mobile device authorization (subdivided under `api/routes/auth/` into `token.js`, `device.js`, and `revoke.js`).
 *   **[`bridges.js`](api/routes/bridges.js):** Manages online/offline states of connected Internet Bridges.
 *   **[`devices.js`](api/routes/devices.js):** Operates hardware registers, checks firmware status, and reads battery states of Valve Actuators.
-*   **[`graphql.js`](api/routes/graphql.js):** Stub endpoint that logs and parses Tado's internal GraphQL compatibility queries.
+*   **[`graphql.js`](api/routes/graphql.js):** Processes GraphQL queries.
 *   **[`heating.js`](api/routes/heating.js):** Configures advanced zone heating setups, target temperatures, and hot water settings.
 *   **[`homes.js`](api/routes/homes.js):** Central controller managing user homes, address registration, geofencing parameters, and heating control models. Subdivided into logical sub-routers under `api/routes/homes/` (including `base.js`, `heating.js`, `weather.js`, `users.js`, `energy.js`, `installations.js`, `logs.js`, `incident.js`, and `helpers.js`).
 *   **[`misc.js`](api/routes/misc.js):** Returns general time zone offsets, weather overlays, and overall system status.
 *   **[`mobileDevices.js`](api/routes/mobileDevices.js):** Registers mobile phones and handles geofence reports.
+*   **[`ota.js`](api/routes/ota.js):** Serves frontend web and Capacitor mobile OTA update bundles.
 *   **[`setup-mqtt.js`](api/routes/setup-mqtt.js):** Manages MQTT broker configuration and home deletion/reset procedures.
 *   **[`setup-snapshots.js`](api/routes/setup-snapshots.js):** Manages state backup, import, export, and restores.
 *   **[`setup.js`](api/routes/setup.js):** Central mount point routing to administrative sub-routers under `api/routes/setup/`:
@@ -180,6 +183,7 @@ The web backend endpoints (mocking the official Tado Mobile App API v2 layer) an
     *   `homes.js`: Admin options for proxying, traffic logging, and Home Assistant discovery settings.
     *   `settings.js`: Configures MQTT parameters and triggers server restarts.
     *   `system.js`: Manages whitelisting, battery chemical type, travel limits, users, and TOTP 2FA.
+    *   `emulated.js`: Manages ESP32 hardware nodes and virtual emulated devices.
 *   **[`sse.js`](api/routes/sse.js):** Implements Server-Sent Events (SSE) to push real-time UI updates to client apps.
 *   **[`tanoclo.js`](api/routes/tanoclo.js):** Custom endpoints exposing raw JSON snapshots of active boilers, zones, and device states.
 *   **[`users.js`](api/routes/users.js):** Registers and updates system-wide user credentials, profiles, and access authorization.
@@ -235,7 +239,7 @@ The server features test suites executed via **Vitest**:
 *Note: Tests must be executed using `npx vitest run`.*
 
 ### 4.4 Test Configuration (`test_config.json`)
-Copy the template from `test/test_config.json.template` to `test/test_config.json` (ignored by Git) and fill in your local database credentials to run integration tests.
+Copy the template from `test/test_config.json.template` to `test/test_config.json` and fill in your local database credentials to run integration tests.
 
 ---
 
@@ -247,7 +251,7 @@ The **TaNoClo Setup Portal** (accessible at `https://setup.{domain}`) is the adm
 To import your existing Tado home structure:
 1.  Open the Setup Portal, log in, and navigate to the seeding section.
 2.  Click **Start Tado Import**. An OAuth Device Authorization code is fetched from `login.tado.com`.
-3.  Open the displayed URL, log in with your official Tado credentials, and approve the request.
+3.  Open the displayed URL, log in with your Tado credentials, and approve the request.
 4.  TaNoClo automatically imports homes, zones, device registers, schedules, and active users, placing them into your local database.
 
 ### 5.2 Setup & State Capture Flow (Proxy Interception)
@@ -256,9 +260,37 @@ To fully configure your local server with active schedules and zones:
 2.  **Enable Proxy to Cloud**: Log into the Setup Portal, go to the Home Dashboard, and enable the proxy option. This tunnels your Internet Bridge communication back to the real Tado Cloud. Changing proxy modes automatically resets Internet Bridge WebSocket sessions to ensure a clean re-handshake.
 3.  **Start State Capture**: Navigate to **State Backup & Recovery** and click **Start Capture**.
 4.  **Verify Device Check-In**: Let the devices check-in normally through the proxy, automatically recording configurations, active zones, and schedule blocks.
-5.  **Disable Proxy**: Turn off the proxy mode to disconnect from Tado's official cloud and run 100% locally.
+5.  **Disable Proxy**: Turn off the proxy mode to disconnect from Tado's cloud and run 100% locally.
 
-### 5.3 Core Portal Capabilities
-*   **Setup Portal Security**: Support for password changes and Time-based One-Time Password (TOTP) 2FA verification.
-*   **WebSocket Whitelisting**: Allows administrators to maintain a list of permitted Home IDs and Internet Bridge serial numbers.
-*   **Hex Message Decoder**: Paste raw hex buffers to view disassemblies of WS bridge headers, CoAP parameters, and decoded Tag-Length-Value (TLV) parameters looked up against the local labels database.
+### 5.3 Setup Portal Capabilities
+The Setup Portal (`https://setup.tanoclo.yourdomain.com`) provides a comprehensive web management suite for system administrators:
+
+*   **Home Management & Cloud Importer**:
+    *   View all managed homes, device counts, zone counts, associated Internet Bridges, and linked administrator accounts.
+    *   **OAuth Cloud Import**: 1-click import replicating home structures, zones, device bindings, smart schedules, and user accounts directly from Tado Cloud.
+    *   **Proxy Toggling & Traffic Logging**: Individually toggle Cloud Proxy mode and append-only raw traffic capture per home.
+    *   **Home Assistant Auto-Discovery Control**: Enable or disable MQTT entity discovery on a per-home basis.
+    *   **Home Deletion & Reset**: Safely purge or reset managed homes and cascade-delete associated devices and metrics.
+*   **WebSocket Whitelisting**:
+    *   Restrict incoming Internet Bridge connections to an explicit whitelist of Home IDs and Bridge serial numbers.
+    *   Block unauthorized hardware from attaching to the local WebSocket listener.
+*   **User Administration**:
+    *   Manage local user profiles, home assignments, and update account passwords.
+*   **Security & 2FA Management**:
+    *   Change setup portal master administrator credentials.
+    *   Configure Time-based One-Time Password (TOTP) two-factor authentication (2FA) with standard authenticator app QR code setup and secret key provisioning.
+*   **Real-Time Hex Message Decoder**:
+    *   Paste raw hexadecimal packet buffers to disassemble framing layers in real-time.
+    *   Decodes 28-byte WebSocket bridge headers, RFC 7252 CoAP methods/paths/tokens/options, and recursively unpacks Tag-Length-Value (TLV) payload buffers with human-readable label lookups against the local FID catalog.
+*   **System Settings & MQTT Configuration**:
+    *   Configure MQTT broker endpoints, authentication, and port settings.
+    *   Adjust runtime log levels (`debug`, `info`, `warn`, `error`) and trigger server daemon restarts.
+*   **Emulated Devices & Hardware Node Registry**:
+    *   Register and manage ESP32 hardware emulator nodes with IP/port configuration and live ping health checks.
+    *   Create and provision virtual emulated devices (`RU...`) across registered nodes.
+    *   Trigger automated over-the-air RF pairing routines directly from the browser.
+    *   Inject dynamic telemetry (ambient temperature, relative humidity, battery voltage) in real-time.
+    *   Synchronize, re-pair, or unpair virtual devices from node NVRAM and the server database.
+*   **State Backup & Recovery (Snapshots)**:
+    *   **1-Click JSON Export**: Download complete snapshots of all database tables (homes, zones, devices, schedules, measurements, users).
+    *   **1-Click Restore**: Upload and apply saved JSON state snapshots to restore complete server configurations instantaneously.

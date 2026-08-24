@@ -242,6 +242,8 @@ This dictionary consolidates all observed TLV fields, mapping their hex codes, t
 
 | Hex ID | Label Name | Type | Scale | Unit | CoAP Path | DB Table | DB Column / JSON Key | Purpose / Description |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| `0x0000` | `pair_stop_marker_0000` | `empty` | 1.0 | - | `/d/I/{id}/pair` | `tlv_labels` | - | Zero-length pairing termination action marker. |
+| `0x0003` | `reported_rf_key` | `bytes` | 1.0 | - | `/d/rfkey` | `devices` | `field_0155` | 16-byte active AES-128 RF network key reported in GET `/d/rfkey`. |
 | `0x0007` | `client_nonce` | `bytes` | 1.0 | - | `auth/token` | `devices` | `field_0007` | 16-byte client-generated cryptographic nonce for token authentication. |
 | `0x0035` | `fw_version_other_slot` | `u16be` | 1.0 | - | `/d/{id}/fw/state` | `devices` | `field_0035` | Firmware version present in the other/inactive external SPI slot (or previous version). |
 | `0x0036` | `fw_state_aux_0036` | `u8` | 1.0 | - | `/d/{id}/fw/state` | `devices` | `field_0036` | Auxiliary firmware upgrade metric (e.g. partition indicator). |
@@ -269,7 +271,7 @@ This dictionary consolidates all observed TLV fields, mapping their hex codes, t
 | `0x0160` | `device_reset_reason` | `u8` | 1.0 | enum | `/d/{id}/sen` | `device_measurements` | `field_0160` | Hardware reset/reboot reason code (POR, PIN, software reset, watchdog). |
 | `0x0161` | `opentherm_voltage` | `u16be` | 0.001 | V | `/d/{id}/sen` | `device_measurements` | `field_0161` | OpenTherm loop supply voltage in Volts (mV raw). |
 | `0x0162` | `battery_mv` | `u16be` | 1.0 | mV | `/d/{id}/sen` | `device_measurements` | `field_0162` | Power supply voltage. |
-| `0x0165` | `opentherm_current` | `u16be` | 11.0 | mA | `/d/{id}/sen` | `tlv_labels` | - | OpenTherm loop supply current (sVar1 * 11). |
+| `0x0165` | `opentherm_current` | `u16be` | 1.0 | mA | `/d/{id}/sen` | `tlv_labels` | - | OpenTherm loop supply current in milliamperes. |
 | `0x0168` | `ru_opentherm_selftest_supply_mv` | `u32be` | 1.0 | mV | `/d/{id}/selftest/result` | `tlv_labels` | - | RU selftest metrics of OpenTherm docked subsystem reference supply voltage. |
 | `0x016a` | `valve_calibration_state`| `u8` | 1.0 | enum | `/d/{id}/mount` | `devices` | `field_016a` | Calibration steps state index. |
 | `0x016e` | `mounting` | `bytes` | 1.0 | - | `/d/{id}/mount` | `devices` | `last_config_json->mounting` | Motor mounting status metrics. |
@@ -277,6 +279,7 @@ This dictionary consolidates all observed TLV fields, mapping their hex codes, t
 | `0x0180` | `fw_state_update_result_or_bootcount` | `u8` | 1.0 | - | `/d/{id}/fw/state` | `devices` | `field_0180` | Firmware state update result or boot status flags. |
 | `0x0182` | `fallback_active` | `bool` | 1.0 | - | `/d/{id}/config` | `devices` | `field_0182` | Active status for device fallback mode. |
 | `0x0183` | `config_field_0183` | `bytes` | 1.0 | - | `/d/{id}/config` | `tlv_labels` | - | Device configuration payload field. |
+| `0x0197` | `temp_drop_rate_trigger` | `s16be` | 0.01 | °C | `/z/p` | `tlv_labels` | - | Rapid temperature drop trigger threshold in centi-degrees Celsius. |
 | `0x019a` | `firmware_table_fid_019a` | `bytes` | 1.0 | - | `/d/{id}/fw` | `tlv_labels` | - | Firmware table manifest field metadata. |
 | `0x019d` | `display_contrast` | `u8` | 1.0 | - | `/d/{id}/config` | `devices` | `field_019d` | Device display contrast level. |
 | `0x019e` | `display_brightness` | `u8` | 1.0 | - | `/d/{id}/config` | `devices` | `field_019e` | Device display brightness level. |
@@ -294,7 +297,7 @@ This dictionary consolidates all observed TLV fields, mapping their hex codes, t
 | `0x01d0` | `neighbor_self_ipv6` | `bytes` | 1.0 | - | `/d/{id}/neighbors` | `tlv_labels` | - | Neighbor table client local IPv6 address. |
 | `0x01d1` | `neighbor_entry` | `bytes` | 1.0 | - | `/d/{id}/neighbors` | `tlv_labels` | - | Nested neighbor entry diagnostic sub-TLV container. |
 | `0x01d2` | `neighbor_ipv6` | `bytes` | 1.0 | - | `/d/{id}/neighbors` | `tlv_labels` | - | Neighbor device IPv6 address (sub-TLV inside 0x01d1). |
-| `0x01d3` | `neighbor_data` | `bytes` | 1.0 | - | `/d/{id}/neighbors` | `tlv_labels` | - | Neighbor link metrics diagnostic payload. |
+| `0x01d3` | `neighbor_data` | `bytes` | 1.0 | - | `/d/{id}/neighbors` | `tlv_labels` | - | Blockwise alignment padding payload (all zeros) attached on multi-block transfers when more neighbors follow. |
 | `0x01fa` | `va_mount_mode` | `u8` | 1.0 | enum | `/d/{id}/mount` | `devices` | `field_01fa` | Actuator mounting mechanism operation mode. |
 | `0x01fb` | `va_mount_flags` | `u8` | 1.0 | - | `/d/{id}/mount` | `devices` | `field_01fb` | Actuator mounting process execution status flags. |
 | `0x01fc` | `pairing_mode` | `bool` | 1.0 | - | `/d/I/{id}/pair` | `devices` | `in_pairing_mode` | Internet Bridge pairing mode toggle switch. |
@@ -392,6 +395,7 @@ This dictionary consolidates all observed TLV fields, mapping their hex codes, t
 | `0x0292` | `config_field_0292` | `u8` | 1.0 | raw | `/d/{id}/config` | `devices` | `last_config_json->config_field_0292` | Device configuration field. |
 | `0x0293` | `config_field_0293` | `bytes` | 1.0 | - | `/d/{id}/config` | `devices` | `last_config_json->config_field_0293` | Device configuration field. |
 | `0x0294` | `va_act_position2_steps`| `u16be` | 1.0 | steps | `/d/{id}/act` | `devices` | `field_0266` | Secondary piston movement steps. |
+| `0x0298` | `zone_presence` | `u8` | 1.0 | - | `/z/p` | `tlv_labels` | - | Zone node online/presence registration flag. |
 | `0x02b2` | `display_active_timeout`| `u16be` | 1.0 | min | `/d/{id}/config` | `devices` | `field_02b2` | Timeout duration for display activity / temporary override in minutes. |
 | `0x02b3` | `device_config_flag_02b3`| `bool` | 1.0 | - | `/d/{id}/config` | `devices` | `last_config_json->device_config_flag_02b3`| Offline fallback config schedule toggle. |
 | `0x0312` | `fw_manifest_blob` | `bytes` | 1.0 | blob | `/d/{id}/fw` | `tlv_labels` | - | Firmware upgrade manifest metadata. |
@@ -428,11 +432,16 @@ This dictionary consolidates all observed TLV fields, mapping their hex codes, t
 | `0x2040` | `circuit_dhw_max_flow_temperature`| `u16be` | 0.01 | °C | `/h/{id}/c/{id}/config` | `heating_circuits` | `field_2040` | Maximum flow temperature setpoint constraint. |
 | `0x2090` | `circuit_mode_or_flags_2090`| `u8` | 1.0 | enum | `/h/{id}/c/{id}/act` | `heating_circuits` | `field_2090` | Heating circuit operation mode status. |
 | `0x4000` | `circuit_reference_temp` | `s16be` | 0.01 | °C | `/c/{id}/act` | `heating_circuits` | `field_4000` | Flow pipeline reference temperature setpoint. |
+| `0x4020` | `zone_target_temp` | `s16be` | 0.01 | °C | `/z/p` | `tlv_labels` | - | Active target temperature / setpoint in `/z/p` pings. |
 | `0x4040` | `circuit_target_temp` | `s16be` | 0.01 | °C | `/c/{id}/act` | `heating_circuits` | `field_4040` | Active target temperature of heating circuit. |
 | `0x4060` | `zone_temperature_4060` | `s16be` | 0.01 | °C | `/z/{id}/p` | `tlv_labels` | - | Zone temperature seen in RF sniffed zone program captures. |
 | `0x4080` | `circuit_demand_percent` | `u8` | 1.0 | % | `/c/{id}/act` | `heating_circuits` | `field_4080` | Active heating loop warm water load. |
 | `0x40a0` | `demand_percent` | `u8` | 1.0 | % | `/z/{id}/act` | `zone_measurements` | `field_40a0` | Actuator room heat demand power output. |
 | `0x40b0` | `circuit_status_0x40b0` | `u16be` | 1.0 | bits | `/c/{id}/act` | `tlv_labels` | - | Heating loop auxiliary status bitmask. |
+| `0x40e0` | `heating_active_mode` | `bool` | 1.0 | - | `/z/p` | `tlv_labels` | - | Heating mode state flag (0 or 1) in `/z/p` pings. |
+| `0x4120` | `overlay_active_flag` | `bool` | 1.0 | - | `/z/p` | `tlv_labels` | - | Manual overlay / dial override active indicator in `/z/p` pings. |
+| `0x4140` | `owd_state` | `u8` | 1.0 | - | `/z/p` | `tlv_labels` | - | Open Window Detection state flag in `/z/p` pings. |
+| `0x4160` | `owd_override` | `u8` | 1.0 | - | `/z/p` | `tlv_labels` | - | Open Window active override flag in `/z/p` pings. |
 | `0x6000` | `zone_state_base` | `bytes` | 1.0 | - | `/z/{id}/s` | `tlv_labels` | - | Baseline zone state payload block. |
 | `0x6020` | `zone_service_type` | `u8` | 1.0 | enum | `/z/{id}/s` | `zone_measurements` | `field_6020` | Zone classification: `1`=HEATING, `2`=HOT_WATER. |
 | `0x6040` | `zone_program_uri` | `string` | 1.0 | - | `/z/{id}/config` | `tlv_labels` | - | CoAP URI for zone program timetable. |
@@ -440,10 +449,13 @@ This dictionary consolidates all observed TLV fields, mapping their hex codes, t
 | `0x6080` | `zone_temperature_deviation_limit` | `s16be` | 0.01 | °C | `/z/{id}/config` | `zones` | `field_6080` | OWD trigger temperature deviation sensitivity limit. |
 | `0x60a0` | `zone_frost_min_temperature` | `s16be` | 0.01 | °C | `/z/{id}/config` | `zones` | `field_60a0` | Zone minimum frost protection temperature setpoint. |
 | `0x60c0` | `zone_temperature_baseline` | `s16be` | 0.01 | °C | `/z/{id}/config` | `zones` | `field_60c0` | Zone baseline temperature target setpoint. |
+| `0x60e0` | `zone_open_window_detection_enabled` | `bool` | 1.0 | - | `/z/{id}/config` | `zones` | `open_window_enabled` | Zone Open Window Detection enabled switch. |
 | `0x6160` | `home_away` | `u8` | 1.0 | enum | `/z/{id}/s` | `zone_measurements` | `field_6160` | Home occupancy state: `1`=HOME, `2`=AWAY. |
+| `0x6180` | `zone_state_flag_6180` | `bool` | 1.0 | - | `/z/{id}/s` | `zone_measurements` | `field_6180` | Zone state activity flag. |
 | `0x61e0` | `zone_enabled` | `bool` | 1.0 | - | `/z/{id}/s` | `zone_measurements` | `field_61e0` | General toggle state of heating zone loop. |
 | `0x6200` | `schedule_target_temp` | `s16be` | 0.01 | °C | `/z/{id}/s` | `zone_measurements` | `field_6200` | Intended automatic timetable temperature. |
 | `0x6240` | `overlay_mode` | `u8` | 1.0 | enum | `/z/{id}/s` | `zone_measurements` | `field_6240` | Manual override type: `1`=MANUAL, `2`=TIMER. |
+| `0x6260` | `overlay_has_setpoint` | `bool` | 1.0 | - | `/z/{id}/s` | `zone_measurements` | `field_6260` | Indicates manual setpoint is present in overlay. |
 | `0x6280` | `overlay_target_temp` | `s16be` | 0.01 | °C | `/z/{id}/s` | `zone_measurements` | `field_6280` | Active manual overlay override setpoint. |
 | `0x62c0` | `zone_open_window_shutoff_duration` | `u16be` | $0.016\overline{6}$| minutes | `/z/{id}/config` | `tlv_labels` | - | Duration in raw seconds to shut off heating when open window is detected. |
 | `0x62e0` | `overlay_active_aux` | `bool` | 1.0 | - | `/z/{id}/s` | `zone_measurements` | `field_62e0` | Auxiliary indicator that manual overlay is active. |
@@ -452,6 +464,7 @@ This dictionary consolidates all observed TLV fields, mapping their hex codes, t
 | `0x6340` | `owd_nvm_state` | `u8` | 1.0 | - | `/z/{id}/s` | `zones` | `field_6340` | Persistent Open Window Detection state stored in device NVM. |
 | `0x6380` | `zone_program_time_step` | `u16be` | $0.016\overline{6}$| minutes | `/z/{id}/config` | `tlv_labels` | - | Granularity step of schedule/program timetable (in raw seconds). |
 | `0x63a0` | `zone_state_uri` | `string` | 1.0 | - | `/z/{id}/config` | `tlv_labels` | - | CoAP URI for zone state query (typically /z/s). |
+| `0x63c0` | `circuit_association` | `u8` | 1.0 | - | `/z/p` | `tlv_labels` | - | Heating circuit link identifier in `/z/p` pings. |
 | `0x63e0` | `zone_peer_uris_enabled` | `bool` | 1.0 | - | `/z/{id}/config` | `tlv_labels` | - | Toggle for utilizing zone peer URIs for multi-TRV setups. |
 | `0x6440` | `telemetry_config` | `u16be` | 1.0 | - | `/z/{id}/s` | `zone_measurements` | `field_6440` | Auxiliary trigger indicating "resume schedule" action has been requested. |
 | `0x6460` | `zone_fallback_heating_type` | `u8` | 1.0 | enum | `/z/{id}/fallback` | `tlv_labels` | - | Backup offline heating control classification mode. |
@@ -464,7 +477,7 @@ This dictionary consolidates all observed TLV fields, mapping their hex codes, t
 
 ## 4. ETag Generation Specifications
 
-ETags are 8-byte hexadecimal sequence blocks transmitted in CoAP options for cached block checks. Tado implements two highly distinct ETag structures:
+ETags are 8-byte hexadecimal sequence blocks transmitted in CoAP options for cached block checks. Tado devices implement two distinct ETag structures:
 
 ### 4.1 Valve Actuator Deterministic Hash Algorithm
 
@@ -498,17 +511,21 @@ function tadoHashStep(dataByte, currentHash) {
 ```
 
 #### Final CoAP Option Output Construction
-The calculated 2-byte integer is padded with the Tado Valve Actuator stable identifier suffix `112233445566` (6 bytes) to yield an 8-byte hex ETag:
+The calculated 2-byte integer is padded with the Valve Actuator's persistent 6-byte suffix ($\text{suffix}_{12\text{ hex chars}}$) to yield an 8-byte hexadecimal ETag:
 
-$$\text{ETag} = \text{hash.toString(16).padStart(4, "0")} + \text{"112233445566"}$$
+$$\text{ETag} = \text{hash.toString(16).padStart(4, "0")} + \text{suffix}$$
 
-*   *Example:* If the 27-byte block yields a checksum of `0x1234`, the CoAP ETag returned to the device is `"1234112233445566"`.
+*   **Suffix Resolution Hierarchy**:
+    1.  **Inbound Extraction (Option 4)**: Extracted directly from `Bytes [2..7]` of the CoAP Option 4 (ETag) header on incoming `GET /d/{serial}/config` requests transmitted by the TRV.
+    2.  **Database Persistence**: Loaded from `devices.config_etag` or `devices.field_015a` (`field_015a.substring(4)`).
+    3.  **Deterministic Fallback**: Generated via `crypto.createHash('sha256').update(serialNo).digest('hex').substring(0, 12)`.
+*   *Example:* If the 27-byte block yields checksum `0x1234` and the device suffix is `123456789012`, the CoAP ETag returned in Option 4 and TLV `0x015a` is `"1234123456789012"`.
 
 ---
 
 ### 4.2 Internet Bridge Dynamic ETag Format
 
-Unlike Valve Actuators, the Internet Bridge config and hvac paths are dynamic.
+Unlike Valve Actuators, the Internet Bridge ETag is dynamic.
 
 *   **Format:**
     $$\text{ETag} = \text{"fe80000000000000"} + \text{payloadHash (8 bytes)}$$
@@ -527,13 +544,13 @@ Unlike Valve Actuators, the Internet Bridge config and hvac paths are dynamic.
 > Although the Internet Bridge registers RF-facing CoAP endpoints such as `"d/fw"`, `"d/fw/state"`, and `"d/fw/rq"` on its internal 802.15.4 stack, these handlers act strictly in a server role. 
 > 
 > * **Server-Only RF Handlers**: When a Valve Actuator (VA) requests a firmware update block from the IB, it targets the `"d/fw/rq"` endpoint. The IB processes this request by reading the VA firmware fragments from its own external SPI flash and transmitting them to the VA over the RF link.
-> * **Uplink Upgrade via WebSocket**: The Internet Bridge only downloads its own firmware updates over the active WebSocket/Ethernet connection from the Tado cloud. It paginates the firmware binary via TCP block transfers, writes it into external SPI flash, and bootloads itself upon completion. The IB has no receiver logic or write capability to flash its own firmware via incoming RF packets.
+> * **Uplink Upgrade via WebSocket**: The Internet Bridge only downloads its own firmware updates over the active WebSocket/Ethernet connection from the cloud. It paginates the firmware binary via TCP block transfers, writes it into external SPI flash, and bootloads itself upon completion. The IB has no receiver logic or write capability to flash its own firmware via incoming RF packets.
 
 ---
 
 ## 6. Specific Bitfield and Enum Decodings
 
-This section documents the low-level structure of bitfields and enums decoded from Valve Actuator (VA) and Room Unit (RU) firmwares.
+This section documents the low-level structure of bitfields and enums.
 
 ### 6.1 Device Type (`0x015d`)
 Represents the hardware configuration type reported by Room Units and Valve Actuators:
@@ -547,10 +564,10 @@ A 16-bit big-endian bitmask (`u16be`) defining active display/user interface beh
 *   `Bit 10` (`0x0400`): **Display Always-On** (Prevents display from timing out to standby after interaction).
 
 ### 6.3 OpenTherm Loop Voltage (`0x0161`)
-A 16-bit big-endian analog voltage measurement (`u16be`) representing the OpenTherm Loop/Line Voltage in millivolts (mV). It modulates between `~6.2V` (active/low state during communication) and `~15.3V` (idle/high state).
+A 16-bit big-endian analog voltage measurement (`u16be`) representing the OpenTherm Loop/Line Voltage in millivolts (mV). It modulates between `~6V` (active/low state during communication) and `~15V` (idle/high state).
 
 ### 6.3b OpenTherm Loop Current (`0x0165`)
-A 16-bit big-endian measurement representing the OpenTherm loop supply current in milliamperes (mA), derived as `sVar1 * 11`.
+A 16-bit big-endian measurement representing the OpenTherm loop supply current in milliamperes (mA).
 
 ### 6.4 Device Hardware Reset Reason (`0x0160`)
 An 8-bit unsigned byte (`u8`) representing hardware reset flags retrieved from the microcontroller (typically matching STM32 RCC CSR reset flags):
@@ -571,18 +588,38 @@ Used for reporting user rotation and touch interactions on the physical device i
 ## 7. Topology & Neighbor Discovery Endpoints
 
 ### 7.1 Neighbor Topology Report (`/d/{id}/neighbors` / `DEV_NEIGHBORS`)
-Periodically uploaded by the Internet Bridge to report its active 6LoWPAN mesh / link neighbors:
+Periodically uploaded by the Internet Bridge via `PUT` (`CON`) to report its active 6LoWPAN mesh / link neighbors. Transmitted using CoAP blockwise transfer (Option 27 `Block1`/`Block2`, block size $SZX = 2$ / 64 bytes).
+
+#### TLV Fields
 *   **`0x01d0` (`neighbor_self_ipv6`)**: 16-byte link-local IPv6 address of the Internet Bridge (`fe80::21b:c507:31xx:xxxx`).
-*   **`0x01d1` (`neighbor_entry`)**: Repeated sub-TLV container representing each neighboring device. Contains:
+    *   *Presence*: Included **only in Block 0** of the report; omitted from subsequent continuation blocks.
+*   **`0x01d1` (`neighbor_entry`)**: Repeated sub-TLV container representing each neighboring device entry. Contains:
     *   **`0x01d2` (`neighbor_ipv6`)**: 16-byte link-local IPv6 address of the neighboring node.
-*   **`0x01d3` (`neighbor_data`)**: Link quality, RSSI, and transmission metrics byte array corresponding to the preceding neighbor entry.
+*   **`0x01d3` (`neighbor_data`)**: Block alignment padding byte array (all `0x00` bytes).
+    *   **When Included**: Added **only** when there are **more neighbor entries/blocks to follow** (`more = 1` in block pagination / `FUN_080390a0`), AND the current block payload length is less than the 64-byte block boundary ($< 64$ bytes).
+    *   **When Omitted**:
+        *   **Zero neighbors**: Bridge reports only `0x01d0` (19 bytes total); `0x01d1` and `0x01d3` are omitted.
+        *   **Final block / Last neighbor**: When the last neighbor in the routing table is reached (`more = 0`), `0x01d3` is omitted and the packet is sent with its natural unpadded length.
+        *   **Single-neighbor network**: If only 1 neighbor exists, it is the final neighbor; `0x01d3` is never attached (payload is 41 bytes).
+    *   **Payload Size**: Computed dynamically as $\text{len} = 61 - \text{current\_payload\_length}$ bytes of `0x00` (e.g., 20 bytes in Block 0 with `0x01d0` + `0x01d1`, or 39 bytes in continuation blocks with only `0x01d1`) so the resulting block with TLV headers reaches exactly 64 bytes.
 
-### 7.2 Zone Leader Presence Ping (`/z/p?lid=1`)
-Transmitted periodically (every 15 minutes) by zone measuring devices (Valve Actuators and Room Units) to the Zone Controller or Internet Bridge:
-*   **URI**: `/z/p?lid=1` (`OPT_URI_PATH = "z"`, `"p"`, `OPT_URI_QUERY = "lid=1"`)
+#### Mesh Topology Discovery & Ingestion
+*   **Neighbor Ingestion**: A child device (physical VA/RU or ESP32 emulator) is added to the Bridge's active Contiki `uip_ds6_nbr` routing table as soon as the Bridge receives and acknowledges a valid link-layer 802.15.4 / 6LoWPAN frame matching the network PAN ID and RF decryption key (e.g., MAC ACKed pings, `/sen`, `/mnt`, or pairing handshakes).
+*   **Dirty State Detection & Push Trigger**: `FUN_08039288` continuously checks the active mesh neighbor list against the cached snapshot buffer (`DAT_08039328`). If any neighbor IPv6, state, or route status changes, a dirty flag (`DAT_08039328[0x5a0] = 1`) is set, triggering an immediate blockwise `PUT /d/{id}/neighbors` upload to the backend.
+
+### 7.2 Zone Parameter Presence Ping (`/z/p`)
+Transmitted periodically by Smart Radiator Valves (Valve Actuators) to announce local zone temperature, target setpoint, and heat demand across the 802.15.4 mesh.
+*   **URI**: `/z/p` (`OPT_URI_PATH = "z"`, `"p"`)
 *   **Method**: `PUT` (CON)
-*   **Payload**: TLV containing:
-    *   **`0x4060`**: Current room target / demand setpoint ($0.01^\circ\text{C}$).
-    *   **`0x40a0`**: Heat demand output ($0-100\%$).
-    *   **`0x0135`**: Ambient relative humidity ($0.01\%$).
-
+*   **Supported TLV Fields**:
+    *   **`0x4060` (`zone_temperature_4060`)**: Current zone / ambient room temperature (s16be, scaled by $0.01^\circ\text{C}$). Present in steady-state pings.
+    *   **`0x40a0` (`demand_percent`)**: Active heat demand output (u8, $0-100\%$). Appended when demand is non-zero or dynamically changing.
+    *   **`0x4020` (`zone_target_temp`)**: Active target temperature / setpoint (s16be, scaled by $0.01^\circ\text{C}$).
+    *   **`0x40e0` (`heating_active_mode`)**: Heating mode state flag (u8, boolean `0` or `1`).
+    *   **`0x4120` (`overlay_active_flag`)**: Manual overlay / dial override active indicator (u8, boolean).
+    *   **`0x4140` (`owd_state`)**: Open Window Detection state flag (u8).
+    *   **`0x4160` (`owd_override`)**: Open Window active override flag (u8).
+    *   **`0x0197` (`temp_drop_rate_trigger`)**: Rapid temperature drop / window trigger value (s16be).
+    *   **`0x63c0` (`circuit_association`)**: Heating circuit link identifier (u8).
+    *   **`0x0298` (`zone_presence`)**: Zone node online/presence registration flag (u8).
+*   **Note**: Room Units (`RU`) do **not** transmit `/z/p`; they report ambient telemetry solely via `/d/{serial}/sen` and receive zone state updates from the server.
