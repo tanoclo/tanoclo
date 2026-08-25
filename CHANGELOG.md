@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.2.6] - 2026-08-25
+
+- fix: zone config peers
+- docs: Add screenshots
+- feat: Improve IAQ language
+
 ## [0.2.5] - 2026-08-24
 
 - feat: Improve tanoclo-stream-receiver

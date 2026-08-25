@@ -5,7 +5,7 @@
 #              certificates lookup, log levels, and domain strings.
 # ==============================================================================
 name: "TaNoClo WebSocket Server"
-version: "0.2.5"
+version: "0.2.6"
 slug: "tanoclo-ws-server"
 description: "Self-hosted Tado WebSocket and API Server replica"
 url: "https://github.com/tanoclo/tanoclo"
