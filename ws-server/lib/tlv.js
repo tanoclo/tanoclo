@@ -210,7 +210,12 @@ function encodeValue(value, type) {
                 if (value <= 0xFFFF) { const b = Buffer.alloc(2); b.writeUInt16BE(value & 0xFFFF, 0); return b; }
                 const b = Buffer.alloc(4); b.writeUInt32BE(value >>> 0, 0); return b;
             }
-            if (typeof value === 'string') return Buffer.from(value, 'hex');
+            if (typeof value === 'string') {
+                if (/^[0-9a-fA-F]+$/.test(value) && value.length % 2 === 0) {
+                    return Buffer.from(value, 'hex');
+                }
+                return Buffer.from(value, 'utf-8');
+            }
             return Buffer.isBuffer(value) ? value : Buffer.from(value);
     }
 }

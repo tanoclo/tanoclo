@@ -259,11 +259,6 @@ function sortZoneConfigFields(fields) {
             sorted[fid] = fields[fid];
         }
     }
-    for (const [k, v] of Object.entries(fields)) {
-        if (sorted[k] === undefined && k.startsWith('0x')) {
-            sorted[k] = v;
-        }
-    }
     return sorted;
 }
 
@@ -271,10 +266,86 @@ async function buildZoneConfigTLV(homeId, zoneId) {
     if (!homeId) throw new Error('homeId is required for buildZoneConfigTLV');
     const tlv = require('./tlv');
     const p = getPool();
-    const [rows] = await p.execute('SELECT last_config_json, dazzle_enabled, open_window_enabled, open_window_timeout, field_60a0, field_6080, field_6340, field_60c0 FROM zones WHERE id = ? AND home_id = ?', [zoneId, homeId]);
+    const [rows] = await p.execute(
+        'SELECT last_config_json, dazzle_enabled, open_window_enabled, open_window_timeout, field_60a0, field_6080, field_6340, field_60c0, measuring_device_serial, heating_circuit FROM zones WHERE id = ? AND home_id = ?',
+        [zoneId, homeId]
+    );
     if (rows.length === 0) return null;
 
     let fields = safeJsonParse(rows[0].last_config_json);
+
+    // Query active devices in this zone with IPv6
+    const [zoneDevs] = await p.execute(
+        'SELECT serial_no, device_type, ipv6_address FROM devices WHERE zone_id = ? AND home_id = ? AND ipv6_address IS NOT NULL',
+        [zoneId, homeId]
+    );
+
+    // Query heating circuit driver / zone controller (RU/WR/BU/EK)
+    let circuitDriverIpv6 = null;
+    const circuitNum = rows[0].heating_circuit || 1;
+    const [circRows] = await p.execute(
+        'SELECT driver_serial_no FROM heating_circuits WHERE home_id = ? AND number = ? LIMIT 1',
+        [homeId, circuitNum]
+    );
+    if (circRows.length > 0 && circRows[0].driver_serial_no) {
+        const [driverDev] = await p.execute(
+            'SELECT ipv6_address FROM devices WHERE serial_no = ? AND home_id = ? LIMIT 1',
+            [circRows[0].driver_serial_no, homeId]
+        );
+        if (driverDev.length > 0 && driverDev[0].ipv6_address) {
+            circuitDriverIpv6 = driverDev[0].ipv6_address;
+        }
+    }
+    if (!circuitDriverIpv6) {
+        const [zcDevs] = await p.execute(
+            "SELECT ipv6_address FROM devices WHERE home_id = ? AND (device_type LIKE 'RU%' OR device_type LIKE 'WR%' OR device_type LIKE 'BU%' OR device_type LIKE 'EK%') AND ipv6_address IS NOT NULL LIMIT 1",
+            [homeId]
+        );
+        if (zcDevs.length > 0) circuitDriverIpv6 = zcDevs[0].ipv6_address;
+    }
+
+    if (zoneDevs.length > 0) {
+        const measuringSerial = rows[0].measuring_device_serial;
+        const leaderDev = zoneDevs.find(d => d.serial_no === measuringSerial) || zoneDevs[0];
+        const vaDevs = zoneDevs.filter(d => d.device_type && d.device_type.startsWith('VA'));
+
+        // 1. 0x63a0: Zone State URI (points to measuring leader's /z/s)
+        fields['0x63a0'] = `coap://[${leaderDev.ipv6_address}]/z/s`;
+
+        // 2. 0x8000: Zone Listeners (distinct /z/s endpoints for all member devices + circuit driver)
+        const listeners = new Set();
+        if (circuitDriverIpv6) listeners.add(`coap://[${circuitDriverIpv6}]/z/s`);
+        for (const d of zoneDevs) {
+            listeners.add(`coap://[${d.ipv6_address}]/z/s`);
+        }
+        fields['0x8000'] = Array.from(listeners);
+
+        // 3. 0x8200: Control Peer Endpoint (CPE) for all VAs in zone (or leader if no VAs)
+        if (vaDevs.length > 0) {
+            const cpes = vaDevs.map(d => `coap://[${d.ipv6_address}]/z/cpe`);
+            fields['0x8200'] = cpes.length === 1 ? cpes[0] : cpes;
+        } else {
+            fields['0x8200'] = `coap://[${leaderDev.ipv6_address}]/z/cpe`;
+        }
+
+        // 4. 0x8400: Zone Parameter URLs (/z/p) for all VAs in zone + leader if not already in list
+        if (vaDevs.length > 0) {
+            const zps = vaDevs.map(d => `coap://[${d.ipv6_address}]/z/p`);
+            if (leaderDev && !vaDevs.some(d => d.serial_no === leaderDev.serial_no)) {
+                zps.push(`coap://[${leaderDev.ipv6_address}]/z/p`);
+            }
+            fields['0x8400'] = zps.length === 1 ? zps[0] : zps;
+        } else {
+            fields['0x8400'] = `coap://[${leaderDev.ipv6_address}]/z/p`;
+        }
+
+        // 5. 0x6040: Zone Driver URI (primary valve /z/p, or leader /z/p if no valves)
+        if (vaDevs.length > 0) {
+            fields['0x6040'] = `coap://[${vaDevs[0].ipv6_address}]/z/p`;
+        } else {
+            fields['0x6040'] = `coap://[${leaderDev.ipv6_address}]/z/p`;
+        }
+    }
 
     // DB Overrides
     if (rows[0].open_window_enabled !== undefined) {
