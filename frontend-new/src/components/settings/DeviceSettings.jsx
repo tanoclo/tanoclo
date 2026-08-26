@@ -942,7 +942,7 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
         variant="danger"
         isLoading={isChangingRole}
         onConfirm={() => executeRoleChange(200)}
-        onCancel={() => setIsConfirmRoleModalOpen(false)}
+        onClose={() => setIsConfirmRoleModalOpen(false)}
       />
 
       {/* Switch to Wired Thermostat Modal */}

@@ -21,24 +21,29 @@ import Button from './Button';
 export default function ConfirmModal({ 
   isOpen, 
   onClose, 
+  onCancel,
   onConfirm, 
   title, 
   message, 
   confirmText = 'Confirm', 
   cancelText = 'Cancel', 
-  variant = 'primary' 
+  variant = 'primary',
+  isLoading = false
 }) {
+  const handleClose = onClose || onCancel;
+  const resolvedVariant = variant === 'danger' ? 'destructive' : variant;
+
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={title}>
+    <Modal isOpen={isOpen} onClose={handleClose} title={title}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
         <p style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>
           {message}
         </p>
         <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
-          <Button variant="secondary" onClick={onClose}>
+          <Button variant="secondary" onClick={handleClose} disabled={isLoading}>
             {cancelText}
           </Button>
-          <Button variant={variant} onClick={onConfirm}>
+          <Button variant={resolvedVariant} onClick={onConfirm} disabled={isLoading}>
             {confirmText}
           </Button>
         </div>

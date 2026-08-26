@@ -57,7 +57,7 @@ jobs:
           cp dist.zip /tmp/dist.zip
 
           # 2. Collect release notes from git log
-          PREV_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          PREV_TAG=$(git describe --tags --match "ws-server-v*" --abbrev=0 2>/dev/null || echo "")
           if [ -n "$PREV_TAG" ]; then
             NOTES=$(git log "$PREV_TAG"..HEAD --oneline --no-merges -- frontend-new/ | head -20 | sed 's/^[a-f0-9]* /- /')
           else

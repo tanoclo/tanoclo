@@ -78,18 +78,36 @@ jobs:
 
             let prevTag = '';
             try {
-              prevTag = execSync('git describe --tags --abbrev=0 2>/dev/null', { encoding: 'utf8' }).trim();
+              prevTag = execSync('git describe --tags --match \"stream-receiver-v*\" --abbrev=0 2>/dev/null', { encoding: 'utf8' }).trim();
             } catch (e) {}
 
-            const logCmd = prevTag ? 'git log ' + prevTag + '..HEAD --oneline --no-merges' : 'git log -n 15 --oneline --no-merges';
+            const isStreamFile = f => f.startsWith('esphome/') || f.startsWith('tanoclo-stream-receiver/');
+            const isWsFile = f => f.startsWith('frontend-new/') || f.startsWith('frontend/') || f.startsWith('patch_ib_firmware/') || f.startsWith('tanoclo-ws-server/') || f.startsWith('ws-server/');
+            const isSharedFile = f => f.startsWith('docs/') || !f.includes('/') || f.startsWith('.github/');
+
+            const logCmd = prevTag ? 'git log ' + prevTag + '..HEAD --format=\"COMMIT:%H %s\" --name-only --no-merges' : 'git log -n 50 --format=\"COMMIT:%H %s\" --name-only --no-merges';
             let commits = [];
             try {
               const raw = execSync(logCmd, { encoding: 'utf8' }).trim();
               if (raw) {
-                commits = raw.split('\n').map(line => {
-                  const parts = line.split(' ');
-                  return parts.slice(1).join(' ').trim();
-                }).filter(c => c && !c.startsWith('chore: bump'));
+                const entries = raw.split('COMMIT:').filter(Boolean);
+                for (const entry of entries) {
+                  const lines = entry.trim().split('\n');
+                  const firstLine = lines[0].trim();
+                  const spaceIdx = firstLine.indexOf(' ');
+                  const subject = spaceIdx !== -1 ? firstLine.slice(spaceIdx + 1).trim() : '';
+                  const files = lines.slice(1).map(f => f.trim()).filter(Boolean);
+
+                  if (!subject || subject.startsWith('chore: bump') || subject.startsWith('Merge branch')) continue;
+
+                  const touchesStream = files.some(isStreamFile);
+                  const touchesWs = files.some(isWsFile);
+                  const touchesShared = files.some(isSharedFile);
+
+                  if (touchesStream || (touchesShared && !touchesWs)) {
+                    commits.push(subject);
+                  }
+                }
               }
             } catch (e) {}
 
@@ -98,7 +116,7 @@ jobs:
             const commitBullets = commits.map(c => '- ' + c).join('\n');
             const newEntry = '## [' + version + '] - ' + date + '\n\n' + commitBullets + '\n\n';
 
-            const changelogFiles = ['CHANGELOG.md', 'tanoclo-stream-receiver/CHANGELOG.md'];
+            const changelogFiles = ['tanoclo-stream-receiver/CHANGELOG.md'];
             for (const f of changelogFiles) {
               if (fs.existsSync(f)) {
                 let content = fs.readFileSync(f, 'utf8');

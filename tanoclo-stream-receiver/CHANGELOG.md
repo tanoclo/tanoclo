@@ -8,22 +8,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [0.2.4] - 2026-08-26
 
-- Maintenance and bug fixes
+- feat/fix: Audit and advanced device settings improvements
 
 ## [0.2.3] - 2026-08-24
 
-- Maintenance and bug fixes
+- feat: Improve tanoclo-stream-receiver
+- docs: rewrite all docs
+- fix: remove z/p message from tado_emulator
+- fix: remove z/p message from tado_emulator
+- chore: Fix comment
+- fix: Zone and emulator fixes
 
 ## [0.2.2] - 2026-08-23
 
 - fix: Zone and emulator fixes
 - fix: Fix raw explorer and emulator code
-- fix: fw state updates
 - feat: concurrency queue
 
 ## [0.2.1] - 2026-08-20
 
-- Maintenance and bug fixes
+- feat: Make stream-receiver log size and amount configurable
+- feat: Improve Tado emulation
+- feat: Working Tado emulation
+- feat: Prevent workflows running concurrently
+- fix: Improve IAQ, Tado emulation
 
 ## [0.2.0] - 2026-08-15
 
