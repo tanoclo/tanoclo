@@ -182,8 +182,8 @@ export default function SettingsPage() {
     if (!newDeviceSerial) return;
 
     const upperSerial = newDeviceSerial.toUpperCase();
-    const match = /^(VA|RU|IB|BU|WR|SU|BP|BR)(\d{10})$/.exec(upperSerial);
-    if (!match) {
+    const match = /^(RU)(\d{10})$/.exec(upperSerial);
+    if (!match || Number(match[2]) > 4294967295) {
       triggerToast(t('settings.invalid_serial_format'), 'error');
       return;
     }

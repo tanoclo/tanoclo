@@ -105,4 +105,52 @@ describe('api/devices.js', () => {
       method: 'PUT', body: settings
     });
   });
+
+  it('triggerMountCalibration → POST with action', async () => {
+    const { triggerMountCalibration } = await import('../../api/devices');
+    await triggerMountCalibration(1, 'DEV1', 'start');
+    expect(apiFetch).toHaveBeenCalledWith('/api/v2/homes/1/devices/DEV1/mount', {
+      method: 'POST', body: { action: 'start' }
+    });
+  });
+
+  it('triggerSelftest → POST', async () => {
+    const { triggerSelftest } = await import('../../api/devices');
+    await triggerSelftest(1, 'DEV1');
+    expect(apiFetch).toHaveBeenCalledWith('/api/v2/homes/1/devices/DEV1/selftest', {
+      method: 'POST'
+    });
+  });
+
+  it('rebootDevice → POST', async () => {
+    const { rebootDevice } = await import('../../api/devices');
+    await rebootDevice(1, 'DEV1');
+    expect(apiFetch).toHaveBeenCalledWith('/api/v2/homes/1/devices/DEV1/reboot', {
+      method: 'POST'
+    });
+  });
+
+  it('refreshRfKey → POST', async () => {
+    const { refreshRfKey } = await import('../../api/devices');
+    await refreshRfKey(1, 'DEV1');
+    expect(apiFetch).toHaveBeenCalledWith('/api/v2/homes/1/devices/DEV1/rfkey/refresh', {
+      method: 'POST'
+    });
+  });
+
+  it('refreshDeviceConfig → POST', async () => {
+    const { refreshDeviceConfig } = await import('../../api/devices');
+    await refreshDeviceConfig(1, 'DEV1');
+    expect(apiFetch).toHaveBeenCalledWith('/api/v2/homes/1/devices/DEV1/config/refresh', {
+      method: 'POST'
+    });
+  });
+
+  it('triggerDeviceDebug → POST with query params or subpath', async () => {
+    const { triggerDeviceDebug } = await import('../../api/devices');
+    await triggerDeviceDebug(1, 'DEV1', 'st');
+    expect(apiFetch).toHaveBeenCalledWith('/api/v2/homes/1/devices/DEV1/debug', {
+      method: 'POST', body: { subpath: 'st' }
+    });
+  });
 });

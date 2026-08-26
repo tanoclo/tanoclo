@@ -67,8 +67,11 @@ function extractSerialFromPath(pathStr) {
  * Main processor entry point for decoded CoAP datagrams.
  */
 function processCoapPacket(packet, type, meta = {}) {
+    if (!packet || !packet.coap || !packet.coap.code) {
+        return { isDuplicate: false, pathStr: 'Unknown' };
+    }
     const coap = packet.coap;
-    const macInfo = packet.macInfo;
+    const macInfo = packet.macInfo || {};
     const isRequest = coapParser.isRequest(coap.code);
 
     let pathStr = coap.options

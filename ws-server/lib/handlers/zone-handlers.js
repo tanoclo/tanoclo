@@ -136,7 +136,7 @@ async function handleZoneConfig(ws, frame, coapMsg, decoded, peerInfo, pathInfo)
 
 async function handleCircuitActuator(ws, frame, coapMsg, decoded, peerInfo, pathInfo) {
     coapHelpers.sendCoAPAck(ws, coapMsg, peerInfo, frame.directionU16);
-    if (!decoded) return;
+    if (!decoded || !decoded.fields) return;
 
     const f = decoded.fields;
     const circuitId = pathInfo.circuitId;

@@ -358,7 +358,7 @@
     "device_advanced": {
       "display_contrast": "Contrasto del display",
       "warning_title": "AVVERTIMENTO IMPOSTAZIONI PERICOLOSE",
-      "warning_desc": "Questi parametri di regolazione avanzati sono pericolosi e non completamente testati. La modifica delle temporizzazioni dello schermo/salvaschermo o dei limiti dell'attuatore può causare il deterioramento dello schermo, un consumo eccessivo della batteria, danni meccanici o il guasto della valvola. Usare con estrema cautela.",
+      "warning_desc": "Questi parametri di regolazione avanzati sono pericolosi. La modifica delle temporizzazioni dello schermo/salvaschermo, dei limiti dell'attuatore o dei registri interni può causare il deterioramento dello schermo, un consumo eccessivo della batteria, danni meccanici o il guasto della valvola. Usare con estrema cautela. (Nota: questa pagina di impostazioni avanzate è attualmente disponibile solo in inglese.)",
       "display_screensaver_title": "Impostazioni schermo e salvaschermo",
       "display_off_timeout": "Timeout spegnimento schermo",
       "display_dim_level": "Livello attenuazione schermo",
@@ -823,7 +823,7 @@
     },
     "zone_advanced": {
       "warning_title": "AVVERTIMENTO IMPOSTAZIONI PERICOLOSE",
-      "warning_desc": "Queste funzionalità di regolazione avanzate e speciali non sono completamente testate. La loro modifica può causare instabilità del sistema, malfunzionamenti hardware, comportamenti di riscaldamento imprevisti o elevati consumi energetici.",
+      "warning_desc": "Queste funzionalità di regolazione avanzate e speciali sono pericolose. La loro modifica può causare instabilità del sistema, malfunzionamenti hardware, comportamenti di riscaldamento imprevisti o elevati consumi energetici. Usare con cautela. (Nota: questa pagina di impostazioni avanzate è attualmente disponibile solo in inglese.)",
       "pid_title": "Regolazione PID avanzata",
       "kp": "Guadagno proporzionale (Kp)",
       "ki": "Guadagno integrale (Ki)",

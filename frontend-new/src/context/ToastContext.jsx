@@ -16,7 +16,7 @@ const ToastContext = createContext(null);
  * @brief ToastProvider context component wrapper.
  * @param {object} props.children - Sub-components tree.
  */
-export function ToastProvider({ children }) {
+export function ToastProvider({ children, maxToasts = 3 }) {
   const [toasts, setToasts] = useState([]);
 
   /**
@@ -27,8 +27,11 @@ export function ToastProvider({ children }) {
    */
   const showToast = useCallback((message, type = 'success', duration = 4000) => {
     const id = Date.now() + Math.random();
-    setToasts(prev => [...prev, { id, message, type, duration }]);
-  }, []);
+    setToasts(prev => {
+      const next = [...prev, { id, message, type, duration }];
+      return next.length > maxToasts ? next.slice(-maxToasts) : next;
+    });
+  }, [maxToasts]);
 
   /**
    * @brief Removes a toast by its identifier.

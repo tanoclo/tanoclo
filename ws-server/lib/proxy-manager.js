@@ -332,7 +332,9 @@ async function logProxyMessage(dir, data) {
         const code = coap.codeStr(msg.code);
         const consoleLine = `[PROXY ${dir}] ${code} /${uriPathStr}${decodedStr}`;
         log('debug', consoleLine);
-    } catch (e) { }
+    } catch (e) {
+        log('debug', `Failed to log proxy message: ${e.message}`);
+    }
 }
 
 function clearProxyConnectionsForHome(homeId) {
@@ -342,7 +344,9 @@ function clearProxyConnectionsForHome(homeId) {
         delete ws._proxyChecked;
         if (proxyWs) {
             if (proxyWs._pingInterval) clearInterval(proxyWs._pingInterval);
-            try { proxyWs.close(); } catch (e) {}
+            try { proxyWs.close(); } catch (e) {
+                log('debug', `Error closing proxyWs on clear: ${e.message}`);
+            }
         }
         proxyConnections.delete(ws);
         count++;

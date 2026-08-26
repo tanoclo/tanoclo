@@ -312,7 +312,11 @@ function start(port = 19881) {
             });
 
             if (bodyStr) {
-                try { req.body = JSON.parse(bodyStr); } catch (e) { }
+                try {
+                    req.body = JSON.parse(bodyStr);
+                } catch (_e) {
+                    req.body = bodyStr;
+                }
             }
 
             if (pathname === '/api/clients' && req.method === 'GET') {

@@ -100,7 +100,7 @@ function redactSensitive(str, level) {
 }
 
 function getLogger(context) {
-    return function log(level, ...args) {
+    function log(level, ...args) {
         const currentLevel = levels[config.logLevel] || 0;
         const msgLevel = levels[level] || 0;
 
@@ -131,7 +131,14 @@ function getLogger(context) {
             logBuffer.push(formattedMsg);
             if (logBuffer.length > 100) flushLogs();
         }
-    };
+    }
+
+    log.debug = (...args) => log('debug', ...args);
+    log.info = (...args) => log('info', ...args);
+    log.warn = (...args) => log('warn', ...args);
+    log.error = (...args) => log('error', ...args);
+
+    return log;
 }
 
 module.exports = { getLogger };

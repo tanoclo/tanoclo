@@ -441,8 +441,18 @@ async function handleMessage(ws, message, isBinary, isDownlink = false) {
     let decoded = null;
     let timeDecoded = false;
     const isTimePath = displayPath && (displayPath === 'time' || displayPath === 'time (ACK)' || displayPath.includes('/time') || displayPath.startsWith('time'));
+    const isRawBinary = displayPath && (
+        displayPath.includes('dbg/m') ||
+        displayPath.includes('d/dbg/m') ||
+        displayPath.includes('dbg/st') ||
+        displayPath.includes('d/dbg/st') ||
+        displayPath.includes('dbg/valves') ||
+        displayPath.includes('dbg/rtc') ||
+        displayPath.includes('d/dbg/rtc') ||
+        displayPath.includes('dbg/nvm')
+    );
 
-    if (coapMsg.payload.length >= 3) {
+    if (coapMsg.payload.length >= 1) {
         if (isTimePath && coapMsg.payload.length === 5 && coapMsg.payload[0] === 0x0D) {
             const decodedTime = coap.decodeTimeProtobuf(coapMsg.payload);
             if (decodedTime.ok) {
@@ -451,11 +461,14 @@ async function handleMessage(ws, message, isBinary, isDownlink = false) {
                 decoded = { ok: true, isTime: true, unix_s: decodedTime.unix_s, utc: decodedTime.utc };
                 timeDecoded = true;
             }
+        } else if (isRawBinary) {
+            log('debug', `[RAW DEBUG] Path: /${displayPath}, Payload (${coapMsg.payload.length}B): ${coapMsg.payload.slice(0, 32).toString('hex')}${coapMsg.payload.length > 32 ? '...' : ''}`);
+            decoded = { ok: true, isBinary: true, length: coapMsg.payload.length, hex: coapMsg.payload.toString('hex') };
         }
 
-        if (!timeDecoded) {
+        if (!timeDecoded && !isRawBinary && coapMsg.payload.length >= 3) {
             decoded = await workerPool.tlvDecode(coapMsg.payload);
-            if (decoded.ok) {
+            if (decoded.ok && decoded.fields && Object.keys(decoded.fields).length > 0) {
                 log('debug', `TLV fields: ${JSON.stringify(decoded.fields)}`);
                 if (decoded.items && decoded.items.length > 0) {
                     const friendly = {};
@@ -477,6 +490,8 @@ async function handleMessage(ws, message, isBinary, isDownlink = false) {
                         }
                     }
                 }
+            } else if (isAck && coapMsg.payload.length > 0) {
+                log('debug', `Response payload (${coapMsg.payload.length}B): ${coapMsg.payload.toString('hex')}`);
             }
         }
     }
@@ -496,11 +511,12 @@ async function handleMessage(ws, message, isBinary, isDownlink = false) {
     }
 
     if (isAck) {
-        log('debug', `Response from ${isDownlink ? 'server' : 'device'}: ${codeStr} /${displayPath}${displayPath !== uriPathStr ? ' (ACK)' : ''}`);
+        const payloadHex = (coapMsg.payload && coapMsg.payload.length > 0) ? ` [Payload ${coapMsg.payload.length}B: ${coapMsg.payload.toString('hex')}]` : '';
+        log('debug', `Response from ${isDownlink ? 'server' : 'device'} (${activeDeviceId || 'unknown'}): ${codeStr} /${displayPath}${displayPath !== uriPathStr ? ' (ACK)' : ''}${payloadHex}`);
 
         if (!isDownlink) {
             if (commandApi.handleAckReceived) {
-                commandApi.handleAckReceived(coapMsg.mid, activeDeviceId || coapMsg);
+                commandApi.handleAckReceived(coapMsg.mid, { deviceId: activeDeviceId, coapMsg });
             }
             const _api3 = getApiProcess();
             if (_api3 && _api3.connected) {

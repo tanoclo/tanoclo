@@ -117,8 +117,13 @@ export async function apiFetch(endpoint, options = {}) {
         const retryController = new AbortController();
         const retryTimeoutId = setTimeout(() => retryController.abort(), 30000);
         try {
-          const retriedResponse = await fetch(url, { ...options, headers, body, signal: retryController.signal });
+          const retriedResponse = await fetch(url, { ...options, headers, body, credentials: options.credentials || 'include', signal: retryController.signal });
           return handleResponse(retriedResponse);
+        } catch (retryErr) {
+          if (retryErr.name === 'AbortError') {
+            throw new Error('Request timed out. Please check your connection.', { cause: retryErr });
+          }
+          throw retryErr;
         } finally {
           clearTimeout(retryTimeoutId);
         }
@@ -132,12 +137,25 @@ export async function apiFetch(endpoint, options = {}) {
     } else {
       // If a refresh is already in flight, queue this request to retry when finished
       const retryOriginalRequest = new Promise((resolve, reject) => {
-        subscribeTokenRefresh((newToken) => {
+        subscribeTokenRefresh(async (newToken) => {
           if (!newToken) {
             return reject(new Error('Token refresh failed'));
           }
           headers['Authorization'] = `Bearer ${newToken}`;
-          resolve(fetch(url, { ...options, headers, body }));
+          const retryController = new AbortController();
+          const retryTimeoutId = setTimeout(() => retryController.abort(), 30000);
+          try {
+            const retried = await fetch(url, { ...options, headers, body, credentials: options.credentials || 'include', signal: retryController.signal });
+            resolve(retried);
+          } catch (retryErr) {
+            if (retryErr.name === 'AbortError') {
+              reject(new Error('Request timed out. Please check your connection.', { cause: retryErr }));
+            } else {
+              reject(retryErr);
+            }
+          } finally {
+            clearTimeout(retryTimeoutId);
+          }
         });
       });
 

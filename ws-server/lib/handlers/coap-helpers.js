@@ -153,7 +153,9 @@ function sendWrappedCoAP(ws, coapBytes, peerInfo, directionU16) {
                     isReboot = true;
                 }
             }
-        } catch (e) {}
+        } catch (e) {
+            log('debug', `Failed to parse CoAP message in sendWrappedCoAP proxy check: ${e.message}`);
+        }
 
         if (!isReboot) {
             log('debug', 'Skipping local WS send because connection is proxied to real server.');

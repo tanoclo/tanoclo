@@ -24,7 +24,7 @@ import { setZoneOverlay, resumeZoneSchedule, dismissOpenWindow } from '../api/zo
 import { apiFetch } from '../api/client';
 import { SWR_KEYS } from '../utils/swrKeys';
 import { AlertTriangle, ArrowLeft, Thermometer, Calendar } from 'lucide-react';
-import { TEMP_MIN_HEATING, TEMP_MIN_DHW, TEMP_MAX_DEFAULT, TEMP_STEP } from '../utils/constants';
+import { TEMP_MIN_HEATING, TEMP_MAX_HEATING, TEMP_MIN_DHW, TEMP_MAX_DHW, TEMP_STEP } from '../utils/constants';
 import logger from '../utils/logger';
 
 /**
@@ -98,7 +98,6 @@ export default function ZonePage() {
 
   const handleApplyOverlay = async (overlayPayload) => {
     try {
-      const isDhw = zone.type === 'HOT_WATER' || zone.type === 'DHW';
       if (isDhw) {
         overlayPayload.setting.power = targetTemp < 30.0 ? 'OFF' : 'ON';
         if (targetTemp >= 30.0) {
@@ -302,7 +301,7 @@ export default function ZonePage() {
                   onChange={setTargetTemp} 
                   disabled={isOffline}
                   min={isDhw ? TEMP_MIN_DHW : TEMP_MIN_HEATING}
-                  max={isDhw ? 65.0 : TEMP_MAX_DEFAULT}
+                  max={isDhw ? TEMP_MAX_DHW : TEMP_MAX_HEATING}
                   step={isDhw ? 1.0 : TEMP_STEP}
                 />
               </Card>

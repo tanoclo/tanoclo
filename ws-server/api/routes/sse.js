@@ -192,8 +192,12 @@ staleSweepInterval.unref();
 
 function broadcastToHome(homeId, event, data) {
     const homeClients = connections.get(String(homeId));
-    if (!homeClients || homeClients.size === 0) return;
+    if (!homeClients || homeClients.size === 0) {
+        _log('debug', `[SSE] No active SSE clients connected for home ${homeId} (total connected homes: ${connections.size})`);
+        return;
+    }
 
+    _log('debug', `[SSE] Broadcasting event '${event}' to ${homeClients.size} client(s) for home ${homeId}`);
     const msg = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
     for (const res of homeClients) {
         try {

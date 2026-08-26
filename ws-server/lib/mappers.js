@@ -82,12 +82,14 @@ function mapDevice(d) {
             driveConstant: d.field_0280 !== null && d.field_0280 !== undefined ? parseInt(d.field_0280, 10) : null,
             position1: d.field_0265 !== null && d.field_0265 !== undefined ? parseInt(d.field_0265, 10) : null,
             position2: d.field_0266 !== null && d.field_0266 !== undefined ? parseInt(d.field_0266, 10) : null,
-            active: d.field_028c !== null && d.field_028c !== undefined ? parseInt(d.field_028c, 10) : null,
-            mountingState: d.field_016a !== null && d.field_016a !== undefined ? d.field_016a : null,
-            seatPoint: d.field_01fa !== null && d.field_01fa !== undefined ? parseInt(d.field_01fa, 10) : null,
-            referencePoint: d.field_01fb !== null && d.field_01fb !== undefined ? parseInt(d.field_01fb, 10) : null,
-            mode: d.field_01b5 !== null && d.field_01b5 !== undefined ? parseInt(d.field_01b5, 10) : null,
-            flags: d.field_01b6 !== null && d.field_01b6 !== undefined ? parseInt(d.field_01b6, 10) : null,
+            active: (d.field_028c !== null && d.field_028c !== undefined)
+                ? parseInt(d.field_028c, 10)
+                : ((d.field_016a === 'CALIBRATED' || d.field_016a === 'MOUNTED' || (parseInt(d.field_01b6, 10) > 0 && parseInt(d.field_0273, 10) > 0)) ? 1 : 0),
+            mountingState: d.field_016a !== null && d.field_016a !== undefined ? d.field_016a : (parseInt(d.field_01b6, 10) > 0 ? 'CALIBRATED' : null),
+            seatPoint: d.field_01b6 !== null && d.field_01b6 !== undefined ? parseInt(d.field_01b6, 10) : null,
+            referencePoint: d.field_01b5 !== null && d.field_01b5 !== undefined ? parseInt(d.field_01b5, 10) : null,
+            mode: d.field_01fa !== null && d.field_01fa !== undefined ? parseInt(d.field_01fa, 10) : null,
+            flags: d.field_01fb !== null && d.field_01fb !== undefined ? parseInt(d.field_01fb, 10) : null,
             deviation: d.field_0283 !== null && d.field_0283 !== undefined ? parseInt(d.field_0283, 10) : null
         };
     }

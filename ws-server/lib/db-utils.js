@@ -66,7 +66,9 @@ async function getTlvLabels() {
                 for (const [k, v] of Object.entries(extra)) {
                     if (entry[k] === undefined) entry[k] = v;
                 }
-            } catch (e) { }
+            } catch (e) {
+                _log('debug', `Failed to parse json_data for TLV label ${row.hex_id}: ${e.message}`);
+            }
         }
         fields[row.hex_id] = entry;
     }

@@ -114,7 +114,7 @@ test('device and room limit rules', async () => {
         // 2. Test Max 7 heating devices per room
         console.log('Testing max 7 heating devices per room...');
         for (let i = 1; i <= 7; i++) {
-            const serial = `VA990000000${i}`;
+            const serial = `VA390000000${i}`;
             const addDevRes = await makeRequest(port, {
                 path: `/api/v2/homes/${testHomeId}/devices`,
                 method: 'POST',
@@ -128,7 +128,7 @@ test('device and room limit rules', async () => {
             path: `/api/v2/homes/${testHomeId}/devices`,
             method: 'POST',
             headers: authHeaders
-        }, JSON.stringify({ serialNo: 'VA9900000008', deviceType: 'VA02', zoneId: baseZoneId }));
+        }, JSON.stringify({ serialNo: 'VA3900000008', deviceType: 'VA02', zoneId: baseZoneId }));
         assert.strictEqual(dev8Res.statusCode, 400);
         assert.strictEqual(dev8Res.body.error, 'max_room_devices_reached');
 
@@ -138,7 +138,7 @@ test('device and room limit rules', async () => {
             path: `/api/v2/homes/${testHomeId}/devices`,
             method: 'POST',
             headers: authHeaders
-        }, JSON.stringify({ serialNo: 'VA9900000008', deviceType: 'VA02' }));
+        }, JSON.stringify({ serialNo: 'VA3900000008', deviceType: 'VA02' }));
         assert.strictEqual(dev8NewZone.statusCode, 201);
 
         // Try moving dev8 to baseZoneId (which already has 7 devices)
@@ -146,7 +146,7 @@ test('device and room limit rules', async () => {
             path: `/api/v2/homes/${testHomeId}/zones/${baseZoneId}/devices`,
             method: 'POST',
             headers: authHeaders
-        }, JSON.stringify({ serialNo: 'VA9900000008' }));
+        }, JSON.stringify({ serialNo: 'VA3900000008' }));
         assert.strictEqual(moveRes.statusCode, 400);
         assert.strictEqual(moveRes.body.error, 'max_room_devices_reached');
 
@@ -154,7 +154,7 @@ test('device and room limit rules', async () => {
         console.log('Testing max 25 heating devices per home...');
         // Currently we have 8 heating devices. Add 17 more into new zones (total 25)
         for (let i = 9; i <= 25; i++) {
-            const serial = `VA99000000${i < 10 ? '0' + i : i}`;
+            const serial = `VA39000000${i < 10 ? '0' + i : i}`;
             const res = await makeRequest(port, {
                 path: `/api/v2/homes/${testHomeId}/devices`,
                 method: 'POST',
@@ -168,7 +168,7 @@ test('device and room limit rules', async () => {
             path: `/api/v2/homes/${testHomeId}/devices`,
             method: 'POST',
             headers: authHeaders
-        }, JSON.stringify({ serialNo: 'VA9900000026', deviceType: 'VA02' }));
+        }, JSON.stringify({ serialNo: 'VA3900000026', deviceType: 'VA02' }));
         assert.strictEqual(dev26Res.statusCode, 400);
         assert.strictEqual(dev26Res.body.error, 'max_heating_devices_reached');
 
@@ -177,7 +177,7 @@ test('device and room limit rules', async () => {
             path: `/api/v2/homes/${testHomeId}/devices`,
             method: 'POST',
             headers: authHeaders
-        }, JSON.stringify({ serialNo: 'IB9900000099', deviceType: 'IB01' }));
+        }, JSON.stringify({ serialNo: 'IB3900000099', deviceType: 'IB01' }));
         assert.strictEqual(bridgeRes.statusCode, 201);
 
         // 4. Test Max 25 heating rooms per home

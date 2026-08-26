@@ -555,7 +555,8 @@ async function getHeatingCircuit(homeId, circuitNumber) {
     return rows.length > 0 ? rows[0] : null;
 }
 
-async function upsertHeatingCircuit(homeId, number, fields) {
+async function upsertHeatingCircuit(homeId, number, fields = {}) {
+    fields = fields || {};
     const p = getPool();
     const [rows] = await p.execute('SELECT id FROM heating_circuits WHERE home_id=? AND number=?', [homeId, number]);
     if (rows.length === 0) {

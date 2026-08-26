@@ -6,49 +6,61 @@ This document details the advanced configuration parameters, mechanical travel c
 
 ## 1. Stepper Motor Travel & Valve Position Logic
 
-The Valve Actuator controls hot water flow dynamically by driving a stepper motor that linearly moves a piston pin. The travel range is governed by three primary calibration parameters:
+The Valve Actuator controls hot water flow dynamically by driving an internal stepper motor that linearly moves a piston pin outward from the gearbox home.
+
+### 1.1 Mechanical Coordinate System & Step Progression
+
+TRV radiator valves are **normally open** (an internal return spring pushes the valve pin out to allow 100% water flow). To close the valve or modulate flow, the actuator motor must travel outward (increasing step counts) to compress the pin inward.
 
 ```
-                  [Valve Fully Closed]                        [Valve Fully Open]
-                  (Piston Pin Extended)                     (Piston Pin Retracted)
-                     
-                     va_act_limit_low_steps                   va_act_limit_high_steps
-                     (FID 0x0273)                             (FID 0x027c)
-                           |                                        |
-                           v                                        v
-  Stepper Steps: ----------|========================================|------------->
-  Physical State:  [Pin Extended] <======== Active Travel ========> [Pin Retracted]
+[Gearbox Retraction Home]
+      0
+      |
+      |-- (e.g. 205 steps) --> [Reference Point] (`0x01b5`: `va_mount_reference_steps`)
+      |                        Internal mechanical offset where lead screw travel begins.
+      |
+      |-- (e.g. 1786 steps) -> [Drive Constant] (`0x0280`: `va_act_drive_cal_const`)
+      |                        Factory baseline distance where a standard pin is expected.
+      |
+      |-- (e.g. 1894 steps) -> [Seat Point] (`0x01b6`: `va_mount_seatpoint_steps`)
+      |                        Physical pin contact point learned during calibration.
+      |                        Valve is 100% OPEN (pin fully uncompressed).
+      |                        Current Position (e.g. 1897) rests here when no heat is demanded.
+      |
+      |-- (e.g. 2244 steps) -> [High Steps / Modulation Limit] (`0x027c`: `va_act_limit_high_steps`)
+      |                        Pin compressed to active flow-regulation / modulation boundary.
+      |
+      v-- (e.g. 2390 steps) -> [Low Steps / Close Limit] (`0x0273`: `va_act_limit_low_steps`)
+                               Piston fully extended. Pin compressed all the way down.
+                               Valve 100% CLOSED (flow completely shut off).
 ```
 
-### 1.1 Calibration Limits & Step Calculations
-On VA02 hardware, motor step counts are absolute values tracked from the internal physical retraction home. The active travel and calibration limits fall within the **1800 to 2600 steps** range:
+### 1.2 Calibration Limits & Step Calculations
+On VA02 hardware, motor step counts are absolute values tracked from internal physical retraction home.
 
 *   **Fully Extended / Closed Limit (`va_act_limit_low_steps` - FID `0x0273`)**: The step position where the piston is fully extended (valve pin pressed down completely, closing the radiator valve). Typical values lie between **2100 and 2600 steps**.
-    *   *Tuning Tip:* If the radiator leaks hot water when set to off, increasing this value (e.g. from 2300 to 2350) drives the stepper further out, compressing the valve pin more tightly.
-*   **Fully Retracted / Open Limit (`va_act_limit_high_steps` - FID `0x027c`)**: The step position where the piston is fully drawn in (valve pin completely released, opening the radiator valve). Typical values lie between **1900 and 2500 steps**.
-    *   *Tuning Tip:* Reducing this value constrains the maximum opening aperture, artificially restricting the maximum flow rate.
+    *   *Tuning Tip:* If the radiator leaks hot water when set to off, increasing this value (e.g. from 2390 to 2430) drives the stepper further out, compressing the valve pin more tightly.
+*   **Fully Retracted / Open Limit (`va_act_limit_high_steps` - FID `0x027c`)**: The step position representing the upper boundary of the active modulation range. Typical values lie between **1900 and 2500 steps**.
+    *   *Tuning Tip:* Reducing this value constrains the maximum opening aperture, restricting maximum flow rate.
 *   **Calibration Drive Constant (`va_act_drive_cal_const` - FID `0x0280`)**: An internal mechanical calibration reference value. On VA02 hardware, this typically lies between **1700 and 1900 steps** and represents the baseline calibration offset.
-*   **Status/Error flags (`va_act_status_flags_s16` - FID `0x028d`)**: Stored in `devices.field_0283` in the database. Reports positioning step deviation or calibration faults.
+*   **Learned contact/seat point steps (`va_mount_seatpoint_steps` - FID `0x01b6`)**: Stored in `devices.field_01b6`. The learned stepper count where the piston makes physical contact with the valve pin.
+*   **Learned calibration reference/offset steps (`va_mount_reference_steps` - FID `0x01b5`)**: Stored in `devices.field_01b5`. The learned base reference offset steps.
 
-### 1.2 Actuator Status Flags & Mounting State Diagnostics
+### 1.3 Actuator Status Flags & Mounting State Diagnostics
 *   **Positioning Deviation (`va_act_status_flags_s16` - FID `0x028d`)**:
-    *   *Calculation:* The firmware calculates this value during motion calibration as the step deviation from the expected contact/seat point:
+    *   *Calculation:* Calculated as the step deviation from the expected contact/seat point:
         $$\text{Deviation} = (\text{Current Position} - \text{Expected Seat Point})$$
     *   *Values:*
         *   `32767` (`0x7fff`): Inactive or not yet reporting.
         *   Small values (e.g. `-10` to `+10` steps): Normal operation; the motor is perfectly aligned with the valve seat point.
         *   Large negative or positive values (e.g. $< -100$ or $> 100$ steps): Piston contact occurred too early or travel was blocked. Indicates mechanical blockage (valve stuck) or mounting alignment issues.
 *   **Mounting State (`va_mount_state` - FID `0x01b8`)**: Stored in `devices.field_016a` in the database. Represents the physical calibration phase:
-    *   `0`: `CALIBRATED` (mounting and calibration completed successfully)
-    *   `1`: `CALIBRATING` (running active calibration cycle)
+    *   `0`: `CALIBRATING` / `UNMOUNTED` (running active calibration cycle or unmounted)
+    *   `1`: `CALIBRATED` (mounting and calibration completed successfully)
     *   `2`: `MOUNTED` (device attached to bracket, awaiting calibration)
 *   **Mounting Flags (`va_mount_flags` - FID `0x01fb`)**: Stored in `devices.field_01fb` in the database. Tracks internal execution flags during the calibration sequence.
-*   **Learned contact/seat point steps (`va_mount_seatpoint_steps` - FID `0x01b6`)**: Stored in `devices.field_01b6`. The learned stepper count where the piston makes physical contact with the valve pin.
-*   **Learned calibration reference/offset steps (`va_mount_reference_steps` - FID `0x01b5`)**: Stored in `devices.field_01b5`. The learned base reference offset steps.
-
-### 1.3 Positioning Telemetry FIDs
-*   `0x0265` (`va_act_position_steps`): The primary active step count showing current piston extension.
-*   `0x0294` (`va_act_position2_steps`): Secondary target steps (mapped to `devices.field_0266` in the database).
+*   **Current Position (`va_act_position_steps` - FID `0x0265`)**: The primary active step count showing current piston extension (`devices.field_0265`).
+*   **Target Position (`va_act_position2_steps` - FID `0x0294`)**: Secondary target steps commanded by the heating controller (`devices.field_0266`). When idle/no heat demand, target rests at the `Seat Point` (`0x01b6`). When heating, target moves deeper into the modulation band (`0x027c` to `0x0273`).
 
 ---
 

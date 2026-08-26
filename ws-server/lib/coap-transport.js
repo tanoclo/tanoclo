@@ -163,15 +163,16 @@ function scheduleRetry(mid, bridgeId, wsFrame, attempt) {
     _pendingCommands.set(mid, { bridgeId, wsFrame, attempt, timer });
 }
 
-function handleAckReceived(mid, deviceIdOrMsg) {
-    const pending = _pendingCommands.get(mid);
+function handleAckReceived(midInput, deviceIdOrMsg) {
+    const mid = Number(midInput);
+    const pending = _pendingCommands.get(mid) || _pendingCommands.get(midInput);
     let resolvedDeviceId = null;
-    if (pending && pending.bridgeId) {
-        resolvedDeviceId = pending.bridgeId;
+    if (deviceIdOrMsg && typeof deviceIdOrMsg === 'object' && deviceIdOrMsg.deviceId) {
+        resolvedDeviceId = deviceIdOrMsg.deviceId;
     } else if (typeof deviceIdOrMsg === 'string') {
         resolvedDeviceId = deviceIdOrMsg;
-    } else if (deviceIdOrMsg && typeof deviceIdOrMsg === 'object') {
-        resolvedDeviceId = deviceIdOrMsg.deviceId || deviceIdOrMsg.bridgeId || null;
+    } else if (pending && pending.bridgeId) {
+        resolvedDeviceId = pending.bridgeId;
     }
     const displayId = resolvedDeviceId || 'unknown';
 
@@ -179,10 +180,11 @@ function handleAckReceived(mid, deviceIdOrMsg) {
         _log('debug', `[cmd-api] Received ACK for MID ${mid} from ${displayId}. Canceling retry timer.`);
         if (pending.timer) clearTimeout(pending.timer);
         _pendingCommands.delete(mid);
+        _pendingCommands.delete(midInput);
         metrics.inc('commands_acked');
 
         for (const [, entry] of _commandTracker) {
-            if (entry.mid === mid && entry.status === 'pending') {
+            if ((entry.mid === mid || entry.mid === midInput) && entry.status === 'pending') {
                 entry.status = 'acked';
                 entry.ackedAt = new Date().toISOString();
                 break;
@@ -190,13 +192,27 @@ function handleAckReceived(mid, deviceIdOrMsg) {
         }
     }
 
-    const cb = _ackCallbacks.get(mid);
+    const cb = _ackCallbacks.get(mid) || _ackCallbacks.get(midInput);
     if (cb) {
-        cb.resolve({ ok: true, mid });
+        let payload = null;
+        let coapMsg = null;
+        if (deviceIdOrMsg && typeof deviceIdOrMsg === 'object' && deviceIdOrMsg.coapMsg) {
+            coapMsg = deviceIdOrMsg.coapMsg;
+            if (coapMsg.payload) {
+                const raw = coapMsg.payload;
+                payload = Buffer.isBuffer(raw) ? raw : Buffer.from(raw.data || raw);
+            }
+        }
+        const hex = payload ? payload.toString('hex') : null;
+        const bytes = payload ? Array.from(payload) : null;
+        const code = coapMsg ? (coapMsg.codeStr || (coap.formatCode ? coap.formatCode(coapMsg.code) : coapMsg.code)) : null;
+        _log('debug', `[cmd-api] Resolving waitForAck for MID ${mid} with payload: ${hex || '(empty)'}`);
+        cb.resolve({ ok: true, mid, payload, hex, bytes, coapMsg, code });
         _ackCallbacks.delete(mid);
+        _ackCallbacks.delete(midInput);
     }
 
-    const q = _pendingQueries.get(mid);
+    const q = _pendingQueries.get(mid) || _pendingQueries.get(midInput);
     if (q) {
         _log('debug', `[cmd-api] Ignoring simple ACK for Query MID ${mid} from ${displayId}. Waiting for actual Content payload response.`);
     }
@@ -217,16 +233,18 @@ function clearPendingRetries() {
     }
 }
 
-function waitForAck(mid, timeoutMs = 35000) {
+function waitForAck(midInput, timeoutMs = 35000) {
+    const mid = Number(midInput);
     return new Promise((resolve, reject) => {
         const timer = setTimeout(() => {
-            if (_ackCallbacks.has(mid)) {
+            if (_ackCallbacks.has(mid) || _ackCallbacks.has(midInput)) {
                 _ackCallbacks.delete(mid);
+                _ackCallbacks.delete(midInput);
                 reject(new Error('Timeout waiting for device ACK'));
             }
         }, timeoutMs);
 
-        _ackCallbacks.set(mid, {
+        const cbObj = {
             resolve: (res) => {
                 clearTimeout(timer);
                 resolve(res);
@@ -235,7 +253,11 @@ function waitForAck(mid, timeoutMs = 35000) {
                 clearTimeout(timer);
                 reject(err);
             }
-        });
+        };
+        _ackCallbacks.set(mid, cbObj);
+        if (typeof midInput === 'string') {
+            _ackCallbacks.set(midInput, cbObj);
+        }
     });
 }
 

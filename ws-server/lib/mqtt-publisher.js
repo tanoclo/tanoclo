@@ -423,7 +423,9 @@ async function publishZoneStateTelemetry(homeId, zoneId, fields, zoneRow = null)
                     if (ovrs && ovrs.length > 0 && ovrs[0].setting_power === 'OFF') {
                         overlayPowerOff = true;
                     }
-                } catch (e) {}
+                } catch (e) {
+                    if (log) log('debug', `Failed to query overlay for hvac_mode: ${e.message}`);
+                }
             }
             hvacMode = overlayPowerOff ? 'off' : 'heat';
         }
@@ -441,7 +443,9 @@ async function publishZoneStateTelemetry(homeId, zoneId, fields, zoneRow = null)
                     remainingMinutes = Math.max(0, Math.ceil((expiryMs - Date.now()) / 60000));
                 }
             }
-        } catch (e) {}
+        } catch (e) {
+            if (log) log('debug', `Failed to query overlay remaining minutes: ${e.message}`);
+        }
     }
     _pub(`${BASE_TOPIC}/h/${homeId}/z/${zoneId}/overlay_time_remaining`, remainingMinutes);
 
@@ -738,7 +742,9 @@ async function publishHomeTelemetry(homeId, homeData = null) {
                 for (const zone of zones) {
                     _pub(`${BASE_TOPIC}/h/${homeId}/z/${zone.id}/preset_mode`, presetMode);
                 }
-            } catch (e) {}
+            } catch (e) {
+                if (log) log('debug', `Failed to publish preset_mode for home ${homeId} zones: ${e.message}`);
+            }
         }
 
         // Publish Home Assistant switch settings

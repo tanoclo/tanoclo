@@ -8,7 +8,7 @@
 const coap = require('../coap');
 const tlv = require('../tlv');
 const crypto = require('crypto');
-const { getNextMid } = require('../coap-transport');
+const { getNextMid, waitForAck } = require('../coap-transport');
 const api = require('../command-api');
 
 function updateFieldInMap(fields, key, value) {
@@ -72,6 +72,16 @@ async function applyDeviceConfigOverrides(deviceId, fields, updates = null) {
         const hasExplicitOrient = updates && (('0x0149' in updates) || ('field_0149' in updates) || ('va_orientation' in updates) || ('orientation' in updates));
         if (!hasExplicitOrient && dbDev.field_0149 !== undefined && dbDev.field_0149 !== null) {
             updateFieldInMap(fields, '0x0149', api._db.unmapOrientation(dbDev.field_0149));
+        }
+
+        if (dbDev.field_019e !== undefined && dbDev.field_019e !== null) {
+            updateFieldInMap(fields, '0x019e', Number(dbDev.field_019e));
+        }
+        if (dbDev.field_019d !== undefined && dbDev.field_019d !== null) {
+            updateFieldInMap(fields, '0x019d', Number(dbDev.field_019d));
+        }
+        if (dbDev.field_02b2 !== undefined && dbDev.field_02b2 !== null) {
+            updateFieldInMap(fields, '0x02b2', Number(dbDev.field_02b2));
         }
 
         if (dbDev.zone_id) {
@@ -387,12 +397,54 @@ async function pushMountCalibration(deviceId, action = 'start') {
         { num: 12, value: Buffer.from([0x2a]) }
     ];
     return api.internalPushViabridge(
-        deviceId, coap.CODE_PUT, 'd/mnt',
+        deviceId, coap.CODE_PUT, 'mnt',
         payload, null, extraOptions, true, coap.TYPE_CON, null, `pushMountCalibration:${deviceId}`
     );
 }
 
+function validateActuatorLimits(limits = {}) {
+    const low = limits.lowSteps !== undefined && limits.lowSteps !== null ? Number(limits.lowSteps) : null;
+    const high = limits.highSteps !== undefined && limits.highSteps !== null ? Number(limits.highSteps) : null;
+    const drive = limits.driveConstant !== undefined && limits.driveConstant !== null ? Number(limits.driveConstant) : null;
+
+    if (low !== null && (isNaN(low) || low < 1000 || low > 4000)) {
+        const err = new Error('Low steps out of range (1000-4000)');
+        err.statusCode = 400;
+        throw err;
+    }
+    if (high !== null && (isNaN(high) || high < 1000 || high > 4000)) {
+        const err = new Error('High steps out of range (1000-4000)');
+        err.statusCode = 400;
+        throw err;
+    }
+    if (drive !== null && (isNaN(drive) || drive < 500 || drive > 3500)) {
+        const err = new Error('Drive constant out of range (500-3500)');
+        err.statusCode = 400;
+        throw err;
+    }
+
+    if (low !== null && high !== null && low < high) {
+        const err = new Error('Low steps (close limit) cannot be lower than High steps (open limit)');
+        err.statusCode = 400;
+        throw err;
+    }
+    if (drive !== null) {
+        if (high !== null && high < drive) {
+            const err = new Error('High steps cannot be lower than Drive constant baseline');
+            err.statusCode = 400;
+            throw err;
+        }
+        if (low !== null && low < drive) {
+            const err = new Error('Low steps cannot be lower than Drive constant baseline');
+            err.statusCode = 400;
+            throw err;
+        }
+    }
+}
+
 async function pushActuatorLimits(deviceId, limits = {}) {
+    validateActuatorLimits(limits);
+
     const entries = [];
     if (limits.lowSteps !== undefined && limits.lowSteps !== null) {
         entries.push({ fid: 0x0273, value: tlv.encodeValue(Number(limits.lowSteps) & 0xFFFF, 'u16be') });
@@ -420,10 +472,14 @@ async function pushSelftestTrigger(deviceId) {
     const payload = tlv.encode([
         { fid: 0x0900, value: tlv.encodeValue(1, 'u8') }
     ]);
+    const extraOptions = [
+        { num: 7, value: Buffer.from([0xff, 0xff]) },
+        { num: 12, value: Buffer.from([0x2a]) }
+    ];
 
     return api.internalPushViabridge(
-        deviceId, coap.CODE_PUT, `d/${deviceId}/selftest`,
-        payload, null, [], true, coap.TYPE_CON, null, `pushSelftestTrigger:${deviceId}`
+        deviceId, coap.CODE_PUT, `selftest`,
+        payload, null, extraOptions, true, coap.TYPE_CON, null, `pushSelftestTrigger:${deviceId}`
     );
 }
 
@@ -575,30 +631,80 @@ async function pushDeviceUnassociation(homeId, deviceId) {
 
 async function pushDeviceDebug(deviceId, subpath = 'st', params = {}) {
     let targetPath;
+    let payload = Buffer.alloc(0);
+    let code = coap.CODE_GET;
+
+    const rawFid = params.fid !== undefined ? params.fid : 0x01ac;
+    const fidDec = (typeof rawFid === 'string' && (rawFid.startsWith('0x') || /^[0-9a-fA-F]+$/.test(rawFid)))
+        ? (rawFid.startsWith('0x') ? parseInt(rawFid, 16) : parseInt(rawFid, 10))
+        : Number(rawFid);
+
     if (typeof subpath === 'string' && subpath.includes('?')) {
         targetPath = subpath.startsWith('d/') ? subpath : `d/${subpath}`;
     } else if (subpath === 'st' || subpath === 'dbg/st') {
-        targetPath = 'd/dbg/st';
+        const len = Number(params.len) || 2;
+        targetPath = `d/dbg/st?tag=${fidDec}&len=${len}`;
+        const isPut = String(params.method || '').toUpperCase() === 'PUT' || params.value !== undefined;
+        if (isPut) {
+            code = coap.CODE_PUT;
+            if (Buffer.isBuffer(params.value)) {
+                payload = params.value;
+            } else if (typeof params.value === 'string' && /^[0-9a-fA-F]+$/.test(params.value) && params.value.length === len * 2) {
+                payload = Buffer.from(params.value, 'hex');
+            } else {
+                const valNum = Number(params.value || 0);
+                payload = Buffer.alloc(len);
+                if (len === 1) payload.writeUInt8(valNum & 0xff, 0);
+                else if (len === 2) payload.writeUInt16BE(valNum & 0xffff, 0);
+                else if (len === 4) payload.writeUInt32BE(valNum >>> 0, 0);
+            }
+        } else {
+            code = coap.CODE_GET;
+        }
     } else if (subpath === 'tlvs' || subpath === 'dbg2/tlvs') {
-        const fid = params.fid || 320;
-        const len = params.len || 2;
-        targetPath = `d/dbg2/tlvs?fid=${fid}&len=${len}`;
+        const len = Number(params.len) || 2;
+        targetPath = `d/dbg2/tlvs`;
+        code = coap.CODE_PUT;
+        let valBuf;
+        if (Buffer.isBuffer(params.value)) {
+            valBuf = params.value;
+        } else if (typeof params.value === 'string' && /^[0-9a-fA-F]+$/.test(params.value) && params.value.length === len * 2) {
+            valBuf = Buffer.from(params.value, 'hex');
+        } else {
+            const valNum = Number(params.value || 0);
+            valBuf = Buffer.alloc(len);
+            if (len === 1) valBuf.writeUInt8(valNum & 0xff, 0);
+            else if (len === 2) valBuf.writeUInt16BE(valNum & 0xffff, 0);
+            else if (len === 4) valBuf.writeUInt32BE(valNum >>> 0, 0);
+        }
+        payload = tlv.encode([{ fid: fidDec, value: valBuf }]);
     } else if (subpath === 'm' || subpath === 'dbg/m') {
-        const adr = params.adr || '20000000';
-        const len = params.len || 16;
-        targetPath = `d/dbg/m?adr=${adr}&len=${len}`;
+        const rawAdr = String(params.adr || '20000000').trim();
+        let adrDec;
+        if (rawAdr.startsWith('0x')) {
+            adrDec = parseInt(rawAdr, 16).toString(10);
+        } else if (/^[0-9a-fA-F]{8}$/.test(rawAdr)) {
+            adrDec = parseInt(rawAdr, 16).toString(10);
+        } else {
+            adrDec = rawAdr;
+        }
+        const len = params.len || 64;
+        targetPath = `d/dbg/m?adr=${adrDec}&len=${len}`;
+        code = coap.CODE_GET;
     } else if (subpath.startsWith('d/')) {
         targetPath = subpath;
     } else {
         targetPath = `d/dbg/${subpath}`;
     }
 
-    const extraOptions = [
-        { num: 7, value: Buffer.from([0xff, 0xff]) },
-        { num: 12, value: Buffer.from([0x2a]) }
-    ];
+    const extraOptions = [];
+    if (code === coap.CODE_GET) {
+        extraOptions.push({ num: 6, value: Buffer.from([0x2a]) }); // Option 6: Accept (42)
+    } else {
+        extraOptions.push({ num: 12, value: Buffer.from([0x2a]) }); // Option 12: Content-Format (42)
+    }
 
-    return api.internalPushViabridge(deviceId, coap.CODE_GET, targetPath, Buffer.alloc(0), null, extraOptions, true, coap.TYPE_CON, null, `debug:${subpath}`);
+    return api.internalPushViabridge(deviceId, code, targetPath, payload, null, extraOptions, true, coap.TYPE_CON, null, `debug:${subpath}`);
 }
 
 async function pushUnassociateNeighborByIp(homeId, targetIpv6) {
@@ -659,13 +765,20 @@ async function handleDeviceDebug(req, res, deviceId) {
     const body = req.body || {};
     const subpath = body.subpath || req.query.subpath || 'st';
     const params = {
+        method: body.method || req.query.method,
         adr: body.adr || req.query.adr,
-        fid: body.fid || req.query.fid,
-        len: body.len || req.query.len
+        fid: body.fid !== undefined ? body.fid : req.query.fid,
+        len: body.len || req.query.len,
+        value: body.value !== undefined ? body.value : req.query.value
     };
     try {
         const mid = await pushDeviceDebug(deviceId, subpath, params);
-        api.jsonResponse(res, 200, { ok: true, mid, message: `Debug request sent to ${deviceId}` });
+        api.jsonResponse(res, 200, {
+            ok: true,
+            mid,
+            pending: true,
+            message: `Debug request (MID ${mid}) sent to ${deviceId}`
+        });
     } catch (err) {
         api.jsonResponse(res, 500, { error: err.message });
     }

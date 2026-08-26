@@ -759,7 +759,7 @@
     },
     "device_advanced": {
       "warning_title": "DANGEROUS SETTINGS WARNING",
-      "warning_desc": "These advanced device tuning parameters are dangerous and not fully tested. Modifying display/screensaver timings or actuator limits can result in display screen burn-in, excessive battery drain, mechanical gear damage, or radiator valve failure. Use with extreme caution and expect nothing here to function properly.",
+      "warning_desc": "These advanced device tuning parameters are dangerous. Modifying display/screensaver timings, actuator limits, or internal registers can result in display screen burn-in, excessive battery drain, mechanical gear damage, or radiator valve failure. Use with extreme caution. (Note: This advanced settings page is currently available in English only.)",
       "display_screensaver_title": "Display & Screensaver Settings",
       "display_off_timeout": "Display Off Timeout",
       "display_dim_level": "Display Dim Level",
@@ -812,7 +812,7 @@
     },
     "zone_advanced": {
       "warning_title": "DANGEROUS SETTINGS WARNING",
-      "warning_desc": "These advanced and special tuning features are not fully tested or officially supported by Tado. Modifying them may cause system instability, hardware malfunction, unexpected heating behavior, or high energy use.",
+      "warning_desc": "These advanced and special tuning features are dangerous. Modifying them may cause system instability, hardware malfunction, unexpected heating behavior, or high energy use. Use with caution. (Note: This advanced settings page is currently available in English only.)",
       "pid_title": "Advanced PID Tuning",
       "kp": "Proportional Gain (Kp)",
       "ki": "Integral Gain (Ki)",

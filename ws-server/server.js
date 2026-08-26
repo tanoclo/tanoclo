@@ -140,29 +140,34 @@ async function sendToDevice(deviceId, wsMessage) {
 
     // Cache recreated downlink messages even when proxied
     messageCache.cacheMessage(deviceId, wsMessage, 'recreated');
-    if (proxyConnections.has(clientInfo.ws)) {
-        let isReboot = false;
-        let isConfig = false;
-        try {
-            const frame = wsBridge.parse(Buffer.from(wsMessage));
-            if (frame.ok) {
-                const coapMsg = await workerPool.coapParse(frame.coapBytes);
-                if (coapMsg.ok) {
-                    const uriPathStr = coap.uriPath(coapMsg);
-                    if (uriPathStr && (uriPathStr === 'd/reboot' || uriPathStr.endsWith('/reboot') || uriPathStr.includes('reboot'))) {
-                        isReboot = true;
-                    } else if (uriPathStr && (
-                        uriPathStr.includes('config') ||
-                        uriPathStr === 'd/config' ||
-                        uriPathStr.endsWith('/config')
-                    )) {
-                        isConfig = true;
-                    }
+
+    let isReboot = false;
+    let isConfig = false;
+    try {
+        const frame = wsBridge.parse(Buffer.from(wsMessage));
+        if (frame.ok && frame.coapBytes) {
+            const coapMsg = coap.parse(frame.coapBytes);
+            if (coapMsg.ok) {
+                const uriPathStr = coap.uriPath(coapMsg);
+                if (coapMsg.mid !== undefined && uriPathStr) {
+                    proxyMidCache.set(coapMsg.mid, { path: uriPathStr, ts: Date.now() });
+                }
+                if (uriPathStr && (uriPathStr === 'd/reboot' || uriPathStr.endsWith('/reboot') || uriPathStr.includes('reboot'))) {
+                    isReboot = true;
+                } else if (uriPathStr && (
+                    uriPathStr.includes('config') ||
+                    uriPathStr === 'd/config' ||
+                    uriPathStr.endsWith('/config')
+                )) {
+                    isConfig = true;
                 }
             }
-        } catch (err) {
-            log('error', `Failed to parse CoAP message in sendToDevice check: ${err.message}`);
         }
+    } catch (err) {
+        log('error', `Failed to parse CoAP message in sendToDevice check: ${err.message}`);
+    }
+
+    if (proxyConnections.has(clientInfo.ws)) {
 
         if (isReboot) {
             log('info', `[sendToDevice] Allowing system reboot command for ${deviceId} despite active proxy.`);

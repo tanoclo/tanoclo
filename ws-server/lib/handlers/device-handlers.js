@@ -148,7 +148,7 @@ async function handleDeviceMount(ws, frame, coapMsg, decoded, peerInfo, pathInfo
         if (shortSerial && mqttPublisher) {
             const state = decoded.fields['0x016a'] || decoded.fields['0x01b8'];
             if (state !== undefined) {
-                const MOUNT_STATE_MAP = { 0: 'CALIBRATED', 1: 'CALIBRATING', 2: 'MOUNTED' };
+                const MOUNT_STATE_MAP = { 0: 'CALIBRATING', 1: 'CALIBRATED', 2: 'MOUNTED' };
                 const stateStr = MOUNT_STATE_MAP[state] || String(state);
                 mqttPublisher.publishMountingState(shortSerial, stateStr).catch(() => { });
             }

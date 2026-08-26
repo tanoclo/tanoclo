@@ -108,8 +108,10 @@ app.use(cors({
 
 
 // Derive a separate cookie-signing key from the JWT secret to limit blast radius if either is compromised
-const cookieSigningKey = crypto.createHmac('sha256', config.jwtSecret).update('cookie-signing').digest('hex');
-app.use(cookieParser(cookieSigningKey));
+function getCookieSigningKey() {
+    return crypto.createHmac('sha256', config.jwtSecret).update('cookie-signing').digest('hex');
+}
+app.use((req, res, next) => cookieParser(getCookieSigningKey())(req, res, next));
 
 app.set('trust proxy', 1); // Trust only the first reverse proxy hop
 app.set('etag', false);
@@ -154,7 +156,7 @@ app.get('/sw.js', (req, res) => {
 app.use('/assets', express.static(path.join(frontendPath, 'assets'), { maxAge: '30d' }));
 app.use('/media', express.static(path.join(frontendPath, 'media'), { maxAge: '30d' }));
 app.use('/images', express.static(path.join(frontendPath, 'images'), { maxAge: '30d' }));
-app.use(express.static(frontendPath, { 
+app.use(express.static(frontendPath, {
     index: false,
     setHeaders: (res, filePath) => {
         if (filePath.endsWith('index.html')) {
@@ -737,7 +739,42 @@ if ((require.main === module || process.send || process.env.IS_CHILD_PROCESS ===
                 case 'ACK_RECEIVED': {
                     const commandApi = require('../lib/command-api');
                     if (commandApi.handleAckReceived) {
-                        commandApi.handleAckReceived(msg.mid, msg.deviceId || msg.coapMsg);
+                        commandApi.handleAckReceived(msg.mid, { deviceId: msg.deviceId, coapMsg: msg.coapMsg });
+                    }
+                    if (msg.coapMsg && (msg.coapMsg.payload || msg.coapMsg.code)) {
+                        const raw = msg.coapMsg.payload;
+                        const payloadBuf = Buffer.isBuffer(raw) ? raw : (raw?.data ? Buffer.from(raw.data) : Buffer.alloc(0));
+                        let parsedVal = null;
+                        if (payloadBuf.length === 1) parsedVal = payloadBuf.readUInt8(0);
+                        else if (payloadBuf.length === 2) parsedVal = payloadBuf.readUInt16BE(0);
+                        else if (payloadBuf.length === 4) parsedVal = payloadBuf.readUInt32BE(0);
+
+                        const devId = msg.deviceId;
+                        const resolveHome = async () => {
+                            if (!devId) return null;
+                            let dev = await db.getDeviceBySerial(devId);
+                            if (!dev) dev = await db.getDeviceByFullSerial(devId);
+                            return dev ? dev.home_id : null;
+                        };
+
+                        resolveHome().then(homeId => {
+                            if (homeId) {
+                                const sse = require('./routes/sse');
+                                _log('debug', `[SSE] Broadcasting device-debug-response for ${devId} (Home ${homeId}): ${payloadBuf.toString('hex')}`);
+                                sse.broadcastToHome(homeId, 'device-debug-response', {
+                                    deviceId: devId,
+                                    mid: msg.mid,
+                                    bytes: Array.from(payloadBuf),
+                                    hex: payloadBuf.toString('hex'),
+                                    val: parsedVal,
+                                    code: msg.coapMsg.code
+                                });
+                            } else {
+                                _log('debug', `[SSE] Could not resolve home for ${devId}, skipping SSE debug broadcast`);
+                            }
+                        }).catch(err => {
+                            _log('error', `[SSE] Error resolving home for ${devId}: ${err.message}`);
+                        });
                     }
                     break;
                 }

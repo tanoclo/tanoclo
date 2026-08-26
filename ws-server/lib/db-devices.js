@@ -83,7 +83,9 @@ async function updateDeviceConnectionState(shortSerial, isConnected, batteryStat
         try {
             await p.execute('UPDATE emulated_devices SET pairing_state = "PAIRED" WHERE serial_no = ? AND pairing_state = "PAIRING_RF"', [shortSerial]);
             await p.execute('UPDATE devices SET in_pairing_mode = 0 WHERE serial_no = ? AND in_pairing_mode = 1', [shortSerial]);
-        } catch (_) { }
+        } catch (e) {
+            _log('debug', `Failed to update pairing state for device ${shortSerial}: ${e.message}`);
+        }
     }
 }
 

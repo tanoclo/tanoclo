@@ -183,8 +183,16 @@ router.post('/devices', async (req, res) => {
             return res.status(404).json({ success: false, error: 'ESP32 node not found' });
         }
 
-        // Generate serial if not provided (RU format)
-        const targetSerial = serial_no || `RU${Math.floor(1000000000 + Math.random() * 9000000000)}`;
+        if (serial_no) {
+            const match = /^[A-Z]{2}(\d{10})$/.exec(serial_no.toUpperCase());
+            if (!match || Number(match[1]) > 4294967295) {
+                return res.status(400).json({ success: false, error: 'Invalid serial number. Numeric part must be a 10-digit number <= 4294967295.' });
+            }
+        }
+
+        // Generate serial if not provided (RU format with numeric part <= 4294967295)
+        const randNum = Math.floor(1000000000 + Math.random() * (4294967295 - 1000000000));
+        const targetSerial = (serial_no ? serial_no.toUpperCase() : `RU${randNum}`);
         const ipv6 = generateTadoIpv6(targetSerial);
 
         // 1. Generate a 16-byte device factory key (Slot 2 key) for secure pairing

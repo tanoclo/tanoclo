@@ -369,12 +369,25 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
   };
 
   const handleSaveActuatorLimits = async () => {
+    const numLow = Number(lowSteps);
+    const numHigh = Number(highSteps);
+    const numDrive = Number(driveConstant);
+
+    if (numLow < numHigh) {
+      showToast(t('settings.actuator_limits.err_low_lt_high', 'Low Steps (close limit) cannot be lower than High Steps (open limit).'), 'error');
+      return;
+    }
+    if (numHigh < numDrive || numLow < numDrive) {
+      showToast(t('settings.actuator_limits.err_lt_drive', 'High and Low Steps cannot be lower than Drive Constant baseline.'), 'error');
+      return;
+    }
+
     setIsSavingLimits(true);
     try {
       await updateActuatorLimits(homeId, deviceId, {
-        lowSteps: Number(lowSteps),
-        highSteps: Number(highSteps),
-        driveConstant: Number(driveConstant)
+        lowSteps: numLow,
+        highSteps: numHigh,
+        driveConstant: numDrive
       });
       showToast(t('settings.actuator_limits.saved'));
       mutate();
@@ -714,7 +727,7 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
           />
 
           {/* Advanced Settings Click-through */}
-          {!isBridge && !device?.isEmulated && (
+          {!device?.isEmulated && (
             <Card 
               onClick={() => setView('advanced')} 
               style={{ 

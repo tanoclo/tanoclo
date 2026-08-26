@@ -36,6 +36,7 @@ function loadIpCertsConfig() {
 function loadDatabaseConfig() {
     return {
         host: process.env.DB_HOST || '127.0.0.1',
+        port: parseInt(process.env.DB_PORT || '3306', 10),
         database: process.env.DB_NAME || 'tanoclo',
         user: process.env.DB_USER || 'tanoclo',
         password: process.env.DB_PASS || '',

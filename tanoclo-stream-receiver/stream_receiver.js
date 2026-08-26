@@ -245,6 +245,34 @@ function logToFile(msg) {
 }
 
 function displayPacket(packet, type, meta = {}) {
+    if (type === 'incomplete') {
+        const f = packet.fragmentInfo;
+        if (!config.consoleLogging) {
+            logToFile(`Fragment received: Tag=0x${f.tag.toString(16).toUpperCase()} Type=${f.fragType} Progress=${f.progress.percent}%`);
+            return;
+        }
+
+        const time = new Date().toLocaleTimeString();
+        const border = '================================================================================';
+        console.log('\n' + border);
+        console.log(`[LIVE] 🟡 NEW INCOMPLETE FRAGMENT RECEIVED [${time}] [RSSI: ${meta.rssi} dBm]`);
+        console.log(border);
+        console.log(`*  Key Used:    ${meta.keyName}`);
+        console.log(`*  Source MAC:  ${packet.macInfo.src} (Short: 0x${packet.macInfo.srcShort})`);
+        console.log(`*  Dest MAC:    ${packet.macInfo.dst} (Short: 0x${packet.macInfo.dstShort})`);
+        if (meta.rawHex) {
+            console.log(`*  Raw Packet:  ${meta.rawHex}`);
+        }
+        console.log(`*  Fragment:    ${f.fragType} | Tag: 0x${f.tag.toString(16).toUpperCase()}`);
+        console.log(`*  Progress:    Received ${f.progress.receivedBytes} / ${f.progress.totalBytes || f.progress.totalSize} bytes (${f.progress.percent}%)`);
+        console.log(`*  Missing:     ${f.missingParts}`);
+        console.log(border + '\n');
+        logToFile(`Fragment received: Tag=0x${f.tag.toString(16).toUpperCase()} Type=${f.fragType} Progress=${f.progress.percent}%`);
+        return;
+    }
+
+    if (!packet || !packet.coap) return;
+
     const result = messageProcessor.processCoapPacket(packet, type, meta);
     if (result.isDuplicate) {
         statsDecodedCoapDuplicate++;
@@ -255,12 +283,7 @@ function displayPacket(packet, type, meta = {}) {
     const pathStr = result.pathStr || 'Unknown';
 
     if (!config.consoleLogging) {
-        if (type === 'incomplete') {
-            const f = packet.fragmentInfo;
-            logToFile(`Fragment received: Tag=0x${f.tag.toString(16).toUpperCase()} Type=${f.fragType} Progress=${f.progress.percent}%`);
-        } else {
-            logToFile(`COAP: /${pathStr} MID=0x${packet.coap.mid.toString(16).toUpperCase()} Code=${coapParser.codeStr(packet.coap.code)} Key=${meta.keyName} RSSI=${meta.rssi}`);
-        }
+        logToFile(`COAP: /${pathStr} MID=0x${packet.coap.mid.toString(16).toUpperCase()} Code=${coapParser.codeStr(packet.coap.code)} Key=${meta.keyName} RSSI=${meta.rssi}`);
         return;
     }
 

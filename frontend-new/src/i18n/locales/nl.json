@@ -358,7 +358,7 @@
     "device_advanced": {
       "display_contrast": "Schermcontrast",
       "warning_title": "WAARSCHUWING GEVAARLIJKE INSTELLINGEN",
-      "warning_desc": "Deze geavanceerde instellingen zijn gevaarlijk en niet volledig getest. Het aanpassen van scherm/screensaver-timings of actuatorlimieten kan leiden tot inbranden van het scherm, overmatig batterijverbruik, mechanische schade of klepdefecten. Gebruik met uiterste voorzichtigheid.",
+      "warning_desc": "Deze geavanceerde apparaatinstellingen zijn gevaarlijk. Het aanpassen van scherm/screensaver-timings, actuatorlimieten of interne registers kan leiden tot inbranden van het scherm, overmatig batterijverbruik, mechanische schade of klepdefecten. Gebruik met uiterste voorzichtigheid. (Let op: deze geavanceerde instellingenpagina is momenteel alleen in het Engels beschikbaar.)",
       "display_screensaver_title": "Scherm- & screensaver-instellingen",
       "display_off_timeout": "Scherm uitschakeltijd",
       "display_dim_level": "Scherm dimniveau",
@@ -823,7 +823,7 @@
     },
     "zone_advanced": {
       "warning_title": "WAARSCHUWING GEVAARLIJKE INSTELLINGEN",
-      "warning_desc": "Deze geavanceerde en speciale functies zijn niet vollständig getest. Aanpassen kan leiden tot systeeminstabiliteit, hardwarestoringen, onverwacht verwarmingsgedrag of hoog energieverbruik.",
+      "warning_desc": "Deze geavanceerde en speciale functies zijn gevaarlijk. Aanpassen kan leiden tot systeeminstabiliteit, hardwarestoringen, onverwacht verwarmingsgedrag of hoog energieverbruik. Gebruik met voorzichtigheid. (Let op: deze geavanceerde instellingenpagina is momenteel alleen in het Engels beschikbaar.)",
       "pid_title": "Geavanceerde PID-afstemming",
       "kp": "Proportionele versterking (Kp)",
       "ki": "Integrale versterking (Ki)",

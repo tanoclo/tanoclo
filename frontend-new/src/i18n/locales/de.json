@@ -358,7 +358,7 @@
     "device_advanced": {
       "display_contrast": "Display-Kontrast",
       "warning_title": "WARNUNG: GEFÄHRLICHE EINSTELLUNGEN",
-      "warning_desc": "Diese erweiterten Geräteeinstellungen sind gefährlich und nicht vollständig getestet. Änderungen an Anzeige-/Bildschirmschoner-Timings oder Aktor-Grenzen können zu Einbrennen des Bildschirms, übermäßigem Batterieverbrauch, mechanischen Getriebeschäden oder Ventilausfall führen. Mit äußerster Vorsicht verwenden.",
+      "warning_desc": "Diese erweiterten Geräteeinstellungen sind gefährlich. Änderungen an Anzeige-/Bildschirmschoner-Timings, Aktor-Grenzen oder internen Registern können zu Einbrennen des Bildschirms, übermäßigem Batterieverbrauch, mechanischen Getriebeschäden oder Ventilausfall führen. Mit äußerster Vorsicht verwenden. (Hinweis: Diese Seite mit erweiterten Einstellungen ist derzeit nur auf Englisch verfügbar.)",
       "display_screensaver_title": "Anzeige- & Bildschirmschoner-Einstellungen",
       "display_off_timeout": "Anzeige-Ausschaltzeit",
       "display_dim_level": "Anzeige-Dimmstufe",
@@ -830,7 +830,7 @@
     },
     "zone_advanced": {
       "warning_title": "WARNUNG: GEFÄHRLICHE EINSTELLUNGEN",
-      "warning_desc": "Diese erweiterten Spezialfunktionen sind nicht vollständig getestet. Änderungen können zu Systeminstabilität, Fehlfunktionen der Hardware, unerwartetem Heizverhalten oder hohem Energieverbrauch führen.",
+      "warning_desc": "Diese erweiterten Spezialfunktionen sind gefährlich. Änderungen können zu Systeminstabilität, Fehlfunktionen der Hardware, unerwartetem Heizverhalten oder hohem Energieverbrauch führen. Mit Vorsicht verwenden. (Hinweis: Diese Seite mit erweiterten Einstellungen ist derzeit nur auf Englisch verfügbar.)",
       "pid_title": "Erweiterte PID-Abstimmung",
       "kp": "Proportionalbeiwert (Kp)",
       "ki": "Integralbeiwert (Ki)",

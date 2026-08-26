@@ -123,23 +123,30 @@ export function AuthProvider({ children }) {
    * @brief Wipes local auth tokens, removes cached IDs, and informs backend API.
    */
   const logout = useCallback(async () => {
+    const currentToken = token || localStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
+
     localStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
     if (isNative) {
       localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN);
     }
     localStorage.removeItem('tanoclo_mobile_device_id');
+    localStorage.removeItem('tanoclo_notified_battery_states');
+    localStorage.removeItem('pkce_code_verifier');
+    localStorage.removeItem('pkce_redirect_uri');
+    localStorage.removeItem('pkce_state');
+
     setToken(null);
     setUser(null);
     setIsAuthenticated(false);
     setIsLoading(false);
     
     // Call backend logout endpoint if authenticated
-    if (token) {
+    if (currentToken) {
       try {
         await fetch(`${getApiBase()}/api/logout`, {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${token}`
+            'Authorization': `Bearer ${currentToken}`
           }
         });
       } catch (err) {

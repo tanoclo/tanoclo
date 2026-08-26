@@ -253,3 +253,51 @@ export function triggerDeviceDebug(homeId, deviceId, subpath = 'st', params = {}
   });
 }
 
+/**
+ * Starts a server-side background memory dump
+ */
+export function startMemoryDump(homeId, deviceId, params = {}) {
+  return apiFetch(`/api/v2/homes/${homeId}/devices/${deviceId}/debug/dump/start`, {
+    method: 'POST',
+    body: params
+  });
+}
+
+/**
+ * Gets status of a server-side background memory dump
+ */
+export function getMemoryDumpStatus(homeId, deviceId) {
+  return apiFetch(`/api/v2/homes/${homeId}/devices/${deviceId}/debug/dump/status`);
+}
+
+/**
+ * Cancels a server-side background memory dump
+ */
+export function cancelMemoryDump(homeId, deviceId) {
+  return apiFetch(`/api/v2/homes/${homeId}/devices/${deviceId}/debug/dump/cancel`, {
+    method: 'POST'
+  });
+}
+
+/**
+ * Downloads completed dump file with authentication header
+ */
+export async function downloadMemoryDumpFile(homeId, deviceId, fileName) {
+  const { STORAGE_KEYS } = await import('../utils/constants');
+  const token = localStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
+  const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+  const res = await fetch(`/api/v2/homes/${homeId}/devices/${deviceId}/debug/dump/download`, { headers });
+  if (!res.ok) throw new Error(`Download failed: ${res.statusText}`);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName || `${deviceId}_dump.bin`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+
+

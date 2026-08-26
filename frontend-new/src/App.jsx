@@ -34,6 +34,8 @@ import { useGeolocation } from './hooks/useGeolocation';
 import { useBatteryNotifier } from './hooks/useBatteryNotifier';
 import logger from './utils/logger';
 
+const isNative = Capacitor.isNativePlatform();
+
 /**
  * @brief Handles Android hardware back button events inside Capacitor wrapper.
  */
@@ -148,8 +150,6 @@ export default function App() {
       setMobileDeviceId(prev => prev !== stored ? stored : prev);
     }
   }, [isAuthenticated]);
-
-  const isNative = Capacitor.isNativePlatform();
 
   // Show loading spinner during session boot
   if (isLoading) {

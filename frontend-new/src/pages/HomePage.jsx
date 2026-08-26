@@ -23,6 +23,7 @@ import { useHome } from '../context/HomeContext';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../hooks/useAuth';
 import { SWR_KEYS } from '../utils/swrKeys';
+import { STORAGE_KEYS, DEFAULT_TEMPERATURES, TEMP_MIN_HEATING, TEMP_MAX_HEATING } from '../utils/constants';
 import { setHomeOverlay, resumeHomeSchedule } from '../api/zones';
 import { setHomePresenceLock, releaseHomePresenceLock, getHomeUsers } from '../api/homes';
 import { getMobileDevices } from '../api/users';
@@ -66,11 +67,11 @@ export default function HomePage() {
     { revalidateOnFocus: false }
   );
 
-  // Fetch device battery data
+  // Fetch device battery data (poll every 5 minutes)
   const { data: batteryDevices } = useSWR(
     activeHomeId ? SWR_KEYS.batteryDevicesRaw(activeHomeId) : null,
     () => getDeviceBatteryData(activeHomeId),
-    { refreshInterval: 30000 }
+    { refreshInterval: 300000 }
   );
 
   // Fetch home users for geofencing presence auto calculation
@@ -80,11 +81,11 @@ export default function HomePage() {
     { revalidateOnFocus: false }
   );
 
-  // Fetch mobile devices for geofencing presence auto calculation
+  // Fetch mobile devices for geofencing presence auto calculation (poll every 60 seconds)
   const { data: mobileDevices } = useSWR(
     activeHomeId ? SWR_KEYS.mobileDevices(activeHomeId) : null,
     () => getMobileDevices(activeHomeId),
-    { refreshInterval: 30000 }
+    { refreshInterval: 60000 }
   );
 
   const autoPresenceState = getAutoPresenceState(homeUsers, mobileDevices);
@@ -125,12 +126,6 @@ export default function HomePage() {
     return s && s.setting?.power !== 'OFF';
   });
 
-  // Find if all zones are OFF
-  const allZonesOff = zoneList.length > 0 && zoneList.every(z => {
-    const s = statesObj[z.id];
-    return s && s.setting?.power === 'OFF';
-  });
-
   // Find if any zone has an active overlay (not running schedule)
   const hasOverlayZone = zoneList.some(z => {
     const s = statesObj[z.id];
@@ -140,6 +135,10 @@ export default function HomePage() {
   const handleBoostAll = async () => {
     setIsBulkActionLoading(true);
     try {
+      const storedBoost = parseFloat(localStorage.getItem(STORAGE_KEYS.BOOST_TEMPERATURE));
+      const boostTemp = !isNaN(storedBoost)
+        ? Math.min(TEMP_MAX_HEATING, Math.max(TEMP_MIN_HEATING, storedBoost))
+        : DEFAULT_TEMPERATURES.BOOST;
       const overlayList = zoneList.map(z => {
         const isDhw = z.type === 'HOT_WATER' || z.type === 'DHW';
         return {
@@ -147,7 +146,7 @@ export default function HomePage() {
           overlay: {
             setting: isDhw 
               ? { type: 'HOT_WATER', power: 'ON' } 
-              : { type: 'HEATING', power: 'ON', temperature: { celsius: 25.0 } },
+              : { type: 'HEATING', power: 'ON', temperature: { celsius: boostTemp } },
             termination: {
               type: 'MANUAL'
             }
@@ -190,39 +189,13 @@ export default function HomePage() {
     }
   };
 
-  const handleTurnOnAll = async () => {
-    setIsBulkActionLoading(true);
-    try {
-      const overlayList = zoneList.map(z => {
-        const isDhw = z.type === 'HOT_WATER' || z.type === 'DHW';
-        return {
-          room: z.id,
-          overlay: {
-            setting: isDhw 
-              ? { type: 'HOT_WATER', power: 'ON' } 
-              : { type: 'HEATING', power: 'ON', temperature: { celsius: 21.0 } },
-            termination: {
-              type: 'MANUAL'
-            }
-          }
-        };
-      });
-      await setHomeOverlay(activeHomeId, { overlays: overlayList });
-      await refreshAll();
-    } catch (err) {
-      logger.error('Failed to turn on all zones:', err);
-    } finally {
-      setIsBulkActionLoading(false);
-    }
-  };
-
-  const handleResumeAll = async () => {
+  const handleClearAllOverlays = async () => {
     setIsBulkActionLoading(true);
     try {
       await resumeHomeSchedule(activeHomeId);
       await refreshAll();
     } catch (err) {
-      logger.error('Failed to resume all schedules:', err);
+      logger.error('Failed to clear all overlays:', err);
     } finally {
       setIsBulkActionLoading(false);
     }
@@ -447,39 +420,10 @@ export default function HomePage() {
                     </button>
                   )}
 
-                  {allZonesOff && (
-                    <button
-                      onClick={() => {
-                        handleTurnOnAll();
-                        setIsQuickActionsOpen(false);
-                      }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        width: '100%',
-                        padding: '0.5rem 0.75rem',
-                        fontSize: '0.85rem',
-                        fontWeight: 600,
-                        color: 'var(--text-primary)',
-                        border: 'none',
-                        backgroundColor: 'transparent',
-                        borderRadius: 'var(--radius-sm)',
-                        cursor: 'pointer',
-                        textAlign: 'left'
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-card-hover)'}
-                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                    >
-                      <Sun size={14} />
-                      <span>{t('dashboard.zones.turn_on_all')}</span>
-                    </button>
-                  )}
-
                   {hasOverlayZone && (
                     <button
                       onClick={() => {
-                        handleResumeAll();
+                        handleClearAllOverlays();
                         setIsQuickActionsOpen(false);
                       }}
                       style={{
@@ -501,7 +445,7 @@ export default function HomePage() {
                       onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                     >
                       <RotateCcw size={14} />
-                      <span>{t('dashboard.zones.resume_all')}</span>
+                      <span>{t('dashboard.zones.clear_all_overlays', t('dashboard.zones.resume_all', 'Clear All Overlays'))}</span>
                     </button>
                   )}
                 </div>

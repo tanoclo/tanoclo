@@ -25,8 +25,8 @@ const ORIENTATION_MAP = {
 };
 
 const MOUNT_STATE_MAP = {
-    0: 'CALIBRATED',
-    1: 'CALIBRATING',
+    0: 'CALIBRATING',
+    1: 'CALIBRATED',
     2: 'MOUNTED'
 };
 
@@ -232,14 +232,14 @@ function getPool() {
         try {
             const dbConfig = {
                 host: config.db.host,
-                port: 3306,
+                port: config.db.port || 3306,
                 database: config.db.database,
                 user: config.db.user,
                 password: config.db.password,
                 charset: 'utf8mb4',
                 timezone: 'Z',
                 waitForConnections: true,
-                connectionLimit: process.env.IS_CHILD_PROCESS === 'true' ? 15 : 20,
+                connectionLimit: parseInt(process.env.DB_CONNECTION_LIMIT || (process.env.IS_CHILD_PROCESS === 'true' ? '15' : '25'), 10),
                 maxIdle: 10,
                 idleTimeout: 60000,
                 queueLimit: 50,
@@ -358,10 +358,9 @@ async function bootstrap() {
         await conn.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\``);
     } catch (err) {
         _log('error', `[BOOTSTRAP FATAL] Failed to create database: ${err.message}`);
-        try { await conn.end(); } catch (e) { }
         throw err;
     } finally {
-        try { await conn.end(); } catch (e) { }
+        try { await conn.end(); } catch (e) { _log('debug', `conn.end error in bootstrap: ${e.message}`); }
     }
 
     // Now connect to the pool to check tables
@@ -425,7 +424,7 @@ async function bootstrap() {
             _log('info', `Database successfully seeded from tanoclo.sql.`);
         } catch (err) {
             _log('error', `[BOOTSTRAP FATAL] Seeding failed: ${err.message}`);
-            try { await dbConn.rollback(); } catch (e) { }
+            try { await dbConn.rollback(); } catch (e) { _log('debug', `Rollback error in bootstrap: ${e.message}`); }
             throw err;
         } finally {
             dbConn.release();

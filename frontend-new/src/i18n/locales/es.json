@@ -358,7 +358,7 @@
     "device_advanced": {
       "display_contrast": "Contraste de pantalla",
       "warning_title": "ADVERTENCIA DE CONFIGURACIÓN PELIGROSA",
-      "warning_desc": "Estos parámetros avanzados de ajuste del dispositivo son peligrosos y no están totalmente probados. La modificación de los tiempos de pantalla/salvapantallas o los límites de actuadores puede causar quemaduras en la pantalla, drenaje excesivo de batería, daños mecánicos o fallos en la válvula. Usar con extrema precaución.",
+      "warning_desc": "Estos parámetros avanzados de ajuste del dispositivo son peligrosos. La modificación de los tiempos de pantalla/salvapantallas, los límites de actuadores o los registros internos puede causar quemaduras en la pantalla, drenaje excesivo de batería, daños mecánicos o fallos en la válvula. Usar con extrema precaución. (Nota: Esta página de configuración avanzada está actualmente disponible solo en inglés.)",
       "display_screensaver_title": "Configuración de pantalla y salvapantallas",
       "display_off_timeout": "Tiempo de apagado de pantalla",
       "display_dim_level": "Nivel de atenuación de pantalla",
@@ -823,7 +823,7 @@
     },
     "zone_advanced": {
       "warning_title": "ADVERTENCIA DE CONFIGURACIÓN PELIGROSA",
-      "warning_desc": "Estas funciones de ajuste avanzadas y especiales no están totalmente probadas. Modificarlas puede causar inestabilidad en el sistema, fallos de hardware, comportamiento de calefacción inesperado o alto consumo de energía.",
+      "warning_desc": "Estas funciones de ajuste avanzadas y especiales son peligrosas. Modificarlas puede causar inestabilidad en el sistema, fallos de hardware, comportamiento de calefacción inesperado o alto consumo de energía. Usar con precaución. (Nota: Esta página de configuración avanzada está actualmente disponible solo en inglés.)",
       "pid_title": "Ajuste PID avanzado",
       "kp": "Ganancia proporcional (Kp)",
       "ki": "Ganancia integral (Ki)",

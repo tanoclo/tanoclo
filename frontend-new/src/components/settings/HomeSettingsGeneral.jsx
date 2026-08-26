@@ -7,9 +7,11 @@
  */
 
 
+import { useState } from 'react';
 import Card from '../common/Card';
 import Button from '../common/Button';
-import { Save } from 'lucide-react';
+import { Save, Flame } from 'lucide-react';
+import { STORAGE_KEYS, DEFAULT_TEMPERATURES, TEMP_MIN_HEATING, TEMP_MAX_HEATING, TEMP_STEP } from '../../utils/constants';
 
 const countries = [
   { code: 'ABW', name: 'Aruba' },
@@ -310,6 +312,11 @@ export default function HomeSettingsGeneral({
   isMobile,
   t
 }) {
+  const [boostTemp, setBoostTemp] = useState(() => {
+    const stored = parseFloat(localStorage.getItem(STORAGE_KEYS.BOOST_TEMPERATURE));
+    return !isNaN(stored) ? stored : DEFAULT_TEMPERATURES.BOOST;
+  });
+
   return (
     <form onSubmit={handleSaveProperties} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       {/* Address Fields */}
@@ -562,6 +569,53 @@ export default function HomeSettingsGeneral({
           <Save size={16} />
           <span>{isSavingProperties ? t('settings.saving') : t('common.save')}</span>
         </Button>
+      </Card>
+
+      {/* Quick Actions & Boost Configuration */}
+      <Card style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <h3 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <Flame size={16} style={{ color: 'var(--primary)' }} />
+          <span>{t('settings.quick_actions_settings', 'Quick Actions Preferences')}</span>
+        </h3>
+        <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: 0 }}>
+          {t('settings.boost_temp_desc', 'Set the target temperature used when activating "Boost All" from the dashboard.')}
+        </p>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxWidth: '320px' }}>
+          <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+            {t('settings.boost_temperature', 'Boost All Temperature (°C)')}
+          </label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <input 
+              type="number"
+              min={TEMP_MIN_HEATING}
+              max={TEMP_MAX_HEATING}
+              step={TEMP_STEP}
+              value={boostTemp}
+              onChange={(e) => {
+                const val = parseFloat(e.target.value);
+                if (!isNaN(val)) {
+                  const clamped = Math.min(TEMP_MAX_HEATING, Math.max(TEMP_MIN_HEATING, val));
+                  setBoostTemp(clamped);
+                  localStorage.setItem(STORAGE_KEYS.BOOST_TEMPERATURE, clamped.toString());
+                }
+              }}
+              style={{
+                backgroundColor: 'var(--bg-input)',
+                border: '1px solid var(--border-color)',
+                color: 'var(--text-primary)',
+                padding: '0.5rem 0.75rem',
+                borderRadius: 'var(--radius-sm)',
+                outline: 'none',
+                width: '100px',
+                fontWeight: 700
+              }}
+            />
+            <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+              ({TEMP_MIN_HEATING}°C - {TEMP_MAX_HEATING}°C)
+            </span>
+          </div>
+        </div>
       </Card>
     </form>
   );

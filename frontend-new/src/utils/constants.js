@@ -33,7 +33,8 @@ export const STORAGE_KEYS = {
   AUTH_TOKEN: 'tanoclo_token',
   REFRESH_TOKEN: 'tanoclo_refresh_token',
   THEME: 'tanoclo_theme',
-  USER_LOCALE: 'tado_locale'
+  USER_LOCALE: 'tado_locale',
+  BOOST_TEMPERATURE: 'tanoclo_boost_temperature'
 };
 
 // Manual override modes matching Tado API endpoints
@@ -53,12 +54,16 @@ export const ZONE_TYPES = {
 export const DEFAULT_TEMPERATURES = {
   HEATING: 20.0,
   AWAY: 15.0,
-  FROST_PROTECTION: 5.0
+  FROST_PROTECTION: 5.0,
+  BOOST: 25.0
 };
 
 // Temperature configuration step ranges
 export const TEMP_MIN_HEATING = 5.0;
+export const TEMP_MAX_HEATING = 25.0;
+export const TEMP_MAX_DEFAULT = TEMP_MAX_HEATING;
 export const TEMP_MIN_DHW = 29.0;
-export const TEMP_MAX_DEFAULT = 25.0;
+export const TEMP_MAX_DHW = 65.0;
 export const TEMP_STEP = 0.5;
+
 

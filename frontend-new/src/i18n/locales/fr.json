@@ -358,7 +358,7 @@
     "device_advanced": {
       "display_contrast": "Contraste de l'écran",
       "warning_title": "AVERTISSEMENT PARAMÈTRES DANGEREUX",
-      "warning_desc": "Ces paramètres avancés d'ajustement sont dangereux et non entièrement testés. La modification des temporisations d'affichage/économiseur d'écran ou des limites d'actionneur peut entraîner un marquage de l'écran, une consommation excessive de batterie, des dommages mécaniques ou une panne de la vanne. À utiliser avec une extrême précaution.",
+      "warning_desc": "Ces paramètres avancés d'ajustement sont dangereux. La modification des temporisations d'affichage/économiseur d'écran, des limites d'actionneur ou des registres internes peut entraîner un marquage de l'écran, une consommation excessive de batterie, des dommages mécaniques ou une panne de la vanne. À utiliser avec une extrême précaution. (Remarque : cette page de paramètres avancés est actuellement disponible en anglais uniquement.)",
       "display_screensaver_title": "Paramètres d'affichage & économiseur d'écran",
       "display_off_timeout": "Délai d'extinction de l'affichage",
       "display_dim_level": "Niveau de baisse de luminosité",
@@ -823,7 +823,7 @@
     },
     "zone_advanced": {
       "warning_title": "AVERTISSEMENT PARAMÈTRES DANGEREUX",
-      "warning_desc": "Ces fonctionnalités d'ajustement avancées ne sont pas entièrement testées. Les modifier peut entraîner une instabilité du système, un dysfonctionnement matériel, un comportement de chauffage inattendu ou une forte consommation d'énergie.",
+      "warning_desc": "Ces fonctionnalités d'ajustement avancées sont dangereuses. Les modifier peut entraîner une instabilité du système, un dysfonctionnement matériel, un comportement de chauffage inattendu ou une forte consommation d'énergie. À utiliser avec précaution. (Remarque : cette page de paramètres avancés est actuellement disponible en anglais uniquement.)",
       "pid_title": "Réglage PID avancé",
       "kp": "Gain proportionnel (Kp)",
       "ki": "Gain intégral (Ki)",

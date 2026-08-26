@@ -289,8 +289,8 @@ async function createDevice(req, res) {
 
         const upperSerialNo = serialNo.toUpperCase();
         const match = /^(VA|RU|IB|BU|WR|SU|BP|BR)(\d{10})$/.exec(upperSerialNo);
-        if (!match) {
-            return res.status(400).json({ error: 'invalid_serial', message: 'Invalid serial number format' });
+        if (!match || Number(match[2]) > 4294967295) {
+            return res.status(400).json({ error: 'invalid_serial', message: 'Invalid serial number format. Numeric part must be a 10-digit number <= 4294967295.' });
         }
 
         const prefix = match[1];
@@ -475,6 +475,11 @@ async function setActuatorLimits(req, res) {
         const [existing] = await pool.execute('SELECT * FROM devices WHERE serial_no = ? AND home_id = ?', [deviceId, homeId]);
         if (existing.length === 0) return res.status(404).json({ error: 'Device not found' });
 
+        await commandApi.pushActuatorLimits(deviceId, { lowSteps, highSteps, driveConstant }).catch(err => {
+            if (err.statusCode === 400) throw err;
+            _log('warn', `Failed to push actuator limits for ${deviceId}: ${err.message}`);
+        });
+
         const updates = [];
         const params = [];
         if (lowSteps !== undefined && lowSteps !== null) { updates.push('field_0273 = ?'); params.push(Number(lowSteps)); }
@@ -486,10 +491,6 @@ async function setActuatorLimits(req, res) {
             params.push(homeId);
             await pool.execute(`UPDATE devices SET ${updates.join(', ')} WHERE serial_no = ? AND home_id = ?`, params);
         }
-
-        await commandApi.pushActuatorLimits(deviceId, { lowSteps, highSteps, driveConstant }).catch(err => {
-            _log('warn', `Failed to push actuator limits for ${deviceId}: ${err.message}`);
-        });
 
         const mqttHaDiscovery = require('../../lib/mqtt-ha-discovery');
         mqttHaDiscovery.publishAllDiscovery().catch(() => {});
@@ -596,6 +597,159 @@ async function unassociateNeighbor(req, res) {
     }
 }
 
+async function triggerMount(req, res) {
+    try {
+        const { deviceId } = req.params;
+        const homeId = await verifyDeviceHome(req, deviceId);
+        const action = (req.body && req.body.action) || 'start';
+        await commandApi.pushMountCalibration(deviceId, action);
+        res.json({ ok: true, message: `Mount calibration ${action} sent to ${deviceId}` });
+    } catch (err) {
+        if (err.statusCode) return res.status(err.statusCode).json({ error: err.message.toLowerCase() });
+        _log('error', `Trigger mount calibration error: ${err.message}`);
+        res.status(500).json({ error: 'internal_error' });
+    }
+}
+
+async function triggerSelftest(req, res) {
+    try {
+        const { deviceId } = req.params;
+        const homeId = await verifyDeviceHome(req, deviceId);
+        await commandApi.pushSelftestTrigger(deviceId);
+        res.json({ ok: true, message: `Selftest request sent to ${deviceId}` });
+    } catch (err) {
+        if (err.statusCode) return res.status(err.statusCode).json({ error: err.message.toLowerCase() });
+        _log('error', `Trigger selftest error: ${err.message}`);
+        res.status(500).json({ error: 'internal_error' });
+    }
+}
+
+async function triggerDeviceDebug(req, res) {
+    try {
+        const { deviceId } = req.params;
+        const homeId = await verifyDeviceHome(req, deviceId);
+        const body = req.body || {};
+        const subpath = body.subpath || req.query.subpath || 'st';
+        const params = {
+            method: body.method || req.query.method,
+            adr: body.adr || req.query.adr,
+            fid: body.fid !== undefined ? body.fid : req.query.fid,
+            len: body.len || req.query.len,
+            value: body.value !== undefined ? body.value : req.query.value
+        };
+        const mid = await commandApi.pushDeviceDebug(deviceId, subpath, params);
+
+        return res.json({
+            ok: true,
+            mid,
+            pending: true,
+            message: `Debug request (MID ${mid}) sent to ${deviceId}`
+        });
+    } catch (err) {
+        if (err.statusCode) return res.status(err.statusCode).json({ error: err.message.toLowerCase() });
+        _log('error', `Trigger device debug error: ${err.message}`);
+        res.status(500).json({ error: 'internal_error' });
+    }
+}
+
+async function rebootDevice(req, res) {
+    try {
+        const { deviceId } = req.params;
+        const homeId = await verifyDeviceHome(req, deviceId);
+        await commandApi.pushDeviceReboot(deviceId);
+        res.json({ ok: true, message: `Reboot command sent to ${deviceId}` });
+    } catch (err) {
+        if (err.statusCode) return res.status(err.statusCode).json({ error: err.message.toLowerCase() });
+        _log('error', `Reboot device error: ${err.message}`);
+        res.status(500).json({ error: 'internal_error' });
+    }
+}
+
+async function refreshRfKey(req, res) {
+    try {
+        const { deviceId } = req.params;
+        const homeId = await verifyDeviceHome(req, deviceId);
+        await commandApi.handleRfKeyRefresh(req, res, deviceId);
+    } catch (err) {
+        if (err.statusCode) return res.status(err.statusCode).json({ error: err.message.toLowerCase() });
+        _log('error', `Refresh RF key error: ${err.message}`);
+        res.status(500).json({ error: 'internal_error' });
+    }
+}
+
+async function refreshConfig(req, res) {
+    try {
+        const { deviceId } = req.params;
+        const homeId = await verifyDeviceHome(req, deviceId);
+        await commandApi.pushConfigRefresh(deviceId);
+        res.json({ ok: true, message: `Config refresh sent to ${deviceId}` });
+    } catch (err) {
+        if (err.statusCode) return res.status(err.statusCode).json({ error: err.message.toLowerCase() });
+        _log('error', `Refresh config error: ${err.message}`);
+        res.status(500).json({ error: 'internal_error' });
+    }
+}
+
+async function startMemoryDump(req, res) {
+    try {
+        const { deviceId } = req.params;
+        const homeId = await verifyDeviceHome(req, deviceId);
+        const { startAdr, totalBytes, chunkSize, restart } = req.body || {};
+        const memoryDumper = require('../../lib/memory-dumper');
+        const status = memoryDumper.startDump(deviceId, homeId, startAdr, totalBytes, chunkSize, !!restart);
+        res.json({ ok: true, status });
+    } catch (err) {
+        if (err.statusCode) return res.status(err.statusCode).json({ error: err.message.toLowerCase() });
+        _log.error(`Start memory dump error: ${err.message}`);
+        res.status(500).json({ error: 'internal_error' });
+    }
+}
+
+async function getMemoryDumpStatus(req, res) {
+    try {
+        const { deviceId } = req.params;
+        await verifyDeviceHome(req, deviceId);
+        const memoryDumper = require('../../lib/memory-dumper');
+        const status = memoryDumper.getStatus(deviceId);
+        res.json({ ok: true, status });
+    } catch (err) {
+        if (err.statusCode) return res.status(err.statusCode).json({ error: err.message.toLowerCase() });
+        _log.error(`Get memory dump status error: ${err.message}`);
+        res.status(500).json({ error: 'internal_error' });
+    }
+}
+
+async function cancelMemoryDump(req, res) {
+    try {
+        const { deviceId } = req.params;
+        await verifyDeviceHome(req, deviceId);
+        const memoryDumper = require('../../lib/memory-dumper');
+        const result = memoryDumper.cancelDump(deviceId);
+        res.json({ ok: true, result });
+    } catch (err) {
+        if (err.statusCode) return res.status(err.statusCode).json({ error: err.message.toLowerCase() });
+        _log.error(`Cancel memory dump error: ${err.message}`);
+        res.status(500).json({ error: 'internal_error' });
+    }
+}
+
+async function downloadMemoryDump(req, res) {
+    try {
+        const { deviceId } = req.params;
+        await verifyDeviceHome(req, deviceId);
+        const memoryDumper = require('../../lib/memory-dumper');
+        const fileInfo = memoryDumper.getDumpFilePath(deviceId);
+        if (!fileInfo) {
+            return res.status(404).json({ error: 'no_dump_file_found' });
+        }
+        res.download(fileInfo.filePath, fileInfo.fileName);
+    } catch (err) {
+        if (err.statusCode) return res.status(err.statusCode).json({ error: err.message.toLowerCase() });
+        _log.error(`Download memory dump error: ${err.message}`);
+        res.status(500).json({ error: 'internal_error' });
+    }
+}
+
 router.get('/:homeId/devices', getDeviceList);
 router.get('/:homeId/deviceList', getDeviceList);
 router.post('/:homeId/devices', createDevice);
@@ -612,6 +766,16 @@ router.put('/:homeId/devices/:deviceId/actuatorLimits', setActuatorLimits);
 router.put('/:homeId/devices/:deviceId/displaySettings', setDisplaySettings);
 router.put('/:homeId/tanoclo/devices/:deviceId/friendlyName', setFriendlyName);
 router.post('/:homeId/devices/:deviceId/unassociate-neighbor', unassociateNeighbor);
+router.post('/:homeId/devices/:deviceId/mount', triggerMount);
+router.post('/:homeId/devices/:deviceId/selftest', triggerSelftest);
+router.post('/:homeId/devices/:deviceId/debug', triggerDeviceDebug);
+router.post('/:homeId/devices/:deviceId/debug/dump/start', startMemoryDump);
+router.get('/:homeId/devices/:deviceId/debug/dump/status', getMemoryDumpStatus);
+router.post('/:homeId/devices/:deviceId/debug/dump/cancel', cancelMemoryDump);
+router.get('/:homeId/devices/:deviceId/debug/dump/download', downloadMemoryDump);
+router.post('/:homeId/devices/:deviceId/reboot', rebootDevice);
+router.post('/:homeId/devices/:deviceId/rfkey/refresh', refreshRfKey);
+router.post('/:homeId/devices/:deviceId/config/refresh', refreshConfig);
 
 router.get('/:deviceId', getDevice);
 router.delete('/:deviceId', deleteDevice);
@@ -627,5 +791,11 @@ router.put('/:deviceId/actuatorLimits', setActuatorLimits);
 router.put('/:deviceId/displaySettings', setDisplaySettings);
 router.put('/tanoclo/devices/:deviceId/friendlyName', setFriendlyName);
 router.post('/:deviceId/unassociate-neighbor', unassociateNeighbor);
+router.post('/:deviceId/mount', triggerMount);
+router.post('/:deviceId/selftest', triggerSelftest);
+router.post('/:deviceId/debug', triggerDeviceDebug);
+router.post('/:deviceId/reboot', rebootDevice);
+router.post('/:deviceId/rfkey/refresh', refreshRfKey);
+router.post('/:deviceId/config/refresh', refreshConfig);
 
 module.exports = router;

@@ -263,7 +263,7 @@ async function handleAuthToken(ws, frame, coapMsg, decoded, peerInfo, rawData) {
         if (existing && existing.ws !== ws) {
             log('warn', `Reconnection for ${deviceId}: Cleaning up stale session.`);
             wsToBridgeId.delete(existing.ws);
-            try { existing.ws.end(); } catch (e) { }
+            try { existing.ws.end(); } catch (e) { log('debug', `Stale socket end error: ${e.message}`); }
         }
 
         clients.set(deviceId, {

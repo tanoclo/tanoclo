@@ -86,6 +86,15 @@ export function useSSE(homeId) {
           mutateRef.current(SWR_KEYS.zoneStates(homeId));
         });
 
+        // Device debug response: push live diagnostic/NVM response directly to components
+        es.addEventListener('device-debug-response', (e) => {
+          logger.debug('SSE received device-debug-response:', e.data);
+          try {
+            const parsed = JSON.parse(e.data);
+            window.dispatchEvent(new CustomEvent('device-debug-response', { detail: parsed }));
+          } catch (_err) {}
+        });
+
         // Presence update: invalidate and reload HOME/AWAY occupancy state
         es.addEventListener('home-state', (e) => {
           logger.debug('SSE received home-state:', e.data);
@@ -97,6 +106,9 @@ export function useSSE(homeId) {
           logger.error('SSE Error, reconnecting:', err);
           if (es) {
             es.close();
+          }
+          if (esRef.current === es) {
+            esRef.current = null;
           }
           if (active) {
             reconnectAttempts++;
@@ -112,6 +124,7 @@ export function useSSE(homeId) {
         };
       } catch (err) {
         logger.error('Failed to establish SSE connection:', err);
+        esRef.current = null;
         if (active) {
           reconnectAttempts++;
           if (reconnectAttempts > MAX_RECONNECT_ATTEMPTS) {
