@@ -153,19 +153,27 @@ async function buildDeviceConfigTLV(deviceId) {
     }
 
     // Ensure hvac_diagnostic_015d (0x015d) is present
-    if (isRU || (isIB && homeHasBoiler)) {
+    if (isRU) {
+        if (dbDev.is_emulated || dbDev.emulated_mode) {
+            fields['0x015d'] = 200;
+        } else if (dbDev.field_015d !== null && dbDev.field_015d !== undefined) {
+            fields['0x015d'] = Number(dbDev.field_015d);
+        } else {
+            fields['0x015d'] = 71; // 0x47
+        }
+    } else if (isIB && homeHasBoiler) {
         const [hsRows] = await p.execute('SELECT field_015d FROM heating_systems WHERE home_id = ? LIMIT 1', [dbDev.home_id]);
         const hsField015d = hsRows.length > 0 ? hsRows[0].field_015d : null;
         if (hsField015d != null) {
             fields['0x015d'] = hsField015d;
         } else if (dbDev.field_015d) {
-            fields['0x015d'] = dbDev.field_015d;
+            fields['0x015d'] = Number(dbDev.field_015d);
         } else {
             fields['0x015d'] = 71; // 0x47
         }
     } else {
         if (dbDev.field_015d) {
-            fields['0x015d'] = dbDev.field_015d;
+            fields['0x015d'] = Number(dbDev.field_015d);
         } else {
             fields['0x015d'] = 112; // 0x70
         }

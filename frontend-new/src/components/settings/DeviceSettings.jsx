@@ -21,7 +21,8 @@ import {
   updateOrientation, deleteDevice, 
   startPairing, stopPairing, updateActuatorLimits,
   updateFriendlyName, updateDisplaySettings,
-  rebootDevice, refreshRfKey, refreshDeviceConfig
+  rebootDevice, refreshRfKey, refreshDeviceConfig,
+  updateDeviceRole
 } from '../../api/devices';
 import { 
   addDeviceToZone, removeDeviceFromZone, createZone 
@@ -130,6 +131,11 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
 
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
   const [confirmZoneChangeData, setConfirmZoneChangeData] = useState(null); // { targetValue, name }
+  const [isConfirmRoleModalOpen, setIsConfirmRoleModalOpen] = useState(false);
+  const [isWiredRoleModalOpen, setIsWiredRoleModalOpen] = useState(false);
+  const [createDhwChecked, setCreateDhwChecked] = useState(false);
+  const [isChangingRole, setIsChangingRole] = useState(false);
+  const hasDhwZone = Boolean((zones || []).some(z => z.type === 'HOT_WATER'));
 
   useEffect(() => {
     if (device) {
@@ -292,6 +298,39 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
     } finally {
       setIsChangingZone(false);
       setIsCreatingZone(false);
+    }
+  };
+
+  const handleRoleSelect = (targetRole) => {
+    if (isReadOnly || device?.isEmulated) return;
+    const currentRole = device?.field_015d === 200 || device?.deviceRole === 'WIRELESS_SENSOR' ? 200 : 71;
+    if (targetRole === currentRole) return;
+
+    if (targetRole === 200) {
+      setIsConfirmRoleModalOpen(true);
+    } else {
+      setCreateDhwChecked(!hasDhwZone);
+      setIsWiredRoleModalOpen(true);
+    }
+  };
+
+  const executeRoleChange = async (roleToSet, options = {}) => {
+    setIsChangingRole(true);
+    try {
+      await updateDeviceRole(homeId, device.serialNo, roleToSet, options);
+      showToast(t('settings.device_role_updated', 'Device role updated successfully'), 'success');
+      await Promise.all([
+        mutate(),
+        mutateDevices ? mutateDevices() : Promise.resolve(),
+        mutateZones ? mutateZones() : Promise.resolve()
+      ]);
+    } catch (err) {
+      logger.error('Failed to update device role:', err);
+      showToast(err.message || t('settings.failed_update_device_role', 'Failed to update device role'), 'error');
+    } finally {
+      setIsChangingRole(false);
+      setIsConfirmRoleModalOpen(false);
+      setIsWiredRoleModalOpen(false);
     }
   };
 
@@ -556,6 +595,8 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
             zones={zones}
             devices={allDevices}
             circuits={circuits}
+            handleRoleSelect={handleRoleSelect}
+            isChangingRole={isChangingRole}
             t={t}
           />
 
@@ -886,6 +927,65 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
             </Button>
             <Button type="button" variant="primary" style={{ backgroundColor: 'var(--warning, #ef4444)', borderColor: 'var(--warning, #ef4444)' }} onClick={handleConfirmPairing} disabled={isTogglingPairing}>
               <span>{t('tanoclo_ex.pairing_warning_confirm')}</span>
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Confirm Role Change Modal (to Wireless Sensor) */}
+      <ConfirmModal
+        isOpen={isConfirmRoleModalOpen}
+        title={t('settings.confirm_role_change_title', 'Change to Wireless Sensor?')}
+        message={t('settings.confirm_role_change_msg', 'Switching this device to a Wireless Sensor will disable it as a Zone/Boiler Controller, remove it from all assigned rooms, and delete any bound heating circuits or hot water (DHW) zones. Are you sure you want to proceed?')}
+        confirmText={t('settings.change_to_wireless_sensor', 'Change to Wireless Sensor')}
+        cancelText={t('common.cancel', 'Cancel')}
+        variant="danger"
+        isLoading={isChangingRole}
+        onConfirm={() => executeRoleChange(200)}
+        onCancel={() => setIsConfirmRoleModalOpen(false)}
+      />
+
+      {/* Switch to Wired Thermostat Modal */}
+      <Modal
+        isOpen={isWiredRoleModalOpen}
+        onClose={() => setIsWiredRoleModalOpen(false)}
+        title={t('settings.switch_to_wired_thermostat', 'Switch to Wired Thermostat')}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          <p style={{ margin: 0, fontSize: '0.9rem', lineHeight: 1.5, color: 'var(--text-primary)' }}>
+            {t('settings.switch_to_wired_desc', 'Switching this device to Wired Thermostat (71) enables it as a boiler/circuit driver. A heating circuit will be allocated for this device so other rooms can use it as a Zone Controller.')}
+          </p>
+
+          {!hasDhwZone && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', cursor: 'pointer', backgroundColor: 'var(--bg-input)', padding: '0.75rem 1rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)' }}>
+              <input
+                type="checkbox"
+                checked={createDhwChecked}
+                onChange={(e) => setCreateDhwChecked(e.target.checked)}
+                style={{ width: '18px', height: '18px', accentColor: 'var(--accent-primary)', cursor: 'pointer' }}
+              />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                  {t('settings.create_dhw_zone_label', 'Create Hot Water (DHW) zone')}
+                </span>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                  {t('settings.create_dhw_zone_desc', 'Creates a dedicated Domestic Hot Water zone controlled by this thermostat.')}
+                </span>
+              </div>
+            </label>
+          )}
+
+          <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+            <Button type="button" variant="secondary" onClick={() => setIsWiredRoleModalOpen(false)}>
+              {t('common.cancel', 'Cancel')}
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              disabled={isChangingRole}
+              onClick={() => executeRoleChange(71, { createDhwZone: !hasDhwZone && createDhwChecked })}
+            >
+              <span>{isChangingRole ? t('common.saving', 'Saving...') : t('settings.confirm_switch_wired', 'Switch to Wired')}</span>
             </Button>
           </div>
         </div>

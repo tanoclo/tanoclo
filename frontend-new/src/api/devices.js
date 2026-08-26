@@ -95,6 +95,19 @@ export function updateChildLock(homeId, deviceId, childLockEnabled) {
 }
 
 /**
+ * Updates device role between Wired Thermostat (71) and Wireless Sensor (200)
+ * @param {string|number} homeId
+ * @param {string} deviceId
+ * @param {number|string} role - 71 or 200
+ */
+export function updateDeviceRole(homeId, deviceId, role, options = {}) {
+  return apiFetch(`/api/v2/homes/${homeId}/devices/${deviceId}/role`, {
+    method: 'PUT',
+    body: { role, ...options }
+  });
+}
+
+/**
  * Updates orientation of a valve adapter device (HORIZONTAL/VERTICAL)
  * @param {string|number} homeId
  * @param {string} deviceId

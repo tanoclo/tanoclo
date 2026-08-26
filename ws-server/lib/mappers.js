@@ -64,7 +64,13 @@ function mapDevice(d) {
         displayActiveTimeout: d.field_02b2 !== null && d.field_02b2 !== undefined ? parseInt(d.field_02b2, 10) : 0,
         ipv6Address: d.ipv6_address || null,
         isEmulated: Boolean(d.is_emulated || d.emulated_mode),
-        emulatedMode: d.emulated_mode || null
+        emulatedMode: d.emulated_mode || null,
+        field_015d: Boolean(d.is_emulated || d.emulated_mode) 
+            ? (d.device_type && d.device_type.startsWith('RU') ? 200 : (d.field_015d !== null && d.field_015d !== undefined ? parseInt(d.field_015d, 10) : (d.device_type === 'VA02' ? 112 : 71)))
+            : (d.field_015d !== null && d.field_015d !== undefined ? parseInt(d.field_015d, 10) : (d.device_type && d.device_type.startsWith('RU') ? 71 : (d.device_type === 'VA02' ? 112 : null))),
+        deviceRole: (Boolean(d.is_emulated || d.emulated_mode) && d.device_type && d.device_type.startsWith('RU')) || (d.field_015d === 200 || d.field_015d === '200')
+            ? 'WIRELESS_SENSOR'
+            : (d.device_type && d.device_type.startsWith('RU') ? 'WIRED_THERMOSTAT' : null)
     };
 
     if ((d.device_type && d.device_type.startsWith('IB')) || mapped.isEmulated) {

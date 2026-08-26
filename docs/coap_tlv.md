@@ -266,8 +266,8 @@ This dictionary consolidates all observed TLV fields, mapping their hex codes, t
 | `0x0158` | `device_ui_flags_0158` | `u16be` | 1.0 | bits | `/d/{id}/config` | `devices` | `field_0158` | UI settings bitfield. Bit 9 (`0x0200`)=Dazzle mode, Bit 10 (`0x0400`)=Display Always-On. |
 | `0x015a` | `device_config` | `bytes` | 1.0 | hash | `/d/{id}/config` | `devices` | `field_015a` | ETag determinants block configuration hash. |
 | `0x015c` | `home_id` | `u32be` | 1.0 | - | `/d/{id}/config` | `devices` | `home_id` | Unique 4-byte Home ID. |
-| `0x015d` | `device_type` | `u16be` | 1.0 | - | `/d/{id}/config`, `/codes`| `heating_systems` | `field_015d` | Device type index (RU=71, VA Horizontal=112, VA Vertical=113). |
-| `0x015e` | `zone_binding_pairs` | `bytes` | 1.0 | pairs | `/d/{id}/config` | `devices` | `field_015e` | Topology-aware binding role+zone array. |
+| `0x015d` | `device_type` | `u16be` | 1.0 | - | `/d/{id}/config`, `/codes`| `devices`, `heating_systems` | `field_015d` | Device type / role index (RU Wired=71, RU Wireless Sensor=200, VA Horizontal=112, VA Vertical=113). |
+| `0x015e` | `zone_binding_pairs` | `bytes` | 1.0 | pairs | `/d/{id}/config` | `devices` | `field_015e` | Topology-aware binding role+zone array (2-byte pairs: Role byte + Zone byte). |
 | `0x0160` | `device_reset_reason` | `u8` | 1.0 | enum | `/d/{id}/sen` | `device_measurements` | `field_0160` | Hardware reset/reboot reason code (POR, PIN, software reset, watchdog). |
 | `0x0161` | `opentherm_voltage` | `u16be` | 0.001 | V | `/d/{id}/sen` | `device_measurements` | `field_0161` | OpenTherm loop supply voltage in Volts (mV raw). |
 | `0x0162` | `battery_mv` | `u16be` | 1.0 | mV | `/d/{id}/sen` | `device_measurements` | `field_0162` | Power supply voltage. |
@@ -553,10 +553,20 @@ Unlike Valve Actuators, the Internet Bridge ETag is dynamic.
 This section documents the low-level structure of bitfields and enums.
 
 ### 6.1 Device Type (`0x015d`)
-Represents the hardware configuration type reported by Room Units and Valve Actuators:
-*   `71` (0x47): Room Unit (RU)
+Represents the hardware configuration and operational role reported by Room Units and Valve Actuators:
+*   `71` (0x47): Room Unit (RU) - Wired Thermostat / Heating Controller / Boiler Driver
+*   `200` (0xc8): Room Unit (RU) - Wireless Temperature Sensor (Measuring leader only, non-controller)
 *   `112` (0x70): Valve Actuator (VA) - Horizontal mounting configuration
 *   `113` (0x71): Valve Actuator (VA) - Vertical mounting configuration
+
+### 6.1b Zone Binding Pairs (`0x015e`)
+An array of 2-byte pairs formatted as `[Role Byte (1 byte)][Zone ID (1 byte)]`:
+*   `0x02`: **Remote Heating Circuit Controller** (Controls boiler/heating circuit for a room where it is not the measuring device).
+*   `0x03`: **RU Zone Follower** (RU present in zone where another device is the measuring leader).
+*   `0x05`: **VA Zone Member** (Valve actuator in zone).
+*   `0x09`: **Wireless Temperature Sensor** (Measuring leader only, non-actuator / non-driver).
+*   `0x0B`: **RU Leader & Controller** (Wired Thermostat acting as measuring leader and heating circuit controller).
+*   `0x0D`: **Circuit Driver / Measuring Leader** (Bridge / VA Leader / Hot Water).
 
 ### 6.2 UI Config Flags (`0x0158`)
 A 16-bit big-endian bitmask (`u16be`) defining active display/user interface behavior:

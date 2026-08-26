@@ -23072,7 +23072,8 @@ CREATE TABLE `devices` (
   `cap_radio_encryption_key_access` tinyint(1) DEFAULT 0,
   `field_019e` tinyint(4) DEFAULT 112 COMMENT 'display_brightness',
   `field_019d` tinyint(3) UNSIGNED DEFAULT 128 COMMENT 'display_contrast',
-  `field_02b2` int(11) DEFAULT 0 COMMENT 'display_active_timeout'
+  `field_02b2` int(11) DEFAULT 0 COMMENT 'display_active_timeout',
+  `field_015d` int(11) DEFAULT NULL COMMENT 'device_type/role: 71=Wired Thermostat, 200=Wireless Sensor, 112/113=VA'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `device_measurements` (

@@ -750,6 +750,139 @@ async function downloadMemoryDump(req, res) {
     }
 }
 
+async function setDeviceRole(req, res) {
+    try {
+        const { deviceId } = req.params;
+        const homeId = await verifyDeviceHome(req, deviceId);
+        const pool = db.getPool();
+
+        const { isReadOnly, devBypass } = await checkZoneConfigReadonly(homeId);
+        if (isReadOnly && !devBypass) {
+            return res.status(403).json({ error: 'zone_config_readonly', message: 'Zone configuration is read-only' });
+        }
+
+        const dev = await db.getDeviceByFullSerial(deviceId);
+        if (!dev || dev.home_id !== homeId) {
+            return res.status(404).json({ error: 'Device not found' });
+        }
+
+        if (!dev.device_type || !dev.device_type.startsWith('RU')) {
+            return res.status(400).json({ error: 'invalid_device_type', message: 'Role switching is only supported on RU devices' });
+        }
+
+        if (dev.is_emulated || dev.emulated_mode) {
+            return res.status(400).json({ error: 'emulated_ru_role_immutable', message: 'Emulated RU devices can only be wireless sensors' });
+        }
+
+        let { role, field_015d } = req.body || {};
+        let targetRole = field_015d !== undefined ? parseInt(field_015d, 10) : (typeof role === 'string' ? (role.toUpperCase() === 'WIRELESS_SENSOR' ? 200 : 71) : parseInt(role, 10));
+
+        if (targetRole !== 71 && targetRole !== 200) {
+            return res.status(400).json({ error: 'invalid_role', message: 'Role must be 71 (Wired Thermostat) or 200 (Wireless Sensor)' });
+        }
+
+        if (targetRole === 200) {
+            // Changing to Wireless Sensor:
+            // 1. Disable specified RU as Zone controller / circuit driver
+            await pool.execute('DELETE FROM heating_circuits WHERE home_id = ? AND driver_serial_no = ?', [homeId, deviceId]);
+
+            // 2. Delete bound DHW zones (HOT_WATER zones associated with this home/driver)
+            const [dhwZones] = await pool.execute("SELECT id FROM zones WHERE home_id = ? AND type = 'HOT_WATER'", [homeId]);
+            const { purgeZone } = require('../../lib/db-zones/state');
+            for (const dhw of dhwZones) {
+                await purgeZone(homeId, dhw.id).catch(err => {
+                    _log.warn(`Failed to purge DHW zone ${dhw.id}: ${err.message}`);
+                });
+            }
+
+            // 3. Remove RU from all zones
+            const previousZoneId = dev.zone_id;
+            if (previousZoneId) {
+                const [zone] = await pool.execute('SELECT measuring_device_serial FROM zones WHERE id = ? AND home_id = ?', [previousZoneId, homeId]);
+                if (zone.length > 0 && zone[0].measuring_device_serial === deviceId) {
+                    const [otherDevs] = await pool.execute('SELECT serial_no FROM devices WHERE zone_id = ? AND home_id = ? AND serial_no != ?', [previousZoneId, homeId, deviceId]);
+                    const newMeasurer = otherDevs.length > 0 ? otherDevs[0].serial_no : null;
+                    await pool.execute('UPDATE zones SET measuring_device_serial = ? WHERE id = ? AND home_id = ?', [newMeasurer, previousZoneId, homeId]);
+                }
+            }
+            await pool.execute('UPDATE devices SET zone_id = NULL, field_015d = 200 WHERE serial_no = ? AND home_id = ?', [deviceId, homeId]);
+
+            // 4. Push updated config to device and refresh home configuration
+            const commandApi = require('../../lib/command-api');
+            await commandApi.pushDeviceConfig(deviceId).catch(err => {
+                _log.warn(`Failed to push updated config to device ${deviceId}: ${err.message}`);
+            });
+            if (previousZoneId) {
+                await commandApi.pushZoneConfig(homeId, previousZoneId).catch(() => {});
+            }
+        } else {
+            // Changing to Wired Thermostat:
+            await pool.execute('UPDATE devices SET field_015d = 71 WHERE serial_no = ? AND home_id = ?', [deviceId, homeId]);
+
+            // 1. Ensure a heating circuit exists with this device as driver
+            const [existingCircuits] = await pool.execute('SELECT number FROM heating_circuits WHERE home_id = ? AND driver_serial_no = ?', [homeId, deviceId]);
+            let circuitNumber;
+            if (existingCircuits.length > 0) {
+                circuitNumber = existingCircuits[0].number;
+            } else {
+                const [maxCircuitRows] = await pool.execute('SELECT MAX(number) as max_num FROM heating_circuits WHERE home_id = ?', [homeId]);
+                circuitNumber = (maxCircuitRows[0].max_num !== null && maxCircuitRows[0].max_num !== undefined) ? maxCircuitRows[0].max_num + 1 : 1;
+                await pool.execute(
+                    'INSERT INTO heating_circuits (home_id, number, driver_serial_no) VALUES (?, ?, ?)',
+                    [homeId, circuitNumber, deviceId]
+                );
+            }
+
+            // 2. Optionally create Hot Water (DHW) zone if requested
+            const { createDhwZone } = req.body || {};
+            if (createDhwZone) {
+                const [existingDhw] = await pool.execute("SELECT id FROM zones WHERE home_id = ? AND type = 'HOT_WATER'", [homeId]);
+                if (existingDhw.length === 0) {
+                    const [zoneRows] = await pool.execute('SELECT id FROM zones WHERE home_id = ?', [homeId]);
+                    const existingIds = zoneRows.map(r => r.id);
+                    let dhwZoneId = 0;
+                    if (existingIds.includes(dhwZoneId)) {
+                        dhwZoneId = 1;
+                        while (existingIds.includes(dhwZoneId)) {
+                            dhwZoneId++;
+                        }
+                    }
+
+                    const [maxOrderRows] = await pool.execute('SELECT MAX(display_order) as max_order FROM zones WHERE home_id = ?', [homeId]);
+                    const nextOrder = (maxOrderRows[0].max_order !== null) ? maxOrderRows[0].max_order + 1 : 0;
+                    const now = new Date().toISOString();
+
+                    await pool.execute(
+                        `INSERT INTO zones (
+                            id, home_id, name, type, date_created, open_window_enabled, open_window_timeout, 
+                            dazzle_enabled, early_start_enabled, min_temp, max_temp, step_temp, 
+                            default_overlay_type, default_overlay_duration, heating_circuit, display_order
+                        ) VALUES (?, ?, 'Hot Water', 'HOT_WATER', ?, 1, 900, 1, 0, 30.0, 65.0, 1.0, 'MANUAL', null, ?, ?)`,
+                        [dhwZoneId, homeId, now, circuitNumber, nextOrder]
+                    );
+                    await pool.execute('UPDATE homes SET zones_count = (SELECT COUNT(*) FROM zones WHERE home_id = ?) WHERE id = ?', [homeId, homeId]);
+                }
+            }
+
+            const commandApi = require('../../lib/command-api');
+            await commandApi.pushDeviceConfig(deviceId).catch(err => {
+                _log.warn(`Failed to push updated config to device ${deviceId}: ${err.message}`);
+            });
+            const [ibDevs] = await pool.execute("SELECT serial_no FROM devices WHERE home_id = ? AND device_type LIKE 'IB%' LIMIT 1", [homeId]);
+            if (ibDevs.length > 0) {
+                await commandApi.pushConfigRefresh(ibDevs[0].serial_no).catch(() => {});
+            }
+        }
+
+        const updatedDev = await db.getDeviceByFullSerial(deviceId);
+        res.json(mapDevice(updatedDev));
+    } catch (err) {
+        if (err.statusCode) return res.status(err.statusCode).json({ error: err.message.toLowerCase() });
+        _log.error(`Set device role error: ${err.message}`);
+        res.status(500).json({ error: 'internal_error' });
+    }
+}
+
 router.get('/:homeId/devices', getDeviceList);
 router.get('/:homeId/deviceList', getDeviceList);
 router.post('/:homeId/devices', createDevice);
@@ -757,6 +890,8 @@ router.get('/:homeId/devices/:deviceId', getDevice);
 router.delete('/:homeId/devices/:deviceId', deleteDevice);
 router.get('/:homeId/devices/:deviceId/temperatureOffset', getTemperatureOffset);
 router.put('/:homeId/devices/:deviceId/temperatureOffset', setTemperatureOffset);
+router.put('/:homeId/devices/:deviceId/role', setDeviceRole);
+router.put('/:homeId/tanoclo/devices/:deviceId/role', setDeviceRole);
 router.post('/:homeId/devices/:deviceId/identify', identifyDevice);
 router.put('/:homeId/devices/:deviceId/childLock', setChildLock);
 router.post('/:homeId/devices/:deviceId/orientation', setOrientation);
@@ -781,6 +916,8 @@ router.get('/:deviceId', getDevice);
 router.delete('/:deviceId', deleteDevice);
 router.get('/:deviceId/temperatureOffset', getTemperatureOffset);
 router.put('/:deviceId/temperatureOffset', setTemperatureOffset);
+router.put('/:deviceId/role', setDeviceRole);
+router.put('/tanoclo/devices/:deviceId/role', setDeviceRole);
 router.post('/:deviceId/identify', identifyDevice);
 router.get('/:deviceId/childLock', getChildLock);
 router.put('/:deviceId/childLock', setChildLock);

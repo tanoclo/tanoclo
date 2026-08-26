@@ -2812,6 +2812,7 @@ class TadoEmulatorComponent : public Component,
             // Role codes:
             // 0x0B = RU Leader & Controller (Measuring Leader)
             // 0x0D = Device is Measuring Leader (Bridge/HW/VA)
+            // 0x09 = Wireless Temperature Sensor (Measuring Leader)
             // 0x03 = RU Member/Follower in zone (another device is measuring leader)
             // 0x05 = VA in zone
             // 0x02 = Remote zone
@@ -2819,7 +2820,7 @@ class TadoEmulatorComponent : public Component,
               bool changed = (target_dev->zone_id != zid || target_dev->zone_role != role);
               target_dev->zone_id = zid;
               target_dev->zone_role = role;
-              target_dev->is_measuring_leader = (role == 0x0B || role == 0x0D);
+              target_dev->is_measuring_leader = (role == 0x0B || role == 0x0D || role == 0x09);
               if (changed) {
                 peers_changed = true;
                 ESP_LOGI(TAG, "✓ %s: Assigned to Zone %u (Role 0x%02X: %s)",

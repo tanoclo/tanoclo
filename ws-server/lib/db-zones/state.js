@@ -441,11 +441,23 @@ async function getZoneBindingsForDevice(deviceId) {
     const zoneId = dbDev.zone_id || 1;
     const isIB = deviceId.startsWith('IB');
     const isRU = deviceId.startsWith('RU') || deviceId.startsWith('WR') || deviceId.startsWith('SU') || deviceId.startsWith('BP') || deviceId.startsWith('BR');
+    const isEmulated = Boolean(dbDev.is_emulated || dbDev.emulated_mode);
+    const isWirelessSensor = isRU && (isEmulated || dbDev.field_015d === 200 || dbDev.field_015d === '200');
     const currentDeviceSerial = deviceId;
     const currentDeviceZoneId = dbDev.zone_id;
 
-    // Check if home has boiler/circuit controller
-    const [boilerRows] = await p.execute("SELECT serial_no FROM devices WHERE home_id = ? AND (device_type LIKE 'RU%' OR device_type LIKE 'BU%') LIMIT 1", [dbDev.home_id]);
+    if (isWirelessSensor) {
+        if (currentDeviceZoneId) {
+            return ['09' + Number(currentDeviceZoneId).toString(16).padStart(2, '0')];
+        }
+        return [];
+    }
+
+    // Check if home has boiler/circuit controller (ignoring wireless sensors)
+    const [boilerRows] = await p.execute(
+        "SELECT serial_no FROM devices WHERE home_id = ? AND ((device_type LIKE 'RU%' AND (field_015d IS NULL OR field_015d != 200)) OR device_type LIKE 'BU%') LIMIT 1", 
+        [dbDev.home_id]
+    );
     const homeHasBoiler = boilerRows.length > 0;
 
     const pairs = [];

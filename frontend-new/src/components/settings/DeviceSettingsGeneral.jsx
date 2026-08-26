@@ -45,8 +45,11 @@ export default function DeviceSettingsGeneral({
   zones,
   devices,
   circuits,
+  handleRoleSelect,
+  isChangingRole,
   t
 }) {
+  const isRU = Boolean(device?.deviceType?.startsWith('RU'));
   const isAssigned = device && device.zoneId !== null && device.zoneId !== undefined && device.zoneId !== 'none';
   const currentZone = isAssigned ? zones?.find(z => String(z.id) === String(device.zoneId)) : null;
 
@@ -194,6 +197,41 @@ export default function DeviceSettingsGeneral({
           )}
         </div>
       </Card>
+
+      {/* Device Role Card (RU devices) */}
+      {isRU && (
+        <Card style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          <h3 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0 }}>{t('settings.device_role', 'Device Role')}</h3>
+          <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0 }}>
+            {t('settings.device_role_desc', 'Configure whether this device acts as a Wired Thermostat (Heating & Boiler Controller) or a Wireless Temperature Sensor.')}
+          </p>
+
+          {device?.isEmulated ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: 'var(--bg-input)', padding: '0.5rem 0.75rem', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)' }}>
+              <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>{t('settings.role_wireless_sensor_emulated', 'Wireless Temperature Sensor (Emulated RU)')}</span>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <Button
+                variant={(device?.field_015d === 71 || (!device?.field_015d && device?.deviceRole !== 'WIRELESS_SENSOR')) ? 'primary' : 'secondary'}
+                onClick={() => handleRoleSelect && handleRoleSelect(71)}
+                disabled={isChangingRole || isReadOnly}
+                style={{ fontSize: '0.85rem', padding: '0.4rem 0.8rem' }}
+              >
+                {t('settings.role_wired_thermostat', 'Wired Thermostat (71)')}
+              </Button>
+              <Button
+                variant={(device?.field_015d === 200 || device?.deviceRole === 'WIRELESS_SENSOR') ? 'primary' : 'secondary'}
+                onClick={() => handleRoleSelect && handleRoleSelect(200)}
+                disabled={isChangingRole || isReadOnly}
+                style={{ fontSize: '0.85rem', padding: '0.4rem 0.8rem' }}
+              >
+                {t('settings.role_wireless_sensor', 'Wireless Sensor (200)')}
+              </Button>
+            </div>
+          )}
+        </Card>
+      )}
 
       {/* Zone Assignment Card */}
       {!isBridge && (
