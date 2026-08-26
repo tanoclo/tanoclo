@@ -132,6 +132,30 @@ async function handleDeviceConfig(ws, frame, coapMsg, decoded, peerInfo, pathInf
         if (shortSerial) {
             await db.updateDeviceConnectionState(shortSerial, true);
         }
+
+        try {
+            const [emRows] = await db.getPool().execute('SELECT home_id, pairing_state FROM emulated_devices WHERE serial_no = ?', [deviceId]);
+            if (emRows.length > 0 && emRows[0].pairing_state !== 'PAIRED') {
+                await db.updateEmulatedDevicePairingState(deviceId, 'PAIRED').catch(() => {});
+                const homeId = emRows[0].home_id || pathInfo.homeId;
+                if (homeId) {
+                    setTimeout(async () => {
+                        try {
+                            const [ibRows] = await db.getPool().execute("SELECT serial_no FROM devices WHERE home_id = ? AND device_type LIKE 'IB%' LIMIT 1", [homeId]);
+                            if (ibRows.length > 0 && ibRows[0].serial_no) {
+                                const commandApi = require('../command-api');
+                                await commandApi.pushDevicePair(ibRows[0].serial_no, false);
+                                log('info', `[Pairing Auto-Close] Successfully closed IB pairing mode on ${ibRows[0].serial_no} 30s after ${deviceId} paired.`);
+                            }
+                        } catch (err) {
+                            log('warn', `[Pairing Auto-Close] Error closing IB pairing mode: ${err.message}`);
+                        }
+                    }, 30000).unref();
+                }
+            }
+        } catch (e) {
+            log('warn', `[Pairing Auto-Close] Warning checking emulated device pairing state: ${e.message}`);
+        }
     }
 }
 

@@ -106,6 +106,48 @@ async function publishAllDiscovery() {
     }
 }
 
+function unpublishDevice(serial) {
+    if (!mqttClient || !config || !config.mqtt) return;
+    const haPath = config.mqtt.haPath || 'homeassistant';
+    const entities = [
+        ['binary_sensor', `tanoclo_${serial}_connection`],
+        ['sensor', `tanoclo_${serial}_firmware`],
+        ['sensor', `tanoclo_${serial}_reset_reason`],
+        ['sensor', `tanoclo_${serial}_error_flags`],
+        ['binary_sensor', `tanoclo_${serial}_emulated`],
+        ['sensor', `tanoclo_${serial}_battery_level`],
+        ['sensor', `tanoclo_${serial}_battery_mv`],
+        ['binary_sensor', `tanoclo_${serial}_battery`],
+        ['sensor', `tanoclo_${serial}_temperature`],
+        ['sensor', `tanoclo_${serial}_aux_temperature`],
+        ['sensor', `tanoclo_${serial}_humidity`],
+        ['sensor', `tanoclo_${serial}_light_level`],
+        ['sensor', `tanoclo_${serial}_opentherm_voltage`],
+        ['sensor', `tanoclo_${serial}_valve_position`],
+        ['sensor', `tanoclo_${serial}_actuator_deviation`],
+        ['sensor', `tanoclo_${serial}_valve_raw_steps`],
+        ['binary_sensor', `tanoclo_${serial}_actuator`],
+        ['sensor', `tanoclo_${serial}_mounting`],
+        ['switch', `tanoclo_${serial}_child_lock`],
+        ['number', `tanoclo_${serial}_actuator_limit_low`],
+        ['number', `tanoclo_${serial}_actuator_limit_high`],
+        ['number', `tanoclo_${serial}_actuator_drive_constant`],
+        ['button', `tanoclo_${serial}_actuator_limits_apply`],
+        ['button', `tanoclo_${serial}_identify`],
+        ['select', `tanoclo_${serial}_orientation`],
+        ['number', `tanoclo_emulated_${serial}_temp`],
+        ['number', `tanoclo_emulated_${serial}_humidity`],
+        ['sensor', `tanoclo_emulated_${serial}_battery`],
+        ['button', `tanoclo_emulated_${serial}_push`]
+    ];
+
+    for (const [component, entityId] of entities) {
+        const topic = `${haPath}/${component}/${entityId}/config`;
+        mqttClient.publish(topic, '', { retain: true, qos: 1 });
+    }
+    if (log) log('info', `[mqtt-ha] Unpublished Home Assistant discovery entities for device ${serial}`);
+}
+
 function unpublishMobileDevice(deviceId) {
     if (!mqttClient || !config || !config.mqtt) return;
     const haPath = config.mqtt.haPath || 'homeassistant';
@@ -117,5 +159,6 @@ function unpublishMobileDevice(deviceId) {
 module.exports = {
     init,
     publishAllDiscovery,
+    unpublishDevice,
     unpublishMobileDevice
 };

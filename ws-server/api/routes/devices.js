@@ -408,14 +408,15 @@ async function deleteDevice(req, res) {
         const homeId = await verifyDeviceHome(req, deviceId);
         const pool = db.getPool();
 
-        const [devices] = await pool.execute('SELECT zone_id, home_id, device_type FROM devices WHERE serial_no = ? AND home_id = ?', [deviceId, homeId]);
-        if (devices.length === 0) return res.status(204).end();
-        const { zone_id, device_type } = devices[0];
+        const dev = await db.getDeviceByFullSerial(deviceId);
+        if (!dev || dev.home_id !== homeId) return res.status(204).end();
+        const { zone_id, device_type, is_emulated, emulated_mode } = dev;
+        const isEmulated = Boolean(is_emulated || emulated_mode);
 
         if (device_type && (device_type.startsWith('IB') || device_type.includes('GW') || device_type.includes('BRIDGE'))) {
             return res.status(403).json({ error: 'cannot_delete_bridge', message: 'Internet Bridge devices cannot be removed.' });
         }
-        if (device_type && device_type.startsWith('RU')) {
+        if (device_type && device_type.startsWith('RU') && !isEmulated) {
             return res.status(403).json({ error: 'cannot_delete_ru', message: 'Reconfiguring or removing a RU device should be done using the Tado app (in proxy mode)' });
         }
 
@@ -439,17 +440,58 @@ async function deleteDevice(req, res) {
         if (!devBypass) {
             const commandApi = require('../../lib/command-api');
             await commandApi.pushDeviceUnassociation(homeId, deviceId).catch(err => {
-                _log('warn', `Failed to push un-association config to device ${deviceId}: ${err.message}`);
+                _log.warn(`Failed to push un-association config to device ${deviceId}: ${err.message}`);
             });
 
             if (bridgeSerial) {
                 await commandApi.pushDevicePair(bridgeSerial, false).catch(err => {
-                    _log('warn', `Failed to push unpair to bridge ${bridgeSerial}: ${err.message}`);
+                    _log.warn(`Failed to push unpair to bridge ${bridgeSerial}: ${err.message}`);
                 });
             }
         }
 
+        if (isEmulated || deviceId.startsWith('RU') || deviceId.startsWith('VA')) {
+            try {
+                const emulatedList = await db.getAllEmulatedDevices();
+                const emDev = emulatedList.find(d => d.serial_no === deviceId);
+                const { sendEsp32Command } = require('../setup/emulated');
+                if (typeof sendEsp32Command === 'function') {
+                    if (emDev && emDev.esp32_node_id) {
+                        const node = await db.getEsp32NodeById(emDev.esp32_node_id);
+                        if (node && node.ip_address) {
+                            await sendEsp32Command(node.ip_address, node.api_port, node.api_key, {
+                                cmd: 'remove',
+                                serial: deviceId
+                            }).catch(e => _log.warn(`[Emulated] ESP32 remove RPC warning: ${e.message}`));
+                        }
+                    } else {
+                        const nodes = await db.getAllEsp32Nodes();
+                        for (const node of nodes) {
+                            if (node && node.ip_address) {
+                                await sendEsp32Command(node.ip_address, node.api_port, node.api_key, {
+                                    cmd: 'remove',
+                                    serial: deviceId
+                                }).catch(e => _log.warn(`[Emulated] ESP32 remove RPC warning: ${e.message}`));
+                            }
+                        }
+                    }
+                }
+            } catch (espErr) {
+                _log.warn(`[Emulated] Warning notifying ESP32 on deletion: ${espErr.message}`);
+            }
+
+            await pool.execute('DELETE FROM emulated_devices WHERE serial_no = ?', [deviceId]);
+        }
         await pool.execute('DELETE FROM devices WHERE serial_no = ? AND home_id = ?', [deviceId, homeId]);
+
+        try {
+            const mqttHaDiscovery = require('../../lib/mqtt-ha-discovery');
+            if (mqttHaDiscovery && typeof mqttHaDiscovery.unpublishDevice === 'function') {
+                mqttHaDiscovery.unpublishDevice(deviceId);
+            }
+        } catch (mqttErr) {
+            _log.warn(`[devices] Warning unpublishing from HA on device delete: ${mqttErr.message}`);
+        }
 
         if (zone_id) {
             const [counts] = await pool.execute('SELECT COUNT(*) as c FROM devices WHERE zone_id = ? AND home_id = ?', [zone_id, homeId]);
@@ -460,7 +502,7 @@ async function deleteDevice(req, res) {
 
         res.status(204).end();
     } catch (err) {
-        _log('error', `Failed to delete device: ${err.message}`);
+        _log.error(`Failed to delete device: ${err.message}`);
         res.status(500).json({ error: 'internal_error' });
     }
 }

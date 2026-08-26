@@ -16,6 +16,7 @@ CONF_CHANNEL = "channel"
 CONF_WEB_SERVER_BASE_ID = "web_server_base_id"
 
 CONF_AUTO_MAC_ACK = "auto_mac_ack"
+CONF_FAST_FIFO_DRAIN = "fast_fifo_drain"  # 2026-08-27: High-throughput SPI burst FIFO draining option
 
 CONFIG_SCHEMA = cv.Schema({
     cv.GenerateID(): cv.declare_id(TadoEmulatorComponent),
@@ -23,6 +24,7 @@ CONFIG_SCHEMA = cv.Schema({
     cv.Required(CONF_RST_PIN): pins.internal_gpio_output_pin_schema,
     cv.Optional(CONF_CHANNEL, default=26): cv.int_,
     cv.Optional(CONF_AUTO_MAC_ACK, default=False): cv.boolean,
+    cv.Optional(CONF_FAST_FIFO_DRAIN, default=True): cv.boolean,
     cv.Optional('server_url', default=''): cv.string,
     cv.Optional('api_key', default=''): cv.string,
     cv.GenerateID(CONF_WEB_SERVER_BASE_ID): cv.use_id(web_server_base.WebServerBase),
@@ -41,6 +43,7 @@ async def to_code(config):
     
     cg.add(var.set_channel(config[CONF_CHANNEL]))
     cg.add(var.set_auto_mac_ack(config[CONF_AUTO_MAC_ACK]))
+    cg.add(var.set_fast_fifo_drain(config[CONF_FAST_FIFO_DRAIN]))
     
     server = await cg.get_variable(config[CONF_WEB_SERVER_BASE_ID])
     cg.add(var.set_server_base(server))

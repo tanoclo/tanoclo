@@ -324,9 +324,8 @@ async function queryDeviceConfig(deviceSerial, coapPath) {
         try {
             const rawFields = JSON.parse(dbDev.last_config_json);
             const fields = {};
-            const CONFIG_KEYS_ORDER = [
-                '0x0143', '0x0140', '0x015d', '0x015c', '0x02b3', '0x021a', '0x0149', '0x015e', '0x0158', '0x015a'
-            ];
+            const { CONFIG_FIDS_ORDER } = require('./db-utils');
+            const CONFIG_KEYS_ORDER = CONFIG_FIDS_ORDER.map(fid => '0x' + fid.toString(16).padStart(4, '0'));
             for (const key of CONFIG_KEYS_ORDER) {
                 if (rawFields[key] !== undefined) {
                     fields[key] = rawFields[key];

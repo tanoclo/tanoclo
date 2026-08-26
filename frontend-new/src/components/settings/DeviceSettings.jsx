@@ -462,7 +462,7 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
   };
 
   const handleDelete = () => {
-    if (device?.deviceType?.startsWith('RU')) {
+    if (device?.deviceType?.startsWith('RU') && !device?.isEmulated) {
       showToast(t('settings.ru_reconfigure_remove_warning'), "error");
       return;
     }

@@ -18,7 +18,7 @@ ota:
     password: "YourOTAPassword"
 
 logger:
-  level: INFO
+  level: WARN
   tx_buffer_size: 4096
   task_log_buffer_size: 2048
 
@@ -43,4 +43,5 @@ tado_emulator:
   server_url: "http://192.168.0.10:3111"
   auto_mac_ack: true
   api_key: ""
+  fast_fifo_drain: true  # default is true; set false to revert to 10ms/15-byte mode
 

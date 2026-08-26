@@ -175,7 +175,10 @@ async function handlePairFound(ws, frame, coapMsg, decoded, peerInfo, rawData) {
     log('info', `PAIR_FOUND: Discovered device target IPv6 = ${targetIpv6}`);
 
     if (targetIpv6) {
-        targetDevice = await db.getDeviceByIPv6(targetIpv6);
+        const serialByIpv6 = await db.getDeviceByIPv6(targetIpv6);
+        if (serialByIpv6) {
+            targetDevice = { serial_no: serialByIpv6 };
+        }
     }
 
     if (!targetDevice) {
@@ -183,26 +186,32 @@ async function handlePairFound(ws, frame, coapMsg, decoded, peerInfo, rawData) {
         const [rows] = await pool.execute('SELECT * FROM emulated_devices WHERE pairing_state != "PAIRED" ORDER BY created_at DESC LIMIT 1');
         if (rows && rows.length > 0) {
             targetDevice = rows[0];
-            if (targetIpv6 && !targetDevice.ipv6_address) {
-                await pool.execute('UPDATE emulated_devices SET ipv6_address = ? WHERE serial_no = ?', [targetIpv6, targetDevice.serial_no]);
-            }
         }
     }
 
-    if (targetDevice && targetDevice.factory_key) {
-        factoryKey = targetDevice.factory_key;
-    } else {
-        factoryKey = '8ee8b8fc9693c412f253be8f02e608d7';
+    if (targetDevice && targetIpv6) {
+        const pool = db.getPool();
+        await pool.execute('UPDATE emulated_devices SET ipv6_address = ? WHERE serial_no = ?', [targetIpv6, targetDevice.serial_no]);
+        await pool.execute('UPDATE devices SET ipv6_address = ? WHERE serial_no = ?', [targetIpv6, targetDevice.serial_no]);
+        if (ipv6ToDevice) {
+            ipv6ToDevice.set(targetIpv6, targetDevice.serial_no);
+        }
     }
 
-    log('info', `PAIR_FOUND: Supplying factory key ${factoryKey} for device ${targetDevice ? targetDevice.serial_no : 'unknown'} to Bridge`);
+    let responsePayload = null;
+    if (targetDevice && targetDevice.factory_key) {
+        log('info', `PAIR_FOUND: Supplying factory key ${targetDevice.factory_key} for device ${targetDevice.serial_no} to Bridge`);
+        responsePayload = Buffer.concat([
+            Buffer.from([0x06, 0x10]),
+            Buffer.from(targetDevice.factory_key, 'hex')
+        ]);
+    } else {
+        log('info', `PAIR_FOUND: Device ${targetDevice ? targetDevice.serial_no : 'unknown'} has no custom factory key; Bridge using default pairing key.`);
+    }
 
-    const responsePayload = Buffer.concat([
-        Buffer.from([0x06, 0x10]),
-        Buffer.from(factoryKey, 'hex')
-    ]);
-
-    const ackBytes = coap.buildAckWithPayload(coapMsg, coap.CODE_CONTENT, responsePayload);
+    const ackBytes = responsePayload
+        ? coap.buildAckWithPayload(coapMsg, coap.CODE_CONTENT, responsePayload)
+        : coap.buildAck(coapMsg, coap.CODE_VALID);
     coapHelpers.sendWrappedCoAP(ws, ackBytes, peerInfo, wsBridge.DIR_SERVER_TO_CLIENT);
 }
 

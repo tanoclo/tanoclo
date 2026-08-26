@@ -105,6 +105,36 @@ async function applyDeviceConfigOverrides(deviceId, fields, updates = null) {
                     updateFieldInMap(fields, '0x62c0', Math.round(owdTimeout / 60));
                 }
             }
+
+            const isRU = deviceId.startsWith('RU') || deviceId.startsWith('WR') || deviceId.startsWith('SU') || deviceId.startsWith('BP') || deviceId.startsWith('BR');
+            if (isRU) {
+                const [zoneDevs] = await api._db.getPool().execute(
+                    'SELECT serial_no, device_type, ipv6_address FROM devices WHERE home_id = ? AND zone_id = ?',
+                    [dbDev.home_id, dbDev.zone_id]
+                );
+                if (zoneDevs.length > 0) {
+                    const [zRows] = await api._db.getPool().execute('SELECT measuring_device_serial FROM zones WHERE id = ? AND home_id = ?', [dbDev.zone_id, dbDev.home_id]);
+                    const measuringSerial = zRows.length > 0 ? zRows[0].measuring_device_serial : null;
+                    const leaderDev = zoneDevs.find(d => d.serial_no === measuringSerial) || zoneDevs[0];
+                    const vaDevs = zoneDevs.filter(d => d.device_type && d.device_type.startsWith('VA'));
+
+                    if (leaderDev && leaderDev.ipv6_address) {
+                        updateFieldInMap(fields, '0x63a0', `coap://[${leaderDev.ipv6_address}]/z/s`);
+                    }
+
+                    if (vaDevs.length > 0) {
+                        const zps = vaDevs.filter(d => d.ipv6_address).map(d => `coap://[${d.ipv6_address}]/z/p`);
+                        if (zps.length > 0) updateFieldInMap(fields, '0x8400', zps.length === 1 ? zps[0] : zps);
+                        const cpes = vaDevs.filter(d => d.ipv6_address).map(d => `coap://[${d.ipv6_address}]/z/cpe`);
+                        if (cpes.length > 0) updateFieldInMap(fields, '0x8200', cpes.length === 1 ? cpes[0] : cpes);
+                    } else if (leaderDev && leaderDev.ipv6_address) {
+                        updateFieldInMap(fields, '0x8400', `coap://[${leaderDev.ipv6_address}]/z/p`);
+                        updateFieldInMap(fields, '0x8200', `coap://[${leaderDev.ipv6_address}]/z/cpe`);
+                    }
+                    updateFieldInMap(fields, '0x6020', 1);
+                    updateFieldInMap(fields, '0x63e0', true);
+                }
+            }
         }
 
         const isVA = deviceId.startsWith('VA');

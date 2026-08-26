@@ -16,10 +16,13 @@ const { getZoneBindingsForDevice } = require('./db-zones');
 const tlv = require('./tlv');
 const crypto = require('crypto');
 
+// Canonical order of config FIDs for d/config TLV payloads.
+// Single source of truth — imported by command-api.js and coap-transport.js.
+const CONFIG_FIDS_ORDER = [
+    0x0143, 0x0140, 0x015d, 0x6020, 0x63e0, 0x63a0, 0x8400, 0x8200, 0x6380, 0x2040, 0x046c, 0x046d, 0x0471, 0x0481, 0x015c, 0x019d, 0x019e, 0x02b2, 0x02b3, 0x021a, 0x0149, 0x015e, 0x0158, 0x015a
+];
+
 function sortConfigFields(fields) {
-    const CONFIG_FIDS_ORDER = [
-        0x0143, 0x0140, 0x015d, 0x015c, 0x019d, 0x019e, 0x02b2, 0x02b3, 0x021a, 0x0149, 0x015e, 0x0158, 0x015a
-    ];
 
     const getFid = (key) => {
         if (key.startsWith('0x')) {
@@ -103,7 +106,8 @@ async function buildDeviceConfigTLV(deviceId) {
         'display_contrast', '0x019d',
         'display_active_timeout', '0x02b2',
         'display_orientation', '0x0149',
-        'device_flag_0143', '0x0143'
+        'device_flag_0143', '0x0143',
+        '0x01a0', '0x003a', '0x003b', '0x0035', '0x0039', '0x0036', '0x003c', '0x0210', '0x0180', '0x014c'
     ].forEach(k => delete fields[k]);
 
     // Use strictly hex keys
@@ -128,6 +132,35 @@ async function buildDeviceConfigTLV(deviceId) {
 
     if (pairs.length > 0) {
         fields['0x015e'] = pairs;
+    }
+
+    if (isRU && dbDev.zone_id) {
+        const [zoneDevs] = await p.execute(
+            'SELECT serial_no, device_type, ipv6_address FROM devices WHERE home_id = ? AND zone_id = ?',
+            [dbDev.home_id, dbDev.zone_id]
+        );
+        if (zoneDevs.length > 0) {
+            const [zRows] = await p.execute('SELECT measuring_device_serial FROM zones WHERE id = ? AND home_id = ?', [dbDev.zone_id, dbDev.home_id]);
+            const measuringSerial = zRows.length > 0 ? zRows[0].measuring_device_serial : null;
+            const leaderDev = zoneDevs.find(d => d.serial_no === measuringSerial) || zoneDevs[0];
+            const vaDevs = zoneDevs.filter(d => d.device_type && d.device_type.startsWith('VA'));
+
+            if (leaderDev && leaderDev.ipv6_address) {
+                fields['0x63a0'] = `coap://[${leaderDev.ipv6_address}]/z/s`;
+            }
+
+            if (vaDevs.length > 0) {
+                const zps = vaDevs.filter(d => d.ipv6_address).map(d => `coap://[${d.ipv6_address}]/z/p`);
+                if (zps.length > 0) fields['0x8400'] = zps.length === 1 ? zps[0] : zps;
+                const cpes = vaDevs.filter(d => d.ipv6_address).map(d => `coap://[${d.ipv6_address}]/z/cpe`);
+                if (cpes.length > 0) fields['0x8200'] = cpes.length === 1 ? cpes[0] : cpes;
+            } else if (leaderDev && leaderDev.ipv6_address) {
+                fields['0x8400'] = `coap://[${leaderDev.ipv6_address}]/z/p`;
+                fields['0x8200'] = `coap://[${leaderDev.ipv6_address}]/z/cpe`;
+            }
+            fields['0x6020'] = 1;
+            fields['0x63e0'] = true;
+        }
     }
 
     // Dynamic ETag Generation for Valve Actuators
@@ -320,39 +353,43 @@ async function buildZoneConfigTLV(homeId, zoneId) {
         const vaDevs = zoneDevs.filter(d => d.device_type && d.device_type.startsWith('VA'));
 
         // 1. 0x63a0: Zone State URI (points to measuring leader's /z/s)
-        fields['0x63a0'] = `coap://[${leaderDev.ipv6_address}]/z/s`;
+        if (leaderDev && leaderDev.ipv6_address) {
+            fields['0x63a0'] = `coap://[${leaderDev.ipv6_address}]/z/s`;
+        }
 
         // 2. 0x8000: Zone Listeners (distinct /z/s endpoints for all member devices + circuit driver)
         const listeners = new Set();
         if (circuitDriverIpv6) listeners.add(`coap://[${circuitDriverIpv6}]/z/s`);
         for (const d of zoneDevs) {
-            listeners.add(`coap://[${d.ipv6_address}]/z/s`);
+            if (d.ipv6_address) listeners.add(`coap://[${d.ipv6_address}]/z/s`);
         }
-        fields['0x8000'] = Array.from(listeners);
+        if (listeners.size > 0) {
+            fields['0x8000'] = Array.from(listeners);
+        }
 
         // 3. 0x8200: Control Peer Endpoint (CPE) for all VAs in zone (or leader if no VAs)
         if (vaDevs.length > 0) {
-            const cpes = vaDevs.map(d => `coap://[${d.ipv6_address}]/z/cpe`);
-            fields['0x8200'] = cpes.length === 1 ? cpes[0] : cpes;
-        } else {
+            const cpes = vaDevs.filter(d => d.ipv6_address).map(d => `coap://[${d.ipv6_address}]/z/cpe`);
+            if (cpes.length > 0) fields['0x8200'] = cpes.length === 1 ? cpes[0] : cpes;
+        } else if (leaderDev && leaderDev.ipv6_address) {
             fields['0x8200'] = `coap://[${leaderDev.ipv6_address}]/z/cpe`;
         }
 
         // 4. 0x8400: Zone Parameter URLs (/z/p) for all VAs in zone + leader if not already in list
         if (vaDevs.length > 0) {
-            const zps = vaDevs.map(d => `coap://[${d.ipv6_address}]/z/p`);
-            if (leaderDev && !vaDevs.some(d => d.serial_no === leaderDev.serial_no)) {
+            const zps = vaDevs.filter(d => d.ipv6_address).map(d => `coap://[${d.ipv6_address}]/z/p`);
+            if (leaderDev && leaderDev.ipv6_address && !vaDevs.some(d => d.serial_no === leaderDev.serial_no)) {
                 zps.push(`coap://[${leaderDev.ipv6_address}]/z/p`);
             }
-            fields['0x8400'] = zps.length === 1 ? zps[0] : zps;
-        } else {
+            if (zps.length > 0) fields['0x8400'] = zps.length === 1 ? zps[0] : zps;
+        } else if (leaderDev && leaderDev.ipv6_address) {
             fields['0x8400'] = `coap://[${leaderDev.ipv6_address}]/z/p`;
         }
 
         // 5. 0x6040: Zone Driver URI (primary valve /z/p, or leader /z/p if no valves)
-        if (vaDevs.length > 0) {
+        if (vaDevs.length > 0 && vaDevs[0].ipv6_address) {
             fields['0x6040'] = `coap://[${vaDevs[0].ipv6_address}]/z/p`;
-        } else {
+        } else if (leaderDev && leaderDev.ipv6_address) {
             fields['0x6040'] = `coap://[${leaderDev.ipv6_address}]/z/p`;
         }
     }
@@ -424,6 +461,7 @@ async function buildCircuitConfigTLV(homeId, circuitNumber) {
 }
 
 module.exports = {
+    CONFIG_FIDS_ORDER,
     getTlvLabels,
     buildDeviceConfigTLV,
     buildDeviceSensorTLV,

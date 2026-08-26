@@ -307,6 +307,16 @@ router.delete('/devices/:serialNo', async (req, res) => {
 
         // Clean up DB records
         await dbDevices.deleteEmulatedDevice(serialNo);
+
+        try {
+            const mqttHaDiscovery = require('../../../lib/mqtt-ha-discovery');
+            if (mqttHaDiscovery && typeof mqttHaDiscovery.unpublishDevice === 'function') {
+                mqttHaDiscovery.unpublishDevice(serialNo);
+            }
+        } catch (mqttErr) {
+            console.warn(`[Emulated] Warning unpublishing from HA: ${mqttErr.message}`);
+        }
+
         res.json({ success: true, message: 'Emulated device deletion completed', unassociateTriggered, espRemoved });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
@@ -338,6 +348,16 @@ router.post('/notify-removed', async (req, res) => {
         }
 
         await dbDevices.deleteEmulatedDevice(serial);
+
+        try {
+            const mqttHaDiscovery = require('../../../lib/mqtt-ha-discovery');
+            if (mqttHaDiscovery && typeof mqttHaDiscovery.unpublishDevice === 'function') {
+                mqttHaDiscovery.unpublishDevice(serial);
+            }
+        } catch (mqttErr) {
+            console.warn(`[Emulated Webhook] Warning unpublishing from HA: ${mqttErr.message}`);
+        }
+
         console.log(`[Emulated Webhook] Authenticated NVRAM removal confirmation for device ${serial}`);
         res.json({ success: true, message: 'Device records removed from database' });
     } catch (err) {
@@ -435,6 +455,38 @@ router.get('/devices/:serialNo/state', async (req, res) => {
             }
         }
 
+        let fwVersion = 55042;
+        let fwOtherSlot = 52227;
+        let fwBuildId = 'c54baf8';
+        let devTypeCode = 10;
+        let slotNum = 1;
+        let field01a0 = 8;
+        let field003b = 14;
+        let field003c = 14;
+        let field014c = 1;
+
+        if (dbDev) {
+            if (dbDev.current_fw_version) {
+                const parts = String(dbDev.current_fw_version).split('.');
+                if (parts.length === 2) {
+                    fwVersion = (parseInt(parts[0], 10) << 8) | parseInt(parts[1], 10);
+                }
+            }
+            if (dbDev.field_0035) {
+                const parts = String(dbDev.field_0035).split('.');
+                if (parts.length === 2) {
+                    fwOtherSlot = (parseInt(parts[0], 10) << 8) | parseInt(parts[1], 10);
+                }
+            }
+            if (dbDev.fw_build_id) fwBuildId = dbDev.fw_build_id;
+            if (dbDev.field_0036 != null) devTypeCode = parseInt(dbDev.field_0036, 10);
+            if (dbDev.field_0180 != null) slotNum = parseInt(dbDev.field_0180, 10);
+            if (dbDev.field_01a0 != null) field01a0 = parseInt(dbDev.field_01a0, 10);
+            if (dbDev.field_003b != null) field003b = parseInt(dbDev.field_003b, 10);
+            if (dbDev.field_003c != null) field003c = parseInt(dbDev.field_003c, 10);
+            if (dbDev.field_014c != null) field014c = parseInt(dbDev.field_014c, 10);
+        }
+
         res.json({
             success: true,
             serial: serialNo,
@@ -442,11 +494,22 @@ router.get('/devices/:serialNo/state', async (req, res) => {
             humidity_percent: humidity,
             battery_mv: batteryMv,
             zone_id: zoneId,
-            peers: peers
+            peers: peers,
+            fw_version: fwVersion,
+            fw_other_slot: fwOtherSlot,
+            fw_build_id: fwBuildId,
+            device_type_code: devTypeCode,
+            slot_num: slotNum,
+            field_01a0: field01a0,
+            field_003b: field003b,
+            field_003c: field003c,
+            field_014c: field014c
         });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
 });
 
+router.sendEsp32Command = sendEsp32Command;
 module.exports = router;
+module.exports.sendEsp32Command = sendEsp32Command;

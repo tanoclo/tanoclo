@@ -191,9 +191,7 @@ async function checkZoneConfigReadonly(homeId) {
 }
 
 function sortConfigFields(fields) {
-    const CONFIG_FIDS_ORDER = [
-        0x0143, 0x0140, 0x015d, 0x015c, 0x019d, 0x019e, 0x02b2, 0x02b3, 0x021a, 0x0149, 0x015e, 0x0158, 0x015a
-    ];
+    const { CONFIG_FIDS_ORDER } = require('./db-utils');
 
     const getFid = (key) => {
         if (key.startsWith('0x')) {
