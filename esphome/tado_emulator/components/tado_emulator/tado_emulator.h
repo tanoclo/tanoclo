@@ -2217,7 +2217,7 @@ class TadoEmulatorComponent : public Component,
     target_dev->last_rx_seq = seq;
     target_dev->last_rx_len = buf_len;
 
-    bool is_broadcast = (fcf == 0xE849 || fcf == 0xE859);
+    is_broadcast = is_broadcast || (fcf == 0xE849 || fcf == 0xE859);
     if (is_dup_rf) {
       ESP_LOGD(TAG, "[RF RX Dup] %s: Len=%d, FCF=0x%04X, Seq=%d, RSSI=%d",
                is_broadcast ? "Broadcast" : target_dev->serial_no.c_str(), (int)buf_len, fcf, seq, pkt.rssi);
@@ -3288,6 +3288,19 @@ class TadoEmulatorComponent : public Component,
     if (this->devices_mutex_ != nullptr) xSemaphoreGiveRecursive(this->devices_mutex_);
   }
 
+  void clear_all_nvs() {
+    if (this->devices_mutex_ != nullptr) xSemaphoreTakeRecursive(this->devices_mutex_, portMAX_DELAY);
+    ESP_LOGI(TAG, "Erasing ALL emulated devices from NVRAM and in-memory registry");
+    this->devices_.clear();
+    nvs_handle_t handle;
+    if (nvs_open("tado_emul", NVS_READWRITE, &handle) == ESP_OK) {
+      nvs_erase_all(handle);
+      nvs_commit(handle);
+      nvs_close(handle);
+    }
+    if (this->devices_mutex_ != nullptr) xSemaphoreGiveRecursive(this->devices_mutex_);
+  }
+
   void derive_mac_from_ipv6(const std::string &ipv6_in, uint8_t *mac) {
     std::string ipv6 = ipv6_in;
     size_t bstart = ipv6.find('[');
@@ -3488,6 +3501,34 @@ class TadoEmulatorComponent : public Component,
           request->send(200, "application/json", "{\"ok\":true,\"message\":\"Device removed from NVRAM\"}");
           return;
         }
+      }
+      // 4. Command: clear_nvs / clear_all
+      else if (json_has_key(body, "clear_nvs") || json_has_key(body, "clear_all") || body.find("clear_nvs") != std::string::npos || body.find("clear_nvram") != std::string::npos) {
+        this->clear_all_nvs();
+        xSemaphoreGiveRecursive(this->devices_mutex_);
+        request->send(200, "application/json", "{\"ok\":true,\"message\":\"All emulated devices cleared from NVRAM\"}");
+        return;
+      }
+      // 5. Command: reboot / restart
+      else if (json_has_key(body, "reboot") || json_has_key(body, "restart") || body.find("reboot") != std::string::npos) {
+        xSemaphoreGiveRecursive(this->devices_mutex_);
+        request->send(200, "application/json", "{\"ok\":true,\"message\":\"Rebooting ESP32...\"}");
+        this->set_timeout(500, []() {
+          ESP_LOGI(TAG, "Rebooting ESP32 upon REST RPC request...");
+          esp_restart();
+        });
+        return;
+      }
+      // 6. Command: clear_and_reboot
+      else if (json_has_key(body, "clear_and_reboot")) {
+        this->clear_all_nvs();
+        xSemaphoreGiveRecursive(this->devices_mutex_);
+        request->send(200, "application/json", "{\"ok\":true,\"message\":\"NVRAM cleared. Rebooting ESP32...\"}");
+        this->set_timeout(500, []() {
+          ESP_LOGI(TAG, "Rebooting ESP32 after NVRAM clear...");
+          esp_restart();
+        });
+        return;
       }
       xSemaphoreGiveRecursive(this->devices_mutex_);
     }

@@ -158,6 +158,42 @@ router.delete('/nodes/:id', async (req, res) => {
     }
 });
 
+router.post('/nodes/:id/clear-nvs', async (req, res) => {
+    try {
+        const node = await dbDevices.getEsp32NodeById(req.params.id);
+        if (!node) return res.status(404).json({ success: false, error: 'ESP32 node not found' });
+
+        const espRes = await sendEsp32Command(node.ip_address, node.api_port, node.api_key, { clear_nvs: true });
+        res.json({ success: true, message: 'NVRAM cleared on ESP32 node', esp32: espRes });
+    } catch (err) {
+        res.status(500).json({ success: false, error: 'Failed to communicate with ESP32 node: ' + err.message });
+    }
+});
+
+router.post('/nodes/:id/reboot', async (req, res) => {
+    try {
+        const node = await dbDevices.getEsp32NodeById(req.params.id);
+        if (!node) return res.status(404).json({ success: false, error: 'ESP32 node not found' });
+
+        const espRes = await sendEsp32Command(node.ip_address, node.api_port, node.api_key, { reboot: true });
+        res.json({ success: true, message: 'ESP32 node rebooting...', esp32: espRes });
+    } catch (err) {
+        res.status(500).json({ success: false, error: 'Failed to communicate with ESP32 node: ' + err.message });
+    }
+});
+
+router.post('/nodes/:id/clear-and-reboot', async (req, res) => {
+    try {
+        const node = await dbDevices.getEsp32NodeById(req.params.id);
+        if (!node) return res.status(404).json({ success: false, error: 'ESP32 node not found' });
+
+        const espRes = await sendEsp32Command(node.ip_address, node.api_port, node.api_key, { clear_and_reboot: true });
+        res.json({ success: true, message: 'ESP32 node NVRAM cleared and rebooting...', esp32: espRes });
+    } catch (err) {
+        res.status(500).json({ success: false, error: 'Failed to communicate with ESP32 node: ' + err.message });
+    }
+});
+
 // ---------------------------------------------------------------------------
 // Emulated Device Management & Automated Pairing / Unassociation
 // ---------------------------------------------------------------------------

@@ -49,8 +49,9 @@ router.get('/dashboard', adminAuth, async (req, res) => {
             <head>
                 <title>Setup Dashboard</title>
                 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+                <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
                 <style>
-                    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+                    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
                     
                     body { 
                         background: #0a0a0a; 
@@ -179,6 +180,85 @@ router.get('/dashboard', adminAuth, async (req, res) => {
                     
                     .badge { font-weight: 500; padding: 6px 10px; border-radius: 6px; }
                     code { color: #0dcaf0; background: rgba(13, 202, 240, 0.1); padding: 2px 6px; border-radius: 4px; }
+
+                    /* Action Buttons Styling */
+                    .btn-action-telemetry {
+                        background: rgba(13, 202, 240, 0.12);
+                        color: #0dcaf0;
+                        border: 1px solid rgba(13, 202, 240, 0.4);
+                        border-radius: 6px;
+                        padding: 4px 10px;
+                        font-size: 0.76rem;
+                        font-weight: 500;
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 5px;
+                        white-space: nowrap;
+                        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+                        cursor: pointer;
+                        text-decoration: none;
+                    }
+                    .btn-action-telemetry:hover:not(:disabled) {
+                        background: #0dcaf0;
+                        color: #051b24;
+                        border-color: #0dcaf0;
+                        box-shadow: 0 0 10px rgba(13, 202, 240, 0.4);
+                        transform: translateY(-1px);
+                    }
+                    .btn-action-telemetry:active:not(:disabled) { transform: translateY(0); }
+                    .btn-action-telemetry:disabled { opacity: 0.6; cursor: not-allowed; }
+
+                    .btn-action-danger {
+                        background: rgba(220, 53, 69, 0.12);
+                        color: #ea868f;
+                        border: 1px solid rgba(220, 53, 69, 0.4);
+                        border-radius: 6px;
+                        padding: 4px 8px;
+                        font-size: 0.76rem;
+                        font-weight: 500;
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 4px;
+                        white-space: nowrap;
+                        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+                        cursor: pointer;
+                    }
+                    .btn-action-danger:hover:not(:disabled) {
+                        background: #dc3545;
+                        color: #fff;
+                        border-color: #dc3545;
+                        box-shadow: 0 0 10px rgba(220, 53, 69, 0.4);
+                        transform: translateY(-1px);
+                    }
+
+                    .btn-action-warning {
+                        background: rgba(255, 193, 7, 0.12);
+                        color: #ffda6a;
+                        border: 1px solid rgba(255, 193, 7, 0.4);
+                        border-radius: 6px;
+                        padding: 4px 10px;
+                        font-size: 0.76rem;
+                        font-weight: 500;
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 5px;
+                        white-space: nowrap;
+                        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+                        cursor: pointer;
+                    }
+                    .btn-action-warning:hover:not(:disabled) {
+                        background: #ffc107;
+                        color: #1a1500;
+                        border-color: #ffc107;
+                        box-shadow: 0 0 10px rgba(255, 193, 7, 0.4);
+                        transform: translateY(-1px);
+                    }
+
+                    .table-actions-cell {
+                        white-space: nowrap;
+                        text-align: right;
+                        padding-right: 12px !important;
+                    }
                     
                     .form-select-sm { background-color: #1a1a1a !important; border-color: rgba(255, 255, 255, 0.1) !important; color: #fff !important; }
                     .font-monospace { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace !important; }
@@ -1555,12 +1635,18 @@ router.get('/dashboard', adminAuth, async (req, res) => {
                             } else {
                                 nodesTbody.innerHTML = nodes.map(n => '<tr>' +
                                     '<td>' + n.id + '</td>' +
-                                    '<td><strong>' + n.name + '</strong></td>' +
+                                    '<td><strong class="text-white">' + n.name + '</strong></td>' +
                                     '<td><code>' + n.ip_address + '</code></td>' +
                                     '<td>' + n.api_port + '</td>' +
-                                    '<td><span class="badge ' + (n.status === 'ONLINE' ? 'bg-success' : (n.status === 'OFFLINE' ? 'bg-danger' : 'bg-warning')) + '">' + n.status + '</span></td>' +
+                                    '<td><span class="badge ' + (n.status === 'ONLINE' ? 'bg-success' : (n.status === 'OFFLINE' ? 'bg-danger' : 'bg-warning text-dark')) + '">' + n.status + '</span></td>' +
                                     '<td class="small text-white-50">' + (n.last_seen ? new Date(n.last_seen).toLocaleTimeString() : '-') + '</td>' +
-                                    '<td><button class="btn btn-outline-danger btn-sm py-0 px-2" onclick="deleteEsp32Node(' + n.id + ')">Del</button></td>' +
+                                    '<td class="table-actions-cell">' +
+                                        '<div class="d-inline-flex align-items-center gap-1 justify-content-end">' +
+                                            '<button class="btn-action-warning" data-node-id="' + n.id + '" onclick="clearEsp32Nvs(this.dataset.nodeId)" title="Clear all emulated devices from ESP32 NVRAM"><i class="bi bi-eraser-fill"></i> Clear NVRAM</button>' +
+                                            '<button class="btn-action-telemetry" id="reboot_btn_' + n.id + '" data-node-id="' + n.id + '" onclick="rebootEsp32Node(this.dataset.nodeId)" title="Reboot ESP32 hardware"><i class="bi bi-arrow-clockwise"></i> Reboot</button>' +
+                                            '<button class="btn-action-danger" data-node-id="' + n.id + '" onclick="deleteEsp32Node(this.dataset.nodeId)" title="Delete node from database"><i class="bi bi-trash"></i></button>' +
+                                        '</div>' +
+                                    '</td>' +
                                 '</tr>').join('');
 
                                 nodeSelect.innerHTML = '<option value="">Select Node...</option>' +
@@ -1575,15 +1661,17 @@ router.get('/dashboard', adminAuth, async (req, res) => {
                                 devsTbody.innerHTML = '<tr><td colspan="7" class="text-white-50 text-center py-2">No emulated devices created. Create one above.</td></tr>';
                             } else {
                                 devsTbody.innerHTML = devs.map(d => '<tr>' +
-                                    '<td><strong>' + d.serial_no + '</strong></td>' +
-                                    '<td>' + (d.esp32_name || '-') + ' (<code>' + (d.esp32_ip || '-') + '</code>)</td>' +
+                                    '<td><strong class="text-white">' + d.serial_no + '</strong></td>' +
+                                    '<td>' + (d.esp32_name || '-') + ' <span class="text-white-50">(<code>' + (d.esp32_ip || '-') + '</code>)</span></td>' +
                                     '<td>Home #' + d.home_id + '</td>' +
-                                    '<td><span class="badge bg-info">' + d.mode + '</span></td>' +
+                                    '<td><span class="badge bg-info text-dark fw-semibold">' + d.mode + '</span></td>' +
                                     '<td><code>' + d.ipv6_address + '</code></td>' +
-                                    '<td><span class="badge ' + (d.pairing_state === 'PAIRED' ? 'bg-success' : 'bg-warning') + '">' + d.pairing_state + '</span></td>' +
-                                    '<td>' +
-                                        '<button class="btn btn-outline-info btn-sm py-0 px-2 me-1" data-serial="' + d.serial_no + '" onclick="triggerTelemetry(this.dataset.serial)">Send Telemetry</button>' +
-                                        '<button class="btn btn-outline-danger btn-sm py-0 px-2" data-serial="' + d.serial_no + '" onclick="deleteEmulatedDevice(this.dataset.serial)">Del</button>' +
+                                    '<td><span class="badge ' + (d.pairing_state === 'PAIRED' ? 'bg-success' : 'bg-warning text-dark') + '">' + d.pairing_state + '</span></td>' +
+                                    '<td class="table-actions-cell">' +
+                                        '<div class="d-inline-flex align-items-center gap-1 justify-content-end">' +
+                                            '<button class="btn-action-telemetry" id="tel_btn_' + d.serial_no + '" data-serial="' + d.serial_no + '" onclick="triggerTelemetry(this.dataset.serial)"><i class="bi bi-broadcast"></i> Send Telemetry</button>' +
+                                            '<button class="btn-action-danger" data-serial="' + d.serial_no + '" onclick="deleteEmulatedDevice(this.dataset.serial)" title="Delete Device"><i class="bi bi-trash"></i></button>' +
+                                        '</div>' +
                                     '</td>' +
                                 '</tr>').join('');
                             }
@@ -1613,6 +1701,34 @@ router.get('/dashboard', adminAuth, async (req, res) => {
                         loadEmulatedData();
                     }
 
+                    async function clearEsp32Nvs(nodeId) {
+                        if (!confirm('Clear all emulated devices and pairings from ESP32 NVRAM?')) return;
+                        const res = await apiCall('/setup/emulated/nodes/' + nodeId + '/clear-nvs', 'POST');
+                        if (res && res.success) {
+                            alert('✓ ' + (res.message || 'ESP32 NVRAM cleared'));
+                            loadEmulatedData();
+                        }
+                    }
+
+                    async function rebootEsp32Node(nodeId) {
+                        if (!confirm('Reboot this ESP32 hardware node? Active connections will momentarily drop.')) return;
+                        const btn = document.getElementById('reboot_btn_' + nodeId);
+                        const origHtml = btn ? btn.innerHTML : '';
+                        if (btn) {
+                            btn.disabled = true;
+                            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Rebooting...';
+                        }
+                        const res = await apiCall('/setup/emulated/nodes/' + nodeId + '/reboot', 'POST');
+                        if (res && res.success) {
+                            setTimeout(loadEmulatedData, 4000);
+                        } else {
+                            if (btn) {
+                                btn.disabled = false;
+                                btn.innerHTML = origHtml;
+                            }
+                        }
+                    }
+
                     async function createEmulatedDevice() {
                         const esp32_node_id = document.getElementById('emul_dev_node').value;
                         const home_id = document.getElementById('emul_dev_home').value;
@@ -1638,13 +1754,32 @@ router.get('/dashboard', adminAuth, async (req, res) => {
                     }
 
                     async function triggerTelemetry(serialNo) {
-                        const res = await apiCall('/setup/emulated/devices/' + serialNo + '/telemetry', 'POST', {
-                            temp_celsius: 21.5,
-                            humidity_percent: 48.5,
-                            battery_mv: 3050
-                        });
-                        if (res && res.success) {
-                            alert('Telemetry push triggered for ' + serialNo);
+                        const btn = document.getElementById('tel_btn_' + serialNo);
+                        const origHtml = btn ? btn.innerHTML : '';
+                        if (btn) {
+                            btn.disabled = true;
+                            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Sending...';
+                        }
+                        try {
+                            const res = await apiCall('/setup/emulated/devices/' + serialNo + '/telemetry', 'POST', {
+                                temp_celsius: 21.5,
+                                humidity_percent: 48.5,
+                                battery_mv: 3050
+                            });
+                            if (btn) {
+                                if (res && res.success) {
+                                    btn.innerHTML = '<i class="bi bi-check-lg text-success"></i> Sent!';
+                                    setTimeout(() => { if (btn) { btn.innerHTML = origHtml; btn.disabled = false; } }, 2000);
+                                } else {
+                                    btn.innerHTML = '<i class="bi bi-x-lg text-danger"></i> Failed';
+                                    setTimeout(() => { if (btn) { btn.innerHTML = origHtml; btn.disabled = false; } }, 2000);
+                                }
+                            }
+                        } catch (err) {
+                            if (btn) {
+                                btn.innerHTML = '<i class="bi bi-x-lg text-danger"></i> Error';
+                                setTimeout(() => { if (btn) { btn.innerHTML = origHtml; btn.disabled = false; } }, 2000);
+                            }
                         }
                     }
 

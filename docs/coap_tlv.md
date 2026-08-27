@@ -606,16 +606,16 @@ Periodically uploaded by the Internet Bridge via `PUT` (`CON`) to report its act
 *   **`0x01d1` (`neighbor_entry`)**: Repeated sub-TLV container representing each neighboring device entry. Contains:
     *   **`0x01d2` (`neighbor_ipv6`)**: 16-byte link-local IPv6 address of the neighboring node.
 *   **`0x01d3` (`neighbor_data`)**: Block alignment padding byte array (all `0x00` bytes).
-    *   **When Included**: Added **only** when there are **more neighbor entries/blocks to follow** (`more = 1` in block pagination / `FUN_080390a0`), AND the current block payload length is less than the 64-byte block boundary ($< 64$ bytes).
+    *   **When Included**: Added **only** when there are **more neighbor entries/blocks to follow** AND the current block payload length is less than the 64-byte block boundary ($< 64$ bytes).
     *   **When Omitted**:
         *   **Zero neighbors**: Bridge reports only `0x01d0` (19 bytes total); `0x01d1` and `0x01d3` are omitted.
         *   **Final block / Last neighbor**: When the last neighbor in the routing table is reached (`more = 0`), `0x01d3` is omitted and the packet is sent with its natural unpadded length.
         *   **Single-neighbor network**: If only 1 neighbor exists, it is the final neighbor; `0x01d3` is never attached (payload is 41 bytes).
-    *   **Payload Size**: Computed dynamically as $\text{len} = 61 - \text{current\_payload\_length}$ bytes of `0x00` (e.g., 20 bytes in Block 0 with `0x01d0` + `0x01d1`, or 39 bytes in continuation blocks with only `0x01d1`) so the resulting block with TLV headers reaches exactly 64 bytes.
+    *   **Payload Size**: Computed dynamically as $\text{len} = 61 - \text{currentPayloadLength}$ bytes of `0x00` (e.g., 20 bytes in Block 0 with `0x01d0` + `0x01d1`, or 39 bytes in continuation blocks with only `0x01d1`) so the resulting block with TLV headers reaches exactly 64 bytes.
 
 #### Mesh Topology Discovery & Ingestion
 *   **Neighbor Ingestion**: A child device (physical VA/RU or ESP32 emulator) is added to the Bridge's active Contiki `uip_ds6_nbr` routing table as soon as the Bridge receives and acknowledges a valid link-layer 802.15.4 / 6LoWPAN frame matching the network PAN ID and RF decryption key (e.g., MAC ACKed pings, `/sen`, `/mnt`, or pairing handshakes).
-*   **Dirty State Detection & Push Trigger**: `FUN_08039288` continuously checks the active mesh neighbor list against the cached snapshot buffer (`DAT_08039328`). If any neighbor IPv6, state, or route status changes, a dirty flag (`DAT_08039328[0x5a0] = 1`) is set, triggering an immediate blockwise `PUT /d/{id}/neighbors` upload to the backend.
+*   **Dirty State Detection & Push Trigger**: IB continuously checks the active mesh neighbor list against the cached snapshot buffer. If any neighbor IPv6, state, or route status changes, a dirty flag is set, triggering an immediate blockwise `PUT /d/{id}/neighbors` upload to the backend.
 
 ### 7.2 Zone Parameter Presence Ping (`/z/p`)
 Transmitted periodically by Smart Radiator Valves (Valve Actuators) to announce local zone temperature, target setpoint, and heat demand across the 802.15.4 mesh.
