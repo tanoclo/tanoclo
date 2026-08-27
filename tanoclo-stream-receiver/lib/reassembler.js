@@ -108,7 +108,7 @@ class SixLoWPANReassembler {
         if (isFrag1) {
             fragType = 'FRAG1';
             compressedOffset = 0;
-            payload = decrypted.subarray(12); // after FRAG1 header
+            payload = decrypted.subarray(12);
             dg.frag1_decrypted = decrypted;
 
             // Calculate precise expansion dynamically
@@ -149,7 +149,15 @@ class SixLoWPANReassembler {
             }
             const uncompressedOffset = decrypted[12] * 8;
             compressedOffset = uncompressedOffset - dg.expansion;
-            payload = decrypted.subarray(13); // after FRAGN header
+            payload = decrypted.subarray(13);
+
+            // Trim FRAG1 if it overlapped with FRAGN offset (discarding frame CRC)
+            if (dg.fragments.has(0) && compressedOffset > 0) {
+                const frag1 = dg.fragments.get(0);
+                if (frag1.length > compressedOffset) {
+                    dg.fragments.set(0, frag1.subarray(0, compressedOffset));
+                }
+            }
         }
 
         dg.fragments.set(compressedOffset, payload);

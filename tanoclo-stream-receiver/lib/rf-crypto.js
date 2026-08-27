@@ -24,6 +24,16 @@ function getPanId(rawBytes) {
     // Security enabled Data Frame check (FCF low 4 bits = 0x09)
     if ((frame[0] & 0x0F) !== 0x09) return null;
 
+    const fcf = frame.readUInt16LE(0);
+    const destMode = (fcf >> 10) & 0x03;
+
+    if (destMode === 3) {
+        return frame.readUInt16LE(3);
+    } else if (destMode === 2) {
+        const val = frame.readUInt16LE(3);
+        if (val === 0xFFFF) return 0xFFFF; // Broadcast PAN
+        return null; // Short unicast address, PAN omitted
+    }
     return frame.readUInt16LE(3);
 }
 

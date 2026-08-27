@@ -7,6 +7,22 @@
 
 let _labels = {};
 
+const BUILTIN_LABELS = {
+    '0x015e': { name: 'zone_role_and_id', type: 'role_zone' },
+    '0x8400': { name: 'zone_peer_uri_p', type: 'string_ascii' },
+    '0x8200': { name: 'zone_peer_uri_c', type: 'string_ascii' },
+    '0x8000': { name: 'zone_peer_uri_s', type: 'string_ascii' },
+    '0x63a0': { name: 'zone_peer_uri_alt', type: 'string_ascii' },
+    '0x6040': { name: 'zone_peer_uri_cpe', type: 'string_ascii' },
+    '0x01d4': { name: 'zone_peer_uri_1d4', type: 'string_ascii' },
+    '0x01d5': { name: 'zone_peer_uri_1d5', type: 'string_ascii' },
+    '0x0210': { name: 'fw_build_id', type: 'string_ascii' },
+    '0x003a': { name: 'fw_version', type: 'u16be' },
+    '0x0035': { name: 'fw_other_slot', type: 'u16be' },
+    '0x0180': { name: 'slot_num', type: 'u8' },
+    '0x0036': { name: 'dev_type_code', type: 'u8' }
+};
+
 /**
  * Initialize TLV decoder with labels from database/JSON
  */
@@ -21,7 +37,21 @@ function getLabels() {
 function getLabel(fid) {
     if (fid === null || fid === undefined) return null;
     const key = '0x' + fid.toString(16).toLowerCase().padStart(4, '0');
-    return _labels[key] || null;
+    return _labels[key] || BUILTIN_LABELS[key] || null;
+}
+
+function decodeZoneRole(code) {
+    if (code === null || code === undefined) return 'UNKNOWN';
+    const num = Number(code);
+    switch (num) {
+        case 0x09: return 'WTS_MEASURING_LEADER';
+        case 0x0B: return 'RU_LEADER_CONTROLLER';
+        case 0x0D: return 'BRIDGE_HW_LEADER';
+        case 0x05: return 'VA_ZONE_MEMBER';
+        case 0x03: return 'RU_ZONE_FOLLOWER';
+        case 0x02: return 'REMOTE_ZONE';
+        default: return `ROLE_0x${num.toString(16).toUpperCase()}`;
+    }
 }
 
 /**
@@ -138,6 +168,13 @@ function interpretValue(valueBuf, label) {
         case 'string':
         case 'string_ascii':
             value = valueBuf.toString('utf-8');
+            break;
+        case 'role_zone':
+            value = valueBuf.length >= 2 ? {
+                role: valueBuf[0],
+                zoneId: valueBuf[1],
+                roleName: decodeZoneRole(valueBuf[0])
+            } : valueBuf.toString('hex');
             break;
         case 'bool':
         case 'flag':

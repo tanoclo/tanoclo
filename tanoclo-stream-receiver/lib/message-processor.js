@@ -133,6 +133,13 @@ function processCoapPacket(packet, type, meta = {}) {
             detectedFwVersion = String(f['0x0190']);
             updates.firmware_version = detectedFwVersion;
         }
+        if (f['0x0210'] && typeof f['0x0210'] === 'string') {
+            updates.firmware_build = f['0x0210'].trim();
+        }
+        if (f['0x015e'] && typeof f['0x015e'] === 'object') {
+            updates.zone_id = f['0x015e'].zoneId;
+            updates.zone_role = f['0x015e'].roleName;
+        }
 
         // Environmental metrics
         const temp = f['0x012d'] !== undefined ? f['0x012d'] : f.temperature_ambient;

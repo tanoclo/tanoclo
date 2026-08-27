@@ -340,7 +340,7 @@ function displayPacket(packet, type, meta = {}) {
 }
 
 function processDecryptedPayload(payload, macInfo, innerProto, seq, type, meta, reassemblyInfo = null) {
-    if (!payload || payload.length < 5) {
+    if (!payload || payload.length < 4) {
         statsNoCoap++;
         return;
     }
@@ -376,12 +376,33 @@ function processDecryptedPayload(payload, macInfo, innerProto, seq, type, meta, 
             }
 
             displayPacket(packet, type, fullMeta);
-        } else {
-            statsNoCoap++;
+            return;
         }
-    } else {
-        statsNoCoap++;
     }
+
+    // Check for ICMPv6 packets (e.g. RS 0x85, RA 0x86, NS 0x87, NA 0x88, Echo 0x80/0x81)
+    for (let i = 0; i < Math.min(25, payload.length - 1); i++) {
+        const t = payload[i];
+        if ((t === 0x80 || t === 0x81 || t === 0x85 || t === 0x86 || t === 0x87 || t === 0x88) && payload[i + 1] === 0x00) {
+            const icmpNames = {
+                0x80: 'Echo Request',
+                0x81: 'Echo Reply',
+                0x85: 'Router Solicitation',
+                0x86: 'Router Advertisement',
+                0x87: 'Neighbor Solicitation',
+                0x88: 'Neighbor Advertisement'
+            };
+            const name = icmpNames[t] || `ICMPv6_0x${t.toString(16).toUpperCase()}`;
+            logToFile(`ICMPv6: ${name} (Type=0x${t.toString(16).toUpperCase()}) From=${macInfo.src} To=${macInfo.dst} RSSI=${meta.rssi}`);
+            if (config.consoleLogging) {
+                console.log(`[ICMPv6] 🌐 ${name} (Type=0x${t.toString(16).toUpperCase()}) From=${macInfo.src} To=${macInfo.dst} RSSI=${meta.rssi} dBm`);
+            }
+            return;
+        }
+    }
+
+    statsNoCoap++;
+    logToFile(`Decryption ignored: No CoAP, len=${payload.length}`);
 }
 
 async function start() {
@@ -537,16 +558,7 @@ async function start() {
             }
 
             if (result.type === 'unfragmented') {
-                if (innerProto !== 0x04) {
-                    statsNonOperational++;
-                    if (innerProto === 0x3B && config.consoleLogging) {
-                        const icmpType = decrypted[6];
-                        const icmpName = icmpType === 0x85 ? 'Router Solicitation' : (icmpType === 0x86 ? 'Router Advertisement' : (icmpType === 0x80 ? 'Echo Request (Emulator Probe)' : 'Echo Reply'));
-                        console.log(`\n[LIVE] 🟢 NEW ICMPv6 ${icmpName} (Inner Proto: 0x3B, Type: 0x${icmpType.toString(16).toUpperCase()}). Raw: ${data.hex}`);
-                    }
-                    return;
-                }
-                const tado_payload = decrypted.subarray(5);
+                const tado_payload = decrypted.subarray(innerProto === 0x04 ? 5 : 0);
                 processDecryptedPayload(tado_payload, macInfo, innerProto, seq, 'unfragmented', {
                     rssi,
                     keyName,
