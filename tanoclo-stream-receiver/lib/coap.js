@@ -128,31 +128,67 @@ function isValidCoap(parsed) {
         if (parsed.type === 3) return false;
     }
 
+    // Reject false positive matches on random/checksum bytes:
+    // RFC 7252: Error responses (4.xx / 5.xx) on ACKs without valid options or payload with TKL >= 4 are invalid.
+    if (parsed.code >= 0x80 && (!parsed.options || parsed.options.length === 0) && (!parsed.payload || parsed.payload.length === 0) && parsed.tkl >= 4) {
+        return false;
+    }
+
     return true;
 }
 
 /**
  * Deterministically locates the start offset of a CoAP message within an inner UDP payload.
- * Prevents false positives from 6LoWPAN / UDP header bytes.
+ * Correctly decodes 6LoWPAN dispatch & NHC headers to prevent false positives from UDP checksum bytes.
  */
 function findCoapOffset(payload) {
     if (!payload || payload.length <= 4) return -1;
-    const firstByte = payload[4];
 
-    // 1. Check known deterministic UDP NHC header offsets
     const candidates = [];
-    if (firstByte === 0x33) {
-        candidates.push(12); // Standard Tado 6LoWPAN UDP NHC
-    } else if (firstByte === 0xF7) {
-        candidates.push(13);
-    } else if (firstByte === 0xF5) {
-        candidates.push(21);
-    } else if (firstByte === 0xD7) {
-        candidates.push(22);
+
+    // 1. Unicast operational frames with 8-byte prefix (3B MAC tail + 1B Proto + 4B Seq)
+    if (payload.length > 8 && payload[3] === 0x04) {
+        const dispatch = payload[8];
+        if (dispatch === 0x7E) {
+            // 0x7E = Tado custom 6LoWPAN UDP
+            if (payload.length > 10 && payload[9] === 0x33 && (payload[10] & 0xF0) === 0xF0) {
+                const portsComp = payload[10] & 0x03;
+                if (portsComp === 0) candidates.push(17); // 8 + 1(0x7E) + 2(0x33,0xF0) + 2(src) + 2(dst) + 2(csum) = 17
+                else if (portsComp === 1 || portsComp === 2) candidates.push(16);
+                else if (portsComp === 3) candidates.push(14);
+            } else if (payload.length > 9 && (payload[9] & 0xF8) === 0xF0) {
+                const portsComp = payload[9] & 0x03;
+                if (portsComp === 0) candidates.push(15);
+                else if (portsComp === 1 || portsComp === 2) candidates.push(14);
+                else if (portsComp === 3) candidates.push(12);
+            }
+            candidates.push(17, 15, 14, 12);
+        } else if ((dispatch & 0xF8) === 0xF0) {
+            const portsComp = dispatch & 0x03;
+            if (portsComp === 0) candidates.push(15);
+            else if (portsComp === 3) candidates.push(12);
+            candidates.push(15, 14, 12);
+        }
     }
 
+    // 2. Broadcast / stripped headers (e.g. 0x00 0x00 0x7E or direct 0x33/0xF0)
+    if (payload.length > 2 && payload[0] === 0x00 && payload[1] === 0x00 && payload[2] === 0x7E) {
+        candidates.push(11, 9, 8);
+    }
+    if (payload.length > 2 && payload[0] === 0x33 && payload[1] === 0xF0) {
+        candidates.push(8);
+    }
+    if (payload.length > 1 && (payload[0] & 0xF8) === 0xF0) {
+        candidates.push((payload[0] & 0x03) === 3 ? 4 : 7);
+    }
+
+    // Add common fallback candidate offsets
+    candidates.push(17, 15, 14, 13, 12, 11, 8, 4);
+
+    const checked = new Set();
     for (const offset of candidates) {
-        if (offset <= payload.length - 4) {
+        if (offset > 0 && offset <= payload.length - 4 && !checked.has(offset)) {
+            checked.add(offset);
             const parsed = parse(payload.subarray(offset));
             if (isValidCoap(parsed)) {
                 return offset;
@@ -160,24 +196,22 @@ function findCoapOffset(payload) {
         }
     }
 
-    // 2. Fallback scan starting at offset 10 to avoid matching on outer headers
+    // 3. Fallback scan starting at offset 10 to avoid matching on outer headers
     for (let i = 10; i <= payload.length - 4; i++) {
-        const parsed = parse(payload.subarray(i));
-        if (isValidCoap(parsed)) {
-            return i;
+        if (!checked.has(i)) {
+            const parsed = parse(payload.subarray(i));
+            if (isValidCoap(parsed)) {
+                return i;
+            }
         }
     }
     return -1;
 }
 
 /**
- * Parse a CoAP message from binary data with Tado Option 15 defensive fallback.
- * @param {Buffer} data - Raw CoAP bytes
- * @returns {object} Parsed CoAP object
+ * Internal parser for CoAP binary bytes.
  */
-function parse(data) {
-    if (!Buffer.isBuffer(data)) data = Buffer.from(data);
-
+function parseInternal(data) {
     if (data.length < 4) {
         return { ok: false, error: 'CoAP message too short (< 4 bytes)' };
     }
@@ -243,20 +277,17 @@ function parse(data) {
             offset += 2;
         }
 
-        currentOptNum += delta;
-
         if (offset + length > data.length) {
             return { ok: false, error: 'Option value exceeds message size' };
         }
 
-        const value = data.subarray(offset, offset + length);
-        offset += length;
-
+        currentOptNum += delta;
         options.push({
             num: currentOptNum,
             name: getOptionName(currentOptNum),
-            value
+            value: data.subarray(offset, offset + length)
         });
+        offset += length;
     }
 
     const payload = offset < data.length ? data.subarray(offset) : Buffer.alloc(0);
@@ -272,6 +303,23 @@ function parse(data) {
         options,
         payload
     };
+}
+
+/**
+ * Parse a CoAP message from binary data with trailing 802.15.4 Kermit CRC16 fallback.
+ * @param {Buffer} data - Raw CoAP bytes
+ * @returns {object} Parsed CoAP object
+ */
+function parse(data) {
+    if (!Buffer.isBuffer(data)) data = Buffer.from(data);
+
+    let res = parseInternal(data);
+    if (!res.ok && data.length > 6 && !data.includes(0xFF)) {
+        // If parsing failed due to trailing 2-byte frame CRC, try without the trailing 2 bytes
+        const resNoCrc = parseInternal(data.subarray(0, -2));
+        if (resNoCrc.ok) return resNoCrc;
+    }
+    return res;
 }
 
 /**

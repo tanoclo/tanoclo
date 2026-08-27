@@ -73,7 +73,7 @@ app.use(helmet({
             "style-src-elem": ["'self'", "'unsafe-inline'", `*.${config.domain}`, "fonts.googleapis.com", "https://cdn.jsdelivr.net"],
             "img-src": ["'self'", "data:", `*.${config.domain}`, "maps.googleapis.com", "*.gstatic.com", "*.google.com", "*.googleapis.com", "*.basemaps.cartocdn.com", "*.tile.openstreetmap.org"],
             "form-action": ["'self'", `*.${config.domain}`, "tado:"],
-            "font-src": ["'self'", "fonts.gstatic.com", "data:"]
+            "font-src": ["'self'", "fonts.gstatic.com", "https://cdn.jsdelivr.net", "data:"]
         },
     },
 }));

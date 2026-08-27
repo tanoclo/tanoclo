@@ -770,9 +770,9 @@ class TadoEmulatorComponent : public Component,
     }
   }
 
-  void send_config_get(EmulatedDevice *dev) {
+  void send_config_get(EmulatedDevice *dev, int32_t block2_num = -1, uint8_t block2_szx = 4) {
     std::string path = "d/" + dev->serial_no + "/config";
-    this->send_coap_request(dev, 1 /* GET */, path, {});
+    this->send_coap_request(dev, 1 /* GET */, path, {}, block2_num, block2_szx);
   }
 
   void send_time_get(EmulatedDevice *dev) {
@@ -1355,24 +1355,24 @@ class TadoEmulatorComponent : public Component,
   // CoAP & Radio Packet Transmission Engine
   // -------------------------------------------------------------------------
 
-  void send_coap_request(EmulatedDevice *dev, uint8_t code, const std::string &path, const std::vector<uint8_t> &payload) {
+  void send_coap_request(EmulatedDevice *dev, uint8_t code, const std::string &path, const std::vector<uint8_t> &payload, int32_t block2_num = -1, uint8_t block2_szx = 4) {
     if (!dev->has_op_key) {
       ESP_LOGW(TAG, "Device %s has no operational key. Cannot send encrypted CoAP packet.", dev->serial_no.c_str());
       return;
     }
-    this->send_coap_raw(dev, code, path, payload, dev->op_key, true);
+    this->send_coap_raw(dev, code, path, payload, dev->op_key, true, block2_num, block2_szx);
   }
 
-  void send_coap_raw(EmulatedDevice *dev, uint8_t code, const std::string &path, const std::vector<uint8_t> &payload, const uint8_t *key, bool use_token) {
+  void send_coap_raw(EmulatedDevice *dev, uint8_t code, const std::string &path, const std::vector<uint8_t> &payload, const uint8_t *key, bool use_token, int32_t block2_num = -1, uint8_t block2_szx = 4) {
     if (dev->ib_mac_known) {
-      this->send_coap_raw_dest(dev, code, path, payload, key, use_token, dev->ib_mac);
+      this->send_coap_raw_dest(dev, code, path, payload, key, use_token, dev->ib_mac, block2_num, block2_szx);
     } else {
       const uint8_t bcast_mac[8] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-      this->send_coap_raw_dest(dev, code, path, payload, key, use_token, bcast_mac);
+      this->send_coap_raw_dest(dev, code, path, payload, key, use_token, bcast_mac, block2_num, block2_szx);
     }
   }
 
-  void send_coap_raw_dest(EmulatedDevice *dev, uint8_t code, const std::string &path, const std::vector<uint8_t> &payload, const uint8_t *key, bool use_token, const uint8_t *dest_mac) {
+  void send_coap_raw_dest(EmulatedDevice *dev, uint8_t code, const std::string &path, const std::vector<uint8_t> &payload, const uint8_t *key, bool use_token, const uint8_t *dest_mac, int32_t block2_num = -1, uint8_t block2_szx = 4) {
     std::vector<uint8_t> coap;
     uint16_t mid = dev->coap_mid++;
 
@@ -1403,10 +1403,30 @@ class TadoEmulatorComponent : public Component,
       last_opt = 12;
     }
 
+    // Option 23: Block2 (if requesting a specific block in blockwise transfer)
+    if (block2_num >= 0) {
+      uint32_t b2_val = ((uint32_t)block2_num << 4) | (0 << 3) | (block2_szx & 0x07);
+      uint16_t opt_delta = 23 - last_opt;
+      if (b2_val <= 0xFF) {
+        coap.push_back(((opt_delta & 0x0F) << 4) | 0x01);
+        coap.push_back((uint8_t)b2_val);
+      } else if (b2_val <= 0xFFFF) {
+        coap.push_back(((opt_delta & 0x0F) << 4) | 0x02);
+        coap.push_back((b2_val >> 8) & 0xFF);
+        coap.push_back(b2_val & 0xFF);
+      } else {
+        coap.push_back(((opt_delta & 0x0F) << 4) | 0x03);
+        coap.push_back((b2_val >> 16) & 0xFF);
+        coap.push_back((b2_val >> 8) & 0xFF);
+        coap.push_back(b2_val & 0xFF);
+      }
+      last_opt = 23;
+    }
+
     // Option 2048 (Session Token) if applicable
     if (use_token && dev->has_session_token) {
-      uint16_t delta_2048 = 2048 - last_opt; // 2036 if last_opt=12, 2037 if last_opt=11
-      uint16_t ext_delta = delta_2048 - 269; // 1767 (0x06E7) or 1768 (0x06E8)
+      uint16_t delta_2048 = 2048 - last_opt;
+      uint16_t ext_delta = delta_2048 - 269;
       coap.push_back(0xE8); // Delta=14(ext 2-byte), Length=8
       coap.push_back((ext_delta >> 8) & 0xFF); // Extended delta MSB
       coap.push_back(ext_delta & 0xFF);        // Extended delta LSB
@@ -2217,7 +2237,7 @@ class TadoEmulatorComponent : public Component,
     target_dev->last_rx_seq = seq;
     target_dev->last_rx_len = buf_len;
 
-    bool is_broadcast = (fcf == 0xE849 || fcf == 0xE859);
+    is_broadcast = is_broadcast || (fcf == 0xE849 || fcf == 0xE859);
     if (is_dup_rf) {
       ESP_LOGD(TAG, "[RF RX Dup] %s: Len=%d, FCF=0x%04X, Seq=%d, RSSI=%d",
                is_broadcast ? "Broadcast" : target_dev->serial_no.c_str(), (int)buf_len, fcf, seq, pkt.rssi);
@@ -2589,6 +2609,23 @@ class TadoEmulatorComponent : public Component,
           opt_idx += 2;
         }
         current_opt += opt_delta;
+        if (current_opt == 23 && opt_len > 0 && opt_idx + opt_len <= decrypted.size()) {
+          uint32_t b2_raw = 0;
+          for (size_t k = 0; k < opt_len; k++) {
+            b2_raw = (b2_raw << 8) | decrypted[opt_idx + k];
+          }
+          uint32_t b2_num = b2_raw >> 4;
+          bool b2_more = (b2_raw >> 3) & 1;
+          uint8_t b2_szx = b2_raw & 0x07;
+          if (b2_more) {
+            ESP_LOGI(TAG, "✓ %s: Received Block2 (num=%u, more=1, szx=%u) on /config. Requesting next block (%u)...",
+                     target_dev->serial_no.c_str(), (unsigned)b2_num, (unsigned)b2_szx, (unsigned)(b2_num + 1));
+            this->send_config_get(target_dev, b2_num + 1, b2_szx);
+          } else {
+            ESP_LOGI(TAG, "✓ %s: Received Block2 final block (num=%u, more=0).",
+                     target_dev->serial_no.c_str(), (unsigned)b2_num);
+          }
+        }
         if (current_opt == 2048 && opt_len == 8 && opt_idx + 8 <= decrypted.size()) {
           bool token_changed = !target_dev->has_session_token || (memcmp(target_dev->session_token, &decrypted[opt_idx], 8) != 0);
           memcpy(target_dev->session_token, &decrypted[opt_idx], 8);
@@ -3288,6 +3325,19 @@ class TadoEmulatorComponent : public Component,
     if (this->devices_mutex_ != nullptr) xSemaphoreGiveRecursive(this->devices_mutex_);
   }
 
+  void clear_all_nvs() {
+    if (this->devices_mutex_ != nullptr) xSemaphoreTakeRecursive(this->devices_mutex_, portMAX_DELAY);
+    ESP_LOGI(TAG, "Erasing ALL emulated devices from NVRAM and in-memory registry");
+    this->devices_.clear();
+    nvs_handle_t handle;
+    if (nvs_open("tado_emul", NVS_READWRITE, &handle) == ESP_OK) {
+      nvs_erase_all(handle);
+      nvs_commit(handle);
+      nvs_close(handle);
+    }
+    if (this->devices_mutex_ != nullptr) xSemaphoreGiveRecursive(this->devices_mutex_);
+  }
+
   void derive_mac_from_ipv6(const std::string &ipv6_in, uint8_t *mac) {
     std::string ipv6 = ipv6_in;
     size_t bstart = ipv6.find('[');
@@ -3488,6 +3538,34 @@ class TadoEmulatorComponent : public Component,
           request->send(200, "application/json", "{\"ok\":true,\"message\":\"Device removed from NVRAM\"}");
           return;
         }
+      }
+      // 4. Command: clear_nvs / clear_all
+      else if (json_has_key(body, "clear_nvs") || json_has_key(body, "clear_all") || body.find("clear_nvs") != std::string::npos || body.find("clear_nvram") != std::string::npos) {
+        this->clear_all_nvs();
+        xSemaphoreGiveRecursive(this->devices_mutex_);
+        request->send(200, "application/json", "{\"ok\":true,\"message\":\"All emulated devices cleared from NVRAM\"}");
+        return;
+      }
+      // 5. Command: reboot / restart
+      else if (json_has_key(body, "reboot") || json_has_key(body, "restart") || body.find("reboot") != std::string::npos) {
+        xSemaphoreGiveRecursive(this->devices_mutex_);
+        request->send(200, "application/json", "{\"ok\":true,\"message\":\"Rebooting ESP32...\"}");
+        this->set_timeout(500, []() {
+          ESP_LOGI(TAG, "Rebooting ESP32 upon REST RPC request...");
+          esp_restart();
+        });
+        return;
+      }
+      // 6. Command: clear_and_reboot
+      else if (json_has_key(body, "clear_and_reboot")) {
+        this->clear_all_nvs();
+        xSemaphoreGiveRecursive(this->devices_mutex_);
+        request->send(200, "application/json", "{\"ok\":true,\"message\":\"NVRAM cleared. Rebooting ESP32...\"}");
+        this->set_timeout(500, []() {
+          ESP_LOGI(TAG, "Rebooting ESP32 after NVRAM clear...");
+          esp_restart();
+        });
+        return;
       }
       xSemaphoreGiveRecursive(this->devices_mutex_);
     }
