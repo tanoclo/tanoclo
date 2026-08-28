@@ -104,6 +104,8 @@ jobs:
 
           RUN_NUM=${{ github.run_number }}
           APK_VERSION="${{ github.event.inputs.version }}"
+          APK_SHA=$(sha256sum tanoclo.apk | awk '{print $1}')
+          APK_SIZE=$(wc -c < tanoclo.apk | tr -d ' ')
 
           # 6. Update manifest with real release notes
           node -e "
@@ -114,6 +116,8 @@ jobs:
               webVersionName: '${APK_VERSION}',
               apkVersionCode: ${RUN_NUM},
               apkVersionName: '${APK_VERSION}',
+              apkSha256: '${APK_SHA}',
+              apkSize: ${APK_SIZE},
               zipUrl: 'https://raw.githubusercontent.com/tanoclo/tanoclo/ota/dist.zip',
               apkUrl: 'https://raw.githubusercontent.com/tanoclo/tanoclo/ota/tanoclo.apk',
               releaseNotes: releaseNotes
@@ -121,7 +125,7 @@ jobs:
             if (fs.existsSync('manifest.json')) {
               try {
                 const existing = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
-                manifest = { ...existing, apkVersionCode: ${RUN_NUM}, apkVersionName: '${APK_VERSION}', releaseNotes: releaseNotes };
+                manifest = { ...existing, apkSha256: '${APK_SHA}', apkSize: ${APK_SIZE}, apkVersionCode: ${RUN_NUM}, apkVersionName: '${APK_VERSION}', releaseNotes: releaseNotes };
               } catch (e) {}
             }
             fs.writeFileSync('manifest.json', JSON.stringify(manifest, null, 2));

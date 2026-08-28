@@ -13,13 +13,40 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.security.MessageDigest;
+import java.util.Iterator;
 
 @CapacitorPlugin(name = "SelfUpdate")
 public class SelfUpdatePlugin extends Plugin {
+
+    private String computeFileSha256(File file) {
+        if (file == null || !file.exists() || !file.canRead()) {
+            return null;
+        }
+        try (InputStream fis = new FileInputStream(file)) {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] buffer = new byte[8192];
+            int n;
+            while ((n = fis.read(buffer)) != -1) {
+                digest.update(buffer, 0, n);
+            }
+            byte[] hash = digest.digest();
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hash) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) hexString.append('0');
+                hexString.append(hex);
+            }
+            return hexString.toString();
+        } catch (Exception e) {
+            return null;
+        }
+    }
 
     @PluginMethod
     public void getVersionInfo(PluginCall call) {
@@ -34,9 +61,13 @@ public class SelfUpdatePlugin extends Plugin {
             }
             String versionName = pInfo.versionName;
 
+            String apkPath = context.getPackageCodePath();
+            String apkSha256 = computeFileSha256(new File(apkPath));
+
             JSObject ret = new JSObject();
             ret.put("versionCode", versionCode);
             ret.put("versionName", versionName);
+            ret.put("apkSha256", apkSha256 != null ? apkSha256 : "");
             call.resolve(ret);
         } catch (Exception e) {
             call.reject("Failed to get version info", e);
@@ -79,6 +110,9 @@ public class SelfUpdatePlugin extends Plugin {
             return;
         }
 
+        JSObject headers = call.getObject("headers");
+        String expectedSha256 = call.getString("expectedSha256");
+
         new Thread(new Runnable() {
             @Override
             public void run() {
@@ -86,10 +120,24 @@ public class SelfUpdatePlugin extends Plugin {
                     URL url = new URL(urlString);
                     HttpURLConnection connection = (HttpURLConnection) url.openConnection();
                     connection.setRequestMethod("GET");
+
+                    if (headers != null) {
+                        Iterator<String> keys = headers.keys();
+                        while (keys.hasNext()) {
+                            String key = keys.next();
+                            try {
+                                String value = headers.getString(key);
+                                if (value != null) {
+                                    connection.setRequestProperty(key, value);
+                                }
+                            } catch (Exception ignored) {}
+                        }
+                    }
+
                     connection.connect();
 
                     if (connection.getResponseCode() != HttpURLConnection.HTTP_OK) {
-                        call.reject("Server returned HTTP " + connection.getResponseCode());
+                        call.reject("Server returned HTTP " + connection.getResponseCode() + " (" + connection.getResponseMessage() + ")");
                         return;
                     }
 
@@ -126,6 +174,14 @@ public class SelfUpdatePlugin extends Plugin {
                     output.flush();
                     output.close();
                     input.close();
+
+                    if (expectedSha256 != null && !expectedSha256.trim().isEmpty()) {
+                        String downloadedSha = computeFileSha256(apkFile);
+                        if (downloadedSha == null || !downloadedSha.equalsIgnoreCase(expectedSha256.trim())) {
+                            call.reject("Downloaded APK checksum verification failed (expected " + expectedSha256 + ", got " + downloadedSha + ")");
+                            return;
+                        }
+                    }
 
                     triggerInstall(apkFile, call);
 

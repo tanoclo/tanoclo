@@ -16,6 +16,7 @@ import logger from '../../utils/logger';
 import { useToast } from '../../context/ToastContext';
 import { useTranslation } from 'react-i18next';
 import { apiFetch } from '../../api/client';
+import { getApiBase, STORAGE_KEYS } from '../../utils/constants';
 
 const SelfUpdate = registerPlugin('SelfUpdate');
 
@@ -115,7 +116,7 @@ export default function SelfUpdater() {
         logger.info('[SelfUpdater] Downloading CapGo web asset update (webVersionCode:', remoteWebCode, ')');
         try {
           const zipUrl = manifestData.zipUrl.startsWith('/') 
-            ? `${window.location.origin}${manifestData.zipUrl}`
+            ? `${getApiBase()}${manifestData.zipUrl}`
             : manifestData.zipUrl;
           const bundle = await CapacitorUpdater.download({
             url: zipUrl,
@@ -138,13 +139,26 @@ export default function SelfUpdater() {
         }
       }
 
-      // 2. Native APK Update via SelfUpdate plugin (ONLY if apkVersionCode changed)
-      const remoteApkCode = Number(manifestData.apkVersionCode || manifestData.versionCode || 0);
-      const localApkCode = Number(localInfo.versionCode || 0);
+      // 2. Native APK Update via SelfUpdate plugin
+      // Compare SHA-256 checksums if available; any hash difference triggers update.
+      const remoteSha = manifestData.apkSha256 ? String(manifestData.apkSha256).toLowerCase().trim() : null;
+      const localSha = localInfo.apkSha256 ? String(localInfo.apkSha256).toLowerCase().trim() : null;
 
-      if (remoteApkCode > localApkCode) {
+      let isApkUpdateAvailable = false;
+      if (remoteSha && localSha) {
+        isApkUpdateAvailable = (remoteSha !== localSha);
+        logger.debug(`[SelfUpdater] APK SHA check: remote=${remoteSha} local=${localSha} -> update=${isApkUpdateAvailable}`);
+      } else {
+        // Fallback to versionCode if SHA is missing from either side
+        const remoteApkCode = Number(manifestData.apkVersionCode || manifestData.versionCode || 0);
+        const localApkCode = Number(localInfo.versionCode || 0);
+        isApkUpdateAvailable = (remoteApkCode > localApkCode);
+        logger.debug(`[SelfUpdater] APK versionCode check: remote=${remoteApkCode} local=${localApkCode} -> update=${isApkUpdateAvailable}`);
+      }
+
+      if (isApkUpdateAvailable) {
         hasAnyUpdate = true;
-        logger.info('[SelfUpdater] New native APK version available (apkVersionCode:', remoteApkCode, ')');
+        logger.info('[SelfUpdater] New native APK version available (SHA:', remoteSha || 'N/A', ')');
         setUpdateState('PROMPT');
         if (isManual) {
           showToast(t('settings.update_available') || 'New app version available!', 'info');
@@ -230,8 +244,23 @@ export default function SelfUpdater() {
         setDownloadProgress(data.progress || 0);
       });
 
-      logger.debug('[SelfUpdater] Downloading APK from:', manifest.apkUrl);
-      await SelfUpdate.downloadAndInstallApk({ url: manifest.apkUrl });
+      let apkUrl = manifest.apkUrl;
+      if (apkUrl.startsWith('/')) {
+        apkUrl = `${getApiBase()}${apkUrl}`;
+      }
+
+      const token = localStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
+      const headers = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      logger.debug('[SelfUpdater] Downloading APK from:', apkUrl);
+      await SelfUpdate.downloadAndInstallApk({
+        url: apkUrl,
+        headers,
+        expectedSha256: manifest.apkSha256 || null
+      });
       setUpdateState('IDLE');
     } catch (err) {
       logger.error('[SelfUpdater] Download or installation failed:', err);

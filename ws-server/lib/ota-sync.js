@@ -7,6 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const http = require('http');
+const crypto = require('crypto');
 const AdmZip = require('adm-zip');
 
 const frontendDistPath = path.join(__dirname, '../frontend-dist');
@@ -22,6 +23,16 @@ const DEFAULT_OTA_APK_URL = 'https://raw.githubusercontent.com/tanoclo/tanoclo/o
 let currentManifest = null;
 let isSyncing = false;
 let checkTimer = null;
+
+function computeFileSha256(filePath) {
+  try {
+    if (!fs.existsSync(filePath)) return null;
+    const fileBuffer = fs.readFileSync(filePath);
+    return crypto.createHash('sha256').update(fileBuffer).digest('hex');
+  } catch (err) {
+    return null;
+  }
+}
 
 function ensureDirs() {
   if (!fs.existsSync(frontendDistPath)) {
@@ -57,17 +68,46 @@ function fetchUrlBuffer(url, redirectsLeft = 5) {
   });
 }
 
+function getApkPath() {
+  if (fs.existsSync(apkCacheFile)) return apkCacheFile;
+  const distApk = path.join(frontendDistPath, 'tanoclo.apk');
+  if (fs.existsSync(distApk)) return distApk;
+  return null;
+}
+
 function loadLocalManifest() {
   try {
     if (fs.existsSync(manifestCacheFile)) {
       const data = fs.readFileSync(manifestCacheFile, 'utf8');
       currentManifest = JSON.parse(data);
-      return currentManifest;
+    } else {
+      const distManifest = path.join(frontendDistPath, 'manifest.json');
+      if (fs.existsSync(distManifest)) {
+        const data = fs.readFileSync(distManifest, 'utf8');
+        currentManifest = JSON.parse(data);
+      }
     }
   } catch (err) {
     console.error('[OtaSync] Error reading local manifest:', err.message);
   }
-  return null;
+  if (!currentManifest) {
+    currentManifest = {
+      webVersionCode: 1,
+      webVersionName: '0.1.0',
+      apkVersionCode: 1,
+      apkVersionName: '0.1.0'
+    };
+  }
+  const apkPath = getApkPath();
+  if (apkPath) {
+    const sha = computeFileSha256(apkPath);
+    if (sha) {
+      currentManifest.apkSha256 = sha;
+      currentManifest.apkSize = fs.statSync(apkPath).size;
+      currentManifest.apkUrl = currentManifest.apkUrl || '/api/v2/ota/tanoclo.apk';
+    }
+  }
+  return currentManifest;
 }
 
 function extractZipBuffer(zipBuffer, targetDir) {
@@ -201,12 +241,22 @@ function getManifest() {
   if (!currentManifest) {
     loadLocalManifest();
   }
-  return currentManifest || {
+  const manifest = currentManifest ? { ...currentManifest } : {
     webVersionCode: 1,
     webVersionName: '0.1.0',
     apkVersionCode: 1,
     apkVersionName: '0.1.0'
   };
+  const apkPath = getApkPath();
+  if (apkPath) {
+    const sha = computeFileSha256(apkPath);
+    if (sha) {
+      manifest.apkSha256 = sha;
+      manifest.apkSize = fs.statSync(apkPath).size;
+      manifest.apkUrl = manifest.apkUrl || '/api/v2/ota/tanoclo.apk';
+    }
+  }
+  return manifest;
 }
 
 function getDistZipPath() {
@@ -224,5 +274,6 @@ module.exports = {
   getDistZipPath,
   getApkPath,
   stopTimer,
-  extractZipBuffer
+  extractZipBuffer,
+  computeFileSha256
 };

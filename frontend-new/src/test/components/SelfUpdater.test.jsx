@@ -62,4 +62,30 @@ describe('SelfUpdater', () => {
     const html = renderToString(<SelfUpdater />);
     expect(typeof html).toBe('string');
   });
+
+  it('detects update when apkSha256 differs', async () => {
+    const { apiFetch } = await import('../../api/client');
+    vi.mocked(apiFetch).mockResolvedValueOnce({
+      apkVersionCode: 100,
+      apkVersionName: '1.0.0',
+      apkSha256: 'sha256-remote-new-build',
+      apkUrl: '/api/v2/ota/tanoclo.apk'
+    });
+
+    const { registerPlugin } = await import('@capacitor/core');
+    const mockPlugin = registerPlugin('SelfUpdate');
+    vi.mocked(mockPlugin.getVersionInfo).mockResolvedValueOnce({
+      versionCode: 100,
+      versionName: '1.0.0',
+      apkSha256: 'sha256-local-old-build'
+    });
+
+    const handler = (e) => {
+      e.detail.resolve(true);
+    };
+    window.addEventListener('tanoclo_check_for_updates', handler, { once: true });
+
+    const result = await triggerCheckForUpdates(true);
+    expect(result).toBe(true);
+  });
 });

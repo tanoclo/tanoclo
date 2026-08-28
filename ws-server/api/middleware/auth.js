@@ -13,7 +13,10 @@ const config = require('../../lib/config');
 const _log = getLogger('auth-mw');
 
 module.exports = async function authMiddleware(req, res, next) {
-    const authHeader = req.headers.authorization;
+    let authHeader = req.headers.authorization;
+    if (!authHeader && req.query && req.query.token) {
+        authHeader = `Bearer ${req.query.token}`;
+    }
     if (!authHeader || (!authHeader.startsWith('Bearer ') && !authHeader.startsWith('Mobile '))) {
         _log('warn', `Unauthorized request to ${req.method} ${req.url}: No valid Authorization header`);
         return res.status(401).json({ error: 'unauthorized', error_description: 'Authentication is required to access this resource' });

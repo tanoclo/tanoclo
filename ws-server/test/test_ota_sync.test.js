@@ -47,4 +47,13 @@ describe('OtaSyncManager', () => {
       expect(realContent).not.toBe('<html><body>Test OTA</body></html>');
     }
   });
+
+  it('computes apkSha256 dynamically on file buffer', () => {
+    const testApkPath = path.join(tmpDir, 'test.apk');
+    fs.writeFileSync(testApkPath, Buffer.from('dummy apk test bytes'));
+
+    const sha = otaSync.computeFileSha256(testApkPath);
+    expect(sha).toBeDefined();
+    expect(sha.length).toBe(64); // SHA-256 hex string length
+  });
 });
