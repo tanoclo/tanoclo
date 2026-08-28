@@ -378,11 +378,11 @@ async function startServer() {
         mqttClient.init(config, log);
         mqttPublisher.init(mqttClient, db, config, log);
         mqttHaDiscovery.init(mqttClient, db, config, log);
-        mqttCommands.init(mqttClient, db, commandApi, mqttPublisher, log);
+        mqttCommands.init(mqttClient, db, commandApi, mqttPublisher, log, deps.onStateChange);
 
         // Initialize OWD Detector
         const owdDetector = require('./lib/owd-detector');
-        owdDetector.init(db, commandApi, mqttPublisher);
+        owdDetector.init(db, commandApi, mqttPublisher, deps.onStateChange);
 
         mqttClient.onConnect(() => {
             mqttPublisher.publishFullState();
@@ -532,7 +532,8 @@ async function startServer() {
         pushZoneOverlayDelete: commandApi.pushZoneOverlayDelete,
         pushScheduleTransition: commandApi.pushScheduleTransition,
         mqttPublisher,
-        mqttHaDiscovery
+        mqttHaDiscovery,
+        onStateChange: deps.onStateChange
     });
 
     log('info', `Zone config writes: ${config.zoneConfigReadonly ? 'DISABLED (readonly)' : 'ENABLED'}`);

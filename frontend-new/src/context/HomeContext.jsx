@@ -29,7 +29,7 @@ export function HomeProvider({ children }) {
   const [activeHomeId, setActiveHomeId] = useState(null);
 
   // Subscribe to Server-Sent Events (SSE) updates to push real-time zone/home telemetry
-  useSSE(activeHomeId);
+  const { isConnected: sseConnected, lastEventAt: sseLastEventAt } = useSSE(activeHomeId);
 
   // Set default active home once user profile loads
   useEffect(() => {
@@ -60,10 +60,14 @@ export function HomeProvider({ children }) {
    * @brief Helper to calculate correct SWR polling interval.
    * @param {number} webMs - Polling interval for standard web client (active tab).
    * @param {number} mobileMs - Polling interval for Capacitor mobile wrapper.
+   * @param {number} [disconnectedFallbackMs] - Aggressive fallback interval when SSE is disconnected.
    * @returns {number} Active polling interval in ms (0 to disable).
    */
-  const pollInterval = (webMs, mobileMs) => {
+  const pollInterval = (webMs, mobileMs, disconnectedFallbackMs = null) => {
     if (!isVisible) return 0;
+    if (!sseConnected && disconnectedFallbackMs !== null) {
+      return isMobile ? Math.max(disconnectedFallbackMs, 10000) : disconnectedFallbackMs;
+    }
     return isMobile ? mobileMs : webMs;
   };
 
@@ -94,7 +98,7 @@ export function HomeProvider({ children }) {
   } = useSWR(
     isAuthenticated && activeHomeId ? SWR_KEYS.homeState(activeHomeId) : null,
     () => getHomeState(activeHomeId),
-    { ...swrConfig, refreshInterval: pollInterval(30000, 60000) } // Poll every 30s
+    { ...swrConfig, refreshInterval: pollInterval(30000, 60000, 5000) } // 30s when SSE connected, 5s fallback
   );
 
   // Fetch Home weather
@@ -127,7 +131,7 @@ export function HomeProvider({ children }) {
   } = useSWR(
     isAuthenticated && activeHomeId ? SWR_KEYS.zoneStates(activeHomeId) : null,
     () => getZoneStates(activeHomeId),
-    { ...swrConfig, refreshInterval: pollInterval(60000, 90000) } // Poll every 60s as fallback (SSE handles real-time)
+    { ...swrConfig, refreshInterval: pollInterval(60000, 90000, 5000) } // 60s when SSE connected, 5s fallback
   );
 
   const value = {
@@ -138,6 +142,8 @@ export function HomeProvider({ children }) {
     weather,
     zones,
     zoneStates,
+    sseConnected,
+    sseLastEventAt,
     isLoading: isAuthenticated && activeHomeId && (!homeInfo || !zones || !zoneStates) && !homeInfoError && !zonesError && !zoneStatesError,
     error: homeInfoError || homeStateError || weatherError || zonesError || zoneStatesError,
     

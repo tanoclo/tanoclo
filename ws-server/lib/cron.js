@@ -20,6 +20,7 @@ let _pushZoneOverlayDeleteFn = null;
 let _pushScheduleTransitionFn = null;
 let _mqttPublisher = null;
 let _mqttHaDiscovery = null;
+let _onStateChangeFn = null;
 
 const _retryQueue = [];
 const _intervals = [];
@@ -57,13 +58,14 @@ async function processRetryQueue() {
  * @param {Function} opts.broadcastTime - Function to broadcast time to all bridges
  * @param {Function} opts.pushZoneOverlayDelete - Function to resume schedule for a zone
  */
-function start({ broadcastTime, broadcastRfKey, pushZoneOverlayDelete, pushScheduleTransition, mqttPublisher, mqttHaDiscovery }) {
+function start({ broadcastTime, broadcastRfKey, pushZoneOverlayDelete, pushScheduleTransition, mqttPublisher, mqttHaDiscovery, onStateChange }) {
     _broadcastTimeFn = broadcastTime;
     _broadcastRfKeyFn = broadcastRfKey;
     _pushZoneOverlayDeleteFn = pushZoneOverlayDelete;
     _pushScheduleTransitionFn = pushScheduleTransition;
     _mqttPublisher = mqttPublisher;
     _mqttHaDiscovery = mqttHaDiscovery;
+    _onStateChangeFn = onStateChange;
 
     log('info', 'Cron service started');
 
@@ -372,6 +374,10 @@ async function maintenanceZone(homeId, zoneId, zoneData, initialOverlay) {
 
         // 3. Trigger WS Push if something changed
         if (changed) {
+            if (typeof _onStateChangeFn === 'function') {
+                _onStateChangeFn(homeId, 'zone-state', { zoneId });
+            }
+
             try {
                 if (db.isOffline()) throw new Error('Database is offline');
                 if (hasOverlay && _pushZoneOverlayDeleteFn) {

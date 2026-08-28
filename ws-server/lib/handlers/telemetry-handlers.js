@@ -12,7 +12,7 @@ const wsBridge = require('../ws-bridge');
 
 let db, coap, battery, mqttPublisher;
 let clients, ipv6ToDevice;
-let extractShortSerial;
+let extractShortSerial, onStateChange;
 
 function init(deps) {
     db = deps.db;
@@ -22,6 +22,7 @@ function init(deps) {
     clients = deps.clients;
     ipv6ToDevice = deps.ipv6ToDevice;
     extractShortSerial = deps.extractShortSerial;
+    onStateChange = deps.onStateChange;
 }
 
 async function handleSensorData(ws, frame, coapMsg, decoded, peerInfo, pathInfo) {
@@ -119,6 +120,10 @@ async function handleSensorData(ws, frame, coapMsg, decoded, peerInfo, pathInfo)
                 }
             );
 
+            if (typeof onStateChange === 'function') {
+                onStateChange(zone.homeId, 'zone-state', { zoneId: zone.zoneId });
+            }
+
             const owdDetector = require('../owd-detector');
             try {
                 const [measRows] = await db.getPool().execute('SELECT * FROM zone_measurements WHERE zone_id = ? ORDER BY id DESC LIMIT 1', [zone.zoneId]);
@@ -139,6 +144,10 @@ async function handleSensorData(ws, frame, coapMsg, decoded, peerInfo, pathInfo)
         await db.insertDeviceMeasurement(shortSerial, homeId, zone ? zone.zoneId : null, f);
     }
     await db.updateDeviceConnectionState(shortSerial, true, batteryState, batteryPercent);
+
+    if (typeof onStateChange === 'function' && homeId) {
+        onStateChange(homeId, 'device-state', { deviceId: shortSerial });
+    }
 
     if (mqttPublisher && homeId) {
         db.getDeviceBySerial(shortSerial).then(dev => {

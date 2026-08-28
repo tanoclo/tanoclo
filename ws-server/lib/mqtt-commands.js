@@ -12,16 +12,18 @@ let db = null;
 let commandApi = null;
 let mqttPublisher = null;
 let log = null;
+let onStateChange = null;
 
 const emulatedStates = new Map();
 const pendingEsp32Retries = new Map();
 
-function init(_mqttClient, _db, _commandApi, _mqttPublisher, _log) {
+function init(_mqttClient, _db, _commandApi, _mqttPublisher, _log, _onStateChange) {
     mqttClient = _mqttClient;
     db = _db;
     commandApi = _commandApi;
     mqttPublisher = _mqttPublisher;
     log = _log;
+    onStateChange = _onStateChange;
 
     // Subscribe to home-scoped commands
     mqttClient.subscribe('tado/tanoclo/h/+/set/#', (topic, payload) => {
@@ -237,6 +239,10 @@ async function handleCommand(topic, payload) {
                     await commandApi.pushZoneOverlayDelete(homeId, zoneId).catch(err => {
                         if (log) log('warn', `[mqtt-commands] Delete overlay push failed: ${err.message}`);
                     });
+
+                    if (typeof onStateChange === 'function') {
+                        onStateChange(homeId, 'zone-state', { zoneId });
+                    }
 
                     _pub(`tado/tanoclo/h/${homeId}/z/${zoneId}/target_temperature`, targetTemp);
 
@@ -659,6 +665,10 @@ async function handleCommand(topic, payload) {
       await commandApi.pushZoneOverlay(homeId, zoneId, setting, { type: termType, durationInSeconds: termDuration }).catch(err => {
           if (log) log('warn', `[mqtt-commands] Overlay push failed: ${err.message}`);
       });
+
+      if (typeof onStateChange === 'function') {
+          onStateChange(homeId, 'zone-state', { zoneId });
+      }
   }
 
 async function handleEmulatedCommand(topic, payloadStr) {

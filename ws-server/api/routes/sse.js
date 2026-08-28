@@ -146,12 +146,12 @@ router.get('/homes/:homeId/events', sseAuth, (req, res) => {
 
     const keepalive = setInterval(() => {
         try {
-            res.write(':\n\n'); // SSE spec comment heartbeat
+            res.write('event: ping\ndata: {}\n\n'); // SSE ping event for client heartbeat detection
         } catch (e) {
             clearInterval(keepalive);
             removeClient(homeId, res);
         }
-    }, 30000);
+    }, 20000);
     res._sseKeepalive = keepalive; // store ref for cleanup on broadcast failure
 
     req.on('close', () => {

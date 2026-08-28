@@ -11,6 +11,7 @@ const log = getLogger('owd-detector');
 let db = null;
 let commandApi = null;
 let mqttPublisher = null;
+let onStateChange = null;
 
 const COOLDOWN_MS = 15 * 60 * 1000;   // 15 minutes cooldown
 const DEFAULT_THRESHOLD = 1.5;         // °C drop default
@@ -18,10 +19,11 @@ const HUMIDITY_THRESHOLD = 10;         // % drop confidence boost
 
 const cooldowns = new Map(); // zoneId -> timestamp of last OWD event
 
-function init(_db, _commandApi, _mqttPublisher) {
+function init(_db, _commandApi, _mqttPublisher, _onStateChange) {
     db = _db;
     commandApi = _commandApi;
     mqttPublisher = _mqttPublisher;
+    onStateChange = _onStateChange;
     log('info', 'TaNoClo OWD Detector initialized');
 }
 
@@ -101,6 +103,9 @@ async function evaluate(homeId, zoneId, latestMeasurement) {
 
             // Activate OWD
             await db.updateZoneOpenWindow(homeId, zoneId, true);
+            if (typeof onStateChange === 'function') {
+                onStateChange(homeId, 'zone-state', { zoneId });
+            }
 
             // Push to devices
             if (commandApi) {

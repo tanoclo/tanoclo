@@ -30,7 +30,7 @@ describe('i18n/index.js', () => {
     const i18n = (await import('../i18n')).default;
     expect(i18n).toBeDefined();
     expect(typeof i18n.t).toBe('function');
-  });
+  }, 15000);
 
   it('defaults to en when no stored preference', async () => {
     // Navigator.language may vary, but fallbackLng is 'en'

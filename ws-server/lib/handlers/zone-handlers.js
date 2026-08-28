@@ -60,6 +60,9 @@ async function handleZoneActuator(ws, frame, coapMsg, decoded, peerInfo, pathInf
             }
         }
         await db.insertZoneDemand(homeId, zoneId, demand);
+        if (typeof onStateChange === 'function' && homeId) {
+            onStateChange(homeId, 'zone-state', { zoneId });
+        }
     }
 }
 
@@ -90,6 +93,9 @@ async function handleZoneOpenWindow(ws, frame, coapMsg, decoded, peerInfo, pathI
 
     if (zoneId != null) {
         await db.updateZoneOpenWindow(homeId, zoneId, active);
+        if (typeof onStateChange === 'function' && homeId) {
+            onStateChange(homeId, 'zone-state', { zoneId });
+        }
         if (mqttPublisher) {
             mqttPublisher.publishOpenWindow(zoneId, active).catch(() => { });
         }
