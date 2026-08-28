@@ -28,6 +28,7 @@ services:
       WS_PORT: 988
       HTTP_API_PORT: 3111
       LOG_LEVEL: info
+      CARTO_API_KEY: ""
     volumes:
       - ./ws-server:/app/ws-server
     ports:

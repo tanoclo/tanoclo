@@ -62,6 +62,7 @@ const config = {
     zoneConfigReadonly: process.env.TANOCLO_ZONE_CONFIG_READONLY !== 'false',
     swaggerEnabled: process.env.TANOCLO_SWAGGER_ENABLED !== 'false',
     otaAutoUpdate: process.env.OTA_AUTO_UPDATE !== 'false', // Auto-update frontend from GitHub OTA branch
+    cartoApiKey: process.env.CARTO_API_KEY || '',
 
     // Database cleanup settings (retention in days)
     cleanupDeviceMeasurementsDays: 30,
@@ -201,6 +202,9 @@ function _applySettings(rows) {
                 break;
             case 'ota_auto_update':
                 config.otaAutoUpdate = row.value === '1' || row.value === 'true';
+                break;
+            case 'carto_api_key':
+                config.cartoApiKey = row.value || '';
                 break;
         }
     }

@@ -119,6 +119,7 @@ Now you can install and configure the TaNoClo app itself.
    * **Database Name:** `tanoclo`
    * **MQTT Host:** `mqtt://core-mosquitto:1883`
    * **JWT Secret:** Leave blank (will auto-generate and persist to `/data/jwt_secret.txt` on startup)
+   * **CARTO API Key:** *(Optional)* Enter your CARTO Basemaps API key to remove the raster watermark from geofence maps
 7. Save settings and click **Start**.
 
 ---

@@ -649,6 +649,14 @@ router.get('/dashboard', adminAuth, async (req, res) => {
                                         <div class="form-text text-white-50 small mt-1">Changing the JWT secret will invalidate all existing sessions.</div>
                                     </div>
                                     <div class="mb-3">
+                                        <label class="form-label small text-info">CARTO Basemaps API Key</label>
+                                        <div class="input-group">
+                                            <input type="password" id="settings_carto_api_key" class="form-control bg-dark text-white border-secondary font-monospace" placeholder="cb1_...">
+                                            <button class="btn btn-outline-secondary btn-sm" onclick="toggleCartoKeyVisibility()" title="Show/Hide" id="carto_toggle_btn">👁</button>
+                                        </div>
+                                        <div class="form-text text-white-50 small mt-1">CARTO API key for raster basemap tiles on geofence maps to remove watermarks.</div>
+                                    </div>
+                                    <div class="mb-3">
                                         <label class="form-label small text-info">Device Measurements Retention (Days)</label>
                                         <input type="number" id="settings_cleanup_device_measurements_days" class="form-control form-control-sm bg-dark text-white border-secondary" min="1" required>
                                         <div class="form-text text-white-50 small mt-1">How many days of device measurements to keep. Default: 30.</div>
@@ -1325,6 +1333,7 @@ router.get('/dashboard', adminAuth, async (req, res) => {
                         if (!data) return;
                         document.getElementById('settings_log_level').value = data.log_level || 'debug';
                         document.getElementById('settings_jwt_secret').value = data.jwt_secret || '';
+                        document.getElementById('settings_carto_api_key').value = data.carto_api_key || '';
                         document.getElementById('settings_cleanup_device_measurements_days').value = data.cleanup_device_measurements_days || 30;
                         document.getElementById('settings_cleanup_zone_measurements_days').value = data.cleanup_zone_measurements_days || 390;
                         document.getElementById('settings_cleanup_home_weather_days').value = data.cleanup_home_weather_days || 390;
@@ -1336,6 +1345,7 @@ router.get('/dashboard', adminAuth, async (req, res) => {
                         const logLevel = document.getElementById('settings_log_level').value;
                         const jwtInput = document.getElementById('settings_jwt_secret');
                         const jwtSecret = jwtInput.readOnly ? null : jwtInput.value;
+                        const cartoApiKey = document.getElementById('settings_carto_api_key').value;
                         const deviceDays = parseInt(document.getElementById('settings_cleanup_device_measurements_days').value, 10);
                         const zoneDays = parseInt(document.getElementById('settings_cleanup_zone_measurements_days').value, 10);
                         const weatherDays = parseInt(document.getElementById('settings_cleanup_home_weather_days').value, 10);
@@ -1356,6 +1366,7 @@ router.get('/dashboard', adminAuth, async (req, res) => {
 
                         const body = {
                             log_level: logLevel,
+                            carto_api_key: cartoApiKey,
                             cleanup_device_measurements_days: deviceDays,
                             cleanup_zone_measurements_days: zoneDays,
                             cleanup_home_weather_days: weatherDays,
@@ -1400,6 +1411,11 @@ router.get('/dashboard', adminAuth, async (req, res) => {
 
                     function toggleJwtVisibility() {
                         const input = document.getElementById('settings_jwt_secret');
+                        input.type = input.type === 'password' ? 'text' : 'password';
+                    }
+
+                    function toggleCartoKeyVisibility() {
+                        const input = document.getElementById('settings_carto_api_key');
                         input.type = input.type === 'password' ? 'text' : 'password';
                     }
 

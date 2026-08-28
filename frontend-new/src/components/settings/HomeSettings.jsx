@@ -22,6 +22,7 @@ import { getHomeTimezone, updateHomeTimezone } from '../../api/tanoclo';
 
 import logger from '../../utils/logger';
 import { useToast } from '../../context/ToastContext';
+import { getCartoTileUrl } from '../../utils/constants';
 
 import HomeSettingsGeneral from './HomeSettingsGeneral';
 import HomeSettingsGeofencing from './HomeSettingsGeofencing';
@@ -449,7 +450,7 @@ export default function HomeSettings({ homeId, homeInfo, mutateHomeInfo }) {
         attributionControl: false
       }).setView([lat, lon], 15);
 
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      L.tileLayer(getCartoTileUrl(details?.cartoApiKey || homeInfo?.cartoApiKey), {
         maxZoom: 19,
         subdomains: 'abcd',
         crossOrigin: true

@@ -10,6 +10,7 @@ import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { getCartoTileUrl } from '../../utils/constants';
 
 /**
  * @brief Geofence interactive map component.
@@ -41,7 +42,7 @@ export default function GeofenceMap({ homeInfo, devices = [], radius, onRadiusCh
       }).setView([homeLat, homeLon], 15);
 
       // Add OpenStreetMap tiles (bright-themed look using CartoDB Voyager tiles)
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+      L.tileLayer(getCartoTileUrl(homeInfo?.cartoApiKey), {
         maxZoom: 19,
         subdomains: 'abcd',
         crossOrigin: true

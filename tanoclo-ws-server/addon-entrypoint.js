@@ -68,6 +68,7 @@ if (options.mqtt_enabled !== undefined) {
 if (options.mqtt_host) env.MQTT_HOST = options.mqtt_host;
 if (options.mqtt_username) env.MQTT_USERNAME = options.mqtt_username;
 if (options.mqtt_password) env.MQTT_PASSWORD = options.mqtt_password;
+if (options.carto_api_key) env.CARTO_API_KEY = options.carto_api_key;
 
 // Force SSL files lookup to use the mounted /ssl folder if mapped
 env.SSL_KEY_PATH = '/ssl/tanoclo_key.pem';

@@ -170,6 +170,7 @@ For secure client access (web portal & mobile apps), configure a reverse proxy t
    * **mqtt_host:** `mqtt://core-mosquitto:1883`
    * **tanoclo_domain:** `tanoclo.yourdomain.com`
    * **jwt_secret:** *(Leave blank to let the add-on generate one automatically)*
+   * **carto_api_key:** *(Optional: Enter CARTO Basemaps API key to remove raster watermark from maps)*
 3. Save settings and click **Start**.
 4. Check the logs to see if TaNoClo started successfully.
 

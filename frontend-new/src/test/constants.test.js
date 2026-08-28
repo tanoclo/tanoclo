@@ -98,4 +98,17 @@ describe('utils/constants.js', () => {
       expect(TEMP_STEP).toBe(0.5);
     });
   });
+
+  describe('getCartoTileUrl', () => {
+    it('returns default tile URL when no key is provided', async () => {
+      const { getCartoTileUrl } = await import('../utils/constants');
+      expect(getCartoTileUrl()).toBe('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png');
+      expect(getCartoTileUrl('')).toBe('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png');
+    });
+
+    it('returns tile URL with key query param when API key is provided', async () => {
+      const { getCartoTileUrl } = await import('../utils/constants');
+      expect(getCartoTileUrl('my_test_key')).toBe('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=my_test_key');
+    });
+  });
 });

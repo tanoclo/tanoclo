@@ -91,7 +91,8 @@ router.get('/:homeId/details', async (req, res) => {
                 name: home.contact_name || '',
                 email: home.contact_email || '',
                 phone: home.contact_phone || ''
-            }
+            },
+            cartoApiKey: config.cartoApiKey || ''
         });
     } catch (err) {
         res.status(500).json({ error: 'internal_error' });

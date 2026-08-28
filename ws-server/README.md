@@ -94,6 +94,7 @@ All settings are managed via environment variables and loaded through [lib/confi
 *   **`LOG_LEVEL`** (String): Console log level (`debug`, `info`, `warn`, `error`). Default: `'debug'`.
 *   **`TANOCLO_ZONE_CONFIG_READONLY`** (Boolean): If `true`, blocks pushes of zone configurations to prevent accidental writes. Default: `true`.
 *   **`TANOCLO_SWAGGER_ENABLED`** (Boolean): Enables Swagger OpenAPI interactive documentation when `true`. Default: `true`.
+*   **`CARTO_API_KEY`** (String): API key for CARTO Basemaps raster tiles service. Removes watermark on geofence maps. Default: `''`.
 
 ---
 

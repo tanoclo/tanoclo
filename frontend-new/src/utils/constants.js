@@ -66,4 +66,16 @@ export const TEMP_MIN_DHW = 29.0;
 export const TEMP_MAX_DHW = 65.0;
 export const TEMP_STEP = 0.5;
 
+/**
+ * @brief Builds the CARTO Basemaps tile URL, appending the API key if available.
+ * @param {string} [apiKey] - CARTO Basemaps API key from home details or environment.
+ * @returns {string} Tile layer URL template.
+ */
+export const getCartoTileUrl = (apiKey) => {
+  const key = apiKey || import.meta.env.VITE_CARTO_API_KEY || '';
+  return key
+    ? `https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=${encodeURIComponent(key)}`
+    : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+};
+
 

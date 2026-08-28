@@ -63,7 +63,7 @@ test('legacy test suite runs successfully', async () => {
       const pool = db.getPool();
   
       // Backup settings
-      const keysToBackup = ['cleanup_device_measurements_days', 'cleanup_zone_measurements_days', 'cleanup_home_weather_days', 'log_level'];
+      const keysToBackup = ['cleanup_device_measurements_days', 'cleanup_zone_measurements_days', 'cleanup_home_weather_days', 'log_level', 'carto_api_key'];
       const originalSettings = {};
       for (const key of keysToBackup) {
           const [rows] = await pool.execute('SELECT `value` FROM server_settings WHERE `key` = ?', [key]);
@@ -313,6 +313,7 @@ test('legacy test suite runs successfully', async () => {
           assert.strictEqual(res.body.cleanup_device_measurements_days, 30);
           assert.strictEqual(res.body.cleanup_zone_measurements_days, 390);
           assert.strictEqual(res.body.cleanup_home_weather_days, 390);
+          assert.strictEqual(typeof res.body.carto_api_key, 'string');
       });
   
       await test('POST /setup/settings (Setup API)', async () => {
@@ -321,7 +322,8 @@ test('legacy test suite runs successfully', async () => {
               log_level: 'info',
               cleanup_device_measurements_days: 15,
               cleanup_zone_measurements_days: 180,
-              cleanup_home_weather_days: 200
+              cleanup_home_weather_days: 200,
+              carto_api_key: 'test_carto_key_123'
           });
           const res = await makeRequest(port, {
               path: '/setup/settings',
@@ -340,6 +342,7 @@ test('legacy test suite runs successfully', async () => {
           assert.strictEqual(config.cleanupDeviceMeasurementsDays, 15);
           assert.strictEqual(config.cleanupZoneMeasurementsDays, 180);
           assert.strictEqual(config.cleanupHomeWeatherDays, 200);
+          assert.strictEqual(config.cartoApiKey, 'test_carto_key_123');
       });
   
       console.log(`\n═══ API Routes Tests Completed: Passed ${passed}/${passed + failed} ═══`);

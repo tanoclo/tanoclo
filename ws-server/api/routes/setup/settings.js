@@ -85,7 +85,8 @@ router.get('/settings', adminAuth, async (req, res) => {
             cleanup_zone_measurements_days: settings.cleanup_zone_measurements_days !== undefined ? parseInt(settings.cleanup_zone_measurements_days, 10) : config.cleanupZoneMeasurementsDays,
             cleanup_home_weather_days: settings.cleanup_home_weather_days !== undefined ? parseInt(settings.cleanup_home_weather_days, 10) : config.cleanupHomeWeatherDays,
             swagger_enabled: settings.swagger_enabled !== undefined ? (settings.swagger_enabled === '1' || settings.swagger_enabled === 'true') : config.swaggerEnabled,
-            ota_auto_update: settings.ota_auto_update !== undefined ? (settings.ota_auto_update === '1' || settings.ota_auto_update === 'true') : config.otaAutoUpdate
+            ota_auto_update: settings.ota_auto_update !== undefined ? (settings.ota_auto_update === '1' || settings.ota_auto_update === 'true') : config.otaAutoUpdate,
+            carto_api_key: settings.carto_api_key !== undefined ? settings.carto_api_key : (config.cartoApiKey || '')
         });
     } catch (err) {
         _log('error', `[setup] GET /settings error: ${err.message}`);
@@ -97,7 +98,7 @@ router.post('/settings', adminAuth, async (req, res) => {
     try {
         const pool = db.getPool();
         const now = new Date().toISOString();
-        const { log_level, jwt_secret, cleanup_device_measurements_days, cleanup_zone_measurements_days, cleanup_home_weather_days, swagger_enabled } = req.body;
+        const { log_level, jwt_secret, cleanup_device_measurements_days, cleanup_zone_measurements_days, cleanup_home_weather_days, swagger_enabled, carto_api_key } = req.body;
 
         if (log_level && ['debug', 'info', 'warn', 'error'].includes(log_level)) {
             await pool.execute(
@@ -110,6 +111,13 @@ router.post('/settings', adminAuth, async (req, res) => {
             await pool.execute(
                 'INSERT INTO server_settings (`key`, `value`, updated_at) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`), updated_at = VALUES(updated_at)',
                 ['jwt_secret', jwt_secret, now]
+            );
+        }
+
+        if (carto_api_key !== undefined) {
+            await pool.execute(
+                'INSERT INTO server_settings (`key`, `value`, updated_at) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`), updated_at = VALUES(updated_at)',
+                ['carto_api_key', typeof carto_api_key === 'string' ? carto_api_key.trim() : '', now]
             );
         }
 
