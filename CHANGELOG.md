@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.2.9] - 2026-08-28
+
+- feat: Improve OTA updating
+- fix: Android updater
+- feat: WS MID deduplication
+- feat: Improve SSE
+- fix: Fix pairing of real devices
+- feat: Add Carto API key
+- feat: improve emulator
+- feat: improve emulator
+
 ## [0.2.8] - 2026-08-27
 
 - feat: Emulated devices improvements
