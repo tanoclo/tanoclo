@@ -402,7 +402,7 @@ class TadoEmulatorComponent : public Component,
             continue;
           }
           uint32_t elapsed = now - it->sent_ts;
-          uint32_t timeout = 4u << it->retry_count; // CoAP RFC 7252: 4, 8, 16, 32 seconds
+          uint32_t timeout = 8u << it->retry_count; // CoAP RFC 7252 with bridged link latency: 8, 16, 32, 64 seconds
           if (elapsed >= timeout) {
             if (it->retry_count >= 4) {
               ESP_LOGW(TAG, "[RF] %s: MID=0x%04X abandoned after 4 retries",
@@ -426,7 +426,7 @@ class TadoEmulatorComponent : public Component,
               it->seq = new_seq;
               it->frame = this->rebuild_pending_frame(*it, &dev, new_seq);
               ESP_LOGI(TAG, "[RF TX Retry] %s: Retry #%u for MID=0x%04X (backoff %us, new seq=%u)",
-                       dev.serial_no.c_str(), it->retry_count, it->mid, 4u << (it->retry_count - 1), new_seq);
+                       dev.serial_no.c_str(), it->retry_count, it->mid, 8u << (it->retry_count - 1), new_seq);
               this->send_raw_rf_frame(it->frame);
               ++it;
             }

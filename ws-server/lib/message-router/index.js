@@ -16,6 +16,7 @@ const stateSnapshot = require('../state-snapshot');
 const commandLog = require('../command-log');
 const messageCache = require('../message-cache');
 const configCapture = require('../config-capture');
+const coapDedup = require('../coap-dedup');
 const { reconstructBuffers } = require('../utils');
 const WebSocket = require('ws');
 const proxyManager = require('../proxy-manager');
@@ -618,6 +619,17 @@ async function handleMessage(ws, message, isBinary, isDownlink = false) {
                     log('debug', `Device ${activeDeviceId} is not in TaNoClo database but connection is proxied. Bypassing local CoAP handling.`);
                     return;
                 }
+            }
+
+            // CoAP Request Deduplication (RFC 7252 §4.5)
+            if (coapMsg.type === coap.TYPE_CON && (coapMsg.code === coap.CODE_PUT || coapMsg.code === coap.CODE_POST) && pathInfo.type !== 'auth_key' && pathInfo.type !== 'auth_token') {
+                const dedupEndpoint = pathInfo.deviceId || activeDeviceId || peerInfo.ipv6;
+                if (coapDedup.isDuplicate(dedupEndpoint, coapMsg.mid)) {
+                    handlers.sendCoAPAck(ws, coapMsg, peerInfo, frame.directionU16);
+                    log('debug', `[CoAP Dedup] Duplicate CON ${coap.codeStr(coapMsg.code)} MID=0x${coapMsg.mid.toString(16).toUpperCase()} for ${dedupEndpoint} (${pathInfo.type}). Re-ACKed and skipped execution.`);
+                    return;
+                }
+                coapDedup.record(dedupEndpoint, coapMsg.mid);
             }
 
             switch (pathInfo.type) {
