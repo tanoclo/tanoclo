@@ -1,6 +1,6 @@
 {
   "name": "tado-sniffer-receiver",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "Node.js TCP stream receiver for Tado RF sniffer — decrypts, parses CoAP/TLV, and publishes to MQTT",
   "main": "stream_receiver.js",
   "scripts": {
