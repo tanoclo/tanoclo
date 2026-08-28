@@ -136,6 +136,27 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
   const [createDhwChecked, setCreateDhwChecked] = useState(false);
   const [isChangingRole, setIsChangingRole] = useState(false);
   const hasDhwZone = Boolean((zones || []).some(z => z.type === 'HOT_WATER'));
+  const [countdownSeconds, setCountdownSeconds] = useState(0);
+
+  useEffect(() => {
+    const remaining = device?.pairingBlock?.remainingSeconds || (bridge?.in_pairing_mode ? 120 : 0);
+    setCountdownSeconds(remaining);
+  }, [device?.pairingBlock, bridge?.in_pairing_mode]);
+
+  useEffect(() => {
+    if (countdownSeconds <= 0) return;
+    const interval = setInterval(() => {
+      setCountdownSeconds(prev => {
+        if (prev <= 1) {
+          mutateBridge && mutateBridge();
+          mutate && mutate();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [countdownSeconds, mutateBridge, mutate]);
 
   useEffect(() => {
     if (device) {
@@ -654,15 +675,45 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
                 fontSize: '0.75rem', 
                 color: bridge.in_pairing_mode ? 'var(--warning)' : 'var(--text-muted)',
                 backgroundColor: bridge.in_pairing_mode ? 'var(--warning-glow)' : 'var(--bg-input)',
-                padding: '0.5rem 0.75rem',
+                padding: '0.65rem 0.75rem',
                 borderRadius: 'var(--radius-sm)',
                 fontWeight: 600,
                 display: 'flex',
                 alignItems: 'center',
+                justifyContent: 'space-between',
                 gap: '0.5rem'
               }}>
-                <Radio size={14} className={bridge.in_pairing_mode ? 'pulse-icon' : ''} />
-                <span>{bridge.in_pairing_mode ? t('tanoclo_ex.pairing_broadcasting') : t('tanoclo_ex.pairing_locked')}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Radio size={14} className={bridge.in_pairing_mode ? 'pulse-icon' : ''} />
+                  <span>
+                    {bridge.in_pairing_mode 
+                      ? (countdownSeconds > 0 
+                          ? `Offline Pairing Active (${Math.floor(countdownSeconds / 60)}:${String(countdownSeconds % 60).padStart(2, '0')}) — Bridge isolated for key push`
+                          : t('tanoclo_ex.pairing_broadcasting')) 
+                      : t('tanoclo_ex.pairing_locked')}
+                  </span>
+                </div>
+                {bridge.in_pairing_mode && (
+                  <Button
+                    variant="secondary"
+                    onClick={async () => {
+                      try {
+                        setIsTogglingPairing(true);
+                        await stopPairing(homeId, device.serialNo);
+                        showToast(t('settings.pairing_stopped_unblocked', { defaultValue: 'Pairing stopped & Bridge reconnected' }), 'success');
+                        await Promise.all([mutateBridge(), mutate()]);
+                      } catch (e) {
+                        showToast(e.message || t('settings.failed_disable_pairing'), 'error');
+                      } finally {
+                        setIsTogglingPairing(false);
+                      }
+                    }}
+                    disabled={isTogglingPairing}
+                    style={{ padding: '0.2rem 0.6rem', fontSize: '0.75rem', flexShrink: 0 }}
+                  >
+                    Unblock & Reconnect
+                  </Button>
+                )}
               </div>
             </Card>
           )}

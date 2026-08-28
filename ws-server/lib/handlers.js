@@ -156,6 +156,15 @@ async function handleAuthKey(ws, frame, coapMsg, decoded, peerInfo, rawData) {
 }
 
 async function handlePairFound(ws, frame, coapMsg, decoded, peerInfo, rawData) {
+    const { isBridgeBlocked } = require('./device-manager');
+    const bridgeId = wsToBridgeId ? wsToBridgeId.get(ws) : null;
+    if (isBridgeBlocked(bridgeId)) {
+        log('info', `[PAIRING_BLOCK] Dropping PAIR_FOUND & terminating socket for isolated Bridge (${bridgeId || 'unknown'})`);
+        try { ws.close(); } catch(e) {}
+        try { ws.end(); } catch(e) {}
+        return;
+    }
+
     log('info', `PAIR_FOUND received from Bridge: ipv6=${peerInfo.ipv6} payloadHex=${coapMsg.payload ? coapMsg.payload.toString('hex') : 'empty'}`);
 
     let targetIpv6 = null;
@@ -175,38 +184,22 @@ async function handlePairFound(ws, frame, coapMsg, decoded, peerInfo, rawData) {
     log('info', `PAIR_FOUND: Discovered device target IPv6 = ${targetIpv6}`);
 
     if (targetIpv6) {
-        const serialByIpv6 = await db.getDeviceByIPv6(targetIpv6);
-        if (serialByIpv6) {
-            targetDevice = { serial_no: serialByIpv6 };
-        }
-    }
-
-    if (!targetDevice) {
         const pool = db.getPool();
-        const [rows] = await pool.execute('SELECT * FROM emulated_devices WHERE pairing_state != "PAIRED" ORDER BY created_at DESC LIMIT 1');
+        const [rows] = await pool.execute('SELECT serial_no, factory_key FROM devices WHERE ipv6_address = ? LIMIT 1', [targetIpv6]);
         if (rows && rows.length > 0) {
             targetDevice = rows[0];
         }
     }
 
-    if (targetDevice && targetIpv6) {
-        const pool = db.getPool();
-        await pool.execute('UPDATE emulated_devices SET ipv6_address = ? WHERE serial_no = ?', [targetIpv6, targetDevice.serial_no]);
-        await pool.execute('UPDATE devices SET ipv6_address = ? WHERE serial_no = ?', [targetIpv6, targetDevice.serial_no]);
-        if (ipv6ToDevice) {
-            ipv6ToDevice.set(targetIpv6, targetDevice.serial_no);
-        }
-    }
-
     let responsePayload = null;
     if (targetDevice && targetDevice.factory_key) {
-        log('info', `PAIR_FOUND: Supplying factory key ${targetDevice.factory_key} for device ${targetDevice.serial_no} to Bridge`);
+        log('info', `PAIR_FOUND: Supplying factory key for device ${targetDevice.serial_no} to Bridge`);
         responsePayload = Buffer.concat([
             Buffer.from([0x06, 0x10]),
             Buffer.from(targetDevice.factory_key, 'hex')
         ]);
     } else {
-        log('info', `PAIR_FOUND: Device ${targetDevice ? targetDevice.serial_no : 'unknown'} has no custom factory key; Bridge using default pairing key.`);
+        log('info', `PAIR_FOUND: Device at ${targetIpv6 || 'unknown'} has no custom factory key; Bridge using default pairing key.`);
     }
 
     const ackBytes = responsePayload
@@ -261,8 +254,23 @@ async function handleAuthToken(ws, frame, coapMsg, decoded, peerInfo, rawData) {
     ]);
 
     if (deviceId) {
+        const { isBridgeBlocked } = require('./device-manager');
+        if (isBridgeBlocked(deviceId)) {
+            log('info', `[PAIRING_BLOCK] Rejecting handleAuthToken & closing socket for isolated Bridge ${deviceId}`);
+            try { ws.close(); } catch(e) {}
+            try { ws.end(); } catch(e) {}
+            return;
+        }
+
         deviceSessions.set(deviceId, sessionToken);
         ipv6ToDevice.set(peerInfo.ipv6, deviceId);
+
+        // Only update IPv6 in database if currently empty/unset
+        if (peerInfo.ipv6 && (!dbDev.ipv6_address || dbDev.ipv6_address.trim() === '') && typeof db.updateDeviceIPv6 === 'function') {
+            db.updateDeviceIPv6(deviceId, peerInfo.ipv6).catch(err => {
+                log('error', `Failed to persist initial IPv6 for ${deviceId}: ${err.message}`);
+            });
+        }
 
         db.updateDeviceSessionToken(deviceId, sessionToken).catch(err => {
             log('error', `Failed to persist session token for ${deviceId}: ${err.message}`);

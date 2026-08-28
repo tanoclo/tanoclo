@@ -37,7 +37,7 @@ router.get('/:homeId/zones', async (req, res) => {
         const sortedZones = zonesData;
 
         const allDevices = await db.getDevicesForHome(homeId);
-        let boilerDevice = allDevices.find(d => ['RU01', 'RU02', 'BU01'].includes(d.device_type));
+        const [circuits] = await pool.execute('SELECT * FROM heating_circuits WHERE home_id = ?', [homeId]);
 
         const zoneDevices = new Map();
         allDevices.forEach(d => {
@@ -48,11 +48,19 @@ router.get('/:homeId/zones', async (req, res) => {
         });
 
         const zones = sortedZones.map(zone => {
-            let devicesInZone = zoneDevices.get(zone.id.toString()) || [];
+            let devicesInZone = (zoneDevices.get(zone.id.toString()) || []).slice();
 
-            if (zone.type === 'HOT_WATER' && boilerDevice) {
-                if (!devicesInZone.find(d => d.serial_no === boilerDevice.serial_no)) {
-                    devicesInZone.push(boilerDevice);
+            // Find specific driver device for this zone / circuit
+            const circuit = circuits.find(c => c.number === zone.heating_circuit) || circuits[0];
+            const driverSerial = (zone.type === 'HOT_WATER' && zone.measuring_device_serial)
+                ? zone.measuring_device_serial
+                : (circuit ? circuit.driver_serial_no : null);
+            const driverDevice = allDevices.find(d => d.serial_no === driverSerial)
+                || allDevices.find(d => !d.is_emulated && d.field_015d !== 200 && ['RU01', 'RU02', 'BU01'].includes(d.device_type));
+
+            if (zone.type === 'HOT_WATER' && driverDevice) {
+                if (!devicesInZone.find(d => d.serial_no === driverDevice.serial_no)) {
+                    devicesInZone.push(driverDevice);
                 }
             }
 
@@ -61,9 +69,9 @@ router.get('/:homeId/zones', async (req, res) => {
                 const mapped = mapDevice(d);
                 const duties = new Set(['ZONE_UI']);
 
-                if (boilerDevice && d.serial_no === boilerDevice.serial_no && zone.type === 'HEATING') duties.add('CIRCUIT_DRIVER');
+                if (driverDevice && d.serial_no === driverDevice.serial_no && zone.type === 'HEATING') duties.add('CIRCUIT_DRIVER');
                 if (d.device_type === 'VA02') duties.add('ZONE_DRIVER');
-                if (boilerDevice && d.serial_no === boilerDevice.serial_no && zone.type === 'HOT_WATER') duties.add('ZONE_DRIVER');
+                if (driverDevice && d.serial_no === driverDevice.serial_no && zone.type === 'HOT_WATER') duties.add('ZONE_DRIVER');
 
                 let isLeader = (zone.measuring_device_serial && d.serial_no === zone.measuring_device_serial);
                 if (isLeader) {

@@ -115,8 +115,14 @@ function mapDevice(d) {
         mapped.childLockEnabled = Boolean(d.child_lock_enabled);
     }
 
-    if (d.device_type === 'IB01') {
+    if (d.device_type === 'IB01' || (d.device_type && d.device_type.startsWith('IB'))) {
         mapped.inPairingMode = Boolean(d.in_pairing_mode);
+        try {
+            const { getBridgeBlockStatus } = require('./device-manager');
+            mapped.pairingBlock = getBridgeBlockStatus(d.serial_no);
+        } catch (e) {
+            mapped.pairingBlock = { active: false, remainingSeconds: 0 };
+        }
     }
 
     mapped.neighborData = null;

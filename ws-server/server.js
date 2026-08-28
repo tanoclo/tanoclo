@@ -79,7 +79,7 @@ const commandLog = require('./lib/command-log');
 
 const TADO_ROOT_CA = fs.readFileSync(config.tadoRootCA);
 
-const { clients, deviceSessions, wsToBridgeId, extractShortSerial } = require('./lib/device-manager');
+const { clients, deviceSessions, wsToBridgeId, extractShortSerial, isBridgeBlocked, getBridgeBlockStatus } = require('./lib/device-manager');
 const { proxyConnections, proxyMidCache, startProxyServer, stopProxyServer } = require('./lib/proxy-manager');
 const { downlinkBlockSessions, blockReassembly, ipv6ToDevice, nextMid, parseResourceIds, handleMessage, init: initMessageRouter } = require('./lib/message-router');
 
@@ -411,6 +411,12 @@ async function startServer() {
             const proto = req.getHeader('sec-websocket-protocol');
             const ip = Buffer.from(res.getRemoteAddressAsText()).toString();
 
+            if (isBridgeBlocked(null, ip)) {
+                log('info', `[PAIRING_BLOCK] Rejecting WS upgrade from isolated Bridge IP ${ip} (offline pairing active)`);
+                res.writeStatus('403 Forbidden').end();
+                return;
+            }
+
             log('debug', `WS upgrade from ${ip}, protocol: ${proto}`);
 
             res.upgrade(
@@ -607,6 +613,27 @@ function startApiChildProcess() {
                 }
                 case 'BROADCAST_RFKEY': {
                     broadcastRfKey();
+                    break;
+                }
+                case 'BLOCK_BRIDGE': {
+                    const { blockBridge } = require('./lib/device-manager');
+                    log('info', `[IPC] Received BLOCK_BRIDGE for ${msg.deviceId} for ${msg.durationMs}ms`);
+                    blockBridge(msg.deviceId, msg.durationMs || 120000, async (expiredSerial) => {
+                        log('info', `[PAIRING_TIMEOUT] Auto-disabling pairing mode after timeout for Bridge ${expiredSerial}`);
+                        try {
+                            const p = db.getPool();
+                            await p.execute('UPDATE devices SET in_pairing_mode = 0 WHERE serial_no = ?', [expiredSerial]);
+                            await commandApi.pushDevicePair(expiredSerial, false).catch(() => {});
+                        } catch (err) {
+                            log('error', `Failed to auto-disable pairing for ${expiredSerial}: ${err.message}`);
+                        }
+                    });
+                    break;
+                }
+                case 'UNBLOCK_BRIDGE': {
+                    const { unblockBridge } = require('./lib/device-manager');
+                    log('info', `[IPC] Received UNBLOCK_BRIDGE for ${msg.deviceId}`);
+                    unblockBridge(msg.deviceId);
                     break;
                 }
                 case 'GET_MESSAGE_CACHE': {

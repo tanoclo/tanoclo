@@ -249,7 +249,26 @@ async function setPairing(req, res) {
             _log('warn', `Failed to push pairing mode for ${deviceId}: ${err.message}`);
         });
 
-        res.json({});
+        const { blockBridge, getBridgeBlockStatus } = require('../../lib/device-manager');
+        const skipBlock = req.query.skip_block === 'true' || req.body?.skip_block === true;
+        let blockStatus = { active: false, remainingSeconds: 0 };
+
+        if (!skipBlock) {
+            _log('info', `[PAIRING] Isolating Bridge ${deviceId} offline for 120s to enable plaintext key push (TLV 0x12) for real devices.`);
+            blockBridge(deviceId, 120000, async (expiredSerial) => {
+                _log('info', `[PAIRING_TIMEOUT] Auto-disabling pairing mode after 120s for Bridge ${expiredSerial}`);
+                try {
+                    const p = db.getPool();
+                    await p.execute('UPDATE devices SET in_pairing_mode = 0 WHERE serial_no = ?', [expiredSerial]);
+                    await commandApi.pushDevicePair(expiredSerial, false).catch(() => {});
+                } catch (err) {
+                    _log('error', `Failed to auto-disable pairing for ${expiredSerial}: ${err.message}`);
+                }
+            });
+            blockStatus = getBridgeBlockStatus(deviceId);
+        }
+
+        res.json({ in_pairing_mode: true, pairing_block: blockStatus });
     } catch (err) {
         if (err.statusCode) return res.status(err.statusCode).json({ error: err.message.toLowerCase() });
         res.status(500).json({ error: 'internal_error' });
@@ -263,6 +282,9 @@ async function deletePairing(req, res) {
         const pool = db.getPool();
         const [existing] = await pool.execute('SELECT * FROM devices WHERE serial_no = ? AND home_id = ?', [deviceId, homeId]);
         if (existing.length === 0) return res.status(404).json({ error: 'Device not found' });
+
+        const { unblockBridge } = require('../../lib/device-manager');
+        unblockBridge(deviceId);
 
         await pool.execute('UPDATE devices SET in_pairing_mode = 0 WHERE serial_no = ? AND home_id = ?', [deviceId, homeId]);
 
@@ -332,40 +354,18 @@ async function createDevice(req, res) {
             }
         }
 
-        if (!zoneId) {
-            const [heatingZoneRows] = await pool.execute("SELECT COUNT(*) as c FROM zones WHERE home_id = ? AND type = 'HEATING'", [parsedHomeId]);
-            if (heatingZoneRows[0].c >= 25) {
-                return res.status(400).json({ error: 'max_heating_rooms_reached', message: 'Maximum limit of 25 heating rooms reached for this home' });
+        if (zoneId) {
+            if (isHeatingDev) {
+                const [roomDevRows] = await pool.execute(
+                    "SELECT COUNT(*) as c FROM devices WHERE home_id = ? AND zone_id = ? AND device_type NOT LIKE 'IB%' AND device_type NOT LIKE 'GW%' AND device_type != 'BRIDGE'",
+                    [parsedHomeId, zoneId]
+                );
+                if (roomDevRows[0].c >= 7) {
+                    return res.status(400).json({ error: 'max_room_devices_reached', message: 'Maximum limit of 7 heating devices per room reached' });
+                }
             }
-
-            const [zones] = await pool.execute('SELECT COUNT(*) as c FROM zones WHERE home_id = ?', [parsedHomeId]);
-            const newZoneName = `Zone ${zones[0].c + 1}`;
-
-            const [zoneRows] = await pool.execute('SELECT id FROM zones WHERE home_id = ? ORDER BY id ASC', [parsedHomeId]);
-            const existingIds = zoneRows.map(r => r.id);
-            let newZoneId = 1;
-            while (existingIds.includes(newZoneId)) {
-                newZoneId++;
-            }
-
-            await pool.execute(
-                `INSERT INTO zones (
-                    id, home_id, name, type, date_created, default_overlay_type, default_overlay_duration, 
-                    heating_circuit, fallback_value, measuring_device_serial,
-                    min_temp, max_temp, step_temp, open_window_enabled, open_window_timeout, 
-                    dazzle_enabled, early_start_enabled
-                ) VALUES (?, ?, ?, 'HEATING', ?, 'TADO_MODE', 0, null, 0, ?, 5.0, 25.0, 0.5, 1, 900, 1, 0)`,
-                [newZoneId, parsedHomeId, newZoneName, new Date().toISOString(), upperSerialNo]
-            );
-            zoneId = newZoneId;
-        } else if (isHeatingDev) {
-            const [roomDevRows] = await pool.execute(
-                "SELECT COUNT(*) as c FROM devices WHERE home_id = ? AND zone_id = ? AND device_type NOT LIKE 'IB%' AND device_type NOT LIKE 'GW%' AND device_type != 'BRIDGE'",
-                [parsedHomeId, zoneId]
-            );
-            if (roomDevRows[0].c >= 7) {
-                return res.status(400).json({ error: 'max_room_devices_reached', message: 'Maximum limit of 7 heating devices per room reached' });
-            }
+        } else {
+            zoneId = null;
         }
 
         await pool.execute(
@@ -825,16 +825,24 @@ async function setDeviceRole(req, res) {
 
         if (targetRole === 200) {
             // Changing to Wireless Sensor:
-            // 1. Disable specified RU as Zone controller / circuit driver
-            await pool.execute('DELETE FROM heating_circuits WHERE home_id = ? AND driver_serial_no = ?', [homeId, deviceId]);
+            // 1. Find circuits driven by THIS specific device before deleting
+            const [driverCircuits] = await pool.execute('SELECT number FROM heating_circuits WHERE home_id = ? AND driver_serial_no = ?', [homeId, deviceId]);
+            const driverCircuitNums = driverCircuits.map(c => c.number);
 
-            // 2. Delete bound DHW zones (HOT_WATER zones associated with this home/driver)
-            const [dhwZones] = await pool.execute("SELECT id FROM zones WHERE home_id = ? AND type = 'HOT_WATER'", [homeId]);
-            const { purgeZone } = require('../../lib/db-zones/state');
-            for (const dhw of dhwZones) {
-                await purgeZone(homeId, dhw.id).catch(err => {
-                    _log.warn(`Failed to purge DHW zone ${dhw.id}: ${err.message}`);
-                });
+            if (driverCircuitNums.length > 0) {
+                await pool.execute('DELETE FROM heating_circuits WHERE home_id = ? AND driver_serial_no = ?', [homeId, deviceId]);
+
+                // 2. Only delete DHW zones bound to the circuits driven by THIS device
+                const [dhwZones] = await pool.execute(
+                    `SELECT id FROM zones WHERE home_id = ? AND type = 'HOT_WATER' AND heating_circuit IN (${driverCircuitNums.map(() => '?').join(',')})`,
+                    [homeId, ...driverCircuitNums]
+                );
+                const { purgeZone } = require('../../lib/db-zones/state');
+                for (const dhw of dhwZones) {
+                    await purgeZone(homeId, dhw.id).catch(err => {
+                        _log.warn(`Failed to purge bound DHW zone ${dhw.id}: ${err.message}`);
+                    });
+                }
             }
 
             // 3. Remove RU from all zones
@@ -848,6 +856,15 @@ async function setDeviceRole(req, res) {
                 }
             }
             await pool.execute('UPDATE devices SET zone_id = NULL, field_015d = 200 WHERE serial_no = ? AND home_id = ?', [deviceId, homeId]);
+            if (previousZoneId) {
+                const [counts] = await pool.execute('SELECT COUNT(*) as c FROM devices WHERE zone_id = ? AND home_id = ?', [previousZoneId, homeId]);
+                if (counts[0].c === 0) {
+                    const { purgeZone } = require('../../lib/db-zones/state');
+                    await purgeZone(homeId, previousZoneId).catch(err => {
+                        _log.warn(`Failed to purge empty zone ${previousZoneId}: ${err.message}`);
+                    });
+                }
+            }
 
             // 4. Push updated config to device and refresh home configuration
             const commandApi = require('../../lib/command-api');

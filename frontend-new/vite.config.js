@@ -60,7 +60,7 @@ export default defineConfig(({ mode }) => {
     build: {
       // Direct build output directory inside the websocket server public path
       outDir: '../ws-server/frontend-dist',
-      emptyOutDir: true,
+      emptyOutDir: false,
       rollupOptions: {
         output: {
           // Manual chunk splitting to optimize vendor bundle sizes and browser cache efficiency

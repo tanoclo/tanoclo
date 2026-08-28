@@ -112,7 +112,14 @@ function stop() {
 
 async function handleMessage(ws, message, isBinary, isDownlink = false) {
     if (!isDownlink) {
+        const { isBridgeBlocked } = require('../device-manager');
         const bridgeId = wsToBridgeId.get(ws);
+        if (isBridgeBlocked(bridgeId)) {
+            log('info', `[PAIRING_BLOCK] Dropping incoming message & terminating socket for isolated Bridge (${bridgeId || 'unknown'})`);
+            try { ws.close(); } catch(e) {}
+            try { ws.end(); } catch(e) {}
+            return;
+        }
         if (bridgeId) {
             const client = clients.get(bridgeId);
             if (client) {
