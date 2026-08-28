@@ -105,25 +105,35 @@ export default function SelfUpdater() {
       let hasAnyUpdate = false;
 
       // 1. Web Asset OTA Update via CapGo
-      // NOTE: webVersionCode and apkVersionCode are independent sequences — never mix them as fallbacks
-      const remoteWebCode = Number(manifestData.webVersionCode || 0);
-      const localWebCode = Number(localStorage.getItem('tanoclo_local_web_version_code') || 0);
+      const remoteWebSha = manifestData.webSha256 ? String(manifestData.webSha256).toLowerCase().trim() : null;
+      const localWebSha = (localStorage.getItem('tanoclo_local_web_sha') || '').toLowerCase().trim() || null;
+      
+      let isWebUpdateAvailable = false;
+      if (remoteWebSha && localWebSha) {
+        isWebUpdateAvailable = (remoteWebSha !== localWebSha);
+        logger.debug(`[SelfUpdater] Web SHA check: remote=${remoteWebSha} local=${localWebSha} -> update=${isWebUpdateAvailable}`);
+      } else {
+        const remoteWebCode = Number(manifestData.webVersionCode || 0);
+        const localWebCode = Number(localStorage.getItem('tanoclo_local_web_version_code') || 0);
+        isWebUpdateAvailable = (remoteWebCode > localWebCode);
+        logger.debug(`[SelfUpdater] Web versionCode check: remote=${remoteWebCode} local=${localWebCode} -> update=${isWebUpdateAvailable}`);
+      }
 
-      logger.debug('[SelfUpdater] Web version check: remote=' + remoteWebCode + ' local=' + localWebCode);
-
-      if (remoteWebCode > localWebCode && manifestData.zipUrl) {
+      if (isWebUpdateAvailable && manifestData.zipUrl) {
         hasAnyUpdate = true;
-        logger.info('[SelfUpdater] Downloading CapGo web asset update (webVersionCode:', remoteWebCode, ')');
+        const remoteWebCode = Number(manifestData.webVersionCode || 0);
+        logger.info('[SelfUpdater] Downloading CapGo web asset update (SHA:', remoteWebSha || remoteWebCode, ')');
         try {
           const zipUrl = manifestData.zipUrl.startsWith('/') 
             ? `${getApiBase()}${manifestData.zipUrl}`
             : manifestData.zipUrl;
           const bundle = await CapacitorUpdater.download({
             url: zipUrl,
-            version: manifestData.webVersionName || `web-${remoteWebCode}`
+            version: remoteWebSha || manifestData.webVersionName || `web-${remoteWebCode}`,
+            checksum: remoteWebSha || undefined
           });
           // Store bundle but don't apply yet — prompt user or apply on next cold start
-          setPendingWebBundle({ bundle, remoteWebCode });
+          setPendingWebBundle({ bundle, remoteWebCode, remoteWebSha });
           setUpdateState('PROMPT_WEB');
           logger.info('[SelfUpdater] Web bundle downloaded, awaiting user confirmation to apply');
           if (isManual) {
@@ -215,6 +225,9 @@ export default function SelfUpdater() {
     if (!pendingWebBundle) return;
     try {
       // MUST persist version BEFORE set() — set() triggers immediate app reload
+      if (pendingWebBundle.remoteWebSha) {
+        localStorage.setItem('tanoclo_local_web_sha', pendingWebBundle.remoteWebSha);
+      }
       localStorage.setItem('tanoclo_local_web_version_code', pendingWebBundle.remoteWebCode.toString());
       await CapacitorUpdater.set({ id: pendingWebBundle.bundle.id });
       // Lines below may never execute if set() reloads the app

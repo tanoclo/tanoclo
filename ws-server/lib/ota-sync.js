@@ -75,6 +75,13 @@ function getApkPath() {
   return null;
 }
 
+function getDistZipPath() {
+  if (fs.existsSync(distZipCacheFile)) return distZipCacheFile;
+  const distZip = path.join(frontendDistPath, 'dist.zip');
+  if (fs.existsSync(distZip)) return distZip;
+  return null;
+}
+
 function loadLocalManifest() {
   try {
     if (fs.existsSync(manifestCacheFile)) {
@@ -105,6 +112,15 @@ function loadLocalManifest() {
       currentManifest.apkSha256 = sha;
       currentManifest.apkSize = fs.statSync(apkPath).size;
       currentManifest.apkUrl = currentManifest.apkUrl || '/api/v2/ota/tanoclo.apk';
+    }
+  }
+  const zipPath = getDistZipPath();
+  if (zipPath) {
+    const sha = computeFileSha256(zipPath);
+    if (sha) {
+      currentManifest.webSha256 = sha;
+      currentManifest.webSize = fs.statSync(zipPath).size;
+      currentManifest.zipUrl = currentManifest.zipUrl || '/api/v2/ota/dist.zip';
     }
   }
   return currentManifest;
@@ -256,15 +272,16 @@ function getManifest() {
       manifest.apkUrl = manifest.apkUrl || '/api/v2/ota/tanoclo.apk';
     }
   }
+  const zipPath = getDistZipPath();
+  if (zipPath) {
+    const sha = computeFileSha256(zipPath);
+    if (sha) {
+      manifest.webSha256 = sha;
+      manifest.webSize = fs.statSync(zipPath).size;
+      manifest.zipUrl = manifest.zipUrl || '/api/v2/ota/dist.zip';
+    }
+  }
   return manifest;
-}
-
-function getDistZipPath() {
-  return fs.existsSync(distZipCacheFile) ? distZipCacheFile : null;
-}
-
-function getApkPath() {
-  return fs.existsSync(apkCacheFile) ? apkCacheFile : null;
 }
 
 module.exports = {

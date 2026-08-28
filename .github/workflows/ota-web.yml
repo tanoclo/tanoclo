@@ -86,6 +86,8 @@ jobs:
 
           RUN_NUM=${{ github.run_number }}
           WEB_VERSION="${{ github.event.inputs.version }}"
+          WEB_SHA=$(sha256sum dist.zip | awk '{print $1}')
+          WEB_SIZE=$(wc -c < dist.zip | tr -d ' ')
 
           # 6. Update manifest with real release notes
           node -e "
@@ -94,6 +96,8 @@ jobs:
             let manifest = {
               webVersionCode: ${RUN_NUM},
               webVersionName: '${WEB_VERSION}',
+              webSha256: '${WEB_SHA}',
+              webSize: ${WEB_SIZE},
               apkVersionCode: 1,
               apkVersionName: '0.1.0',
               zipUrl: 'https://raw.githubusercontent.com/tanoclo/tanoclo/ota/dist.zip',
@@ -103,7 +107,7 @@ jobs:
             if (fs.existsSync('manifest.json')) {
               try {
                 const existing = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
-                manifest = { ...existing, webVersionCode: ${RUN_NUM}, webVersionName: '${WEB_VERSION}', zipUrl: 'https://raw.githubusercontent.com/tanoclo/tanoclo/ota/dist.zip', releaseNotes: releaseNotes };
+                manifest = { ...existing, webVersionCode: ${RUN_NUM}, webVersionName: '${WEB_VERSION}', webSha256: '${WEB_SHA}', webSize: ${WEB_SIZE}, zipUrl: 'https://raw.githubusercontent.com/tanoclo/tanoclo/ota/dist.zip', releaseNotes: releaseNotes };
               } catch (e) {}
             }
             fs.writeFileSync('manifest.json', JSON.stringify(manifest, null, 2));
