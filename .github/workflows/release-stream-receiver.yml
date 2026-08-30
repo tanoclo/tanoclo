@@ -24,6 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       tag: stream-receiver-v${{ github.event.inputs.version }}
+      changelog: ${{ steps.changelog.outputs.changelog }}
     steps:
       - name: Checkout main
         uses: actions/checkout@v7
@@ -68,6 +69,7 @@ jobs:
           fi
 
       - name: Update CHANGELOG
+        id: changelog
         run: |
           VERSION="${{ env.VERSION }}"
           node -e "
@@ -130,6 +132,10 @@ jobs:
                 console.log('  ✓ Updated ' + f);
               }
             }
+
+            if (process.env.GITHUB_OUTPUT) {
+              fs.appendFileSync(process.env.GITHUB_OUTPUT, 'changelog<<EOF\n' + commitBullets + '\nEOF\n');
+            }
           "
 
       - name: Sync package-lock.json files
@@ -190,4 +196,4 @@ jobs:
         with:
           tag_name: stream-receiver-v${{ env.VERSION }}
           name: TaNoClo RF Sniffer v${{ env.VERSION }}
-          generate_release_notes: true
+          body: ${{ needs.version-bump.outputs.changelog }}

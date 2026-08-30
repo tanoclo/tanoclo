@@ -15,7 +15,6 @@ import AppShell from '../components/layout/AppShell';
 import ZoneCard from '../components/zone/ZoneCard';
 import ClimateQualityCard from '../components/zone/ClimateQualityCard';
 import ZoneDetail from '../components/zone/ZoneDetail';
-import ReorderRooms from '../components/zone/ReorderRooms';
 import Button from '../components/common/Button';
 import Spinner from '../components/common/Spinner';
 import Card from '../components/common/Card';
@@ -30,7 +29,7 @@ import { getMobileDevices } from '../api/users';
 import { getClimateQuality } from '../api/weather';
 import { getDeviceBatteryData } from '../api/tanoclo';
 import { getAutoPresenceState } from '../utils/presence';
-import { Sun, CloudRain, Flame, RotateCcw, ArrowUpDown, Cloud, AlertTriangle, ChevronDown } from 'lucide-react';
+import { Sun, CloudRain, Flame, RotateCcw, Cloud, AlertTriangle, ChevronDown } from 'lucide-react';
 import { formatTemperature } from '../utils/temperature';
 import logger from '../utils/logger';
 
@@ -50,12 +49,9 @@ export default function HomePage() {
     homeInfo,
     homeState
   } = useHome();
-  const { user } = useAuth();
-
-  const isAdmin = homeInfo && user ? (homeInfo.isCurrentUserAdmin || String(user.id) === String(homeInfo.adminUserId)) : false;
+  const { user: _user } = useAuth();
 
   const [selectedZoneId, setSelectedZoneId] = useState(null);
-  const [isReorderOpen, setIsReorderOpen] = useState(false);
   const [isBulkActionLoading, setIsBulkActionLoading] = useState(false);
   const [loadingTimedOut, setLoadingTimedOut] = useState(false);
   const [isQuickActionsOpen, setIsQuickActionsOpen] = useState(false);
@@ -223,234 +219,235 @@ export default function HomePage() {
 
   return (
     <AppShell title={homeInfo?.name || t('dashboard.title')}>
-      <div className="page-container" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+      <div className="page-container" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
         
-        {/* Small consolidated control bar: presence + weather + quick actions */}
+        {/* Consolidated control bar: presence + weather & quick actions */}
         <div style={{
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
           flexWrap: 'wrap',
-          gap: '1rem',
+          gap: '0.6rem 1rem',
           backgroundColor: 'var(--bg-card)',
-          padding: '0.75rem 1.25rem',
+          padding: '0.5rem 0.85rem',
           borderRadius: 'var(--radius-lg)',
           border: '1px solid var(--border-color)',
           boxShadow: 'var(--glass-shadow)'
         }}>
           {/* Presence Selector Section */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              <span style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                {t('dashboard.presence.mode')}
-              </span>
-              <div style={{ display: 'flex', gap: '8px', marginTop: '2px', padding: '4px' }}>
-                {['HOME', 'AWAY', 'AUTO'].map(mode => {
-                  const isActive = currentPresenceMode === mode;
-                  
-                  // Decide base color dynamically
-                  let baseColor;
-                  if (mode === 'HOME') {
-                    baseColor = 'var(--success)';
-                  } else if (mode === 'AWAY') {
-                    baseColor = 'var(--danger)';
-                  } else {
-                    baseColor = autoPresenceState === 'HOME' ? 'var(--success)' : 'var(--danger)';
-                  }
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center', padding: '2px 0' }}>
+            {['HOME', 'AWAY', 'AUTO'].map(mode => {
+              const isActive = currentPresenceMode === mode;
+              
+              // Decide base color dynamically
+              let baseColor;
+              if (mode === 'HOME') {
+                baseColor = 'var(--success)';
+              } else if (mode === 'AWAY') {
+                baseColor = 'var(--danger)';
+              } else {
+                baseColor = autoPresenceState === 'HOME' ? 'var(--success)' : 'var(--danger)';
+              }
 
-                  const isSuccess = baseColor === 'var(--success)';
-                  const shadowColor = isSuccess ? 'rgba(76, 175, 80, 0.5)' : 'rgba(244, 67, 54, 0.5)';
+              const isSuccess = baseColor === 'var(--success)';
+              const shadowColor = isSuccess ? 'rgba(76, 175, 80, 0.5)' : 'rgba(244, 67, 54, 0.5)';
 
-                  return (
-                    <button
-                      key={mode}
-                      onClick={() => handlePresenceModeChange(mode)}
-                      style={{
-                        padding: '0.45rem 1.1rem',
-                        fontSize: '0.8rem',
-                        fontWeight: 800,
-                        borderRadius: '20px',
-                        cursor: 'pointer',
-                        transition: 'all var(--transition-fast)',
-                        
-                        // Solid green/red backgrounds always
-                        backgroundColor: baseColor,
-                        color: '#ffffff',
-                        border: isActive ? '3px solid var(--text-primary)' : '3px solid transparent',
-                        transform: isActive ? 'scale(1.05)' : 'scale(0.96)',
-                        boxShadow: isActive ? `0 0 12px ${shadowColor}` : 'none',
-                        opacity: isActive ? 1.0 : 0.55
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!isActive) {
-                          e.currentTarget.style.opacity = '0.8';
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!isActive) {
-                          e.currentTarget.style.opacity = '0.55';
-                        }
-                      }}
-                    >
-                      {mode === 'HOME' ? t('dashboard.presence.home') : mode === 'AWAY' ? t('dashboard.presence.away') : t('dashboard.presence.auto')}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
+              return (
+                <button
+                  key={mode}
+                  onClick={() => handlePresenceModeChange(mode)}
+                  style={{
+                    padding: '0.4rem 0.95rem',
+                    fontSize: '0.8rem',
+                    fontWeight: 800,
+                    borderRadius: '20px',
+                    cursor: 'pointer',
+                    transition: 'all var(--transition-fast)',
+                    
+                    // Solid green/red backgrounds always
+                    backgroundColor: baseColor,
+                    color: '#ffffff',
+                    border: isActive ? '3px solid var(--text-primary)' : '3px solid transparent',
+                    transform: isActive ? 'scale(1.04)' : 'scale(0.96)',
+                    boxShadow: isActive ? `0 0 10px ${shadowColor}` : 'none',
+                    opacity: isActive ? 1.0 : 0.55
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isActive) {
+                      e.currentTarget.style.opacity = '0.8';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isActive) {
+                      e.currentTarget.style.opacity = '0.55';
+                    }
+                  }}
+                >
+                  {mode === 'HOME' ? t('dashboard.presence.home') : mode === 'AWAY' ? t('dashboard.presence.away') : t('dashboard.presence.auto')}
+                </button>
+              );
+            })}
           </div>
 
-          {/* Weather Info Section */}
-          {weather && (
-            <div style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '0.6rem', 
-              padding: '0.35rem 0.85rem', 
-              borderRadius: '20px',
-              backgroundColor: 'var(--bg-app)',
-              border: '1px solid var(--border-color)',
-              margin: 0
-            }}>
-              {getWeatherIcon(weather.weatherState?.value)}
-              <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>
-                {t(`weather.states.${weather.weatherState?.value}`, { defaultValue: weather.weatherState?.value })}
-              </span>
-              <div style={{ width: '1px', height: '12px', backgroundColor: 'var(--border-color)' }} />
-              <span style={{ fontSize: '0.8rem', fontWeight: 700 }}>
-                {formatTemperature(weather.outsideTemperature?.celsius)}
-              </span>
-            </div>
-          )}
-
-          {/* Home Actions Dropdown */}
-          <div style={{ position: 'relative', zIndex: 100 }}>
-            <Button 
-              variant="secondary" 
-              onClick={() => setIsQuickActionsOpen(prev => !prev)}
-              disabled={isLoading || isBulkActionLoading}
-              style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem', height: '32px', display: 'flex', alignItems: 'center', gap: '4px' }}
-            >
-              <span>{t('dashboard.zones.quick_actions') || 'Home Actions'}</span>
-              <ChevronDown size={14} />
-            </Button>
-            
-            {isQuickActionsOpen && (
-              <>
-                <div 
-                  onClick={() => setIsQuickActionsOpen(false)}
-                  style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    zIndex: 998
-                  }}
-                />
-                <div style={{
-                  position: 'absolute',
-                  right: 0,
-                  top: '38px',
-                  backgroundColor: 'var(--bg-card-solid)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: 'var(--radius-md)',
-                  boxShadow: '0 4px 20px rgba(0, 0, 0, 0.35)',
-                  padding: '0.5rem',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '4px',
-                  minWidth: '160px',
-                  zIndex: 999
-                }}>
-                  <button
-                    onClick={() => {
-                      handleBoostAll();
-                      setIsQuickActionsOpen(false);
-                    }}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      width: '100%',
-                      padding: '0.5rem 0.75rem',
-                      fontSize: '0.85rem',
-                      fontWeight: 600,
-                      color: 'var(--text-primary)',
-                      border: 'none',
-                      backgroundColor: 'transparent',
-                      borderRadius: 'var(--radius-sm)',
-                      cursor: 'pointer',
-                      textAlign: 'left'
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-card-hover)'}
-                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                  >
-                    <Flame size={14} style={{ color: 'var(--primary)' }} />
-                    <span>{t('dashboard.zones.boost')}</span>
-                  </button>
-
-                  {hasOnZone && (
-                    <button
-                      onClick={() => {
-                        handleTurnOffAll();
-                        setIsQuickActionsOpen(false);
-                      }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        width: '100%',
-                        padding: '0.5rem 0.75rem',
-                        fontSize: '0.85rem',
-                        fontWeight: 600,
-                        color: 'var(--danger)',
-                        border: 'none',
-                        backgroundColor: 'transparent',
-                        borderRadius: 'var(--radius-sm)',
-                        cursor: 'pointer',
-                        textAlign: 'left'
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-card-hover)'}
-                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                    >
-                      <RotateCcw size={14} style={{ transform: 'rotate(-45deg)' }} />
-                      <span>{t('dashboard.zones.turn_off_all')}</span>
-                    </button>
-                  )}
-
-                  {hasOverlayZone && (
-                    <button
-                      onClick={() => {
-                        handleClearAllOverlays();
-                        setIsQuickActionsOpen(false);
-                      }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        width: '100%',
-                        padding: '0.5rem 0.75rem',
-                        fontSize: '0.85rem',
-                        fontWeight: 600,
-                        color: 'var(--text-secondary)',
-                        border: 'none',
-                        backgroundColor: 'transparent',
-                        borderRadius: 'var(--radius-sm)',
-                        cursor: 'pointer',
-                        textAlign: 'left'
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-card-hover)'}
-                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                    >
-                      <RotateCcw size={14} />
-                      <span>{t('dashboard.zones.clear_all_overlays', t('dashboard.zones.resume_all', 'Clear All Overlays'))}</span>
-                    </button>
-                  )}
-                </div>
-              </>
+          {/* Weather & Home Actions Row */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.6rem',
+            flexWrap: 'nowrap'
+          }}>
+            {/* Weather Info Section */}
+            {weather && (
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '0.5rem', 
+                padding: '0.3rem 0.75rem', 
+                borderRadius: '20px',
+                backgroundColor: 'var(--bg-app)',
+                border: '1px solid var(--border-color)',
+                margin: 0,
+                whiteSpace: 'nowrap'
+              }}>
+                {getWeatherIcon(weather.weatherState?.value)}
+                <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>
+                  {t(`weather.states.${weather.weatherState?.value}`, { defaultValue: weather.weatherState?.value })}
+                </span>
+                <div style={{ width: '1px', height: '12px', backgroundColor: 'var(--border-color)' }} />
+                <span style={{ fontSize: '0.8rem', fontWeight: 700 }}>
+                  {formatTemperature(weather.outsideTemperature?.celsius)}
+                </span>
+              </div>
             )}
+
+            {/* Home Actions Dropdown */}
+            <div style={{ position: 'relative', zIndex: 100 }}>
+              <Button 
+                variant="secondary" 
+                onClick={() => setIsQuickActionsOpen(prev => !prev)}
+                disabled={isLoading || isBulkActionLoading}
+                style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem', height: '32px', display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}
+              >
+                <span>{t('dashboard.zones.quick_actions') || 'Home Actions'}</span>
+                <ChevronDown size={14} />
+              </Button>
+              
+              {isQuickActionsOpen && (
+                <>
+                  <div 
+                    onClick={() => setIsQuickActionsOpen(false)}
+                    style={{
+                      position: 'fixed',
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      zIndex: 998
+                    }}
+                  />
+                  <div style={{
+                    position: 'absolute',
+                    right: 0,
+                    top: '38px',
+                    backgroundColor: 'var(--bg-card-solid)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 'var(--radius-md)',
+                    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.35)',
+                    padding: '0.5rem',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '4px',
+                    minWidth: '160px',
+                    zIndex: 999
+                  }}>
+                    <button
+                      onClick={() => {
+                        handleBoostAll();
+                        setIsQuickActionsOpen(false);
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        width: '100%',
+                        padding: '0.5rem 0.75rem',
+                        fontSize: '0.85rem',
+                        fontWeight: 600,
+                        color: 'var(--text-primary)',
+                        border: 'none',
+                        backgroundColor: 'transparent',
+                        borderRadius: 'var(--radius-sm)',
+                        cursor: 'pointer',
+                        textAlign: 'left'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-card-hover)'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                    >
+                      <Flame size={14} style={{ color: 'var(--primary)' }} />
+                      <span>{t('dashboard.zones.boost')}</span>
+                    </button>
+
+                    {hasOnZone && (
+                      <button
+                        onClick={() => {
+                          handleTurnOffAll();
+                          setIsQuickActionsOpen(false);
+                        }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          width: '100%',
+                          padding: '0.5rem 0.75rem',
+                          fontSize: '0.85rem',
+                          fontWeight: 600,
+                          color: 'var(--danger)',
+                          border: 'none',
+                          backgroundColor: 'transparent',
+                          borderRadius: 'var(--radius-sm)',
+                          cursor: 'pointer',
+                          textAlign: 'left'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-card-hover)'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                      >
+                        <RotateCcw size={14} style={{ transform: 'rotate(-45deg)' }} />
+                        <span>{t('dashboard.zones.turn_off_all')}</span>
+                      </button>
+                    )}
+
+                    {hasOverlayZone && (
+                      <button
+                        onClick={() => {
+                          handleClearAllOverlays();
+                          setIsQuickActionsOpen(false);
+                        }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          width: '100%',
+                          padding: '0.5rem 0.75rem',
+                          fontSize: '0.85rem',
+                          fontWeight: 600,
+                          color: 'var(--text-secondary)',
+                          border: 'none',
+                          backgroundColor: 'transparent',
+                          borderRadius: 'var(--radius-sm)',
+                          cursor: 'pointer',
+                          textAlign: 'left'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--bg-card-hover)'}
+                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                      >
+                        <RotateCcw size={14} />
+                        <span>{t('dashboard.zones.clear_all_overlays', t('dashboard.zones.resume_all', 'Clear All Overlays'))}</span>
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
@@ -536,21 +533,6 @@ export default function HomePage() {
                 />
               )}
             </div>
-            
-            {/* Reorder rooms button placed last */}
-            {isAdmin && (
-              <div style={{ display: 'flex', justifyContent: 'center', marginTop: '1rem', paddingBottom: '1rem' }}>
-                <Button 
-                  variant="secondary" 
-                  onClick={() => setIsReorderOpen(true)}
-                  disabled={isLoading}
-                  style={{ padding: '0.45rem 1rem', fontSize: '0.85rem' }}
-                >
-                  <ArrowUpDown size={14} />
-                  <span>{t('dashboard.zones.reorder')}</span>
-                </Button>
-              </div>
-            )}
           </>
         )}
 
@@ -576,14 +558,6 @@ export default function HomePage() {
             zoneId={selectedZoneId}
             isOpen={selectedZoneId !== null}
             onClose={() => setSelectedZoneId(null)}
-          />
-        )}
-
-        {/* Room Reordering Modal */}
-        {isAdmin && (
-          <ReorderRooms 
-            isOpen={isReorderOpen}
-            onClose={() => setIsReorderOpen(false)}
           />
         )}
 

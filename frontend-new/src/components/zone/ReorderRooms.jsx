@@ -10,7 +10,7 @@ import { useState, useEffect } from 'react';
 import Modal from '../common/Modal';
 import Button from '../common/Button';
 import { useHome } from '../../context/HomeContext';
-import { updateZoneOrder } from '../../api/homes';
+import { useToast } from '../../context/ToastContext';
 import { ArrowUp, ArrowDown, Move } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import logger from '../../utils/logger';
@@ -22,8 +22,9 @@ import logger from '../../utils/logger';
  */
 export default function ReorderRooms({ isOpen, onClose }) {
   const { t } = useTranslation();
-  const { activeHomeId, zones, mutateZones, mutateZoneStates } = useHome();
-  const [localZones, setLocalZones] = useState([]);
+  const { zones, saveUserZoneOrder } = useHome();
+  const { showToast } = useToast();
+  const [localZones, setLocalZones] = useState(() => (zones ? [...zones] : []));
   const [isSaving, setIsSaving] = useState(false);
 
   // Sync with home context zones when modal opens
@@ -57,13 +58,14 @@ export default function ReorderRooms({ isOpen, onClose }) {
     setIsSaving(true);
     try {
       const zoneIds = localZones.map(z => z.id);
-      await updateZoneOrder(activeHomeId, zoneIds);
-      
-      // Refresh home state in cache
-      await Promise.all([mutateZones(), mutateZoneStates()]);
+      if (typeof saveUserZoneOrder === 'function') {
+        saveUserZoneOrder(zoneIds);
+      }
+      showToast(t('dashboard.zones.order_saved', { defaultValue: 'Zone display order saved.' }));
       onClose();
     } catch (err) {
       logger.error('Failed to update room order:', err);
+      showToast(t('common.error', { defaultValue: 'Error saving zone order' }), 'error');
     } finally {
       setIsSaving(false);
     }

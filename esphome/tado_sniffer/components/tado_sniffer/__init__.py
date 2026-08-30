@@ -24,6 +24,7 @@ CONF_RST_PIN = "rst_pin"
 CONF_CHANNEL = "channel"
 CONF_TCP_HOST = "tcp_host"
 CONF_TCP_PORT = "tcp_port"
+CONF_IGNORE_BEACONS = "ignore_beacons"
 
 # Validation schema defining parameters configurable through the YAML file
 CONFIG_SCHEMA = cv.Schema({
@@ -34,18 +35,20 @@ CONFIG_SCHEMA = cv.Schema({
     cv.Optional(CONF_DIO2_PIN): pins.internal_gpio_input_pin_schema,
     # rst_pin: RF module hardware reset pin
     cv.Required(CONF_RST_PIN): pins.internal_gpio_output_pin_schema,
-    # channel: Radio channel used for initial sniffing
-    cv.Optional(CONF_CHANNEL, default=26): cv.int_,
+    # channel: Radio channel used for sniffing (0-49)
+    cv.Optional(CONF_CHANNEL, default=26): cv.int_range(min=0, max=49),
     # tcp_host: TCP server IP/hostname to stream raw sniffed packet bytes to
     cv.Optional(CONF_TCP_HOST): cv.string,
     # tcp_port: TCP server port
-    cv.Optional(CONF_TCP_PORT): cv.port,
+    cv.Optional(CONF_TCP_PORT, default=9999): cv.port,
+    # ignore_beacons: Filter out 802.15.4 beacon and CSL multipurpose beacon frames
+    cv.Optional(CONF_IGNORE_BEACONS, default=False): cv.boolean,
 }).extend(cv.COMPONENT_SCHEMA).extend(spi.spi_device_schema(False))
 
 async def to_code(config):
     """
     Translates the validated YAML configuration into C++ code during the build process.
-    Instantiates the TadoSniffer class and calls setter methods for pins, channel, and TCP streaming settings.
+    Instantiates the TadoSniffer class and calls setter methods for pins, channel, beacon filtering, and TCP streaming settings.
     """
     # Create the C++ component variable
     var = cg.new_Pvariable(config[CONF_ID])
@@ -67,10 +70,13 @@ async def to_code(config):
     cg.add(var.set_rst_pin(rst_pin))
     
     # Set Sniffer Channel
-    cg.add(var.set_channel(config[CONF_CHANNEL]))
+    if CONF_CHANNEL in config:
+        cg.add(var.set_channel(config[CONF_CHANNEL]))
     
     # Set optional TCP streaming host and port
     if CONF_TCP_HOST in config:
         cg.add(var.set_tcp_host(config[CONF_TCP_HOST]))
     if CONF_TCP_PORT in config:
         cg.add(var.set_tcp_port(config[CONF_TCP_PORT]))
+    if CONF_IGNORE_BEACONS in config:
+        cg.add(var.set_ignore_beacons(config[CONF_IGNORE_BEACONS]))

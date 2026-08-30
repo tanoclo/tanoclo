@@ -34,7 +34,8 @@ export const STORAGE_KEYS = {
   REFRESH_TOKEN: 'tanoclo_refresh_token',
   THEME: 'tanoclo_theme',
   USER_LOCALE: 'tado_locale',
-  BOOST_TEMPERATURE: 'tanoclo_boost_temperature'
+  BOOST_TEMPERATURE: 'tanoclo_boost_temperature',
+  ZONE_ORDER_PREFIX: 'tanoclo_zone_order_'
 };
 
 // Manual override modes matching Tado API endpoints

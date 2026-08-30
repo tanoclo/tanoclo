@@ -24,17 +24,7 @@ export default function Header({ title = '', showBack = false, onBack }) {
   const navigate = useNavigate();
 
   return (
-    <header style={{
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      padding: '1rem 1.5rem',
-      backgroundColor: 'var(--bg-app)',
-      borderBottom: '1px solid var(--border-color)',
-      position: 'sticky',
-      top: 0,
-      zIndex: 800
-    }}>
+    <header className="app-header">
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
         {showBack && (
           <button

@@ -8,7 +8,7 @@ info:
     This specification builds upon the community-managed Tado OpenAPI v2
     specification by kritsel (available at
     https://github.com/kritsel/tado-openapispec-v2).
-  version: 2026.08.14.1
+  version: 2026.08.29.1
 servers:
   - url: /api/v2
     description: TaNoClo API v2 base
@@ -3641,6 +3641,745 @@ paths:
                   friendlyName:
                     type: string
                     example: Living Room Radiator
+  /homes/{homeId}/admin/{adminUserId}:
+    put:
+      summary: Transfer home administrative ownership to another user.
+      operationId: transferHomeAdmin
+      tags:
+        - home
+      parameters:
+        - &a1
+          in: path
+          name: homeId
+          required: true
+          schema:
+            $ref: "#/components/schemas/HomeId"
+          description: Unique ID of the home
+        - in: path
+          name: adminUserId
+          required: true
+          schema:
+            type: string
+          description: User ID of the new home administrator
+      responses:
+        "200":
+          description: Admin ownership transferred successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        "403":
+          $ref: "#/components/responses/AccessDenied403"
+  /homes/{homeId}/skills:
+    get:
+      summary: Retrieve enabled Tado skills for the home.
+      operationId: getHomeSkills
+      tags:
+        - home
+      parameters:
+        - *a1
+      responses:
+        "200":
+          description: List of enabled home skills and capabilities
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  skills:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        title:
+                          type: string
+                          example: AUTO_ASSIST
+                        enabled:
+                          type: boolean
+                          example: true
+  /homes/{homeId}/climateQuality:
+    get:
+      summary: Retrieve indoor air quality (IAQ) and climate score.
+      operationId: getClimateQuality
+      tags:
+        - home
+      parameters:
+        - *a1
+      responses:
+        "200":
+          description: Climate quality analysis and score
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  indoorQuality:
+                    type: string
+                    example: EXCELLENT
+                  score:
+                    type: integer
+                    example: 95
+  /homes/{homeId}/energy:
+    get:
+      summary: Retrieve home energy consumption metrics.
+      operationId: getHomeEnergy
+      tags:
+        - report
+      parameters:
+        - *a1
+      responses:
+        "200":
+          description: Aggregated energy usage statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totalConsumptionKWh:
+                    type: number
+                    example: 142.5
+  /homes/{homeId}/energy/daily:
+    get:
+      summary: Retrieve daily aggregated energy consumption metrics.
+      operationId: getHomeEnergyDaily
+      tags:
+        - report
+      parameters:
+        - *a1
+        - in: query
+          name: fromDate
+          required: false
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: toDate
+          required: false
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Daily energy consumption series
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    date:
+                      type: string
+                      format: date
+                    consumptionKWh:
+                      type: number
+                      example: 12.4
+  /homes/{homeId}/emailNotificationSettings:
+    get:
+      summary: Get home email notification preferences.
+      operationId: getEmailNotificationSettings
+      tags:
+        - home
+      parameters:
+        - *a1
+      responses:
+        "200":
+          description: Notification preferences
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  lowBatteryNotifications:
+                    type: boolean
+                    example: true
+                  openWindowNotifications:
+                    type: boolean
+                    example: true
+                  energyReportNotifications:
+                    type: boolean
+                    example: false
+    patch:
+      summary: Update home email notification preferences.
+      operationId: updateEmailNotificationSettings
+      tags:
+        - home
+      parameters:
+        - *a1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                lowBatteryNotifications:
+                  type: boolean
+                openWindowNotifications:
+                  type: boolean
+                energyReportNotifications:
+                  type: boolean
+      responses:
+        "200":
+          description: Updated notification preferences
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  lowBatteryNotifications:
+                    type: boolean
+                  openWindowNotifications:
+                    type: boolean
+                  energyReportNotifications:
+                    type: boolean
+  /homes/{homeId}/zoneOrder:
+    put:
+      summary: Update zone display ordering.
+      operationId: updateZoneOrder
+      tags:
+        - home
+      parameters:
+        - *a1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: integer
+                example: 1
+      responses:
+        "200":
+          description: Zone order updated successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: integer
+  /homes/{homeId}/zones/{zoneId}/energy:
+    get:
+      summary: Retrieve energy consumption metrics for a specific zone.
+      operationId: getZoneEnergy
+      tags:
+        - zone
+      parameters:
+        - *a1
+        - &a2
+          in: path
+          name: zoneId
+          required: true
+          schema:
+            $ref: "#/components/schemas/ZoneId"
+          description: Unique ID of the zone (room)
+      responses:
+        "200":
+          description: Zone energy consumption metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  consumptionKWh:
+                    type: number
+                    example: 34.2
+  /homes/{homeId}/zones/{zoneId}/tanoclo/owd:
+    get:
+      summary: Get custom Open Window Detection parameters for zone.
+      operationId: getZoneCustomOwd
+      tags:
+        - zone control
+      parameters:
+        - *a1
+        - *a2
+      responses:
+        "200":
+          description: Custom OWD parameters
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enabled:
+                    type: boolean
+                    example: true
+                  timeoutInSeconds:
+                    type: integer
+                    example: 900
+                  sensitivity:
+                    type: string
+                    enum:
+                      - LOW
+                      - MEDIUM
+                      - HIGH
+                    example: MEDIUM
+    put:
+      summary: Set custom Open Window Detection parameters for zone.
+      operationId: setZoneCustomOwd
+      tags:
+        - zone control
+      parameters:
+        - *a1
+        - *a2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled:
+                  type: boolean
+                timeoutInSeconds:
+                  type: integer
+                sensitivity:
+                  type: string
+                  enum:
+                    - LOW
+                    - MEDIUM
+                    - HIGH
+      responses:
+        "200":
+          description: OWD parameters updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+  /homes/{homeId}/zones/{zoneId}/offline-schedule:
+    put:
+      summary: Save offline schedule fallback table for zone.
+      operationId: setZoneOfflineSchedule
+      tags:
+        - zone control
+      parameters:
+        - *a1
+        - *a2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                slots:
+                  type: array
+                  items:
+                    type: object
+      responses:
+        "200":
+          description: Offline schedule stored
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+  /homes/{homeId}/zones/{zoneId}/offline-schedule/sync:
+    post:
+      summary: Synchronize offline schedule payload directly to zone devices.
+      operationId: syncZoneOfflineSchedule
+      tags:
+        - zone control
+      parameters:
+        - *a1
+        - *a2
+      responses:
+        "200":
+          description: Schedule synchronization initiated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+  /homes/{homeId}/devices/{deviceId}/role:
+    put:
+      summary: Configure operating role for temperature sensor or heating device
+        (RU/VA).
+      operationId: setDeviceRole
+      tags:
+        - device
+      parameters:
+        - *a1
+        - &a3
+          in: path
+          name: deviceId
+          required: true
+          schema:
+            $ref: "#/components/schemas/DeviceId"
+          description: Serial number of the physical device
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - role
+              properties:
+                role:
+                  type: string
+                  enum:
+                    - TEMPERATURE_SENSOR
+                    - HEATING_DEVICE
+                    - HOT_WATER_DEVICE
+                  example: TEMPERATURE_SENSOR
+      responses:
+        "200":
+          description: Device role updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  role:
+                    type: string
+                    example: TEMPERATURE_SENSOR
+  /homes/{homeId}/devices/{deviceId}/mount:
+    post:
+      summary: Trigger valve actuator mounting calibration cycle.
+      operationId: triggerDeviceMount
+      tags:
+        - device
+      parameters:
+        - *a1
+        - *a3
+      responses:
+        "200":
+          description: Mount calibration cycle initiated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+  /homes/{homeId}/devices/{deviceId}/selftest:
+    post:
+      summary: Execute hardware self-test diagnostic on device.
+      operationId: triggerDeviceSelftest
+      tags:
+        - device
+      parameters:
+        - *a1
+        - *a3
+      responses:
+        "200":
+          description: Self-test command dispatched
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+  /homes/{homeId}/devices/{deviceId}/debug:
+    post:
+      summary: Toggle hardware diagnostic debug streaming mode on device.
+      operationId: toggleDeviceDebug
+      tags:
+        - device
+      parameters:
+        - *a1
+        - *a3
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled:
+                  type: boolean
+                  example: true
+      responses:
+        "200":
+          description: Debug mode updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+  /homes/{homeId}/devices/{deviceId}/debug/dump/start:
+    post:
+      summary: Start firmware memory dump extraction over RF/CSL.
+      operationId: startDeviceMemoryDump
+      tags:
+        - device
+      parameters:
+        - *a1
+        - *a3
+      responses:
+        "200":
+          description: Memory dump started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Memory dump initiated
+  /homes/{homeId}/devices/{deviceId}/debug/dump/status:
+    get:
+      summary: Get firmware memory dump progress and status.
+      operationId: getDeviceMemoryDumpStatus
+      tags:
+        - device
+      parameters:
+        - *a1
+        - *a3
+      responses:
+        "200":
+          description: Dump extraction status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  active:
+                    type: boolean
+                    example: true
+                  progress:
+                    type: number
+                    example: 45.2
+                  totalBytes:
+                    type: integer
+                    example: 262144
+                  receivedBytes:
+                    type: integer
+                    example: 118480
+  /homes/{homeId}/devices/{deviceId}/debug/dump/cancel:
+    post:
+      summary: Cancel in-progress firmware memory dump.
+      operationId: cancelDeviceMemoryDump
+      tags:
+        - device
+      parameters:
+        - *a1
+        - *a3
+      responses:
+        "200":
+          description: Memory dump cancelled
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+  /homes/{homeId}/devices/{deviceId}/debug/dump/download:
+    get:
+      summary: Download completed firmware memory dump binary image.
+      operationId: downloadDeviceMemoryDump
+      tags:
+        - device
+      parameters:
+        - *a1
+        - *a3
+      responses:
+        "200":
+          description: Binary firmware image (.bin)
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: Dump not available
+  /homes/{homeId}/devices/{deviceId}/reboot:
+    post:
+      summary: Issue remote reboot command to physical device.
+      operationId: rebootDevice
+      tags:
+        - device
+      parameters:
+        - *a1
+        - *a3
+      responses:
+        "200":
+          description: Reboot command dispatched
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+  /homes/{homeId}/devices/{deviceId}/rfkey/refresh:
+    post:
+      summary: Request fresh RF encryption key exchange.
+      operationId: refreshDeviceRfKey
+      tags:
+        - device
+      parameters:
+        - *a1
+        - *a3
+      responses:
+        "200":
+          description: RF key refresh requested
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+  /homes/{homeId}/devices/{deviceId}/config/refresh:
+    post:
+      summary: Force download and push of current device configuration.
+      operationId: refreshDeviceConfig
+      tags:
+        - device
+      parameters:
+        - *a1
+        - *a3
+      responses:
+        "200":
+          description: Config refresh queued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+  /homes/{homeId}/mobileDevices/{mobileDeviceId}/geofenceWebhook:
+    post:
+      summary: Webhook endpoint for background mobile geofencing transition events.
+      operationId: geofenceWebhook
+      tags:
+        - mobile device
+      parameters:
+        - *a1
+        - &a4
+          in: path
+          name: mobileDeviceId
+          required: true
+          schema:
+            $ref: "#/components/schemas/MobileDeviceId"
+          description: Unique ID of the mobile device
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                event:
+                  type: string
+                  enum:
+                    - ENTER
+                    - EXIT
+                  example: ENTER
+                timestamp:
+                  type: string
+                  format: date-time
+      responses:
+        "200":
+          description: Geofence event processed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+  /homes/{homeId}/mobileDevices/{mobileDeviceId}/geolocation:
+    post:
+      summary: Update current GPS geolocation coordinates of mobile device.
+      operationId: updateMobileDeviceGeolocation
+      tags:
+        - mobile device
+      parameters:
+        - *a1
+        - *a4
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - latitude
+                - longitude
+              properties:
+                latitude:
+                  type: number
+                  example: 52.52
+                longitude:
+                  type: number
+                  example: 13.405
+                accuracy:
+                  type: number
+                  example: 10.5
+      responses:
+        "200":
+          description: Location updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  atHome:
+                    type: boolean
+                    example: true
+                  relativeDistance:
+                    type: number
+                    example: 0
+  /homes/{homeId}/mobileDevices/{mobileDeviceId}/geolocationConfig:
+    get:
+      summary: Retrieve geofencing radius and distance boundaries for mobile device.
+      operationId: getMobileDeviceGeolocationConfig
+      tags:
+        - mobile device
+      parameters:
+        - *a1
+        - *a4
+      responses:
+        "200":
+          description: Geolocation configuration parameters
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  homeRadius:
+                    type: number
+                    example: 400
+                  awayRadius:
+                    type: number
+                    example: 800
 components:
   securitySchemes:
     oauth2:

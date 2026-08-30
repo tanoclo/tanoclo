@@ -17,10 +17,11 @@ import { ThemeContext } from '../../context/ThemeContext';
 import { apiFetch } from '../../api/client';
 import { Capacitor } from '@capacitor/core';
 import { updateUserProfile, updateUserEmail, updateUserPassword } from '../../api/users';
-import { User, Mail, Lock, Languages } from 'lucide-react';
+import { User, Mail, Lock, Languages, ArrowUpDown } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import logger from '../../utils/logger';
 import { useToast } from '../../context/ToastContext';
+import ReorderRooms from '../zone/ReorderRooms';
 
 /**
  * @brief User configuration settings dashboard panel.
@@ -50,6 +51,7 @@ export default function UserSettings() {
   const [isSavingLowBattery, setIsSavingLowBattery] = useState(false);
   const [hasMobileDevice, setHasMobileDevice] = useState(false);
   const [currentDeviceId, setCurrentDeviceId] = useState(null);
+  const [isReorderOpen, setIsReorderOpen] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -331,6 +333,25 @@ export default function UserSettings() {
         </select>
       </Card>
 
+      {/* Zone Display Order */}
+      <Card style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <h3 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <ArrowUpDown size={16} color="var(--primary)" />
+          {t('dashboard.zones.reorder', { defaultValue: 'Reorder Zones' })}
+        </h3>
+        <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0 }}>
+          {t('settings.reorder_zones_desc', { defaultValue: 'Customize the display order of rooms and zones on your dashboard for this account.' })}
+        </p>
+        <Button 
+          variant="secondary" 
+          onClick={() => setIsReorderOpen(true)}
+          style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: '6px', padding: '0.5rem 1rem' }}
+        >
+          <ArrowUpDown size={14} />
+          <span>{t('dashboard.zones.reorder', { defaultValue: 'Reorder Zones' })}</span>
+        </Button>
+      </Card>
+
       {/* Mobile Geofencing */}
       {hasMobileDevice && (
         <Card style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -553,6 +574,12 @@ export default function UserSettings() {
           </Button>
         </form>
       </Card>
+
+      {/* Room Reordering Modal */}
+      <ReorderRooms 
+        isOpen={isReorderOpen}
+        onClose={() => setIsReorderOpen(false)}
+      />
 
     </div>
   );

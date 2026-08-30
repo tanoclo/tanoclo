@@ -316,11 +316,11 @@ class TadoEmulatorComponent : public Component,
                 this->send_neighbor_advertisement(&dev);
                 bool is_ru = (dev.serial_no.rfind("RU", 0) == 0);
                 if (is_ru) {
-                  dev.startup_stage = 2; // RU starts directly with Stage 2: GET d/{serial}/config
+                  dev.startup_stage = 2; // RU: PUT fw/state first, then GET config
                   dev.stage_ack_received = false;
                   dev.last_startup_step_ms = now_ms;
-                  ESP_LOGI(TAG, "%s: Stage 0 complete (RS beacons + NA sent). Advancing directly to Stage 2: GET d/%s/config (MID 0x9000)...", dev.serial_no.c_str(), dev.serial_no.c_str());
-                  this->send_config_get(&dev);
+                  ESP_LOGI(TAG, "%s: Stage 0 complete (RS+NA). Stage 2: PUT fw/state...", dev.serial_no.c_str());
+                  this->send_fw_state_put(&dev);
                 } else {
                   dev.startup_stage = 1; // Stage 1: Waiting for Bridge POST /auth/token (VA devices)
                   dev.stage_ack_received = false;
@@ -332,28 +332,49 @@ class TadoEmulatorComponent : public Component,
                 dev.startup_stage = 2;
                 dev.stage_ack_received = false;
                 dev.last_startup_step_ms = now_ms;
-                ESP_LOGI(TAG, "✓ %s: Advancing to Stage 2: GET d/%s/config (MID 0x9000)...", dev.serial_no.c_str(), dev.serial_no.c_str());
+                ESP_LOGI(TAG, "✓ %s: Advancing to Stage 2: GET d/%s/config...", dev.serial_no.c_str(), dev.serial_no.c_str());
                 this->send_config_get(&dev);
               } else if (dev.startup_stage == 2 && dev.stage_ack_received && (now_ms - dev.last_startup_step_ms >= 1000)) {
-                // Advance to Stage 3: PUT d/sen (1 full second after Stage 2 ACK)
-                dev.startup_stage = 3;
-                dev.stage_ack_received = false;
-                dev.last_startup_step_ms = now_ms;
-                ESP_LOGI(TAG, "✓ %s: Advancing to Stage 3: PUT d/sen (MID 0x9001)...", dev.serial_no.c_str());
-                this->send_telemetry_put(&dev, dev.target_temp_celsius, dev.target_humidity_pct, dev.target_battery_mv);
+                // After fw/state ACK (RU) or timeout (VA): GET config
+                bool is_ru = (dev.serial_no.rfind("RU", 0) == 0);
+                if (is_ru) {
+                  // RU: fw/state ACK received, now GET config
+                  dev.startup_stage = 3;
+                  dev.stage_ack_received = false;
+                  dev.last_startup_step_ms = now_ms;
+                  ESP_LOGI(TAG, "✓ %s: Stage 2 fw/state ACK. Stage 3: GET config...", dev.serial_no.c_str());
+                  this->send_config_get(&dev);
+                } else {
+                  // VA: config ACK received, proceed to sen
+                  dev.startup_stage = 3;
+                  dev.stage_ack_received = false;
+                  dev.last_startup_step_ms = now_ms;
+                  ESP_LOGI(TAG, "✓ %s: Stage 2 config ACK. Stage 3: PUT sen...", dev.serial_no.c_str());
+                  this->send_telemetry_put(&dev, dev.target_temp_celsius, dev.target_humidity_pct, dev.target_battery_mv);
+                }
               } else if (dev.startup_stage == 3 && dev.stage_ack_received && (now_ms - dev.last_startup_step_ms >= 1000)) {
-                // Advance to Stage 4: PUT d/err (1 full second after Stage 3 ACK)
-                dev.startup_stage = 4;
-                dev.stage_ack_received = false;
-                dev.last_startup_step_ms = now_ms;
-                ESP_LOGI(TAG, "✓ %s: Advancing to Stage 4: PUT d/err (MID 0x9002)...", dev.serial_no.c_str());
-                this->send_error_flags_put(&dev);
+                bool is_ru = (dev.serial_no.rfind("RU", 0) == 0);
+                if (is_ru) {
+                  // RU: config ACK → PUT sen
+                  dev.startup_stage = 4;
+                  dev.stage_ack_received = false;
+                  dev.last_startup_step_ms = now_ms;
+                  ESP_LOGI(TAG, "✓ %s: Stage 3 config ACK. Stage 4: PUT sen...", dev.serial_no.c_str());
+                  this->send_telemetry_put(&dev, dev.target_temp_celsius, dev.target_humidity_pct, dev.target_battery_mv);
+                } else {
+                  // VA: sen ACK → PUT err
+                  dev.startup_stage = 4;
+                  dev.stage_ack_received = false;
+                  dev.last_startup_step_ms = now_ms;
+                  ESP_LOGI(TAG, "✓ %s: Stage 3 sen ACK. Stage 4: PUT err...", dev.serial_no.c_str());
+                  this->send_error_flags_put(&dev);
+                }
               } else if (dev.startup_stage == 4 && dev.stage_ack_received && (now_ms - dev.last_startup_step_ms >= 1000)) {
                 // Advance to Stage 5: GET time (1 full second after Stage 4 ACK)
                 dev.startup_stage = 5;
                 dev.stage_ack_received = false;
                 dev.last_startup_step_ms = now_ms;
-                ESP_LOGI(TAG, "✓ %s: Advancing to Stage 5: GET time (MID 0x9003)...", dev.serial_no.c_str());
+                ESP_LOGI(TAG, "✓ %s: Advancing to Stage 5: GET time...", dev.serial_no.c_str());
                 this->send_time_get(&dev);
               }
             } else if (dev.startup_stage >= 6 && (now - dev.last_telemetry_ts) >= 900) {
@@ -369,10 +390,19 @@ class TadoEmulatorComponent : public Component,
               ESP_LOGI(TAG, "%s: Sending periodic Neighbor Advertisement link probe (5-min keepalive)...", dev.serial_no.c_str());
               this->send_neighbor_advertisement(&dev);
             }
-            // Periodic Config ETag Check (1 hour / 3600s)
+            // Periodic Config ETag Check + Re-Registration Cycle (1 hour / 3600s)
+            // Real RU sends: GET config → PUT sen → PUT act → PUT err → PUT fallback → PUT sen
             if (dev.last_config_check_ts != 0 && (now - dev.last_config_check_ts) >= 3600) {
               dev.last_config_check_ts = now;
               this->send_config_get(&dev);
+              // Stagger the remaining re-registration messages (sent via pending ACK mechanism)
+              // They will fire as each ACK is received in the operational loop
+              // For simplicity, fire them with small delays
+              this->send_telemetry_put(&dev, dev.target_temp_celsius, dev.target_humidity_pct, dev.target_battery_mv);
+              this->send_actuator_put(&dev);
+              this->send_error_flags_put(&dev);
+              this->send_fallback_put(&dev);
+              ESP_LOGI(TAG, "%s: Hourly re-registration cycle: config+sen+act+err+fallback", dev.serial_no.c_str());
             }
             // Periodic Session Token Refresh (24 hours / 86400s)
             if (dev.last_token_refresh_ts != 0 && (now - dev.last_token_refresh_ts) >= 86400) {
@@ -608,42 +638,41 @@ class TadoEmulatorComponent : public Component,
   }
 
   /**
-   * Builds exact d/sen payload matching Real RU:
-   * 0x0161: ambient_light_adc (uint16, e.g. 6249 / 0x1869)
+   * Builds exact d/sen payload matching Real RU sniffer decode:
    * 0x0162: battery_mv (uint16, mV)
    * 0x012d: temp_celsius (int16, temp * 100)
    * 0x012e: aux_temp_celsius (int16, follows ambient)
    * 0x0135: humidity_percent (uint16, % * 10, e.g. 50.0% -> 500)
-   * 0x0136: reset_counter / status (uint8, 1 byte matching Real RU)
+   * 0x0136: ambient_light_level (uint8, 1 byte ADC value)
    */
   static std::vector<uint8_t> build_d_sen_payload(float temp_c, float humidity_pct, uint16_t battery_mv, uint16_t light_adc = 6249, uint8_t reset_count = 6) {
     std::vector<uint8_t> tlv;
     int16_t temp_val = (int16_t)(temp_c * 100.0f);
     int16_t aux_temp_val = temp_val;
     uint16_t hum_val = (uint16_t)(humidity_pct * 10.0f);
+    uint8_t light_byte = (uint8_t)(light_adc > 255 ? 255 : light_adc); // Clamp to 1 byte
 
-    append_tlv_uint16(tlv, 0x0161, light_adc);
     append_tlv_uint16(tlv, 0x0162, battery_mv);
     append_tlv_int16(tlv, 0x012d, temp_val);
     append_tlv_int16(tlv, 0x012e, aux_temp_val);
     append_tlv_uint16(tlv, 0x0135, hum_val);
-    append_tlv_uint8(tlv, 0x0136, reset_count);
+    append_tlv_uint8(tlv, 0x0136, light_byte);
     return tlv;
   }
 
   /**
-   * Builds d/fw/state and /d/info response payload using dynamic device metadata:
-   * - RU02 default: type 10, active_fw 55042 (v215.2), other_slot 52227 (v204.3), build "c54baf8e6aa4b6064303f0b130ba32e5f9658c85", slot 1
-   * - VA02 default: type 10, active_fw 55041 (v215.1), other_slot 52225 (v204.1), build "1556c5e16fabcbe0f58fbaca5b5d6ecd266bc52c", slot 4
+   * Builds d/fw/state payload matching Real RU sniffer decode (7 TLVs, no 0x0180/0x014c).
+   * Used for outbound PUT /d/{serial}/fw/state during boot.
    */
   static std::vector<uint8_t> build_d_fw_state_payload(const EmulatedDevice *dev) {
     if (dev == nullptr) return build_d_fw_state_payload("RU");
-    bool is_ru = (dev->serial_no.rfind("RU", 0) == 0);
-    uint8_t slot_num = is_ru ? 1 : 4;
     std::string build_id = dev->fw_build_id;
     if (build_id.length() <= 8) {
-      build_id = is_ru ? "c54baf8e6aa4b6064303f0b130ba32e5f9658c85" : "1556c5e16fabcbe0f58fbaca5b5d6ecd266bc52c";
+      bool is_ru = (dev->serial_no.rfind("RU", 0) == 0);
+      build_id = is_ru ? "c54baf8" : "1556c5e";
     }
+    // Real RU sends first 7 chars of build hash
+    if (build_id.length() > 7) build_id = build_id.substr(0, 7);
 
     std::vector<uint8_t> tlv;
     append_tlv_uint8(tlv, 0x01a0, dev->field_01a0);
@@ -654,19 +683,16 @@ class TadoEmulatorComponent : public Component,
     append_tlv_uint8(tlv, 0x0036, dev->dev_type_code);
     append_tlv_uint8(tlv, 0x003c, dev->field_003c);
     append_tlv_string(tlv, 0x0210, build_id);
-    append_tlv_uint8(tlv, 0x0180, slot_num);
-    append_tlv_uint8(tlv, 0x014c, dev->field_014c);
     return tlv;
   }
 
   static std::vector<uint8_t> build_d_fw_state_payload(const std::string &serial_no = "RU") {
     std::vector<uint8_t> tlv;
     bool is_ru = (serial_no.rfind("RU", 0) == 0);
-    uint16_t fw_version = is_ru ? 55042 : 55041;           // RU02 v215.2 vs VA02 v215.1
-    uint16_t other_slot = is_ru ? 52227 : 52225;           // RU02 v204.3 vs VA02 v204.1
-    std::string build_id = is_ru ? "c54baf8e6aa4b6064303f0b130ba32e5f9658c85" : "1556c5e16fabcbe0f58fbaca5b5d6ecd266bc52c";
-    uint8_t dev_type = 10;                                 // field_0036 = 10
-    uint8_t slot_num = is_ru ? 1 : 4;                      // slot 1 (RU) vs slot 4 (VA)
+    uint16_t fw_version = is_ru ? 55042 : 55041;
+    uint16_t other_slot = is_ru ? 52227 : 52225;
+    std::string build_id = is_ru ? "c54baf8" : "1556c5e";
+    uint8_t dev_type = 10;
 
     append_tlv_uint8(tlv, 0x01a0, 8);
     append_tlv_uint16(tlv, 0x003a, fw_version);
@@ -676,8 +702,31 @@ class TadoEmulatorComponent : public Component,
     append_tlv_uint8(tlv, 0x0036, dev_type);
     append_tlv_uint8(tlv, 0x003c, 14);
     append_tlv_string(tlv, 0x0210, build_id);
+    return tlv;
+  }
+
+  /**
+   * Builds full d/info response payload with all fields (including 0x0180, 0x014c).
+   * Used when Bridge sends GET /d/info — includes slot number and capability flags.
+   */
+  static std::vector<uint8_t> build_d_info_response_payload(const EmulatedDevice *dev) {
+    std::vector<uint8_t> tlv;
+    bool is_ru = (dev->serial_no.rfind("RU", 0) == 0);
+    uint8_t slot_num = is_ru ? 1 : 4;
+    std::string build_id = dev->fw_build_id;
+    if (build_id.length() <= 8) {
+      build_id = is_ru ? "c54baf8e6aa4b6064303f0b130ba32e5f9658c85" : "1556c5e16fabcbe0f58fbaca5b5d6ecd266bc52c";
+    }
+    append_tlv_uint8(tlv, 0x01a0, dev->field_01a0);
+    append_tlv_uint16(tlv, 0x003a, dev->fw_version);
+    append_tlv_uint8(tlv, 0x003b, dev->field_003b);
+    append_tlv_uint16(tlv, 0x0035, dev->fw_other_slot);
+    append_tlv_uint16(tlv, 0x0039, dev->fw_version);
+    append_tlv_uint8(tlv, 0x0036, dev->dev_type_code);
+    append_tlv_uint8(tlv, 0x003c, dev->field_003c);
+    append_tlv_string(tlv, 0x0210, build_id);
     append_tlv_uint8(tlv, 0x0180, slot_num);
-    append_tlv_uint8(tlv, 0x014c, 1);
+    append_tlv_uint8(tlv, 0x014c, dev->field_014c);
     return tlv;
   }
 
@@ -707,6 +756,16 @@ class TadoEmulatorComponent : public Component,
   static std::vector<uint8_t> build_d_err_payload() {
     std::vector<uint8_t> tlv;
     append_tlv_uint32(tlv, 0x01a3, 0);
+    return tlv;
+  }
+
+  /**
+   * Builds d/fallback payload matching Real RU sniffer decode:
+   * 0x0182: fallback_state (uint8, 0 = not in fallback)
+   */
+  static std::vector<uint8_t> build_d_fallback_payload() {
+    std::vector<uint8_t> tlv;
+    append_tlv_uint8(tlv, 0x0182, 0);
     return tlv;
   }
 
@@ -752,6 +811,12 @@ class TadoEmulatorComponent : public Component,
   void send_error_flags_put(EmulatedDevice *dev) {
     std::vector<uint8_t> payload = build_d_err_payload();
     std::string path = "d/" + dev->serial_no + "/err";
+    this->send_coap_request(dev, 3 /* PUT */, path, payload);
+  }
+
+  void send_fallback_put(EmulatedDevice *dev) {
+    std::vector<uint8_t> payload = build_d_fallback_payload();
+    std::string path = "d/" + dev->serial_no + "/fallback";
     this->send_coap_request(dev, 3 /* PUT */, path, payload);
   }
 
@@ -2039,8 +2104,8 @@ class TadoEmulatorComponent : public Component,
         }
       } else if (f_type == 0x02) {
         keep = true; // MAC ACK
-      } else if (f_type == 0x05) {
-        keep = true; // 802.15.4e CSL Multipurpose Wakeup Strobe
+      } else if (f_type == 0x05 || f_type == 0x04) {
+        keep = true; // 802.15.4e CSL Wakeup Strobe (type 4: 0x0C25 beacons, type 5: Multipurpose)
       }
       if (!keep) {
         this->write_reg(REG_IRQ_FLAGS_2, 0x10);
@@ -2154,10 +2219,13 @@ class TadoEmulatorComponent : public Component,
     uint8_t dst_mode = (fcf >> 10) & 0x03; // 2 = 16-bit short, 3 = 64-bit extended
     bool pan_compress = (fcf & 0x40) != 0;
 
-    if (frame_type == 0x05 && buf_len >= 6) { // 802.15.4e CSL Multipurpose Wakeup Frame (no seq byte, Dest Short at bytes 4..5)
-      uint16_t dest_short = buffer_data[4] | ((uint16_t)buffer_data[5] << 8);
-      uint8_t strobe_seq = buffer_data[1];
-      uint16_t countdown = (buf_len >= 10) ? (buffer_data[8] | ((uint16_t)buffer_data[9] << 8)) : 0;
+    // Handle CSL wake-up strobe beacons (FCF 0x0C 0x25, frame type 4)
+    // Real Bridge sends: 0c 25 <seq> <pan_le_2B> <dest_short_BE_2B> 82 0e <countdown_le_2B> 80 3f
+    // dest_short is big-endian (matches derive_short_addr / IPv6 suffix directly)
+    if (buffer_data[0] == 0x0C && buffer_data[1] == 0x25 && buf_len >= 11) {
+      uint8_t strobe_seq = buffer_data[2];
+      uint16_t dest_short = ((uint16_t)buffer_data[5] << 8) | buffer_data[6]; // Big-endian!
+      uint16_t countdown = buffer_data[9] | ((uint16_t)buffer_data[10] << 8); // LE countdown
 
       // Only respond at the tail end of the CSL strobe burst (when Bridge switches from TX to RX)
       if (countdown <= 0x000C) {
@@ -2166,7 +2234,29 @@ class TadoEmulatorComponent : public Component,
           if (dev.pairing_state == STATE_PAIRED && dev.short_addr == dest_short) {
             if (now_ms - dev.last_csl_wakeup_ms >= 500) {
               dev.last_csl_wakeup_ms = now_ms;
-              ESP_LOGI(TAG, "[CSL Wakeup] Bridge strobe ending (dest=0x%04X, strobe_seq=0x%02X, count=0x%04X) for %s. Sending CSL Data Request Poll...",
+              ESP_LOGI(TAG, "[CSL Wakeup] Bridge strobe ending (dest=0x%04X, seq=0x%02X, countdown=%u) for %s. Sending CSL Data Poll...",
+                       dest_short, strobe_seq, countdown, dev.serial_no.c_str());
+              this->send_csl_data_poll(&dev, strobe_seq);
+            }
+          }
+        }
+      }
+      xSemaphoreGiveRecursive(this->devices_mutex_);
+      return;
+    }
+
+    if (frame_type == 0x05 && buf_len >= 6) { // 802.15.4e Multipurpose Wakeup Frame (legacy handler)
+      uint16_t dest_short = buffer_data[4] | ((uint16_t)buffer_data[5] << 8);
+      uint8_t strobe_seq = buffer_data[1];
+      uint16_t countdown = (buf_len >= 10) ? (buffer_data[8] | ((uint16_t)buffer_data[9] << 8)) : 0;
+
+      if (countdown <= 0x000C) {
+        uint32_t now_ms = millis();
+        for (auto &dev : this->devices_) {
+          if (dev.pairing_state == STATE_PAIRED && dev.short_addr == dest_short) {
+            if (now_ms - dev.last_csl_wakeup_ms >= 500) {
+              dev.last_csl_wakeup_ms = now_ms;
+              ESP_LOGI(TAG, "[CSL Wakeup] Multipurpose strobe ending (dest=0x%04X, strobe_seq=0x%02X, count=0x%04X) for %s. Sending CSL Data Poll...",
                        dest_short, strobe_seq, countdown, dev.serial_no.c_str());
               this->send_csl_data_poll(&dev, strobe_seq);
             }
@@ -2659,7 +2749,7 @@ class TadoEmulatorComponent : public Component,
           if (it->mid == 0x9000) it = target_dev->pending_requests.erase(it);
           else ++it;
         }
-        ESP_LOGI(TAG, "✓ %s: Stage 2 (GET d/config) confirmed. Will advance to Stage 3 in 1000ms...", target_dev->serial_no.c_str());
+        ESP_LOGI(TAG, "✓ %s: Stage 2 (RU:fw/state, VA:config) ACK. Advancing to Stage 3 in 1000ms...", target_dev->serial_no.c_str());
       }
     } else if (coap_mid == 0x9001 && (coap_code == 68 || coap_code == 65 || coap_code == 69)) {
       if (target_dev->startup_stage == 3 && !target_dev->stage_ack_received) {
@@ -2670,7 +2760,7 @@ class TadoEmulatorComponent : public Component,
           if (it->mid == 0x9000 || it->mid == 0x9001) it = target_dev->pending_requests.erase(it);
           else ++it;
         }
-        ESP_LOGI(TAG, "✓ %s: Stage 3 (PUT d/sen) confirmed. Will advance to Stage 4 in 1000ms...", target_dev->serial_no.c_str());
+        ESP_LOGI(TAG, "✓ %s: Stage 3 (RU:config, VA:sen) ACK. Advancing to Stage 4 in 1000ms...", target_dev->serial_no.c_str());
       }
     } else if (coap_mid == 0x9002 && (coap_code == 68 || coap_code == 65 || coap_code == 69)) {
       if (target_dev->startup_stage == 4 && !target_dev->stage_ack_received) {
@@ -2681,7 +2771,7 @@ class TadoEmulatorComponent : public Component,
           if (it->mid >= 0x9000 && it->mid <= 0x9002) it = target_dev->pending_requests.erase(it);
           else ++it;
         }
-        ESP_LOGI(TAG, "✓ %s: Stage 4 (PUT d/err) confirmed. Will advance to Stage 5 in 1000ms...", target_dev->serial_no.c_str());
+        ESP_LOGI(TAG, "✓ %s: Stage 4 (RU:sen, VA:err) ACK. Advancing to Stage 5 in 1000ms...", target_dev->serial_no.c_str());
       }
     } else if (coap_mid == 0x9003 && (coap_code == 69 || coap_code == 68 || coap_code == 65)) {
       uint32_t server_unix_time = 0;
@@ -2901,6 +2991,7 @@ class TadoEmulatorComponent : public Component,
             this->send_config_get(target_dev);
             this->send_actuator_put(target_dev);
             this->send_error_flags_put(target_dev);
+            this->send_fallback_put(target_dev);
             this->send_telemetry_put(target_dev, target_dev->target_temp_celsius, target_dev->target_humidity_pct, target_dev->target_battery_mv);
           }
           this->save_to_nvs();
@@ -2960,7 +3051,7 @@ class TadoEmulatorComponent : public Component,
 
         std::vector<uint8_t> resp_payload;
         if (incoming_uri_path.find("info") != std::string::npos || incoming_uri_path.find("fw") != std::string::npos || dec_str.find("info") != std::string::npos || dec_str.find("fw") != std::string::npos) {
-          resp_payload = build_d_fw_state_payload(target_dev);
+          resp_payload = build_d_info_response_payload(target_dev);
           ESP_LOGI(TAG, "✓ Inbound GET /d/info answered with 2.05 Content (%u bytes) for %s",
                    (unsigned int)resp_payload.size(), target_dev->serial_no.c_str());
         } else {

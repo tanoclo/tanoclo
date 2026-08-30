@@ -32,7 +32,7 @@ export default function AppShell({ children, title = '', showBack = false, onBac
         display: 'flex',
         flexDirection: 'column',
         minWidth: 0, // prevents flex items from overflowing horizontally
-        paddingBottom: '80px' // extra padding to avoid overlap with the bottom navigation bar
+        paddingBottom: '70px' // padding to avoid overlap with the 64px bottom navigation bar
       }}>
         <Header title={title} showBack={showBack} onBack={onBack} />
         <main style={{ flex: 1, overflowY: 'auto', scrollbarGutter: 'stable' }}>

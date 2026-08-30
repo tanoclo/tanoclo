@@ -13,7 +13,6 @@
 #include "esphome/core/component.h"
 #include "esphome/core/hal.h"
 #include "esphome/components/spi/spi.h"
-#include "esphome/core/preferences.h"
 #include <esp_system.h>
 #ifdef ESP_IDF_VERSION_MAJOR
 #if ESP_IDF_VERSION_MAJOR >= 4
@@ -26,9 +25,6 @@
 #include <freertos/semphr.h>
 #include <freertos/queue.h>
 #include <esp_timer.h>
-#include "esphome/components/switch/switch.h"
-#include "esphome/components/number/number.h"
-#include "esphome/components/text/text.h"
 #include <lwip/sockets.h>
 #include <lwip/netdb.h>
 #include <errno.h>
@@ -36,19 +32,6 @@
 
 namespace esphome {
 namespace tado_sniffer {
-
-/**
- * @struct TadoSnifferSettings
- * @brief NVRAM-persisted settings for configuring the sniffer component.
- */
-struct TadoSnifferSettings {
-    uint8_t magic;         // 0xBB = valid settings stored in flash
-    uint8_t channel;       // Sniffer radio channel (0-49)
-    uint16_t tcp_port;     // Remote TCP socket port to stream logs/packets to
-    char tcp_host[40];     // Remote TCP host IP address or domain
-    bool print_stats;      // Enable/disable periodic printing of diagnostic stats
-    bool sniff_raw;        // Enable/disable raw packet printing/streaming
-} __attribute__((packed));
 
 enum SX1276Reg {
     REG_FIFO = 0x00, REG_OP_MODE = 0x01, REG_BITRATE_MSB = 0x02, REG_BITRATE_LSB = 0x03,
@@ -109,16 +92,6 @@ class TadoSniffer : public Component, public spi::SPIDevice<spi::BIT_ORDER_MSB_F
   TaskHandle_t radio_task_handle_{nullptr};
   TaskHandle_t processing_task_handle_{nullptr};
   uint32_t dropped_packets_count_{0};
-
-  // Real-time RF & TCP diagnostic stats
-  uint32_t stats_rf_received_{0};
-  uint32_t stats_rf_dropped_queue_full_{0};
-  uint32_t stats_rf_filtered_mac_type_{0};
-  uint32_t stats_tcp_sent_{0};
-  uint32_t stats_tcp_send_failed_{0};
-  uint32_t stats_rf_dropped_invalid_len_{0};
-  uint32_t stats_rf_crc_failed_{0};
-  uint32_t last_stats_print_{0};
   uint32_t last_fifo_check_{0};
 
   void lock_spi() {
@@ -133,42 +106,12 @@ class TadoSniffer : public Component, public spi::SPIDevice<spi::BIT_ORDER_MSB_F
     }
   }
   
-  bool sniff_raw_{true};
-  std::string tcp_host_{"192.168.0.1"};
+  std::string tcp_host_{""};
   int tcp_port_{9999};
   int tcp_sock_{-1};
-  bool print_stats_{true};
+  bool ignore_beacons_{false};
   int channel_{26};
   uint32_t last_rx_time_{0};
-
-  ESPPreferenceObject settings_pref_;
-
-  switch_::Switch *sniff_raw_switch_{nullptr};
-  switch_::Switch *print_stats_switch_{nullptr};
-  number::Number *sniffer_channel_number_{nullptr};
-  number::Number *tcp_port_number_{nullptr};
-  text::Text *tcp_host_text_{nullptr};
-
-  void set_sniff_raw_switch(switch_::Switch *s) { 
-    this->sniff_raw_switch_ = s; 
-    if (s != nullptr) s->publish_state(this->sniff_raw_);
-  }
-  void set_print_stats_switch(switch_::Switch *s) { 
-    this->print_stats_switch_ = s; 
-    if (s != nullptr) s->publish_state(this->print_stats_);
-  }
-  void set_sniffer_channel_number(number::Number *n) { 
-    this->sniffer_channel_number_ = n; 
-    if (n != nullptr) n->publish_state(this->channel_);
-  }
-  void set_tcp_port_number(number::Number *n) { 
-    this->tcp_port_number_ = n; 
-    if (n != nullptr) n->publish_state(this->tcp_port_);
-  }
-  void set_tcp_host_text(text::Text *t) { 
-    this->tcp_host_text_ = t; 
-    if (t != nullptr) t->publish_state(this->tcp_host_);
-  }
 
   void set_dio0_pin(InternalGPIOPin *pin) { dio0_pin_ = pin; }
   void set_dio2_pin(InternalGPIOPin *pin) { dio2_pin_ = pin; }
@@ -176,97 +119,12 @@ class TadoSniffer : public Component, public spi::SPIDevice<spi::BIT_ORDER_MSB_F
   void set_channel(int channel) { channel_ = channel; }
   void set_tcp_host(const std::string &host) { this->tcp_host_ = host; }
   void set_tcp_port(int port) { this->tcp_port_ = port; }
+  void set_ignore_beacons(bool ignore) { this->ignore_beacons_ = ignore; }
 
   // YAML UI Getters
   std::string get_tcp_host_str() { return this->tcp_host_; }
   int get_tcp_port() { return this->tcp_port_; }
   int get_channel() { return this->channel_; }
-
-  void load_settings() {
-    this->settings_pref_ = global_preferences->make_preference<TadoSnifferSettings>(3810293829ULL);
-    TadoSnifferSettings stored;
-    if (this->settings_pref_.load(&stored) && stored.magic == 0xBB) {
-        this->channel_ = stored.channel;
-        this->tcp_port_ = stored.tcp_port;
-        this->tcp_host_ = std::string(stored.tcp_host);
-        this->print_stats_ = stored.print_stats;
-        this->sniff_raw_ = stored.sniff_raw;
-        
-        ESP_LOGI(TAG, "Restored settings from NVRAM: channel=%d, tcp=%s:%d, print_stats=%d, sniff_raw=%d",
-            this->channel_, this->tcp_host_.c_str(), this->tcp_port_, this->print_stats_, this->sniff_raw_);
-    } else {
-        ESP_LOGI(TAG, "No valid settings found in NVRAM (magic mismatch). Using defaults.");
-    }
-  }
-
-  void save_settings() {
-    TadoSnifferSettings stored;
-    stored.magic = 0xBB;
-    stored.channel = this->channel_;
-    stored.tcp_port = this->tcp_port_;
-    memset(stored.tcp_host, 0, sizeof(stored.tcp_host));
-    strncpy(stored.tcp_host, this->tcp_host_.c_str(), sizeof(stored.tcp_host) - 1);
-    stored.print_stats = this->print_stats_;
-    stored.sniff_raw = this->sniff_raw_;
-    
-    this->settings_pref_.save(&stored);
-    global_preferences->sync();
-    ESP_LOGI(TAG, "Settings saved to NVRAM.");
-  }
-
-  void set_channel_runtime(int channel) {
-    if (channel < 0 || channel > 49) return;
-    this->channel_ = channel;
-    if (this->initialized_) {
-        this->init_radio();
-    }
-    this->save_settings();
-    if (this->sniffer_channel_number_ != nullptr) this->sniffer_channel_number_->publish_state(channel);
-    ESP_LOGI(TAG, "Runtime channel changed to %d (%.4f MHz)", channel, get_channel_freq(channel));
-  }
-
-  void set_tcp_host_runtime(const std::string &host) {
-    this->tcp_host_ = host;
-    if (this->tcp_sock_ >= 0) {
-        close(this->tcp_sock_);
-        this->tcp_sock_ = -1;
-    }
-    this->save_settings();
-    if (this->tcp_host_text_ != nullptr) this->tcp_host_text_->publish_state(host);
-    ESP_LOGI(TAG, "Runtime TCP host changed to %s", host.c_str());
-  }
-
-  void set_tcp_port_runtime(int port) {
-    if (port < 0 || port > 65535) return;
-    this->tcp_port_ = port;
-    if (this->tcp_sock_ >= 0) {
-        close(this->tcp_sock_);
-        this->tcp_sock_ = -1;
-    }
-    this->save_settings();
-    if (this->tcp_port_number_ != nullptr) this->tcp_port_number_->publish_state(port);
-    ESP_LOGI(TAG, "Runtime TCP port changed to %d", port);
-  }
-
-  void set_sniff_raw(bool enable) {
-    this->sniff_raw_ = enable;
-    this->save_settings();
-    if (enable) {
-        ESP_LOGI(TAG, "=== Sniffing Mode: SNIFF ALL RAW PACKETS ACTIVE ===");
-    } else {
-        ESP_LOGI(TAG, "=== Sniffing Mode: SNIFF DATA ONLY ACTIVE ===");
-    }
-    if (this->sniff_raw_switch_ != nullptr) {
-        this->sniff_raw_switch_->publish_state(enable);
-    }
-  }
-
-  void set_print_stats_runtime(bool print_stats) {
-    this->print_stats_ = print_stats;
-    this->save_settings();
-    if (this->print_stats_switch_ != nullptr) this->print_stats_switch_->publish_state(print_stats);
-    ESP_LOGI(TAG, "Runtime print stats changed to %s", print_stats ? "ON" : "OFF");
-  }
 
   double get_channel_freq(uint8_t channel) {
     return 863.125 + (double)channel * 0.199951;
@@ -296,7 +154,7 @@ class TadoSniffer : public Component, public spi::SPIDevice<spi::BIT_ORDER_MSB_F
     delay(2); // Let PLL synthesizer stabilize and lock
     
     ESP_LOGI(TAG, "[Tado Radio] Channel %d set: FRF=0x%06X (%.4f MHz)", 
-        channel, frf, get_channel_freq(channel));
+        channel, (unsigned int)frf, get_channel_freq(channel));
         
     this->last_rx_time_ = millis();
   }
@@ -395,9 +253,6 @@ class TadoSniffer : public Component, public spi::SPIDevice<spi::BIT_ORDER_MSB_F
     this->packet_queue_ = xQueueCreate(100, sizeof(QueuedPacket));
     this->log_queue_ = xQueueCreate(100, sizeof(LogMessage));
 
-    // Load settings from NVRAM
-    this->load_settings();
-
     this->spi_setup();
     this->dio0_pin_->setup();
     if (this->dio2_pin_ != nullptr) {
@@ -452,23 +307,6 @@ class TadoSniffer : public Component, public spi::SPIDevice<spi::BIT_ORDER_MSB_F
             ESP_LOGI(TAG, "%s", msg.text);
             count++;
         }
-    }
-
-    // Periodic statistics report every 60 seconds
-    uint32_t now = millis();
-    if (this->print_stats_ && now - this->last_stats_print_ > 60000) {
-        ESP_LOGI(TAG, "=== Tado Sniffer Diagnostic Stats (Every 60s) ===");
-        ESP_LOGI(TAG, "  * RF Packets Received (FIFO): %u", this->stats_rf_received_);
-        ESP_LOGI(TAG, "  * Dropped (Invalid Length):   %u", this->stats_rf_dropped_invalid_len_);
-        ESP_LOGI(TAG, "  * Queue Overflow Dropped:     %u (total: %u)", this->stats_rf_dropped_queue_full_, this->dropped_packets_count_);
-        ESP_LOGI(TAG, "  * Filtered (MAC Type):        %u", this->stats_rf_filtered_mac_type_);
-        ESP_LOGI(TAG, "  * HW CRC Failed:              %u", this->stats_rf_crc_failed_);
-        ESP_LOGI(TAG, "  * TCP Packets Sent:           %u", this->stats_tcp_sent_);
-        if (this->stats_tcp_send_failed_ > 0) {
-            ESP_LOGW(TAG, "  * TCP Send Failures:          %u", this->stats_tcp_send_failed_);
-        }
-        ESP_LOGI(TAG, "================================================");
-        this->last_stats_print_ = now;
     }
   }
 
@@ -577,13 +415,10 @@ class TadoSniffer : public Component, public spi::SPIDevice<spi::BIT_ORDER_MSB_F
 
     if (len == 0 || len > 127) {
         this->queue_log("Invalid packet length byte: %d. Dropping and resetting FIFO.", len);
-        this->stats_rf_dropped_invalid_len_++;
         write_reg_fast(REG_IRQ_FLAGS_2, 0x10);
         write_reg_fast(REG_RX_CONFIG, 0x5E);
         return;
     }
-
-    this->stats_rf_received_++;
 
     QueuedPacket packet;
     packet.len = len;
@@ -652,8 +487,6 @@ class TadoSniffer : public Component, public spi::SPIDevice<spi::BIT_ORDER_MSB_F
     }
     
     if (!packet.crc_ok) {
-        //this->queue_log("Hardware CRC check failed for packet (len=%d)!", len);
-        this->stats_rf_crc_failed_++;
         write_reg_fast(REG_IRQ_FLAGS_2, 0x10);
         write_reg_fast(REG_RX_CONFIG, 0x5E);
         return;
@@ -663,17 +496,7 @@ class TadoSniffer : public Component, public spi::SPIDevice<spi::BIT_ORDER_MSB_F
 
     if (len >= 2) {
         uint8_t f_type = packet.buffer[0] & 0x07;
-        bool keep = false;
-        if (this->sniff_raw_) {
-            keep = true;
-        } else {
-            if (f_type == 0x01) {
-                keep = true;
-            }
-        }
-
-        if (!keep) {
-            this->stats_rf_filtered_mac_type_++;
+        if (this->ignore_beacons_ && (f_type == 0x00 || f_type == 0x05)) {
             write_reg_fast(REG_IRQ_FLAGS_2, 0x10);
             write_reg_fast(REG_RX_CONFIG, 0x5E);
             return;
@@ -682,7 +505,6 @@ class TadoSniffer : public Component, public spi::SPIDevice<spi::BIT_ORDER_MSB_F
 
     if (xQueueSend(this->packet_queue_, &packet, 0) != pdTRUE) {
         this->dropped_packets_count_++;
-        this->stats_rf_dropped_queue_full_++;
     }
   }
 
@@ -690,10 +512,8 @@ class TadoSniffer : public Component, public spi::SPIDevice<spi::BIT_ORDER_MSB_F
     uint8_t len = packet.len;
     int rssi = packet.rssi;
 
-    if (this->sniff_raw_) {
-        this->queue_log("RAW PACKET [len=%d, RSSI=%d]: %s", 
-            len, rssi, format_hex(packet.buffer, len).c_str());
-    }
+    ESP_LOGD(TAG, "RAW PACKET [len=%d, RSSI=%d]: %s", 
+        len, rssi, format_hex(packet.buffer, len).c_str());
 
     if (this->tcp_port_ > 0 && !this->tcp_host_.empty()) {
         uint32_t station_ip = 0;
@@ -779,10 +599,7 @@ class TadoSniffer : public Component, public spi::SPIDevice<spi::BIT_ORDER_MSB_F
             }
             
             int sent = lwip_write(this->tcp_sock_, tcp_payload.data(), tcp_payload.size());
-            if (sent >= 0) {
-                this->stats_tcp_sent_++;
-            } else {
-                this->stats_tcp_send_failed_++;
+            if (sent < 0) {
                 this->queue_log("TCP write failed: errno=%d. Closing socket.", errno);
                 close(this->tcp_sock_);
                 this->tcp_sock_ = -1;

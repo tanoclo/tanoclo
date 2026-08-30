@@ -58,6 +58,7 @@ describe('utils/constants.js', () => {
       expect(STORAGE_KEYS.REFRESH_TOKEN).toBe('tanoclo_refresh_token');
       expect(STORAGE_KEYS.THEME).toBe('tanoclo_theme');
       expect(STORAGE_KEYS.USER_LOCALE).toBe('tado_locale');
+      expect(STORAGE_KEYS.ZONE_ORDER_PREFIX).toBe('tanoclo_zone_order_');
     });
   });
 

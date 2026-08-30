@@ -7,7 +7,7 @@
  * polling based on screen visibility and native device checks.
  */
 
-import { createContext, useState, useEffect, useContext } from 'react';
+import { createContext, useState, useEffect, useContext, useMemo } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { Capacitor } from '@capacitor/core';
 import useSWR from 'swr';
@@ -16,6 +16,7 @@ import { getZones, getZoneStates } from '../api/zones';
 import { getWeather } from '../api/weather';
 import { useSSE } from '../hooks/useSSE';
 import { SWR_KEYS } from '../utils/swrKeys';
+import { sortZonesByUserOrder, setUserZoneOrder } from '../utils/zoneOrder';
 
 // React Context for sharing general Home state parameters across screens
 export const HomeContext = createContext(null);
@@ -114,7 +115,7 @@ export function HomeProvider({ children }) {
 
   // Fetch Zone list
   const { 
-    data: zones, 
+    data: rawZones, 
     error: zonesError,
     mutate: mutateZones 
   } = useSWR(
@@ -122,6 +123,17 @@ export function HomeProvider({ children }) {
     () => getZones(activeHomeId),
     { ...swrConfig, refreshInterval: pollInterval(300000, 600000) } // Poll every 5min
   );
+
+  const [zoneOrderRevision, setZoneOrderRevision] = useState(0);
+
+  const zones = useMemo(() => {
+    return sortZonesByUserOrder(rawZones, user?.id, activeHomeId);
+  }, [rawZones, user?.id, activeHomeId, zoneOrderRevision]);
+
+  const saveUserZoneOrder = (zoneIds) => {
+    setUserZoneOrder(user?.id, activeHomeId, zoneIds);
+    setZoneOrderRevision(prev => prev + 1);
+  };
 
   // Fetch Zone states (polling fallback)
   const { 
@@ -153,6 +165,7 @@ export function HomeProvider({ children }) {
     mutateWeather,
     mutateZones,
     mutateZoneStates,
+    saveUserZoneOrder,
     
     // Quick refresh helper triggered by pull-to-refresh or navigation events
     refreshAll: async () => {
