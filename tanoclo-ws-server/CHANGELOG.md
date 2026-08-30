@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.2.10] - 2026-08-30
+
+- feat: Release notes, improve emulator and sniffer, improve mobile view, improve OpenAPI
+
 ## [0.2.9] - 2026-08-28
 
 - feat: Improve OTA updating
