@@ -2619,7 +2619,6 @@ class TadoEmulatorComponent : public Component,
             target_dev->startup_stage = 0;
             target_dev->last_telemetry_ts = 0;
             target_dev->last_config_check_ts = 0;
-            target_dev->has_initial_config = false;
             ESP_LOGI(TAG, "%s: Bridge RA beacon detected while PAIRED. Re-triggering active announcement (PUT fw/state -> GET config)", target_dev->serial_no.c_str());
           }
         }
