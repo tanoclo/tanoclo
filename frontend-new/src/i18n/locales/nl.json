@@ -64,13 +64,26 @@
       "installing": "Update installeren...",
       "updated_to": "App bijgewerkt naar v{{version}}",
       "update_available": "Update beschikbaar",
+      "new_version_available": "Nieuwe versie beschikbaar!",
       "version_ready": "Versie v{{version}} is gereed.",
+      "current_version": "Huidige versie",
+      "new_version": "Nieuwe versie",
       "update_and_restart": "Bijwerken en herstarten",
       "later": "Later",
       "release_notes": "Releasenotes:",
       "update_error": "Updatefout",
       "dismiss": "Sluiten",
-      "retry": "Opnieuw proberen"
+      "retry": "Opnieuw proberen",
+      "web_update_ready": "Web-update gereed",
+      "web_update_subtitle": "Nieuwe webbestanden gedownload",
+      "web_update_desc": "Er is een web-update gedownload. Pas deze nu toe om de app-interface te vernieuwen.",
+      "apply_update": "Update toepassen",
+      "permission_required": "Toestemming vereist",
+      "permission_subtitle": "Onbekende apps installeren",
+      "permission_desc": "Om de update te installeren heeft TaNoClo toestemming nodig om apps van onbekende bronnen te installeren. Tik hieronder op Toestemming verlenen, schakel de optie in voor TaNoClo en keer terug naar de app.",
+      "grant_permission": "Toestemming verlenen",
+      "cancel": "Annuleren",
+      "progress": "Voortgang"
     }
   },
   "nav": {

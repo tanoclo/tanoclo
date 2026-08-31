@@ -103,6 +103,7 @@ export default function SelfUpdater() {
       logger.debug('[SelfUpdater] Remote manifest info:', manifestData);
 
       let hasAnyUpdate = false;
+      let hadError = false;
 
       // 1. Web Asset OTA Update via CapGo
       const remoteWebSha = manifestData.webSha256 ? String(manifestData.webSha256).toLowerCase().trim() : null;
@@ -141,8 +142,9 @@ export default function SelfUpdater() {
           }
         } catch (capGoErr) {
           logger.error('[SelfUpdater] CapGo web bundle update failed:', capGoErr);
-          // Download failed — don't claim we have an update
+          // Download failed — don't claim we have an update, but mark error so we don't claim up-to-date
           hasAnyUpdate = false;
+          hadError = true;
           if (isManual) {
             showToast(t('settings.update_check_failed') || 'Web update download failed', 'error');
           }
@@ -176,7 +178,7 @@ export default function SelfUpdater() {
         return true;
       }
 
-      if (!hasAnyUpdate) {
+      if (!hasAnyUpdate && !hadError) {
         logger.debug('[SelfUpdater] App is completely up to date');
         if (isManual) {
           showToast(t('settings.app_up_to_date') || 'TaNoClo is up to date', 'success');
@@ -258,14 +260,17 @@ export default function SelfUpdater() {
       });
 
       let apkUrl = manifest.apkUrl;
+      const isInternalUrl = apkUrl.startsWith('/') || (getApiBase() && apkUrl.startsWith(getApiBase()));
       if (apkUrl.startsWith('/')) {
         apkUrl = `${getApiBase()}${apkUrl}`;
       }
 
-      const token = localStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
       const headers = {};
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
+      if (isInternalUrl) {
+        const token = localStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
       }
 
       logger.debug('[SelfUpdater] Downloading APK from:', apkUrl);
@@ -383,7 +388,7 @@ export default function SelfUpdater() {
                 </div>
                 <div>
                   <h3 style={{ fontSize: '18px', fontWeight: 600 }}>{t('common.updater.update_available')}</h3>
-                  <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{t('settings.update_available')}</p>
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{t('common.updater.new_version_available', 'New version available!')}</p>
                 </div>
               </div>
               <button 
@@ -410,11 +415,11 @@ export default function SelfUpdater() {
               border: '1px solid var(--border-color)'
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>{t('settings.firmware_version')}:</span>
+                <span style={{ color: 'var(--text-secondary)' }}>{t('common.updater.current_version')}:</span>
                 <span style={{ fontWeight: 500 }}>{localVersion?.versionName || 'Unknown'}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>{t('settings.new_version', 'New Version')}:</span>
+                <span style={{ color: 'var(--text-secondary)' }}>{t('common.updater.new_version')}:</span>
                 <span style={{ color: 'var(--primary-light)', fontWeight: 600 }}>{manifest?.apkVersionName || manifest?.webVersionName || 'Unknown'}</span>
               </div>
               {manifest?.releaseNotes && (
@@ -482,8 +487,8 @@ export default function SelfUpdater() {
                   <ArrowDownToLine size={22} />
                 </div>
                 <div>
-                  <h3 style={{ fontSize: '18px', fontWeight: 600 }}>Web Update Ready</h3>
-                  <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>New web assets downloaded</p>
+                  <h3 style={{ fontSize: '18px', fontWeight: 600 }}>{t('common.updater.web_update_ready')}</h3>
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{t('common.updater.web_update_subtitle')}</p>
                 </div>
               </div>
               <button 
@@ -501,7 +506,7 @@ export default function SelfUpdater() {
             </div>
 
             <p style={{ fontSize: '14px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
-              A web update has been downloaded. Apply now to refresh the app interface.
+              {t('common.updater.web_update_desc')}
             </p>
 
             <div style={{ display: 'flex', gap: '12px', marginTop: '4px' }}>
@@ -519,7 +524,7 @@ export default function SelfUpdater() {
                   transition: 'background var(--transition-fast)'
                 }}
               >
-                Later
+                {t('common.updater.later')}
               </button>
               <button
                 onClick={applyWebUpdate}
@@ -536,7 +541,7 @@ export default function SelfUpdater() {
                   transition: 'background var(--transition-fast)'
                 }}
               >
-                Apply Update
+                {t('common.updater.apply_update')}
               </button>
             </div>
           </>
@@ -558,14 +563,13 @@ export default function SelfUpdater() {
                 <SettingsIcon size={22} />
               </div>
               <div>
-                <h3 style={{ fontSize: '18px', fontWeight: 600 }}>Permission Required</h3>
-                <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Install unknown apps</p>
+                <h3 style={{ fontSize: '18px', fontWeight: 600 }}>{t('common.updater.permission_required')}</h3>
+                <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{t('common.updater.permission_subtitle')}</p>
               </div>
             </div>
 
             <p style={{ fontSize: '14px', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
-              To install the update, TaNoClo requires permission to install apps from unknown sources.
-              Please tap <strong>Grant</strong> below, enable the option for TaNoClo, and return to the app to complete the upgrade.
+              {t('common.updater.permission_desc')}
             </p>
 
             <div style={{ display: 'flex', gap: '12px', marginTop: '4px' }}>
@@ -582,7 +586,7 @@ export default function SelfUpdater() {
                   cursor: 'pointer'
                 }}
               >
-                Cancel
+                {t('common.updater.cancel')}
               </button>
               <button
                 onClick={handleGrantPermission}
@@ -598,7 +602,7 @@ export default function SelfUpdater() {
                   boxShadow: '0 4px 12px var(--primary-glow)'
                 }}
               >
-                Grant Permission
+                {t('common.updater.grant_permission')}
               </button>
             </div>
           </>
@@ -628,7 +632,7 @@ export default function SelfUpdater() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', fontWeight: 500 }}>
-                <span>Progress</span>
+                <span>{t('common.updater.progress')}</span>
                 <span>{downloadProgress}%</span>
               </div>
               <div style={{

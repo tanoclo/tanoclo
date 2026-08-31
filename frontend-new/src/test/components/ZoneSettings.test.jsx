@@ -4,6 +4,10 @@ import ZoneSettings from '../../components/settings/ZoneSettings';
 import * as useHomeModule from '../../context/HomeContext';
 
 // Mock dependencies
+vi.mock('react-router', () => ({
+  useSearchParams: () => [new URLSearchParams(), vi.fn()]
+}));
+
 vi.mock('../../context/HomeContext', () => ({
   useHome: () => ({
     _zones: [],

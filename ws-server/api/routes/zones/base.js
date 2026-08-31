@@ -107,10 +107,16 @@ router.get('/:homeId/zones', async (req, res) => {
                 openWindowDetection: zone.type !== 'HOT_WATER' ? {
                     supported: true,
                     enabled: Boolean(zone.open_window_enabled),
-                    timeoutInSeconds: zone.open_window_timeout || 900
+                    timeoutInSeconds: zone.open_window_timeout || 900,
+                    temperatureDeviationLimit: zone.field_6080 !== null && zone.field_6080 !== undefined ? parseFloat(zone.field_6080) : 0.50,
+                    owdNvmState: zone.field_6340 !== null && zone.field_6340 !== undefined ? parseInt(zone.field_6340, 10) : 1
                 } : { supported: false },
+                frostMinTemperature: zone.field_60a0 !== null && zone.field_60a0 !== undefined ? parseFloat(zone.field_60a0) : 5.00,
+                temperatureBaseline: zone.field_60c0 !== null && zone.field_60c0 !== undefined ? parseFloat(zone.field_60c0) : 19.00,
+                tanocloOwdEnabled: Boolean(zone.tanoclo_owd_enabled),
+                tanocloOwdSource: zone.tanoclo_owd_source || 'device',
                 offlineScheduleEnabled: Boolean(zone.offline_schedule_enabled),
-                offlineScheduleSyncedAt: zone.offline_schedule_synced_at,
+                offlineScheduleSyncedAt: zone.offline_schedule_synced_at ? formatDate(zone.offline_schedule_synced_at) : null,
                 earlyStartEnabled: Boolean(zone.early_start_enabled),
                 heatingCircuit: zone.heating_circuit !== null && zone.heating_circuit !== undefined && zone.heating_circuit !== '' ? parseInt(zone.heating_circuit, 10) : null
             };

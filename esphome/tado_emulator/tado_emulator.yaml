@@ -31,8 +31,13 @@ spi:
   mosi_pin: 27
   miso_pin: 19
 
+# External component configuration
 external_components:
-  - source: components
+  - source:
+      type: git
+      url: https://github.com/tanoclo/tanoclo
+      path: esphome/tado_emulator/components
+    components: [ tado_emulator ]
 
 tado_emulator:
   id: tado_rf_emulator

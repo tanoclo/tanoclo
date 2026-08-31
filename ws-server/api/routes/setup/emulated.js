@@ -26,6 +26,39 @@ function generateTadoIpv6(serialNo) {
 }
 
 /**
+ * Derive 8-byte LE MAC address buffer from a Tado link-local IPv6 address.
+ */
+function deriveMacFromIpv6(ipv6Str) {
+    if (!ipv6Str) return null;
+    let clean = ipv6Str.toLowerCase().trim();
+    if (clean.startsWith('coap://[')) clean = clean.substring(8, clean.indexOf(']'));
+    else if (clean.startsWith('[')) clean = clean.substring(1, clean.indexOf(']'));
+    
+    const parts = clean.split('::');
+    let left = parts[0] ? parts[0].split(':') : [];
+    let right = (parts.length > 1 && parts[1]) ? parts[1].split(':') : [];
+    const missing = 8 - (left.length + right.length);
+    const middle = missing > 0 ? Array(missing).fill('0') : [];
+    const full16Hex = [...left, ...middle, ...right].map(p => parseInt(p || '0', 16));
+    
+    if (full16Hex.length !== 8) return null;
+    const buf = Buffer.alloc(16);
+    for (let i = 0; i < 8; i++) {
+        buf.writeUInt16BE(full16Hex[i], i * 2);
+    }
+    const mac = Buffer.alloc(8);
+    mac[0] = buf[15];
+    mac[1] = buf[14];
+    mac[2] = buf[13];
+    mac[3] = buf[12];
+    mac[4] = buf[11];
+    mac[5] = buf[10];
+    mac[6] = buf[9];
+    mac[7] = buf[8] ^ 0x02;
+    return mac;
+}
+
+/**
  * Computes HMAC-SHA256 signature for API request verification.
  */
 function computeHmacSignature(apiKey, timestamp, bodyStr) {
@@ -276,6 +309,15 @@ router.post('/devices', async (req, res) => {
             const devs = await dbDevices.getDevicesForHome(parseInt(home_id, 10));
             const dbBridge = (devs || []).find(d => d.device_type === 'IB01' || d.serial_no.startsWith('IB'));
             const ibIpv6 = dbBridge ? dbBridge.ipv6_address : null;
+            let ibMacHex = null;
+            let ibPanNum = null;
+            if (ibIpv6) {
+                const parsedMac = deriveMacFromIpv6(ibIpv6);
+                if (parsedMac) {
+                    ibMacHex = parsedMac.toString('hex');
+                    ibPanNum = parsedMac[0] | (parsedMac[1] << 8);
+                }
+            }
 
             espRes = await sendEsp32Command(espNode.ip_address, espNode.api_port, espNode.api_key, {
                 cmd: 'pair',
@@ -283,6 +325,8 @@ router.post('/devices', async (req, res) => {
                 serial: targetSerial,
                 ipv6: ipv6,
                 ib_ipv6: ibIpv6,
+                ib_mac: ibMacHex,
+                ib_pan: ibPanNum,
                 factory_key: factoryKey,
                 home_id: parseInt(home_id, 10),
                 zone_id: 0
@@ -491,8 +535,8 @@ router.get('/devices/:serialNo/state', async (req, res) => {
             }
         }
 
-        let fwVersion = 55042;
-        let fwOtherSlot = 52227;
+        let fwVersion = 13762;
+        let fwOtherSlot = 13059;
         let fwBuildId = 'c54baf8';
         let devTypeCode = 10;
         let slotNum = 1;
@@ -505,13 +549,13 @@ router.get('/devices/:serialNo/state', async (req, res) => {
             if (dbDev.current_fw_version) {
                 const parts = String(dbDev.current_fw_version).split('.');
                 if (parts.length === 2) {
-                    fwVersion = (parseInt(parts[0], 10) << 8) | parseInt(parts[1], 10);
+                    fwVersion = (parseInt(parts[0], 10) << 6) | parseInt(parts[1], 10);
                 }
             }
             if (dbDev.field_0035) {
                 const parts = String(dbDev.field_0035).split('.');
                 if (parts.length === 2) {
-                    fwOtherSlot = (parseInt(parts[0], 10) << 8) | parseInt(parts[1], 10);
+                    fwOtherSlot = (parseInt(parts[0], 10) << 6) | parseInt(parts[1], 10);
                 }
             }
             if (dbDev.fw_build_id) fwBuildId = dbDev.fw_build_id;
@@ -521,6 +565,26 @@ router.get('/devices/:serialNo/state', async (req, res) => {
             if (dbDev.field_003b != null) field003b = parseInt(dbDev.field_003b, 10);
             if (dbDev.field_003c != null) field003c = parseInt(dbDev.field_003c, 10);
             if (dbDev.field_014c != null) field014c = parseInt(dbDev.field_014c, 10);
+        }
+
+        let ibIpv6 = null;
+        let ibMac = null;
+        let ibPan = null;
+        if (dbDev && dbDev.home_id) {
+            try {
+                const devs = await dbDevices.getDevicesForHome(parseInt(dbDev.home_id, 10));
+                const dbBridge = (devs || []).find(d => d.device_type === 'IB01' || d.serial_no.startsWith('IB'));
+                if (dbBridge && dbBridge.ipv6_address) {
+                    ibIpv6 = dbBridge.ipv6_address;
+                    const parsedMac = deriveMacFromIpv6(dbBridge.ipv6_address);
+                    if (parsedMac) {
+                        ibMac = parsedMac.toString('hex');
+                        ibPan = parsedMac[0] | (parsedMac[1] << 8);
+                    }
+                }
+            } catch (bErr) {
+                console.warn(`[Emulated] Error resolving Bridge for ${serialNo}: ${bErr.message}`);
+            }
         }
 
         res.json({
@@ -539,8 +603,58 @@ router.get('/devices/:serialNo/state', async (req, res) => {
             field_01a0: field01a0,
             field_003b: field003b,
             field_003c: field003c,
-            field_014c: field014c
+            field_014c: field014c,
+            ib_ipv6: ibIpv6,
+            ib_mac: ibMac,
+            ib_pan: ibPan
         });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Trigger full configuration sync (including IB MAC/PAN and keys) to ESP32 hardware node
+router.post('/devices/:serialNo/sync', async (req, res) => {
+    try {
+        const serialNo = req.params.serialNo;
+        const emulatedList = await dbDevices.getAllEmulatedDevices();
+        const emDev = emulatedList.find(d => d.serial_no === serialNo);
+        const dbDev = await dbDevices.getDeviceByFullSerial(serialNo) || await dbDevices.getDeviceBySerial(serialNo);
+        
+        if (!emDev || !emDev.esp32_ip) {
+            return res.status(404).json({ success: false, error: 'Emulated device or assigned ESP32 node not found' });
+        }
+
+        const homeId = (emDev && emDev.home_id) || (dbDev && dbDev.home_id);
+        const devs = homeId ? await dbDevices.getDevicesForHome(parseInt(homeId, 10)) : [];
+        const dbBridge = (devs || []).find(d => d.device_type === 'IB01' || d.serial_no.startsWith('IB'));
+        const ibIpv6 = dbBridge ? dbBridge.ipv6_address : null;
+        let ibMacHex = null;
+        let ibPanNum = null;
+        if (ibIpv6) {
+            const parsedMac = deriveMacFromIpv6(ibIpv6);
+            if (parsedMac) {
+                ibMacHex = parsedMac.toString('hex');
+                ibPanNum = parsedMac[0] | (parsedMac[1] << 8);
+            }
+        }
+
+        const syncPayload = {
+            cmd: 'pair',
+            api_key: emDev.api_key,
+            serial: serialNo,
+            ipv6: emDev.ipv6_address || (dbDev && dbDev.ipv6_address) || null,
+            ib_ipv6: ibIpv6,
+            ib_mac: ibMacHex,
+            ib_pan: ibPanNum,
+            factory_key: emDev.factory_key || null,
+            op_key: emDev.op_key || null,
+            home_id: homeId ? parseInt(homeId, 10) : 0,
+            zone_id: (dbDev && dbDev.zone_id) ? parseInt(dbDev.zone_id, 10) : 0
+        };
+
+        const espRes = await sendEsp32Command(emDev.esp32_ip, emDev.esp32_port, emDev.api_key, syncPayload);
+        res.json({ success: true, message: 'Sync command dispatched to ESP32', esp32Response: espRes });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }

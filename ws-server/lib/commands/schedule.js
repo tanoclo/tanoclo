@@ -244,7 +244,10 @@ async function pushOfflineScheduleSync(homeId, zoneId) {
         sentCount++;
     }
 
-    return { type: 'OfflineScheduleSync', zoneId, devicesTargeted: sentCount };
+    const now = new Date().toISOString().replace('T', ' ').replace(/\.\d+Z$/, '');
+    await pool.execute('UPDATE zones SET offline_schedule_synced_at = ? WHERE id = ? AND home_id = ?', [now, zoneId, homeId]);
+
+    return { type: 'OfflineScheduleSync', zoneId, devicesTargeted: sentCount, syncedAt: now };
 }
 
 module.exports = {

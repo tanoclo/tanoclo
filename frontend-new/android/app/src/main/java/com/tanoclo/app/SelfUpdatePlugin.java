@@ -117,27 +117,55 @@ public class SelfUpdatePlugin extends Plugin {
             @Override
             public void run() {
                 try {
-                    URL url = new URL(urlString);
-                    HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-                    connection.setRequestMethod("GET");
+                    String currentUrl = urlString;
+                    HttpURLConnection connection = null;
+                    int redirects = 0;
+                    final int MAX_REDIRECTS = 5;
 
-                    if (headers != null) {
-                        Iterator<String> keys = headers.keys();
-                        while (keys.hasNext()) {
-                            String key = keys.next();
-                            try {
-                                String value = headers.getString(key);
-                                if (value != null) {
-                                    connection.setRequestProperty(key, value);
-                                }
-                            } catch (Exception ignored) {}
+                    while (redirects < MAX_REDIRECTS) {
+                        URL url = new URL(currentUrl);
+                        connection = (HttpURLConnection) url.openConnection();
+                        connection.setRequestMethod("GET");
+                        connection.setConnectTimeout(15000);
+                        connection.setReadTimeout(30000);
+                        connection.setInstanceFollowRedirects(true);
+
+                        if (headers != null) {
+                            Iterator<String> keys = headers.keys();
+                            while (keys.hasNext()) {
+                                String key = keys.next();
+                                try {
+                                    String value = headers.getString(key);
+                                    if (value != null) {
+                                        connection.setRequestProperty(key, value);
+                                    }
+                                } catch (Exception ignored) {}
+                            }
                         }
+
+                        connection.connect();
+                        int status = connection.getResponseCode();
+
+                        if (status == HttpURLConnection.HTTP_MOVED_TEMP || 
+                            status == HttpURLConnection.HTTP_MOVED_PERM || 
+                            status == HttpURLConnection.HTTP_SEE_OTHER ||
+                            status == 307 || status == 308) {
+                            String location = connection.getHeaderField("Location");
+                            if (location != null && !location.isEmpty()) {
+                                URL base = new URL(currentUrl);
+                                currentUrl = new URL(base, location).toExternalForm();
+                                connection.disconnect();
+                                redirects++;
+                                continue;
+                            }
+                        }
+                        break;
                     }
 
-                    connection.connect();
-
-                    if (connection.getResponseCode() != HttpURLConnection.HTTP_OK) {
-                        call.reject("Server returned HTTP " + connection.getResponseCode() + " (" + connection.getResponseMessage() + ")");
+                    if (connection == null || connection.getResponseCode() != HttpURLConnection.HTTP_OK) {
+                        int code = connection != null ? connection.getResponseCode() : -1;
+                        String msg = connection != null ? connection.getResponseMessage() : "Unknown error";
+                        call.reject("Server returned HTTP " + code + " (" + msg + ")");
                         return;
                     }
 

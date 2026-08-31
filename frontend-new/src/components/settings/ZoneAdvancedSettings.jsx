@@ -116,7 +116,7 @@ export default function ZoneAdvancedSettings({
             </p>
             <input
               type="range"
-              min="5"
+              min="0"
               max="15"
               step="0.5"
               value={frostMinTemperature}
@@ -180,20 +180,6 @@ export default function ZoneAdvancedSettings({
         t={t}
       />
 
-      {/* Offline Schedule Detailed Documentation Card (Only if applicable) */}
-      {!isDhw && zone?.devices?.some(d => d.deviceType?.startsWith('VA')) && (
-        <Card style={{ padding: '1.25rem', marginTop: '-0.75rem' }}>
-          <h4 style={{ fontSize: '0.85rem', fontWeight: 600, margin: '0 0 0.5rem 0' }}>Offline Schedule Explanation & Interpretation</h4>
-          <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.4' }}>
-            Offline Schedule stores a simplified daily schedule profile directly into the Smart Radiator Thermostat (SRT) flash memory.
-            <br />
-            • <em>How to use</em>: Enable the toggle above, then click <strong>Sync Now</strong>. The server compiles your active schedule into a hardware-compatible TLV profile and transmits it via the Bridge to the device.
-            <br />
-            • <em>Interpretation</em>: If your internet connection drops, the thermostat will autonomously switch temperatures at the scheduled times rather than remaining frozen at the last setpoint. Note that because of hardware memory limits, complex multi-step rules may be simplified.
-          </p>
-        </Card>
-      )}
-
       {/* Advanced OWD settings (Only if heating and OWD is enabled in main settings) */}
       {!isDhw && openWindow && (
         <Card style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
@@ -247,12 +233,12 @@ export default function ZoneAdvancedSettings({
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', borderTop: '1px solid var(--border-color)', paddingTop: '1.25rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <strong>TaNoClo Cloud-Assisted OWD</strong>
+                <strong>TaNoClo Assisted OWD</strong>
               </div>
               <Toggle checked={tanocloOwdEnabled} onChange={handleTaNoCloOwdToggle} />
             </div>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.4' }}>
-              Enables custom cloud-side heuristics on the TaNoClo server to assist or override the local thermostat device OWD logic.
+              Enables custom server-side heuristics on the TaNoClo server to assist or override the local thermostat device OWD logic.
             </p>
 
             {tanocloOwdEnabled && (
@@ -282,7 +268,7 @@ export default function ZoneAdvancedSettings({
                 <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', margin: '4px 0 0 0', lineHeight: '1.3' }}>
                   • <strong>Device Only</strong>: Uses only the thermostat's internal sensor algorithm.
                   <br />
-                  • <strong>Server Heuristics</strong>: Uses cloud analytics, comparing room sensors and weather drop speeds.
+                  • <strong>Server Heuristics</strong>: Uses server analytics, comparing room sensors and weather drop speeds.
                   <br />
                   • <strong>Both</strong>: Heating turns off if either the device or server detects a drop.
                   <br />

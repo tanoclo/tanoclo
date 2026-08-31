@@ -9,6 +9,7 @@
 
 import { SWR_KEYS } from '../../utils/swrKeys';
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router';
 import useSWR from 'swr';
 import Card from '../common/Card';
 import Button from '../common/Button';
@@ -50,8 +51,9 @@ export default function ZoneSettings({ homeId, zoneId, zone, onBack, mutateZones
   const triggerToast = useCallback((msg, type = 'success') => showToast(msg, type), [showToast]);
   const { zones, mutateZones: _mutateZones, homeInfo } = useHome();
   const isReadOnly = (homeInfo?.configReadonly ?? homeInfo?.zoneConfigReadonly) && !homeInfo?.devBypass;
+  const [searchParams, setSearchParams] = useSearchParams();
+  const isAdvanced = searchParams.get('advanced') === 'true';
 
-  const [view, setView] = useState('main');
   const [isSavingAdvancedDetails, setIsSavingAdvancedDetails] = useState(false);
 
   const handleSaveAdvancedDetails = async () => {
@@ -525,15 +527,23 @@ export default function ZoneSettings({ homeId, zoneId, zone, onBack, mutateZones
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minHeight: '42px' }}>
-        <Button variant="secondary" onClick={view === 'advanced' ? () => setView('main') : onBack} style={{ width: '32px', height: '32px', padding: 0, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <Button
+          variant="secondary"
+          onClick={isAdvanced ? () => {
+            const nextParams = new URLSearchParams(searchParams);
+            nextParams.delete('advanced');
+            setSearchParams(nextParams);
+          } : onBack}
+          style={{ width: '32px', height: '32px', padding: 0, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+        >
           <ArrowLeft size={16} />
         </Button>
         <div>
           <h2 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, lineHeight: 1.2 }}>
-            {view === 'advanced' ? `Advanced Settings • ${zone.name}` : t('settings.zone_settings_header', { name: zone.name })}
+            {isAdvanced ? `Advanced Settings • ${zone.name}` : t('settings.zone_settings_header', { name: zone.name })}
           </h2>
           <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', display: 'block' }}>
-            {view === 'advanced' ? "Tuning parameters and special options" : t('settings.zone_settings_header_desc')}
+            {isAdvanced ? "Tuning parameters and special options" : t('settings.zone_settings_header_desc')}
           </span>
         </div>
       </div>
@@ -562,7 +572,7 @@ export default function ZoneSettings({ homeId, zoneId, zone, onBack, mutateZones
         </div>
       )}
 
-      {view === 'advanced' && !isDhw ? (
+      {isAdvanced && !isDhw ? (
         <ZoneAdvancedSettings
           zone={zone}
           isDhw={isDhw}
@@ -697,7 +707,11 @@ export default function ZoneSettings({ homeId, zoneId, zone, onBack, mutateZones
           {/* Advanced Settings Click-through */}
           {!isDhw && (
             <Card
-              onClick={() => setView('advanced')}
+              onClick={() => {
+                const nextParams = new URLSearchParams(searchParams);
+                nextParams.set('advanced', 'true');
+                setSearchParams(nextParams);
+              }}
               style={{
                 padding: '1.25rem',
                 display: 'flex',

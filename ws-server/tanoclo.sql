@@ -23024,7 +23024,6 @@ CREATE TABLE `devices` (
   `field_0149` varchar(20) DEFAULT NULL,
   `field_016a` varchar(50) DEFAULT NULL,
   `mounting_state_timestamp` varchar(24) DEFAULT NULL,
-  `mounting_state_with_error` varchar(50) DEFAULT NULL,
   `connection_state_timestamp` varchar(24) NOT NULL,
   `field_0007` varchar(64) DEFAULT NULL,
   `field_0155` varchar(64) DEFAULT NULL,

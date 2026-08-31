@@ -13,9 +13,6 @@ const { getLogger } = require('../../lib/logger');
 const router = express.Router();
 const _log = getLogger('ota-api');
 
-// Protect all OTA endpoints with application authentication
-router.use(authMiddleware);
-
 // GET /api/v2/ota/manifest
 router.get('/manifest', (req, res) => {
   try {
@@ -63,7 +60,7 @@ router.get('/tanoclo.apk', (req, res) => {
 });
 
 // POST /api/v2/ota/sync - Manual admin trigger
-router.post('/sync', async (req, res) => {
+router.post('/sync', authMiddleware, async (req, res) => {
   try {
     const manifest = await otaSync.checkAndSync(true);
     res.json({ success: true, manifest });
