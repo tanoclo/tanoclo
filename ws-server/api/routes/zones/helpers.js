@@ -136,7 +136,7 @@ async function getZoneDetails(homeId, zoneId, pool) {
         tanocloOwdEnabled: Boolean(zone.tanoclo_owd_enabled),
         tanocloOwdSource: zone.tanoclo_owd_source || 'device',
         offlineScheduleEnabled: Boolean(zone.offline_schedule_enabled),
-        offlineScheduleSyncedAt: zone.offline_schedule_synced_at,
+        offlineScheduleSyncedAt: zone.offline_schedule_synced_at ? formatDate(zone.offline_schedule_synced_at) : null,
         heatingCircuit: zone.heating_circuit !== null && zone.heating_circuit !== undefined && zone.heating_circuit !== '' ? parseInt(zone.heating_circuit, 10) : null
     };
 }

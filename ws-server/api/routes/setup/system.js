@@ -698,11 +698,10 @@ async function performSeeding(accessToken) {
             const childLock = d.childLockEnabled !== undefined ? (d.childLockEnabled ? 1 : 0) : (d.characteristics?.childLockEnabled ? 1 : 0);
             const field_0149 = d.orientation || d.mountingState?.field_0149 || d.field_0149 || null;
 
-            let mountingValue = null, mountingTs = null, mountingError = null;
+            let mountingValue = null, mountingTs = null;
             if (d.deviceType === 'VA02') {
                 mountingValue = d.mountingState?.value || 'CALIBRATED';
                 mountingTs = d.mountingState?.timestamp || new Date().toISOString();
-                mountingError = d.mountingStateWithError || 'CALIBRATED';
             }
 
             const dCaps = d.characteristics?.capabilities || [];
@@ -716,8 +715,8 @@ async function performSeeding(accessToken) {
                     connection_state, connection_state_timestamp, in_pairing_mode,
                     cap_inside_temp_measurement, cap_identify, cap_radio_encryption_key_access, field_0140,
                     battery_state, battery_percent, child_lock_enabled, field_0149,
-                    field_016a, mounting_state_timestamp, mounting_state_with_error
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    field_016a, mounting_state_timestamp
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE
                     zone_id=VALUES(zone_id), current_fw_version=VALUES(current_fw_version),
                     cap_inside_temp_measurement=VALUES(cap_inside_temp_measurement), cap_identify=VALUES(cap_identify), cap_radio_encryption_key_access=VALUES(cap_radio_encryption_key_access),
@@ -727,7 +726,7 @@ async function performSeeding(accessToken) {
                 connState, formatDate(connStateTs), 0,
                 capInsideTemp, capIdentify, capRadio, 0.0,
                 d.batteryState || 'NORMAL', d.batteryPercentage || 100,
-                childLock, field_0149, mountingValue, formatDate(mountingTs), mountingError
+                childLock, field_0149, mountingValue, formatDate(mountingTs)
             ]);
 
             if (d.deviceType === 'IB01') await conn.execute('INSERT IGNORE INTO websocket_whitelist (type, value) VALUES ("device", ?)', [d.serialNo]);

@@ -64,11 +64,16 @@ export default function SettingsPage() {
   const scheduleZoneId = searchParams.get('scheduleZoneId') ? parseInt(searchParams.get('scheduleZoneId'), 10) : null;
 
   const handleBack = () => {
-    if (searchParams.get('roomId') || searchParams.get('deviceId') || searchParams.get('scheduleZoneId')) {
+    if (searchParams.get('advanced')) {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete('advanced');
+      setSearchParams(nextParams);
+    } else if (searchParams.get('roomId') || searchParams.get('deviceId') || searchParams.get('scheduleZoneId')) {
       const nextParams = new URLSearchParams(searchParams);
       nextParams.delete('roomId');
       nextParams.delete('deviceId');
       nextParams.delete('scheduleZoneId');
+      nextParams.delete('advanced');
       setSearchParams(nextParams);
     } else if (searchParams.get('section')) {
       if (isMobile) {
@@ -523,13 +528,14 @@ export default function SettingsPage() {
   }
 
   const getMobileTitle = () => {
+    const isAdvanced = searchParams.get('advanced') === 'true';
     if (activeRoomId !== null) {
       const z = zones?.find(item => item.id === activeRoomId);
-      return z ? z.name : t('nav.settings');
+      return z ? (isAdvanced ? `Advanced • ${z.name}` : z.name) : t('nav.settings');
     }
     if (activeDeviceId) {
       const d = devices?.find(item => item.serialNo === activeDeviceId);
-      return d ? (d.friendlyName || d.serialNo) : t('nav.settings');
+      return d ? (isAdvanced ? `Advanced • ${d.friendlyName || d.serialNo}` : (d.friendlyName || d.serialNo)) : t('nav.settings');
     }
     if (scheduleZoneId !== null) {
       const z = zones?.find(item => item.id === scheduleZoneId);

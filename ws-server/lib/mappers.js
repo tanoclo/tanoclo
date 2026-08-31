@@ -54,7 +54,7 @@ function mapDevice(d) {
             })()
         },
         batteryState: d.battery_state || 'NORMAL',
-        mountingStateWithError: d.mounting_state_with_error || null,
+        mountingStateWithError: d.field_016a || null,
         temperatureOffset: parseFloat(d.field_0140 || 0),
         zoneId: d.zone_id ? parseInt(d.zone_id, 10) : null,
         errorFlags: d.field_01a3 !== null && d.field_01a3 !== undefined ? parseInt(d.field_01a3, 10) : 0,

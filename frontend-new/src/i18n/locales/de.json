@@ -64,13 +64,26 @@
       "installing": "Update wird installiert...",
       "updated_to": "App aktualisiert auf v{{version}}",
       "update_available": "Update verfügbar",
+      "new_version_available": "Neue Version verfügbar!",
       "version_ready": "Version v{{version}} ist bereit.",
+      "current_version": "Aktuelle Version",
+      "new_version": "Neue Version",
       "update_and_restart": "Aktualisieren & Neustarten",
       "later": "Später",
       "release_notes": "Versionshinweise:",
       "update_error": "Update-Fehler",
       "dismiss": "Schließen",
-      "retry": "Wiederholen"
+      "retry": "Wiederholen",
+      "web_update_ready": "Web-Update bereit",
+      "web_update_subtitle": "Neue Web-Assets heruntergeladen",
+      "web_update_desc": "Ein Web-Update wurde heruntergeladen. Jetzt anwenden, um die App-Oberfläche zu aktualisieren.",
+      "apply_update": "Update anwenden",
+      "permission_required": "Berechtigung erforderlich",
+      "permission_subtitle": "Unbekannte Apps installieren",
+      "permission_desc": "Um das Update zu installieren, benötigt TaNoClo die Berechtigung zur Installation von Apps aus unbekannten Quellen. Tippen Sie unten auf Berechtigung erteilen, aktivieren Sie die Option für TaNoClo und kehren Sie zur App zurück.",
+      "grant_permission": "Berechtigung erteilen",
+      "cancel": "Abbrechen",
+      "progress": "Fortschritt"
     }
   },
   "nav": {

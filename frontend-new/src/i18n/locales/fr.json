@@ -64,13 +64,26 @@
       "installing": "Installation de la mise à jour...",
       "updated_to": "Application mise à jour vers la v{{version}}",
       "update_available": "Mise à jour disponible",
+      "new_version_available": "Nouvelle version disponible !",
       "version_ready": "La version v{{version}} est prête.",
+      "current_version": "Version actuelle",
+      "new_version": "Nouvelle version",
       "update_and_restart": "Mettre à jour et redémarrer",
       "later": "Plus tard",
       "release_notes": "Notes de version :",
       "update_error": "Erreur de mise à jour",
       "dismiss": "Ignorer",
-      "retry": "Réessayer"
+      "retry": "Réessayer",
+      "web_update_ready": "Mise à jour Web prête",
+      "web_update_subtitle": "Nouveaux fichiers Web téléchargés",
+      "web_update_desc": "Une mise à jour Web a été téléchargée. Appliquez-la maintenant pour rafraîchir l'interface de l'application.",
+      "apply_update": "Appliquer la mise à jour",
+      "permission_required": "Autorisation requise",
+      "permission_subtitle": "Installer des applications inconnues",
+      "permission_desc": "Pour installer la mise à jour, TaNoClo a besoin de l'autorisation d'installer des applications de sources inconnues. Appuyez sur Accorder l'autorisation ci-dessous, activez l'option pour TaNoClo et revenez à l'application.",
+      "grant_permission": "Accorder l'autorisation",
+      "cancel": "Annuler",
+      "progress": "Progression"
     }
   },
   "nav": {
