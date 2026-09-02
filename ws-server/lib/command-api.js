@@ -815,6 +815,14 @@ function getRouter(opts) {
                     jsonResponse(res, 500, { error: e.message });
                 }
             });
+
+            router.post(`${prefix}/devices/:id/register-bridge`, (req, res) => {
+                try {
+                    module.exports.handleDeviceRegistration(req, res, req.params.id);
+                } catch (e) {
+                    jsonResponse(res, 500, { error: e.message });
+                }
+            });
         }
     });
 

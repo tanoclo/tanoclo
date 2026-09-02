@@ -249,26 +249,7 @@ async function setPairing(req, res) {
             _log('warn', `Failed to push pairing mode for ${deviceId}: ${err.message}`);
         });
 
-        const { blockBridge, getBridgeBlockStatus } = require('../../lib/device-manager');
-        const skipBlock = req.query.skip_block === 'true' || req.body?.skip_block === true;
-        let blockStatus = { active: false, remainingSeconds: 0 };
-
-        if (!skipBlock) {
-            _log('info', `[PAIRING] Isolating Bridge ${deviceId} offline for 120s to enable plaintext key push (TLV 0x12) for real devices.`);
-            blockBridge(deviceId, 120000, async (expiredSerial) => {
-                _log('info', `[PAIRING_TIMEOUT] Auto-disabling pairing mode after 120s for Bridge ${expiredSerial}`);
-                try {
-                    const p = db.getPool();
-                    await p.execute('UPDATE devices SET in_pairing_mode = 0 WHERE serial_no = ?', [expiredSerial]);
-                    await commandApi.pushDevicePair(expiredSerial, false).catch(() => {});
-                } catch (err) {
-                    _log('error', `Failed to auto-disable pairing for ${expiredSerial}: ${err.message}`);
-                }
-            });
-            blockStatus = getBridgeBlockStatus(deviceId);
-        }
-
-        res.json({ in_pairing_mode: true, pairing_block: blockStatus });
+        res.json({ in_pairing_mode: true, pairing_block: { active: false, remainingSeconds: 0 } });
     } catch (err) {
         if (err.statusCode) return res.status(err.statusCode).json({ error: err.message.toLowerCase() });
         res.status(500).json({ error: 'internal_error' });

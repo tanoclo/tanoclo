@@ -609,6 +609,7 @@ async function assignDeviceToZone(req, res, homeId, zoneId, serialNo) {
         }
 
         await pool.execute('UPDATE devices SET zone_id = ? WHERE serial_no = ? AND home_id = ?', [zoneId, serialNo, homeId]);
+        await pool.execute('UPDATE emulated_devices SET zone_id = ? WHERE serial_no = ? AND home_id = ?', [zoneId, serialNo, homeId]).catch(() => {});
 
         // If the new zone didn't have a measuring device, set this one
         const [newZone] = await pool.execute('SELECT measuring_device_serial FROM zones WHERE id = ? AND home_id = ?', [zoneId, homeId]);

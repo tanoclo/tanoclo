@@ -1252,14 +1252,14 @@
       "type": "u16be",
       "unit": "steps",
       "scale": 1,
-      "notes": "Unused. Real VA firmware uses 0x0294 for secondary position steps."
+      "notes": "Unused. VA uses 0x0294 for secondary position steps."
     },
     "0x0283": {
       "name": "va_act_status_flags_unused",
       "type": "s16be",
       "unit": "bits",
       "scale": 1,
-      "notes": "Unused. Real VA firmware uses 0x028d for actuator status/flags."
+      "notes": "Unused. VA uses 0x028d for actuator status/flags."
     },
     "0x4060": {
       "name": "zone_temperature_4060",

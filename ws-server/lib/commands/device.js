@@ -8,7 +8,7 @@
 const coap = require('../coap');
 const tlv = require('../tlv');
 const crypto = require('crypto');
-const { getNextMid, waitForAck } = require('../coap-transport');
+const { getNextMid, waitForAck, sendViaBridge, findBridgeForHome } = require('../coap-transport');
 const api = require('../command-api');
 
 function updateFieldInMap(fields, key, value) {
@@ -346,6 +346,13 @@ async function pushDevicePair(deviceId, enabled = true, pairId = null, durationS
 
     clearPairingTimer(deviceId);
 
+    try {
+        const pool = api._db ? api._db.getPool() : null;
+        if (pool) {
+            await pool.execute('UPDATE devices SET in_pairing_mode = ? WHERE serial_no = ?', [enabled ? 1 : 0, deviceId]).catch(() => {});
+        }
+    } catch (e) {}
+
     if (enabled) {
         const timer = setTimeout(async () => {
             pairingTimers.delete(deviceId);
@@ -366,7 +373,7 @@ async function pushDevicePair(deviceId, enabled = true, pairId = null, durationS
     const durationHex = enabled ? Math.max(1, Math.min(65535, durationSeconds || 300)).toString(16).padStart(4, '0') : '0000';
     const payloadBuffer = Buffer.from(`01040000${durationHex}020100`, 'hex');
 
-    const fullPathPart = `IB0000FT0100${pairId.replace(/^IB/, '')}`;
+    const fullPathPart = `IB0000FT0100${deviceId.replace(/^IB/, '')}`;
     const extraOptions = [
         { num: 7, value: Buffer.from([0xff, 0xff]) },
         { num: 12, value: Buffer.from([0x2a]) }
@@ -822,6 +829,71 @@ function targetPathName(subpath) {
     return 'd/dbg';
 }
 
+async function pushDeviceRegistrationToBridge(deviceId) {
+    let dbDev = await api._db.getDeviceByFullSerial(deviceId);
+    if (!dbDev) dbDev = await api._db.getDeviceBySerial(deviceId);
+    if (!dbDev) throw new Error(`Device ${deviceId} not found in DB`);
+
+    const bridge = findBridgeForHome(dbDev.home_id);
+    if (!bridge) throw new Error(`No bridge connected for home ${dbDev.home_id}`);
+
+    const isRU = deviceId.startsWith('RU') || deviceId.startsWith('BU') || deviceId.startsWith('SU');
+    const isVA = deviceId.startsWith('VA');
+    const devTypeCode = isRU ? 0x0A : (isVA ? 0x03 : 0x01);
+    const roleCode = isRU ? 0x09 : 0x05;
+
+    const fwStr = dbDev.current_fw_version || dbDev.field_0039 || dbDev.field_0035 || '215.2';
+    let fwWord = 0xD702;
+    const parts = String(fwStr).split('.');
+    if (parts.length >= 2) {
+        const major = parseInt(parts[0], 10) || 215;
+        const minor = parseInt(parts[1], 10) || 2;
+        fwWord = ((major & 0xFF) << 8) | (minor & 0xFF);
+    }
+
+    const entries = [
+        { fid: 0x0001, value: Buffer.from(deviceId.padEnd(12, '\0').substring(0, 12), 'utf8') },
+        { fid: 0x0036, value: tlv.encodeValue(devTypeCode, 'u8') },
+        { fid: 0x003a, value: tlv.encodeValue(fwWord, 'u16be') },
+        { fid: 0x4000, value: tlv.encodeValue(dbDev.zone_id || 1, 'u16be') },
+        { fid: 0x4020, value: tlv.encodeValue(roleCode, 'u8') }
+    ];
+
+    const payload = tlv.encode(entries);
+    const extraOptions = [
+        { num: 7, value: Buffer.from([0xff, 0xff]) },
+        { num: 12, value: Buffer.from([0x2a]) }
+    ];
+
+    const mid = getNextMid();
+    const token = crypto.randomBytes(2);
+    const coapBytes = coap.buildRequest({
+        code: coap.CODE_PUT,
+        path: 'd/config',
+        token,
+        mid,
+        type: coap.TYPE_CON,
+        payload,
+        extraOptions
+    });
+
+    sendViaBridge(
+        bridge.bridgeId, bridge.bridgeClient, bridge.bridgeClient.ipv6, bridge.bridgeClient.udpPort || 5683,
+        coapBytes, `pushDeviceRegistration:${deviceId}`
+    );
+
+    return mid;
+}
+
+async function handleDeviceRegistration(req, res, deviceId) {
+    try {
+        const mid = await pushDeviceRegistrationToBridge(deviceId);
+        api.jsonResponse(res, 200, { ok: true, mid, message: `Device registration pushed to Bridge for ${deviceId}` });
+    } catch (err) {
+        api.jsonResponse(res, 500, { error: err.message });
+    }
+}
+
 module.exports = {
     updateFieldInMap,
     applyDeviceConfigOverrides,
@@ -849,6 +921,9 @@ module.exports = {
     pushUnassociateNeighborByIp,
     handleUnassociateNeighbor,
     pushDeviceDebug,
-    handleDeviceDebug
+    handleDeviceDebug,
+    pushDeviceRegistrationToBridge,
+    handleDeviceRegistration
 };
+
 

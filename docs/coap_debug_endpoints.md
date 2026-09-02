@@ -1,6 +1,6 @@
 # CoAP Debug Endpoints & Memory Architecture
 
-This document specifies the internal CoAP diagnostic and memory access endpoints supported by Tado device firmware across all hardware generations (Valve Actuators VA01/VA02, Room Units RU01/RU02, and Internet Bridges IB01/GW03)
+This document specifies the internal CoAP diagnostic and memory access endpoints supported by Tado devices across all hardware generations (Valve Actuators VA01/VA02, Room Units RU01/RU02, and Internet Bridges IB01/GW03)
 
 ---
 
@@ -25,7 +25,7 @@ This document specifies the internal CoAP diagnostic and memory access endpoints
 - **Response**: `2.05 Content` (`0x45`) with raw binary octet-stream payload.
 
 ### Critical Radix Rule
-The MCU firmware parses query parameters with `strtoul(str, NULL, 10)` (base **10** / DECIMAL). Hex strings must be converted to base-10 before dispatch (e.g. `0x20000000` -> `536870912`).
+The MCU parses query parameters with `strtoul(str, NULL, 10)` (base **10** / DECIMAL). Hex strings must be converted to base-10 before dispatch (e.g. `0x20000000` -> `536870912`).
 
 ### Bus Architecture
 - **Addresses `< 0x80000000` (Direct Bus)**: Read via direct CPU. Accesses Internal Flash (ROM/Vectors) and Internal SRAM.
@@ -78,7 +78,7 @@ The MCU firmware parses query parameters with `strtoul(str, NULL, 10)` (base **1
 
 ### Whitelist Architecture
 Unlike `/d/dbg/st` which modifies live RAM state variables, `/d/dbg2/tlvs` writes directly to device Non-Volatile Memory (NVM / Flash storage).
-The firmware parses the TLV payload in the PUT body against the whitelisted setter callbacks.
+The device parses the TLV payload in the PUT body against the whitelisted setter callbacks.
 
 ### Complete 12-Entry Whitelist Table
 

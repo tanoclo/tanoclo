@@ -106,7 +106,7 @@ async function publishAllDiscovery() {
     }
 }
 
-function unpublishDevice(serial) {
+function unpublishDevice(serial, homeId) {
     if (!mqttClient || !config || !config.mqtt) return;
     const haPath = config.mqtt.haPath || 'homeassistant';
     const entities = [
@@ -145,7 +145,27 @@ function unpublishDevice(serial) {
         const topic = `${haPath}/${component}/${entityId}/config`;
         mqttClient.publish(topic, '', { retain: true, qos: 1 });
     }
-    if (log) log('info', `[mqtt-ha] Unpublished Home Assistant discovery entities for device ${serial}`);
+
+    // Clear emulated device state topic
+    mqttClient.publish(`tado/tanoclo/emulated/${serial}/state`, '', { retain: true, qos: 1 });
+
+    // If homeId is known, clear retained device telemetry & availability topics
+    if (homeId) {
+        const stateSuffixes = [
+            'availability', 'connection_state', 'is_emulated', 'firmware_version', 'device_type',
+            'temperature', 'aux_temperature', 'humidity', 'light_level', 'opentherm_voltage',
+            'battery_percent', 'battery_state', 'battery_voltage', 'battery_mv',
+            'reset_reason', 'reset_reason_raw', 'error_flags', 'error_flags_raw',
+            'valve_position', 'valve_position_pct', 'actuator_active', 'mounting_state',
+            'orientation', 'child_lock', 'actuator_limit_low', 'actuator_limit_high',
+            'actuator_drive_constant', 'actuator_deviation'
+        ];
+        for (const suffix of stateSuffixes) {
+            mqttClient.publish(`tado/tanoclo/h/${homeId}/d/${serial}/${suffix}`, '', { retain: true, qos: 1 });
+        }
+    }
+
+    if (log) log('info', `[mqtt-ha] Unpublished Home Assistant discovery entities and state for device ${serial} (homeId: ${homeId || 'none'})`);
 }
 
 function unpublishMobileDevice(deviceId) {

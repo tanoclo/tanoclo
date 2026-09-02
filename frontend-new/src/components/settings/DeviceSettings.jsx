@@ -138,27 +138,7 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
   const [createDhwChecked, setCreateDhwChecked] = useState(false);
   const [isChangingRole, setIsChangingRole] = useState(false);
   const hasDhwZone = Boolean((zones || []).some(z => z.type === 'HOT_WATER'));
-  const [countdownSeconds, setCountdownSeconds] = useState(0);
 
-  useEffect(() => {
-    const remaining = device?.pairingBlock?.remainingSeconds || (bridge?.in_pairing_mode ? 120 : 0);
-    setCountdownSeconds(remaining);
-  }, [device?.pairingBlock, bridge?.in_pairing_mode]);
-
-  useEffect(() => {
-    if (countdownSeconds <= 0) return;
-    const interval = setInterval(() => {
-      setCountdownSeconds(prev => {
-        if (prev <= 1) {
-          mutateBridge && mutateBridge();
-          mutate && mutate();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [countdownSeconds, mutateBridge, mutate]);
 
   useEffect(() => {
     if (device) {
@@ -250,7 +230,7 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
         );
         const isOnlyDeviceInZone = zoneDevices.length <= 1;
 
-        if (isZoneController || isMeasuringDevice || isOnlyDeviceInZone) {
+        if (!device?.isEmulated && (isZoneController || isMeasuringDevice || isOnlyDeviceInZone)) {
           showToast(t('settings.error_cannot_unassign_device', { defaultValue: 'Device cannot be unassigned from zone.' }), 'error');
           return;
         }
@@ -697,9 +677,7 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
                   <Radio size={14} className={bridge.in_pairing_mode ? 'pulse-icon' : ''} />
                   <span>
                     {bridge.in_pairing_mode 
-                      ? (countdownSeconds > 0 
-                          ? `Offline Pairing Active (${Math.floor(countdownSeconds / 60)}:${String(countdownSeconds % 60).padStart(2, '0')}) — Bridge isolated for key push`
-                          : t('tanoclo_ex.pairing_broadcasting')) 
+                      ? t('tanoclo_ex.pairing_broadcasting')
                       : t('tanoclo_ex.pairing_locked')}
                   </span>
                 </div>
@@ -710,7 +688,7 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
                       try {
                         setIsTogglingPairing(true);
                         await stopPairing(homeId, device.serialNo);
-                        showToast(t('settings.pairing_stopped_unblocked', { defaultValue: 'Pairing stopped & Bridge reconnected' }), 'success');
+                        showToast(t('settings.pairing_disabled', { defaultValue: 'Pairing stopped' }), 'success');
                         await Promise.all([mutateBridge(), mutate()]);
                       } catch (e) {
                         showToast(e.message || t('settings.failed_disable_pairing'), 'error');
@@ -721,7 +699,7 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
                     disabled={isTogglingPairing}
                     style={{ padding: '0.2rem 0.6rem', fontSize: '0.75rem', flexShrink: 0 }}
                   >
-                    Unblock & Reconnect
+                    {t('settings.stop_pairing', { defaultValue: 'Stop Pairing' })}
                   </Button>
                 )}
               </div>

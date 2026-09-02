@@ -8,13 +8,16 @@
  */
 
 import React from 'react';
+import useSWR from 'swr';
 import Card from '../../components/common/Card';
 import ListItem from '../../components/common/ListItem';
 import Button from '../../components/common/Button';
-import { Settings, Calendar, Smartphone, AlertTriangle, Plus } from 'lucide-react';
+import { Settings, Calendar, Smartphone, AlertTriangle, Plus, Battery, BatteryLow, BatteryMedium } from 'lucide-react';
 import SupplyTempSettings from '../../components/settings/SupplyTempSettings';
 import BoilerCircuitsSettings from '../../components/settings/BoilerCircuitsSettings';
 import RawExplorerSettings from '../../components/settings/RawExplorerSettings';
+import { SWR_KEYS } from '../../utils/swrKeys';
+import { getDeviceBatteryData } from '../../api/tanoclo';
 
 const MemoizedSupplyTempSettings = React.memo(SupplyTempSettings);
 const MemoizedBoilerCircuitsSettings = React.memo(BoilerCircuitsSettings);
@@ -43,6 +46,11 @@ export default function ServerSettingsPanel({
   isReadOnly,
   t
 }) {
+  const { data: batteryData } = useSWR(
+    activeHomeId && activeSection === 'devices' ? SWR_KEYS.batteryDevicesRaw(activeHomeId) : null,
+    () => getDeviceBatteryData(activeHomeId)
+  );
+
   switch (activeSection) {
     case 'zones': {
       const heatingRoomsCount = (zones || []).filter(z => z.type === 'HEATING').length;
@@ -130,6 +138,7 @@ export default function ServerSettingsPanel({
           <Card style={{ padding: 0, overflow: 'hidden' }}>
             {devices?.map(d => {
               const isBridge = d.deviceType?.startsWith('IB') || d.deviceType === 'GW' || d.deviceType === 'BRIDGE';
+              const isBatteryPowered = !isBridge && !d.isEmulated;
               const assignedZone = zones?.find(z => z.id === d.zoneId);
               const subtitleParts = [];
               if (!isBridge) {
@@ -150,12 +159,45 @@ export default function ServerSettingsPanel({
                   )}
                 </span>
               );
+
+              let batteryDisplay = null;
+              if (isBatteryPowered) {
+                const batteryInfo = (batteryData || []).find(b => b.serial_no === d.serialNo || b.short_serial_no === d.serialNo);
+                const batteryPercent = d.batteryPercentage ?? d.batteryPercent ?? d.battery_percent ?? batteryInfo?.battery_percent;
+                const batteryState = d.batteryState ?? batteryInfo?.battery_state;
+
+                const isLow = batteryState === 'LOW' || batteryState === 'CRITICAL' || batteryState === 'DEPLETED' || (batteryPercent !== null && batteryPercent !== undefined && batteryPercent <= 20);
+                const isMed = batteryPercent !== null && batteryPercent !== undefined && batteryPercent <= 50;
+                const BatteryIcon = isLow ? BatteryLow : (isMed ? BatteryMedium : Battery);
+                const badgeColor = isLow ? 'var(--danger)' : 'var(--text-secondary)';
+                const percentText = batteryPercent !== null && batteryPercent !== undefined 
+                  ? `${batteryPercent}%` 
+                  : (batteryState && batteryState !== 'NORMAL' 
+                      ? (batteryState === 'LOW' ? t('common.low') : (batteryState === 'CRITICAL' ? t('common.critical') : (batteryState === 'DEPLETED' ? t('common.depleted') : batteryState))) 
+                      : t('common.na'));
+
+                batteryDisplay = (
+                  <span style={{ 
+                    display: 'inline-flex', 
+                    alignItems: 'center', 
+                    gap: '0.25rem', 
+                    fontSize: '0.85rem',
+                    fontWeight: 600,
+                    color: badgeColor
+                  }}>
+                    <BatteryIcon size={16} />
+                    <span>{percentText}</span>
+                  </span>
+                );
+              }
+
               return (
                 <ListItem
                   key={d.serialNo}
                   icon={<Smartphone size={18} style={{ color: d.connectionState?.value ? 'var(--success)' : 'var(--text-muted)' }} />}
                   title={title}
                   subtitle={subtitle}
+                  value={batteryDisplay}
                   onClick={() => {
                     const nextParams = new URLSearchParams(searchParams);
                     nextParams.set('deviceId', d.serialNo);

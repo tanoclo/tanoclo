@@ -151,8 +151,12 @@ router.get('/nodes', async (req, res) => {
         // Concurrently probe all nodes to refresh live status
         await Promise.all(nodes.map(async (node) => {
             const liveStatus = await probeNodeStatus(node.ip_address, node.api_port);
-            if (node.status !== liveStatus) {
-                node.status = liveStatus;
+            node.status = liveStatus;
+            if (liveStatus === 'ONLINE') {
+                const now = new Date().toISOString();
+                node.last_seen = now;
+                await dbDevices.updateEsp32NodeStatus(node.id, 'ONLINE', now).catch(() => {});
+            } else if (node.status !== liveStatus) {
                 await dbDevices.updateEsp32NodeStatus(node.id, liveStatus).catch(() => {});
             }
         }));
@@ -234,6 +238,18 @@ router.post('/nodes/:id/clear-and-reboot', async (req, res) => {
 router.get('/devices', async (req, res) => {
     try {
         const devices = await dbDevices.getAllEmulatedDevices();
+        const pool = db.getPool();
+        if (pool && devices && devices.length > 0) {
+            for (const dev of devices) {
+                if (dev.pairing_state !== 'PAIRED') {
+                    const [dRows] = await pool.execute('SELECT connection_state, current_fw_version FROM devices WHERE serial_no = ?', [dev.serial_no]);
+                    if (dRows.length > 0 && (dRows[0].connection_state === 1 || dRows[0].current_fw_version)) {
+                        await dbDevices.updateEmulatedDevicePairingState(dev.serial_no, 'PAIRED').catch(() => {});
+                        dev.pairing_state = 'PAIRED';
+                    }
+                }
+            }
+        }
         res.json({ success: true, devices });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
@@ -293,7 +309,11 @@ router.post('/devices', async (req, res) => {
                 if (dbBridge) bridgeId = dbBridge.serial_no;
             }
             if (bridgeId) {
-                commandApi.pushDevicePair(bridgeId, true).catch(err => {
+                const pool = db.getPool();
+                if (pool) {
+                    await pool.execute('UPDATE devices SET in_pairing_mode = 1 WHERE serial_no = ?', [bridgeId]).catch(() => {});
+                }
+                await commandApi.pushDevicePair(bridgeId, true).catch(err => {
                     console.warn(`[Emulated] Warning pushing pairing to bridge: ${err.message}`);
                 });
                 ibPairingStarted = true;
@@ -319,10 +339,14 @@ router.post('/devices', async (req, res) => {
                 }
             }
 
+            const devMac = deriveMacFromIpv6(ipv6);
+            const devMacHex = devMac ? devMac.toString('hex') : null;
+
             espRes = await sendEsp32Command(espNode.ip_address, espNode.api_port, espNode.api_key, {
                 cmd: 'pair',
                 api_key: espNode.api_key,
                 serial: targetSerial,
+                mac: devMacHex,
                 ipv6: ipv6,
                 ib_ipv6: ibIpv6,
                 ib_mac: ibMacHex,
@@ -391,7 +415,10 @@ router.delete('/devices/:serialNo', async (req, res) => {
         try {
             const mqttHaDiscovery = require('../../../lib/mqtt-ha-discovery');
             if (mqttHaDiscovery && typeof mqttHaDiscovery.unpublishDevice === 'function') {
-                mqttHaDiscovery.unpublishDevice(serialNo);
+                mqttHaDiscovery.unpublishDevice(serialNo, homeId);
+            }
+            if (process.send) {
+                process.send({ type: 'UNPUBLISH_DEVICE', serial: serialNo, homeId });
             }
         } catch (mqttErr) {
             console.warn(`[Emulated] Warning unpublishing from HA: ${mqttErr.message}`);
@@ -427,12 +454,20 @@ router.post('/notify-removed', async (req, res) => {
             }
         }
 
+        const emulatedList = await dbDevices.getAllEmulatedDevices().catch(() => []);
+        const emDev = emulatedList.find(d => d.serial_no === serial);
+        const dbDev = await dbDevices.getDeviceByFullSerial(serial) || await dbDevices.getDeviceBySerial(serial);
+        const homeId = (emDev && emDev.home_id) || (dbDev && dbDev.home_id);
+
         await dbDevices.deleteEmulatedDevice(serial);
 
         try {
             const mqttHaDiscovery = require('../../../lib/mqtt-ha-discovery');
             if (mqttHaDiscovery && typeof mqttHaDiscovery.unpublishDevice === 'function') {
-                mqttHaDiscovery.unpublishDevice(serial);
+                mqttHaDiscovery.unpublishDevice(serial, homeId);
+            }
+            if (process.send) {
+                process.send({ type: 'UNPUBLISH_DEVICE', serial, homeId });
             }
         } catch (mqttErr) {
             console.warn(`[Emulated Webhook] Warning unpublishing from HA: ${mqttErr.message}`);
@@ -639,11 +674,15 @@ router.post('/devices/:serialNo/sync', async (req, res) => {
             }
         }
 
+        const devIpv6 = emDev.ipv6_address || (dbDev && dbDev.ipv6_address) || null;
+        const devMac = devIpv6 ? deriveMacFromIpv6(devIpv6) : null;
+
         const syncPayload = {
-            cmd: 'pair',
+            cmd: 'sync',
             api_key: emDev.api_key,
             serial: serialNo,
-            ipv6: emDev.ipv6_address || (dbDev && dbDev.ipv6_address) || null,
+            mac: devMac ? devMac.toString('hex') : null,
+            ipv6: devIpv6,
             ib_ipv6: ibIpv6,
             ib_mac: ibMacHex,
             ib_pan: ibPanNum,

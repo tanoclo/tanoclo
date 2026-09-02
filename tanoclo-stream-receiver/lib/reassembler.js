@@ -20,8 +20,8 @@ function parseTimestampToSeconds(ts) {
 
 function findCoapOffsetInFrag1(decrypted) {
     if (decrypted.length <= 13) return -1;
-    const offset = coapParser.findCoapOffset(decrypted.subarray(9));
-    return offset !== -1 ? offset + 9 : -1;
+    const offset = coapParser.findCoapOffset(decrypted.subarray(3));
+    return offset !== -1 ? offset + 3 : -1;
 }
 
 class SixLoWPANReassembler {

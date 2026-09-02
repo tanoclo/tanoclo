@@ -634,9 +634,11 @@ async function startAPI() {
     try {
         const mqttClient = require('../lib/mqtt-client');
         const mqttPublisher = require('../lib/mqtt-publisher');
+        const mqttHaDiscovery = require('../lib/mqtt-ha-discovery');
         mqttClient.init(config, _log);
         mqttPublisher.init(mqttClient, db, config, _log);
-        _log('info', `[REST-API] Initialized MQTT client and publisher`);
+        mqttHaDiscovery.init(mqttClient, db, config, _log);
+        _log('info', `[REST-API] Initialized MQTT client, publisher, and HA discovery`);
     } catch (mqttErr) {
         _log('error', `[REST-API] Failed to initialize MQTT: ${mqttErr.message}`);
     }

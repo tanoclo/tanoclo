@@ -13,6 +13,8 @@ import deviceRegistry from '../lib/device-registry.js';
 import * as haDiscovery from '../lib/ha-discovery.js';
 import * as messageProcessor from '../lib/message-processor.js';
 import * as mqttPublisher from '../lib/mqtt-publisher.js';
+import * as csl from '../lib/csl.js';
+import * as icmpv6 from '../lib/icmpv6.js';
 
 describe('rf-crypto module', () => {
     const testKey = Buffer.from('0123456789abcdef0123456789abcdef', 'hex');
@@ -258,3 +260,94 @@ describe('Home Assistant Passive Discovery constraints', () => {
         mqttPublisher.setClient(null);
     });
 });
+
+describe('CSL & MAC Coordination module', () => {
+    it('identifies and parses CSL Multipurpose wake-up beacon (0x25)', () => {
+        // 12-byte CSL beacon: 25 [seq] [panId: 2B LE] [dstShort: 2B LE] [phase: 2B LE] [countdown: 2B LE] [period: 2B LE]
+        const beaconBuf = csl.buildCSLBeacon({
+            seq: 0x42,
+            panId: 0xFA93,
+            dstShort: 0x1234,
+            countdown: 5,
+            period: 0x3F80
+        });
+
+        expect(csl.isCSLBeacon(beaconBuf)).toBe(true);
+        const parsed = csl.parseCSLBeacon(beaconBuf);
+        expect(parsed).not.toBeNull();
+        expect(parsed.fcf).toBe(0x25);
+        expect(parsed.seq).toBe(0x42);
+        expect(parsed.panId).toBe(0xFA93);
+        expect(parsed.dstShort).toBe('0x1234');
+        expect(parsed.isBroadcast).toBe(false);
+        expect(parsed.period).toBe(0x3F80);
+    });
+
+    it('identifies and parses Extended MAC Coordination Frame (0xEE42)', () => {
+        const frame = Buffer.from('42ee0193fa010203040506010203040506070800', 'hex');
+        expect(csl.isMACCoordinationFrame(frame)).toBe(true);
+        const parsed = csl.parseMACCoordinationFrame(frame);
+        expect(parsed).not.toBeNull();
+        expect(parsed.fcf).toBe(0xEE42);
+        expect(parsed.seq).toBe(1);
+        expect(parsed.panId).toBe(0xFA93);
+    });
+});
+
+describe('ICMPv6 deterministic RFC 6282 parser', () => {
+    it('parses Echo Request (128) with 0x04 operational framing', () => {
+        // Mode 0x7A, 0x33, NH=0x3A, Echo Req type=128 code=0 csum=0x1234 id=0x0001 seq=0x0002
+        const echoReq = Buffer.from('001bc504010000007a333a8000123400010002', 'hex');
+        const parsed = icmpv6.parseICMPv6(echoReq);
+        expect(parsed).not.toBeNull();
+        expect(parsed.type).toBe(128);
+        expect(parsed.identifier).toBe(1);
+        expect(parsed.sequence).toBe(2);
+    });
+
+    it('parses Neighbor Solicitation (135) with 0x39 framing', () => {
+        // 00 00 7b 39 3a 02 01 ff 0d 95 30 87 00 c9 b4 + 20-byte NS body
+        const nsBuf = Buffer.from('00007b393a0201ff0d95308700c9b400000000fe80000000000000001bc5073156abcd', 'hex');
+        const parsed = icmpv6.parseICMPv6(nsBuf);
+        expect(parsed).not.toBeNull();
+        expect(parsed.type).toBe(135);
+        expect(parsed.typeName).toContain('Neighbor Solicitation');
+        expect(parsed.targetIp).toBe('fe80:0:0:0:1b:c507:3156:abcd');
+    });
+
+    it('builds valid Echo Reply (129)', () => {
+        const reply = icmpv6.buildEchoReply(0x0042, 0x0001);
+        expect(reply[0]).toBe(129); // Type 129
+        expect(reply[1]).toBe(0);   // Code 0
+        expect(reply.readUInt16BE(4)).toBe(0x0042); // ID
+        expect(reply.readUInt16BE(6)).toBe(0x0001); // Seq
+    });
+});
+
+describe('Deterministic CoAP offset and CRC16 stripping', () => {
+    it('parses empty CoAP ACK with trailing 2-byte Kermit CRC-16', () => {
+        // ACK 2.04 MID=0x1234 Option 12 (0xC1 0x2A) + 2-byte CRC (0x12 0x34)
+        const ackWithCrc = Buffer.from('60441234c12a1234', 'hex');
+        const parsed = coapParser.parse(ackWithCrc);
+        expect(parsed.ok).toBe(true);
+        expect(parsed.type).toBe(2); // ACK
+        expect(parsed.code).toBe(0x44); // 2.04 Changed
+        expect(parsed.mid).toBe(0x1234);
+    });
+
+    it('deterministically finds CoAP offset across IPHC 0x33 and mode 0x7C 0xD7', () => {
+        // Mode 0x7E + 0x33 + NHC 0xF0 + ports (4B) + csum (2B) + CoAP header (4B)
+        const frame7E = Buffer.from('04010000007e33f016331633000040011234', 'hex');
+        expect(coapParser.findCoapOffset(frame7E)).toBe(14);
+
+        // Mode 0x7C + 0xD7 + NHC 0xF0 + ports (4B) + csum (2B) + CoAP header (4B)
+        const frame7C = Buffer.alloc(30);
+        frame7C[0] = 0x04;
+        frame7C[5] = 0x7C;
+        frame7C[6] = 0xD7;
+        frame7C[17] = 0xF0;
+        frame7C[24] = 0x40; // CoAP ver 1 at offset 24 (17 + 1 + 4 + 2)
+        expect(coapParser.findCoapOffset(frame7C)).toBe(24);
+    });
+});
+

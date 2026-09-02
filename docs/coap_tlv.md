@@ -83,7 +83,7 @@ CoAP options are serialized in ascending numerical order. Each option is prefixe
 
 > [!CAUTION]
 > **Tado Option 15 Parser Workaround:**
-> According to RFC 7252, a nibble value of `15` is reserved for future expansion and must cause a protocol error. However, Tado firmware occasionally sends or receives options containing a malformed `15` nibble in delta or length. 
+> According to RFC 7252, a nibble value of `15` is reserved for future expansion and must cause a protocol error. However, Tado devices occasionally send or receive options containing a malformed `15` nibble in delta or length. 
 > To prevent parsing crashes, `coap.js` implements a defensive fallback: if `delta4 === 15 || len4 === 15`, the engine ceases parsing options immediately and scans forward byte-by-byte for the payload marker byte `0xFF`. If found, it positions the read cursor to process the payload; if not, it safely consumes the remaining buffer.
 
 ---
@@ -255,7 +255,7 @@ This dictionary consolidates all observed TLV fields, mapping their hex codes, t
 | `0x0104` | `pair_action` | `empty` | 1.0 | - | `/d/I/{id}/pair` | `tlv_labels` | - | Zero-length pairing transaction action marker during companion binding. |
 | `0x012d` | `temperature_ambient` | `s16be` | 0.01 | °C | `/d/{id}/sen` | `device_measurements` | `field_012d` | Measured room temperature. |
 | `0x012e` | `aux_temperature_1` | `s16be` | 0.01 | °C | `/d/{id}/sen` | `device_measurements` | `field_012e` | Primary reference board thermistor. |
-| `0x0135` | `humidity_percent` | `u16be` | 0.01 | % | `/d/{id}/sen` | `device_measurements` | `field_0135` | Room relative humidity level. |
+| `0x0135` | `humidity_percent` | `u16be` | 0.1 | % | `/d/{id}/sen` | `device_measurements` | `field_0135` | Room relative humidity level (raw 607 = 60.7%). |
 | `0x0136` | `ambient_light_level` | `u16be` | 1.0 | - | `/d/{id}/sen` | `device_measurements` | `field_0136` | Measured light exposure (0-100). |
 | `0x0137` | `dial_encoder_steps` | `u8` | 1.0 | step | `/d/{id}/sen` | `device_measurements` | `field_0137` | Relative rotary dial encoder movement steps (resets to 0x7f after report). |
 | `0x0140` | `temperature_offset` | `s16be` | 0.01 | °C | `/d/{id}/config` | `devices` | `field_0140` | Temperature offset in Celsius. |
@@ -378,7 +378,7 @@ This dictionary consolidates all observed TLV fields, mapping their hex codes, t
 | `0x025f` | `token_validity_minutes`| `u16be` | 1.0 | min | `/d/{id}/auth` | `devices` | `last_config_json->token_validity_minutes` | Session token validity duration in minutes. |
 | `0x0260` | `device_id` | `string` | 1.0 | - | `/d/{id}/auth` | `devices` | `serial_no` | Alphanumeric device hardware serial number. |
 | `0x0265` | `va_act_position_steps` | `u16be` | 1.0 | steps | `/d/{id}/act` | `devices` | `field_0265` | Motor piston extension distance steps. |
-| `0x0266` | `va_act_position2_steps_unused` | `u16be` | 1.0 | steps | `/d/{id}/act` | `devices` | `field_0266` | Unused / historical placeholder. Real VA firmware uses 0x0294. |
+| `0x0266` | `va_act_position2_steps_unused` | `u16be` | 1.0 | steps | `/d/{id}/act` | `devices` | `field_0266` | Unused / historical placeholder. VA uses 0x0294. |
 | `0x0270` | `config_field_0270` | `bytes` | 1.0 | - | `/d/{id}/config` | `devices` | `last_config_json->config_field_0270` | Device configuration raw byte field. |
 | `0x0273` | `va_act_limit_low_steps`| `u16be` | 1.0 | steps | `/d/{id}/act` | `devices` | `field_0273` | Piston closed/zero-level threshold steps. |
 | `0x0275` | `config_field_0275` | `bytes` | 1.0 | - | `/d/{id}/config` | `devices` | `last_config_json->config_field_0275` | Device configuration raw byte field. |
@@ -386,7 +386,7 @@ This dictionary consolidates all observed TLV fields, mapping their hex codes, t
 | `0x027a` | `dial_interaction_result`| `u8` | 1.0 | enum | `/d/{id}/sen` | `device_measurements` | `field_027a` | Dial interaction result/status code (click/touch action). |
 | `0x027c` | `va_act_limit_high_steps`| `u16be` | 1.0 | steps | `/d/{id}/act` | `devices` | `field_027c` | Piston fully retracted span limit steps. |
 | `0x0280` | `va_act_drive_cal_const`| `u16be` | 1.0 | - | `/d/{id}/act` | `devices` | `field_0280` | Valve actuator mechanical drive constant. |
-| `0x0283` | `va_act_status_flags_unused` | `s16be` | 1.0 | bits | `/d/{id}/act` | `devices` | `field_0283` | Unused / historical placeholder. Real VA firmware uses 0x028d. |
+| `0x0283` | `va_act_status_flags_unused` | `s16be` | 1.0 | bits | `/d/{id}/act` | `devices` | `field_0283` | Unused / historical placeholder. VA uses 0x028d. |
 | `0x0286` | `config_field_0286` | `u16be` | 1.0 | raw | `/d/{id}/config` | `devices` | `last_config_json->config_field_0286` | Device configuration field. |
 | `0x028c` | `va_actuator_active` | `bool` | 1.0 | - | `/d/{id}/act` | `devices` | `field_028c` | Actuator calibration/activity status. |
 | `0x028d` | `va_act_status_flags_s16` | `s16be` | 1.0 | bits | `/d/{id}/act` | `devices` | `field_0283` | Motor movement error and block bitmask. |
@@ -481,7 +481,7 @@ ETags are 8-byte hexadecimal sequence blocks transmitted in CoAP options for cac
 
 ### 4.1 Valve Actuator Deterministic Hash Algorithm
 
-For Valve Actuators (TRVs), the CoAP configuration ETag is built deterministically. The TRV firmware extracts specific active settings from its RAM slots, packs them into a **27-byte block**, and passes them to a 16-bit rolling checksum step.
+For Valve Actuators (TRVs), the CoAP configuration ETag is built deterministically. The TRV extracts specific active settings from its RAM slots, packs them into a **27-byte block**, and passes them to a 16-bit rolling checksum step.
 
 #### 27-Byte Target Packing Layout
 

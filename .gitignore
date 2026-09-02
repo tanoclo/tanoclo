@@ -17,3 +17,4 @@ test_config.json
 .discovered_ha_entities.json
 *.log
 *.log.*
+.default.json

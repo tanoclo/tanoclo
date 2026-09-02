@@ -21,6 +21,8 @@ const deviceRegistry = require('./lib/device-registry');
 const haDiscovery = require('./lib/ha-discovery');
 const mqttPublisher = require('./lib/mqtt-publisher');
 const messageProcessor = require('./lib/message-processor');
+const csl = require('./lib/csl');
+const icmpv6 = require('./lib/icmpv6');
 
 // Global state variables
 let tcpServer = null;
@@ -209,6 +211,14 @@ let statsDecodedCoap = 0;
 let statsDecodedCoapUnique = 0;
 let statsDecodedCoapDuplicate = 0;
 let statsReassembledComplete = 0;
+let statsCslBeacons = 0;
+let statsMacCoordination = 0;
+let statsIcmpv6EchoReq = 0;
+let statsIcmpv6EchoRep = 0;
+let statsIcmpv6NeighborSol = 0;
+let statsIcmpv6NeighborAdv = 0;
+let statsIcmpv6RouterSolAdv = 0;
+let statsIcmpv6Other = 0;
 
 // Duplicate raw packet sliding window
 const processedPackets = new Map();
@@ -351,7 +361,12 @@ function processDecryptedPayload(payload, macInfo, innerProto, seq, type, meta, 
         const coap = coapParser.parse(coapBytes);
         if (coap.ok && coap.ver === 1) {
             if (coap.code === 0) {
-                return; // Quietly ignore empty ACKs (Code 0.00)
+                statsDecodedCoap++;
+                logToFile(`COAP_EMPTY_ACK: MID=0x${coap.mid.toString(16).toUpperCase()} Key=${meta.keyName} RSSI=${meta.rssi}`);
+                if (config.consoleLogging) {
+                    console.log(`[COAP ACK] 📭 Empty ACK MID=0x${coap.mid.toString(16).toUpperCase()} From=${macInfo.src} To=${macInfo.dst} RSSI=${meta.rssi} dBm`);
+                }
+                return;
             }
             statsDecodedCoap++;
             let decodedTlv = null;
@@ -380,25 +395,22 @@ function processDecryptedPayload(payload, macInfo, innerProto, seq, type, meta, 
         }
     }
 
-    // Check for ICMPv6 packets (e.g. RS 0x85, RA 0x86, NS 0x87, NA 0x88, Echo 0x80/0x81)
-    for (let i = 0; i < Math.min(25, payload.length - 1); i++) {
-        const t = payload[i];
-        if ((t === 0x80 || t === 0x81 || t === 0x85 || t === 0x86 || t === 0x87 || t === 0x88) && payload[i + 1] === 0x00) {
-            const icmpNames = {
-                0x80: 'Echo Request',
-                0x81: 'Echo Reply',
-                0x85: 'Router Solicitation',
-                0x86: 'Router Advertisement',
-                0x87: 'Neighbor Solicitation',
-                0x88: 'Neighbor Advertisement'
-            };
-            const name = icmpNames[t] || `ICMPv6_0x${t.toString(16).toUpperCase()}`;
-            logToFile(`ICMPv6: ${name} (Type=0x${t.toString(16).toUpperCase()}) From=${macInfo.src} To=${macInfo.dst} RSSI=${meta.rssi}`);
-            if (config.consoleLogging) {
-                console.log(`[ICMPv6] 🌐 ${name} (Type=0x${t.toString(16).toUpperCase()}) From=${macInfo.src} To=${macInfo.dst} RSSI=${meta.rssi} dBm`);
-            }
-            return;
+    // Check for ICMPv6 packets deterministically via RFC 6282 IPHC parser
+    const icmpTarget = meta.decryptedRaw || payload;
+    const icmp = icmpv6.parseICMPv6(icmpTarget);
+    if (icmp) {
+        if (icmp.type === icmpv6.ICMPv6Type.ECHO_REQUEST) statsIcmpv6EchoReq++;
+        else if (icmp.type === icmpv6.ICMPv6Type.ECHO_REPLY) statsIcmpv6EchoRep++;
+        else if (icmp.type === icmpv6.ICMPv6Type.NEIGHBOR_SOLICITATION) statsIcmpv6NeighborSol++;
+        else if (icmp.type === icmpv6.ICMPv6Type.NEIGHBOR_ADVERTISEMENT) statsIcmpv6NeighborAdv++;
+        else if (icmp.type === icmpv6.ICMPv6Type.ROUTER_SOLICITATION || icmp.type === icmpv6.ICMPv6Type.ROUTER_ADVERTISEMENT) statsIcmpv6RouterSolAdv++;
+        else statsIcmpv6Other++;
+
+        logToFile(`ICMPv6: ${icmp.typeName} (Type=${icmp.type}) From=${macInfo.src} To=${macInfo.dst} RSSI=${meta.rssi}`);
+        if (config.consoleLogging) {
+            console.log(`[ICMPv6] 🌐 ${icmp.typeName} (Type=0x${icmp.type.toString(16).toUpperCase()}) From=${macInfo.src} To=${macInfo.dst} RSSI=${meta.rssi} dBm`);
         }
+        return;
     }
 
     statsNoCoap++;
@@ -491,7 +503,7 @@ async function start() {
             let keyUsed = null;
 
             const len = rawBytes[0];
-            if (len >= 15 && len < rawBytes.length) {
+            if (len >= 10 && len < rawBytes.length) {
                 frame = rawBytes.subarray(1, 1 + len);
                 if ((frame[0] & 0x0F) === 0x09) {
                     for (const key of KEYS) {
@@ -515,6 +527,36 @@ async function start() {
                         return;
                     }
                 } else {
+                    // Check for IEEE 802.15.4e CSL Multipurpose wake-up beacons (0x25 FCF)
+                    if (csl.isCSLBeacon(frame)) {
+                        const beacon = csl.parseCSLBeacon(frame);
+                        if (beacon) {
+                            statsCslBeacons++;
+                            if (isWhitelisted) {
+                                logToFile(`CSL_BEACON: PAN=0x${beacon.panId.toString(16)} Dst=${beacon.dstShort} Countdown=${beacon.countdown} RSSI=${rssi}`);
+                                if (config.consoleLogging) {
+                                    console.log(`[CSL BEACON] 📡 PAN=0x${beacon.panId.toString(16).toUpperCase()} Dst=${beacon.dstShort} Countdown=${beacon.countdown} Phase=${beacon.phase} RSSI=${rssi} dBm`);
+                                }
+                            }
+                            return;
+                        }
+                    }
+
+                    // Check for Extended MAC / CSL Coordination frames (0xEE42 / 0x6E42)
+                    if (csl.isMACCoordinationFrame(frame)) {
+                        const coord = csl.parseMACCoordinationFrame(frame);
+                        if (coord) {
+                            statsMacCoordination++;
+                            if (isWhitelisted) {
+                                logToFile(`MAC_COORD: PAN=0x${coord.panId.toString(16)} From=${coord.srcMac} To=${coord.dstMac} RSSI=${rssi}`);
+                                if (config.consoleLogging) {
+                                    console.log(`[MAC COORD] 🔄 PAN=0x${coord.panId.toString(16).toUpperCase()} From=${coord.srcMac} To=${coord.dstMac} RSSI=${rssi} dBm`);
+                                }
+                            }
+                            return;
+                        }
+                    }
+
                     statsNotEncrypted++;
                     const frameType = frame[0] & 0x07;
                     const frameTypeName = frameType === 0 ? 'Beacon' : (frameType === 2 ? 'MAC ACK' : (frameType === 3 ? 'MAC Command' : `Type 0x${frameType.toString(16)}`));
@@ -562,7 +604,8 @@ async function start() {
                 processDecryptedPayload(tado_payload, macInfo, innerProto, seq, 'unfragmented', {
                     rssi,
                     keyName,
-                    rawHex: data.hex
+                    rawHex: data.hex,
+                    decryptedRaw: decrypted
                 });
             } else if (result.type === 'incomplete') {
                 statsIncompleteFragment++;
@@ -592,7 +635,8 @@ async function start() {
                 processDecryptedPayload(reassembled, macInfo, innerProto, seq, 'complete', {
                     rssi,
                     keyName,
-                    rawHex: data.hex
+                    rawHex: data.hex,
+                    decryptedRaw: decrypted
                 }, {
                     tag: result.tag,
                     size: result.size,

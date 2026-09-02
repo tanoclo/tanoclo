@@ -173,9 +173,9 @@ Once decrypted (or prior to encryption during transmission), the plaintext paylo
 | :--- | :--- | :--- | :--- |
 | `0..2` | `SRC_EXT_tail` | 3 | Last 3 bytes of Source Extended MAC (`mac_addr[5..7]`). |
 | `3` | `Inner Protocol Header` | 1 | `0x04` for standard data/CoAP, `0x3B` for ICMPv6 RA broadcast. |
-| `4..7` | `Sequence Counter` | 4 | 4-byte sequence counter: `[frame_seq, 0x00, 0x00, 0x00]`. |
-| `8` | `Tado 6LoWPAN Dispatch` | 1 | `0x7E` (Tado Custom 6LoWPAN UDP encapsulation). |
-| `9..14` | `6LoWPAN UDP NHC Header` | 6 | Port compression: `0x33 0xF0 0x16 0x33 <dst_port_hi> <dst_port_lo>`. |
+| `4` | `Sequence Number` | 1 | 1-byte frame sequence number. |
+| `5..8` | `Tado Custom Dispatch` | 4 | Sender Short Addr (2B LE) + Context (1B) + Dispatch Mode (1B: `0x7E`/`0x7C`/`0x7A`). |
+| `9..14` | `6LoWPAN IPHC / NHC Header` | 6 | Port compression: `0x33 0xF0 0x16 0x33 <dst_port_hi> <dst_port_lo>` (or 7B `0xF7 0x00 0xF0...`). |
 | `15..16` | `IPv6 UDP Checksum` | 2 | Standard RFC 768 / RFC 2460 UDP checksum over link-local IPv6 pseudo-header. |
 | `17..N` | `CoAP Protocol Message` | Variable | Encapsulated standard RFC 7252 CoAP datagram. |
 | `N+1..N+2` | `CRC16-Kermit Trailer` | 2 | CRC-16 Kermit checksum computed over `frame_header (16B) + plaintext`. |
@@ -381,14 +381,14 @@ To illustrate the complete decapsulation stack, consider a telemetry status fram
 
 ### 6.1 Raw Encrypted Frame (Over the Air)
 ```hex
-69 EC 4D AB CD 11 22 33 44 55 66 77 88 50 01 02 
+69 EC 4D 11 22 11 22 33 44 55 66 77 88 50 01 02 
 FA DB C0 EF FE A9 DB E4 18 C0 AA BB DD 12 CC FF
 ```
 1.  **SX1276 FSK Sync Word Match:** Matches `D3 91`. Carrier tuned to $868.3237\text{ MHz}$.
 2.  **MAC Frame Header Parsing:**
     - FCF: `frame[0..1] = 0x69 0xEC` (`0xEC69` -> Security enabled Data Frame).
     - Sequence No: `frame[2] = 0x4D`.
-    - PAN ID: `frame[3..4] = 0xAB 0xCD` (`0xCDAB`).
+    - PAN ID: `frame[3..4] = 0x11 0x22` (matches `dst_mac[0..1]`).
     - Dest Extended Address: `frame[5..12] = 11 22 33 44 55 66 77 88`.
     - Src Extended Address (Clear prefix): `frame[13..15] = 50 01 02`.
 3.  **AES-128-CCM Decryption:**
@@ -435,7 +435,7 @@ Coordinated Sample Listening (CSL) Multipurpose Beacon frames. These are 12 byte
 | buffer[0] | 1 | SX1276 Length Byte | `0x0C` | Always 12 (not part of IEEE frame) |
 | buffer[1] | 1 | FCF LSB | `0x25` | bits[2:0]=0x05 (Multipurpose type) |
 | buffer[2] | 1 | Sequence Number | `0x3B` | Increments per burst cycle |
-| buffer[3..4] | 2 | PAN ID | `0xCD 0xAB` | Little-endian. `0xABCD` during pairing. |
+| buffer[3..4] | 2 | PAN ID | `0xFF 0xFF` | Little-endian. Matches `dst_short` (`0xFFFF` for broadcast). |
 | buffer[5..6] | 2 | Destination Short Addr | `0xFF 0xFF` | `0xFFFF` = broadcast, or specific VA addr |
 | buffer[7..8] | 2 | Source Short Addr | `0x82 0x0E` | **`0x0E82` = Internet Bridge** |
 | buffer[9..10] | 2 | **CSL Countdown** | `0xF8 0x00` | Little-endian. 320 µs/tick. |
@@ -448,13 +448,13 @@ Coordinated Sample Listening (CSL) Multipurpose Beacon frames. These are 12 byte
 - **Period constant:** `0x3F80` corresponds to a ~5 second CSL period.
 
 ### 7.3 Operational Mode Beacons
-CSL beacons are also broadcast during normal operational mode using the user's operational
-PAN ID. The destination address may target individual VA short addresses rather than broadcast
+CSL beacons are also broadcast during normal operational mode.
+The destination address may target individual VA short addresses rather than broadcast
 `0xFFFF`. Source is always `0x0E82`.
 
 ### 7.4 CSL Beacons in Pairing
 During pairing:
-- **Broadcast Beacons:** The Internet Bridge broadcasts CSL beacons to `0xFFFF` under PAN `0xABCD` (or the fallback PAN ID derived from the IB's MAC).
+- **Broadcast Beacons:** The Internet Bridge broadcasts CSL beacons to `0xFFFF` under PAN `0xFFFF`.
 
 ---
 

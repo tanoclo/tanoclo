@@ -78,7 +78,7 @@ function hashToken(token) {
 
 
 /**
- * Port of Tado VA firmware hashing function (0x1750c)
+ * Tado hashing function used for device configuration.
  * Used for FID 0x015a (ETag) generation.
  */
 function tadoHashStep(dataByte, currentHash) {
@@ -249,9 +249,9 @@ function getPool() {
             };
             _log('info', `Creating pool for ${dbConfig.user}@${dbConfig.host}/${dbConfig.database}`);
             const rawPool = mysql.createPool(dbConfig);
-            
+
             const wrapPromise = (origFn, context) => {
-                return async function(...args) {
+                return async function (...args) {
                     try {
                         return await origFn.apply(context, args);
                     } catch (err) {
@@ -265,7 +265,7 @@ function getPool() {
             rawPool.execute = wrapPromise(rawPool.execute, rawPool);
 
             const origGetConnection = rawPool.getConnection;
-            rawPool.getConnection = async function(...args) {
+            rawPool.getConnection = async function (...args) {
                 try {
                     const conn = await origGetConnection.apply(rawPool, args);
                     if (conn) {

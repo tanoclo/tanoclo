@@ -54,6 +54,7 @@ function mapDevice(d) {
             })()
         },
         batteryState: d.battery_state || 'NORMAL',
+        batteryPercentage: d.battery_percent !== null && d.battery_percent !== undefined ? parseInt(d.battery_percent, 10) : null,
         mountingStateWithError: d.field_016a || null,
         temperatureOffset: parseFloat(d.field_0140 || 0),
         zoneId: d.zone_id ? parseInt(d.zone_id, 10) : null,
@@ -75,6 +76,7 @@ function mapDevice(d) {
 
     if ((d.device_type && d.device_type.startsWith('IB')) || mapped.isEmulated) {
         delete mapped.batteryState;
+        delete mapped.batteryPercentage;
     }
 
     if (d.device_type !== 'VA01' && d.device_type !== 'VA02') {

@@ -75,7 +75,7 @@ export default function DeviceSettingsGeneral({
   );
   const isOnlyDeviceInZone = zoneDevices.length <= 1;
 
-  const canUnassign = !isAssigned || (!isZoneController && !isMeasuringDevice && !isOnlyDeviceInZone);
+  const canUnassign = !isAssigned || Boolean(device?.isEmulated) || (!isZoneController && !isMeasuringDevice && !isOnlyDeviceInZone);
   return (
     <>
       {/* Friendly Name Card */}

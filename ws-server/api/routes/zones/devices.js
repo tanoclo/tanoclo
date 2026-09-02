@@ -64,6 +64,7 @@ router.delete('/:homeId/zones/:zoneId/devices/:deviceId', async (req, res) => {
         }
 
         await pool.execute('UPDATE devices SET zone_id = NULL WHERE home_id = ? AND zone_id = ? AND serial_no = ?', [homeId, zoneId, deviceId]);
+        await pool.execute('UPDATE emulated_devices SET zone_id = NULL WHERE serial_no = ?', [deviceId]).catch(() => {});
 
         // Check if zone now has 0 devices left
         const [counts] = await pool.execute('SELECT COUNT(*) as c FROM devices WHERE zone_id = ? AND home_id = ?', [zoneId, homeId]);

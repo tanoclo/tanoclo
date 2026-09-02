@@ -81,10 +81,14 @@ async function updateDeviceConnectionState(shortSerial, isConnected, batteryStat
 
     if (isConnected) {
         try {
-            await p.execute('UPDATE emulated_devices SET pairing_state = "PAIRED" WHERE serial_no = ? AND pairing_state = "PAIRING_RF"', [shortSerial]);
-            await p.execute('UPDATE devices SET in_pairing_mode = 0 WHERE serial_no = ? AND in_pairing_mode = 1', [shortSerial]);
+            await p.execute(`
+                UPDATE esp32_nodes en
+                JOIN emulated_devices ed ON ed.esp32_node_id = en.id
+                SET en.last_seen = ?, en.status = 'ONLINE', ed.last_telemetry = NOW()
+                WHERE ed.serial_no = ?
+            `, [now, shortSerial]);
         } catch (e) {
-            _log('debug', `Failed to update pairing state for device ${shortSerial}: ${e.message}`);
+            _log('debug', `Failed to update esp32_nodes for emulated device ${shortSerial}: ${e.message}`);
         }
     }
 }
@@ -426,9 +430,14 @@ async function createEsp32Node({ name, ip_address, api_port = 80, api_key = null
     return getEsp32NodeById(result.insertId);
 }
 
-async function updateEsp32NodeStatus(id, status) {
+async function updateEsp32NodeStatus(id, status, lastSeen = null) {
     const p = getPool();
-    await p.execute('UPDATE esp32_nodes SET status = ?, last_seen = ? WHERE id = ?', [status, new Date().toISOString(), id]);
+    if (status === 'ONLINE' || lastSeen) {
+        const now = lastSeen || new Date().toISOString();
+        await p.execute('UPDATE esp32_nodes SET status = ?, last_seen = ? WHERE id = ?', [status, now, id]);
+    } else {
+        await p.execute('UPDATE esp32_nodes SET status = ? WHERE id = ?', [status, id]);
+    }
 }
 
 async function deleteEsp32Node(id) {

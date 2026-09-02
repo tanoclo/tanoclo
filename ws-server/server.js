@@ -647,6 +647,17 @@ function startApiChildProcess() {
                     }
                     break;
                 }
+                case 'UNPUBLISH_DEVICE': {
+                    try {
+                        const mqttHaDiscovery = require('./lib/mqtt-ha-discovery');
+                        if (mqttHaDiscovery && typeof mqttHaDiscovery.unpublishDevice === 'function') {
+                            mqttHaDiscovery.unpublishDevice(msg.serial, msg.homeId);
+                        }
+                    } catch (unpubErr) {
+                        log('error', `[IPC] Failed to unpublish device ${msg.serial} via MQTT: ${unpubErr.message}`);
+                    }
+                    break;
+                }
             }
         } catch (err) {
             log('error', `[IPC] Error processing IPC message from API process: ${err.message}`);

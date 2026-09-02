@@ -156,6 +156,8 @@ async function handleAuthKey(ws, frame, coapMsg, decoded, peerInfo, rawData) {
 }
 
 async function handlePairFound(ws, frame, coapMsg, decoded, peerInfo, rawData) {
+    // Disabled pairing socket drop/block for now during testing
+    /*
     const { isBridgeBlocked } = require('./device-manager');
     const bridgeId = wsToBridgeId ? wsToBridgeId.get(ws) : null;
     if (isBridgeBlocked(bridgeId)) {
@@ -164,6 +166,7 @@ async function handlePairFound(ws, frame, coapMsg, decoded, peerInfo, rawData) {
         try { ws.end(); } catch(e) {}
         return;
     }
+    */
 
     log('info', `PAIR_FOUND received from Bridge: ipv6=${peerInfo.ipv6} payloadHex=${coapMsg.payload ? coapMsg.payload.toString('hex') : 'empty'}`);
 

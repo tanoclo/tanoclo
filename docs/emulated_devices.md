@@ -67,7 +67,7 @@ Emulated devices mimic genuine Tado hardware specifications:
 ### 2.3 RF & 6LoWPAN Protocol Stack
 
 #### 2.3.1 Physical & Link Layer (IEEE 802.15.4 FSK)
-- **Modulation**: 868.323 MHz (Channel 26), 250 kbps, 2-FSK on Semtech SX1276.
+- **Modulation**: 868.323 MHz (Channel 26), 50 kbps, 2-FSK on Semtech SX1276.
 - **Frame Addressing**: Standard 802.15.4 Data and ACK frames using 64-bit extended MAC addressing (`00:1a:22:...` / `fe80::21b:c507:...`) with PAN ID compression.
 - **MAC Layer Auto-ACKs**:
   - The emulator automatically transmits Type `0x02` MAC ACKs for all incoming unicast frames addressed to its extended MAC.

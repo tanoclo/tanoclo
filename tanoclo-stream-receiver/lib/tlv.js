@@ -217,7 +217,7 @@ function decode(payload) {
         cur += 3;
 
         if (cur + len > payload.length) {
-            return { ok: false, error: 'TLV field length exceeds payload boundary', items, fields };
+            break;
         }
 
         const valueBuf = payload.subarray(cur, cur + len);
@@ -241,6 +241,35 @@ function decode(payload) {
         fields[hexId] = interpreted.value;
         if (label && label.name) {
             fields[label.name] = interpreted.value;
+        }
+    }
+
+    if (items.length === 0 && payload.length >= 2) {
+        // Fall back to 1-byte tag decoding
+        let cur1 = 0;
+        while (cur1 + 2 <= payload.length) {
+            const fid = payload[cur1];
+            const len = payload[cur1 + 1];
+            cur1 += 2;
+            if (cur1 + len > payload.length) break;
+            const valueBuf = payload.subarray(cur1, cur1 + len);
+            cur1 += len;
+            const hexId = '0x' + fid.toString(16).toLowerCase().padStart(4, '0');
+            const label = getLabel(fid);
+            const interpreted = interpretValue(valueBuf, label);
+            const name = label && label.name ? label.name : hexId;
+            items.push({
+                fid: hexId,
+                name,
+                type: label ? label.type : 'bytes',
+                value: interpreted.value,
+                raw: interpreted.raw,
+                length: len
+            });
+            fields[hexId] = interpreted.value;
+            if (label && label.name) {
+                fields[label.name] = interpreted.value;
+            }
         }
     }
 

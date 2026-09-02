@@ -8,17 +8,17 @@ This document provides complete technical specifications of the radio-frequency 
 
 Initial trust bootstrapping and operational onboarding consist of four distinct phases:
 
-1. **Discovery & Beaconing Phase (Phase 1):** The unassociated device broadcasts encrypted ICMPv6 Router Solicitations (RS) under the static `tado pairing key`. The IB responds with an ICMPv6 Router Advertisement (RA), enabling the device to capture the IB's 8-byte EUI-64 MAC address and 16-bit PAN ID.
+1. **Discovery & Beaconing Phase (Phase 1):** The unassociated device broadcasts encrypted ICMPv6 Router Solicitations (RS) under the static `tado pairing key`. The IB responds with an ICMPv6 Router Advertisement (RA), enabling the device to capture the IB's 8-byte EUI-64 MAC address (the IEEE 802.15.4 wire PAN ID is always the low 2 bytes of the destination MAC `dst[0..1]`).
 2. **Proactive Key Push Phase (Phase 2):** The Internet Bridge sends a CoAP `POST /d/pair` under the static Pairing Key, distributing the 16-byte network Operational Key ($K_{\text{op}}$).
    - **Online Mode:** Key is encrypted with the device's factory key ($K_{\text{factory}}$ / $K_{\text{NVM-34}}$) via AES-ECB (TLV `0x07`).
    - **Offline Mode:** Key is pushed in plaintext inside TLV `0x12` (or TLV `0x0262` / `0x0155`).
-   - The device confirms receipt by replying with a CoAP `2.04 Changed` ACK.
+   - The device confirms receipt by replying with a CoAP `2.04 Changed` ACK with Option 12 (`Content-Format: 42`).
 3. **Neighbor Resolution & Token Acquisition (Phase 3):** The IB queries the device via ICMPv6 Neighbor Solicitation (`0x87`), and the device responds with Neighbor Advertisement (`0x88`). The device requests a session token via CoAP `POST auth/token` (TLV `0x0260`), and receives an 8-byte Session Token (`0x025E` / CoAP Option 2048).
 4. **Post-Pairing Onboarding Sequence (Phase 4):** The newly paired node executes a structured, staggered bootup handshake (`PUT /d/{serial}/fw/state`, `GET /d/{serial}/config`, `PUT /d/{serial}/act`, `PUT /d/{serial}/err`, and `PUT /d/{serial}/sen`) under the Operational Key.
 
 > [!NOTE]
-> **MAC Address:**
-> The 8-byte EUI-64 MAC address (`00:1B:C5:07:xx:xx:xx:xx`) is assigned at the physical radio layer and burned into hardware flash (Sector 508 on VA/RU).
+> **MAC Address & Wire PAN ID:**
+> The 8-byte EUI-64 MAC address (`00:1B:C5:07:xx:xx:xx:xx`) is assigned at the physical radio layer. The IEEE 802.15.4 destination PAN ID field on the wire (`hdr[3..4]`) is always the low 2 bytes of the destination address (`dst[0..1]`, or `0xFFFF` for broadcast).
 
 ---
 
@@ -32,9 +32,9 @@ sequenceDiagram
     participant Cloud as "TaNoClo / Cloud Backend"
 
     Note over DEV, IB: PHASE 1: DISCOVERY & BEACONING (Static Pairing Key)
-    DEV->>IB: Broadcast Router Solicitation (RS)<br/>FCF: 0x49E8 | Dest: 0xFFFF | Src: DEV MAC | AES-CCM (tado pairing key)
-    IB->>DEV: Broadcast Router Advertisement (RA)<br/>FCF: 0xEC69 | ICMPv6 Type 0x86 (RA) | Contains IB MAC & PAN ID
-    DEV->>IB: Unicast Echo Request / RS (2.0s Interval)<br/>FCF: 0x69EC | Dest: IB MAC | Src: DEV MAC
+    DEV->>IB: Broadcast Router Solicitation (RS)<br/>FCF: 0x49E8 | Dest: 0xFFFF | PAN: 0xFFFF | Src: DEV MAC | AES-CCM (tado pairing key)
+    IB->>DEV: Broadcast Router Advertisement (RA)<br/>FCF: 0xEC69 | ICMPv6 Type 0x86 (RA) | Contains IB MAC
+    DEV->>IB: Unicast Echo Request / RS (2.0s Interval)<br/>FCF: 0x69EC | Dest: IB MAC | PAN: IB MAC[0..1] | Src: DEV MAC
 
     Note over DEV, IB: PHASE 2: PROACTIVE KEY PUSH (POST /d/pair)
     alt Cloud Online Mode (Provisioned Device)
@@ -76,7 +76,7 @@ sequenceDiagram
 
 | Key Level | Length | Storage / Location | Purpose |
 |---|---|---|---|
-| **Static Pairing Key** | 16 Bytes | Hardcoded in firmware (`"tado pairing key"` / `74 61 64 6f 20 70 61 69 72 69 6e 67 20 6b 65 79`) | Encrypts discovery beacons, Router Solicitations, and `POST /d/pair` frames. |
+| **Static Pairing Key** | 16 Bytes | Hardcoded (`"tado pairing key"` / `74 61 64 6f 20 70 61 69 72 69 6e 67 20 6b 65 79`) | Encrypts discovery beacons, Router Solicitations, and `POST /d/pair` frames. |
 | **Factory Key ($K_{\text{factory}}$ / $K_{\text{NVM-34}}$)** | 16 Bytes | Burned in factory NVS (Sector 508) & Cloud DB | Device-unique key used to decrypt the Operational Key in Online Mode (TLV `0x07`). |
 | **Operational Key ($K_{\text{op}}$)** | 16 Bytes | Network-wide shared key (NVRAM Index 7) | Encrypts all regular operational CoAP traffic.
 | **Session Token** | 8 Bytes | Volatile session state (Option 2048 / TLV `0x025E`) | Ephemeral session credential attached to CoAP requests for backend validation. |
