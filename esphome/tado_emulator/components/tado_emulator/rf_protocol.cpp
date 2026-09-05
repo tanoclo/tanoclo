@@ -66,11 +66,46 @@ uint16_t crc16_kermit(const uint8_t *h16, const uint8_t *pt, size_t pt_len) {
 // ---------------------------------------------------------------------------
 
 bool parse_mac_header(const uint8_t *frame, size_t len, const uint8_t *decrypted, size_t dec_len, ParsedMac &out) {
-  if (!frame || len < 5) return false;
+  if (!frame || len < 3) return false;
 
   out.fcf = frame[0] | ((uint16_t)frame[1] << 8);
   out.seq = frame[2];
+  out.is_ack = false;
+
+  // Check for 802.15.4 ACK frame (Frame Type 2 or FCF 0xEE42 / 0x0002)
+  if ((out.fcf & 0x07) == 2 || out.fcf == MAC_FCF_COORD_FRAME || out.fcf == MAC_FCF_MAC_ACK) {
+    out.is_ack = true;
+    if (out.fcf == MAC_FCF_COORD_FRAME) {
+      if (len >= 19) {
+        std::memcpy(out.dst_mac, frame + 3, 8);
+        std::memcpy(out.src_mac, frame + 11, 8);
+        out.header_len = 19;
+        out.valid = true;
+        return true;
+      }
+    }
+    if (len >= 3) {
+      out.header_len = 3;
+      out.valid = true;
+      return true;
+    }
+    return false;
+  }
+
+  if (len < 5) return false;
   uint8_t dst_mode = (out.fcf >> 10) & 0x03;
+
+  // Check for Tado Broadcast Data Frame (FCF 0xE849, DST_MODE 2, SRC_MODE 3, DstAddr 0xFFFF, 8B SrcMAC)
+  if ((out.fcf == 0xE849 || out.fcf == 0xE840 || (dst_mode == 2 && ((out.fcf >> 14) & 3) == 3)) &&
+      len >= 16 && frame[3] == 0xFF && frame[4] == 0xFF) {
+    out.is_broadcast = true;
+    out.pan_id = 0xFFFF;
+    std::memset(out.dst_mac, 0xFF, 8);
+    std::memcpy(out.src_mac, frame + 5, 8);
+    out.header_len = 16;
+    out.valid = true;
+    return true;
+  }
 
   size_t offset = 3;
   if (dst_mode == 2) { // 16-bit short address
@@ -345,7 +380,7 @@ int find_coap_offset(const uint8_t *buf, size_t len, uint16_t *out_src_port, uin
   return -1;
 }
 
-static void mac_to_ipv6(const uint8_t *mac, uint8_t *ip) {
+void mac_to_ipv6(const uint8_t *mac, uint8_t *ip) {
   std::memset(ip, 0, 16);
   if (!mac || (mac[0] == 0xFF && mac[7] == 0xFF)) {
     // All-routers multicast ff02::2 (RFC 4861 Router Solicitation)
@@ -609,13 +644,13 @@ std::vector<uint8_t> build_router_solicitation(const uint8_t *src_mac, const uin
   return pt;
 }
 
-std::vector<uint8_t> build_neighbor_advertisement(const uint8_t *src_mac, const uint8_t *dst_mac) {
+std::vector<uint8_t> build_neighbor_advertisement(const uint8_t *src_mac, const uint8_t *dst_mac, bool solicited) {
   std::vector<uint8_t> icmp;
   icmp.push_back(ICMPV6_TYPE_NEIGHBOR_ADVERT); // 136
   icmp.push_back(0);                          // Code 0
   icmp.push_back(0);                          // Checksum MSB
   icmp.push_back(0);                          // Checksum LSB
-  icmp.push_back(0x60);                       // Flags (Solicited + Override)
+  icmp.push_back(solicited ? 0x60 : 0x20);    // Flags: S=1, O=1 (0x60) if solicited; O=1 (0x20) if unsolicited
   icmp.push_back(0); icmp.push_back(0); icmp.push_back(0);
 
   // Target IPv6 (our link-local address)
@@ -1014,6 +1049,38 @@ std::vector<uint8_t> build_d_fw_state_tlv(uint16_t fw_version, uint16_t other_sl
   append_tlv_u8(tlv, TLV_DEV_TYPE_CODE, 10); // RU02 = 10
   append_tlv_u8(tlv, TLV_FW_STATE_AUX, 14);
   append_tlv_string(tlv, TLV_FW_BUILD_ID, build_id);
+  return tlv;
+}
+
+std::vector<uint8_t> build_d_info_tlv(const std::string &serial_no, uint16_t fw_version) {
+  std::vector<uint8_t> tlv;
+  append_tlv_u16(tlv, TLV_DEV_CAPABILITIES_01F9, 0x0001);
+  append_tlv_u16(tlv, TLV_FW_OTHER_SLOT, fw_version);
+  append_tlv_string(tlv, TLV_DEV_SERIAL_0001, serial_no);
+  append_tlv_u8(tlv, TLV_DEV_HW_FLAGS_01F5, 0x01);
+  append_tlv_u8(tlv, TLV_DEV_HW_FLAGS_01F6, 0x0D);
+  append_tlv_u8(tlv, TLV_DEV_HW_FLAGS_01F7, 0x7F);
+  append_tlv_u8(tlv, TLV_DEV_HW_FLAGS_01F8, 0x00);
+  append_tlv_u8(tlv, TLV_DEV_HW_FLAGS_013F, 0x00);
+  return tlv;
+}
+
+std::vector<uint8_t> build_z_extui_tlv(const std::string &url_s, const std::string &url_p) {
+  std::vector<uint8_t> tlv;
+  append_tlv_string(tlv, TLV_EXTUI_TARGET_URL_S, url_s.empty() ? "coap://" : url_s);
+  append_tlv_string(tlv, TLV_EXTUI_TARGET_URL_P, url_p.empty() ? "coap://" : url_p);
+  return tlv;
+}
+
+std::vector<uint8_t> build_z_s_tlv(uint8_t mode, uint8_t zone_id, float target_temp_c) {
+  std::vector<uint8_t> tlv;
+  append_tlv_u8(tlv, 0x6240, 0);
+  append_tlv_u16(tlv, TLV_ZONE_TARGET_TEMP_6200, (uint16_t)(target_temp_c * 100.0f));
+  append_tlv_u8(tlv, 0x61e0, 1);
+  append_tlv_u8(tlv, TLV_ZONE_MODE_6160, mode);
+  append_tlv_u8(tlv, 0x6180, 0);
+  append_tlv_u8(tlv, TLV_ZONE_ID_6020, zone_id);
+  append_tlv_u8(tlv, 0x62e0, 0);
   return tlv;
 }
 

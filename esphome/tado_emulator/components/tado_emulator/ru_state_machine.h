@@ -29,6 +29,8 @@ enum RUState : uint8_t {
 // RFC 7252 §4.2 CON retransmission entry
 struct PendingCON {
   uint16_t mid{0};
+  uint8_t seq{0};
+  bool mac_confirmed{false};
   std::vector<uint8_t> frame;
   uint32_t next_tx_ms{0};
   uint32_t timeout_ms{2000};  // ACK_TIMEOUT = 2s, doubles each retry
@@ -60,11 +62,15 @@ struct EmulatedDeviceConfig {
   uint16_t target_battery_mv{4500};     // 3xAAA nominal full = 4500 mV
   uint16_t target_ambient_light{6249};
   bool child_lock{false};
+  std::string target_url_p{"coap://"};
+  std::string target_url_s{"coap://"};
+  uint8_t zone_mode{1};                 // 1 = heating
 
   // Timing and Sequence Tracking
   uint8_t seq_num{1};
   uint16_t coap_mid{0x4000};
   uint32_t last_telemetry_ts{0};
+  uint32_t last_link_probe_ts{0};
   uint32_t last_pair_tx_time_{0};
   uint8_t pair_tx_count_{0};
   uint32_t idle_fallback_s{900};        // 15 minutes idle fallback interval
@@ -100,6 +106,7 @@ class RUStateMachine {
                                  const uint8_t *rx_key = nullptr);
   void process_csl_strobe(uint8_t strobe_seq, uint16_t dst_short, uint16_t countdown,
                           std::vector<std::vector<uint8_t>> &outbound_frames);
+  void handle_mac_ack(uint8_t seq);
 
   // Frame building helpers
   std::vector<uint8_t> build_encrypted_coap_frame(uint8_t type, uint8_t code, const std::string &path,

@@ -460,19 +460,20 @@ async function createEmulatedDevice({ serial_no, esp32_node_id, device_type = 'R
     const p = getPool();
     const now = new Date().toISOString();
 
+    const inPairing = pairing_state === 'PAIRED' ? 0 : 1;
     // 1. Insert into standard devices table so frontend-new displays it as a regular device
     await p.execute(`
         INSERT INTO devices (
             serial_no, device_type, home_id, zone_id, current_fw_version,
             connection_state, connection_state_timestamp, ipv6_address, in_pairing_mode, factory_key
-        ) VALUES (?, ?, ?, ?, ?, 1, ?, ?, 1, ?)
+        ) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE
             home_id = VALUES(home_id),
             zone_id = VALUES(zone_id),
             ipv6_address = VALUES(ipv6_address),
             factory_key = VALUES(factory_key),
-            in_pairing_mode = 1
-    `, [serial_no, device_type, home_id, zone_id, '95.1', now, ipv6_address, factory_key]);
+            in_pairing_mode = VALUES(in_pairing_mode)
+    `, [serial_no, device_type, home_id, zone_id, '95.1', now, ipv6_address, inPairing, factory_key]);
 
     // 2. Insert into emulated_devices tracking table
     await p.execute(`

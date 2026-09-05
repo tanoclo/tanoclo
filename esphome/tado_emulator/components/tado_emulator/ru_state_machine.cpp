@@ -68,6 +68,11 @@ void RUStateMachine::trigger_pairing(std::vector<std::vector<uint8_t>> &outbound
 void RUStateMachine::tick(uint32_t now_ms, uint32_t now_s, std::vector<std::vector<uint8_t>> &outbound_frames) {
   // 0. CON retransmission engine (RFC 7252 §4.2) — runs in ALL states
   for (auto it = config_.pending_cons.begin(); it != config_.pending_cons.end(); ) {
+    if (it->mac_confirmed) {
+      // MAC confirmed delivery over RF; suppress RF retransmissions while waiting for upstream response
+      ++it;
+      continue;
+    }
     if (now_ms >= it->next_tx_ms) {
       if (it->retries >= PendingCON::MAX_RETRANSMIT) {
         ESP_LOGW(TAG, "[%s] CON MID=0x%04X failed after %d retries",
@@ -87,8 +92,18 @@ void RUStateMachine::tick(uint32_t now_ms, uint32_t now_s, std::vector<std::vect
     }
   }
 
-  // 1. Operational State: Idle Heartbeat Fallback
+  // 1. Operational State: Idle Heartbeat Fallback & Periodic NA keepalive
   if (config_.state == STATE_OPERATIONAL) {
+    // 1a. Periodic Link Probe Echo Request (every 300s / 5 min to refresh Contiki uip_ds6_nbr)
+    if (config_.last_link_probe_ts == 0 || (now_s - config_.last_link_probe_ts >= 300)) {
+      config_.last_link_probe_ts = now_s;
+      std::vector<uint8_t> echo_pt = protocol::build_echo_request(0x1234, config_.seq_num++, nullptr, 0,
+                                                                 config_.mac_addr, config_.ib_mac);
+      std::vector<uint8_t> frame = build_encrypted_icmp_frame(echo_pt, config_.ib_mac);
+      if (!frame.empty()) outbound_frames.push_back(frame);
+      ESP_LOGI(TAG, "[%s] Emitted periodic Link Probe Echo Request (300s)", config_.serial_no.c_str());
+    }
+
     if (config_.last_telemetry_ts == 0) {
       config_.last_telemetry_ts = now_s;
     } else if (now_s - config_.last_telemetry_ts >= config_.idle_fallback_s) {
@@ -190,12 +205,20 @@ void RUStateMachine::process_inbound_decrypted(const ParsedMac &mac, const uint8
                  config_.serial_no.c_str());
       }
     } else if (icmp.type == ICMPV6_TYPE_NEIGHBOR_SOLICIT) {
-      // Immediate Neighbor Advertisement (136)
-      std::vector<uint8_t> na_pt = protocol::build_neighbor_advertisement(config_.mac_addr, mac.src_mac);
-      std::vector<uint8_t> frame = build_encrypted_icmp_frame(na_pt, mac.src_mac, rx_key);
-      if (!frame.empty()) outbound_frames.push_back(frame);
-      ESP_LOGI(TAG, "[%s] Received Neighbor Solicitation from IB! Responded with Neighbor Advertisement (NA)",
-               config_.serial_no.c_str());
+      // Immediate Solicited Neighbor Advertisement (136)
+      bool target_matches = true;
+      if (icmp.body.size() >= 20) {
+        uint8_t our_ip[16];
+        protocol::mac_to_ipv6(config_.mac_addr, our_ip);
+        target_matches = (std::memcmp(icmp.body.data() + 4, our_ip, 16) == 0);
+      }
+      if (target_matches) {
+        std::vector<uint8_t> na_pt = protocol::build_neighbor_advertisement(config_.mac_addr, mac.src_mac, true);
+        std::vector<uint8_t> frame = build_encrypted_icmp_frame(na_pt, mac.src_mac, rx_key);
+        if (!frame.empty()) outbound_frames.push_back(frame);
+        ESP_LOGI(TAG, "[%s] Received Neighbor Solicitation from IB! Responded with Solicited NA (flags=0x60)",
+                 config_.serial_no.c_str());
+      }
     }
     return;
   }
@@ -223,6 +246,27 @@ void RUStateMachine::process_csl_strobe(uint8_t strobe_seq, uint16_t dst_short, 
     std::vector<uint8_t> poll = protocol::build_csl_data_poll(strobe_seq, dst_short,
                                                              config_.mac_addr, dst_short);
     outbound_frames.push_back(poll);
+  }
+}
+
+void RUStateMachine::handle_mac_ack(uint8_t seq) {
+  for (auto it = config_.pending_cons.begin(); it != config_.pending_cons.end(); ) {
+    if (it->seq == seq) {
+      if (config_.state == STATE_OPERATIONAL) {
+        ESP_LOGI(TAG, "[%s] MAC ACK received for operational CON MID=0x%04X seq=%u -> completed",
+                 config_.serial_no.c_str(), it->mid, seq);
+        it = config_.pending_cons.erase(it);
+        return;
+      } else {
+        ESP_LOGI(TAG, "[%s] MAC ACK received for onboarding CON MID=0x%04X seq=%u -> delivery confirmed",
+                 config_.serial_no.c_str(), it->mid, seq);
+        it->mac_confirmed = true;
+        ++it;
+        return;
+      }
+    } else {
+      ++it;
+    }
   }
 }
 
@@ -400,6 +444,121 @@ void RUStateMachine::handle_coap_message(const ParsedCoAP &coap, const ParsedMac
     return;
   }
 
+  // Case 6: Inbound GET /d/info (Device Info Query)
+  if (coap.code == COAP_CODE_GET && (coap.uri_path == "d/info" || coap.uri_path.find("/info") != std::string::npos)) {
+    std::vector<uint8_t> info_tlv = protocol::build_d_info_tlv(config_.serial_no, 13762);
+    std::vector<uint8_t> ack_coap = protocol::serialize_coap(COAP_TYPE_ACK, COAP_CODE_CONTENT, coap.mid,
+                                                            coap.token.data(), coap.token.size(), "",
+                                                            info_tlv.data(), info_tlv.size());
+    std::vector<uint8_t> pt = protocol::encapsulate_6lowpan_udp(ack_coap.data(), ack_coap.size(),
+                                                               config_.mac_addr, mac.src_mac,
+                                                               coap.dst_port, coap.src_port,
+                                                               0x7E);
+    std::vector<uint8_t> frame = build_encrypted_icmp_frame(pt, mac.src_mac, rx_key);
+    if (!frame.empty()) outbound_frames.push_back(frame);
+    ESP_LOGI(TAG, "[%s] Responded to GET /d/info (Task_Device_HW_Info)", config_.serial_no.c_str());
+    return;
+  }
+
+  // Case 7: Inbound GET /z/extui (Zone External UI Query)
+  if (coap.code == COAP_CODE_GET && (coap.uri_path == "z/extui" || coap.uri_path.rfind("z/extui", 0) == 0)) {
+    std::vector<uint8_t> extui_tlv = protocol::build_z_extui_tlv(config_.target_url_s, config_.target_url_p);
+    std::vector<uint8_t> ack_coap = protocol::serialize_coap(COAP_TYPE_ACK, COAP_CODE_CONTENT, coap.mid,
+                                                            coap.token.data(), coap.token.size(), "",
+                                                            extui_tlv.data(), extui_tlv.size());
+    std::vector<uint8_t> pt = protocol::encapsulate_6lowpan_udp(ack_coap.data(), ack_coap.size(),
+                                                               config_.mac_addr, mac.src_mac,
+                                                               coap.dst_port, coap.src_port,
+                                                               0x7E);
+    std::vector<uint8_t> frame = build_encrypted_icmp_frame(pt, mac.src_mac, rx_key);
+    if (!frame.empty()) outbound_frames.push_back(frame);
+    ESP_LOGI(TAG, "[%s] Responded to GET /z/extui with target URLs", config_.serial_no.c_str());
+    return;
+  }
+
+  // Case 8: Inbound PUT /z/extui (Zone Binding Update)
+  if (coap.code == COAP_CODE_PUT && (coap.uri_path == "z/extui" || coap.uri_path.rfind("z/extui", 0) == 0)) {
+    auto tlvs = protocol::parse_tlvs(coap.payload.data(), coap.payload.size());
+    for (const auto &t : tlvs) {
+      if (t.tag == TLV_EXTUI_TARGET_URL_S && !t.value.empty()) {
+        config_.target_url_s.assign((const char *)t.value.data(), t.value.size());
+      } else if (t.tag == TLV_EXTUI_TARGET_URL_P && !t.value.empty()) {
+        config_.target_url_p.assign((const char *)t.value.data(), t.value.size());
+      }
+    }
+    // Reply with 2.01 Created ACK
+    std::vector<uint8_t> ack_coap = protocol::build_coap_ack(coap.mid, COAP_CODE_CREATED,
+                                                            coap.token.data(), coap.token.size());
+    std::vector<uint8_t> pt = protocol::encapsulate_6lowpan_udp(ack_coap.data(), ack_coap.size(),
+                                                               config_.mac_addr, mac.src_mac,
+                                                               coap.dst_port, coap.src_port,
+                                                               0x7E);
+    std::vector<uint8_t> frame = build_encrypted_icmp_frame(pt, mac.src_mac, rx_key);
+    if (!frame.empty()) outbound_frames.push_back(frame);
+    ESP_LOGI(TAG, "[%s] Stored binding URLs from PUT /z/extui and replied 2.01 Created", config_.serial_no.c_str());
+    return;
+  }
+
+  // Case 9: Inbound GET /z/p (Zone Telemetry Query)
+  if (coap.code == COAP_CODE_GET && (coap.uri_path == "z/p" || coap.uri_path.rfind("z/p", 0) == 0)) {
+    std::vector<uint8_t> zp_tlv = protocol::build_z_p_tlv(config_.target_temp_celsius, config_.target_humidity_pct);
+    std::vector<uint8_t> ack_coap = protocol::serialize_coap(COAP_TYPE_ACK, COAP_CODE_CONTENT, coap.mid,
+                                                            coap.token.data(), coap.token.size(), "",
+                                                            zp_tlv.data(), zp_tlv.size());
+    std::vector<uint8_t> pt = protocol::encapsulate_6lowpan_udp(ack_coap.data(), ack_coap.size(),
+                                                               config_.mac_addr, mac.src_mac,
+                                                               coap.dst_port, coap.src_port,
+                                                               0x7E);
+    std::vector<uint8_t> frame = build_encrypted_icmp_frame(pt, mac.src_mac, rx_key);
+    if (!frame.empty()) outbound_frames.push_back(frame);
+    ESP_LOGI(TAG, "[%s] Responded to GET /z/p with temp=%.2f hum=%.1f",
+             config_.serial_no.c_str(), config_.target_temp_celsius, config_.target_humidity_pct);
+    return;
+  }
+
+  // Case 10: Inbound GET /z/s (Zone State Query)
+  if (coap.code == COAP_CODE_GET && (coap.uri_path == "z/s" || coap.uri_path.rfind("z/s", 0) == 0)) {
+    std::vector<uint8_t> zs_tlv = protocol::build_z_s_tlv(config_.zone_mode, config_.zone_id, config_.target_temp_celsius);
+    std::vector<uint8_t> ack_coap = protocol::serialize_coap(COAP_TYPE_ACK, COAP_CODE_CONTENT, coap.mid,
+                                                            coap.token.data(), coap.token.size(), "",
+                                                            zs_tlv.data(), zs_tlv.size());
+    std::vector<uint8_t> pt = protocol::encapsulate_6lowpan_udp(ack_coap.data(), ack_coap.size(),
+                                                               config_.mac_addr, mac.src_mac,
+                                                               coap.dst_port, coap.src_port,
+                                                               0x7E);
+    std::vector<uint8_t> frame = build_encrypted_icmp_frame(pt, mac.src_mac, rx_key);
+    if (!frame.empty()) outbound_frames.push_back(frame);
+    ESP_LOGI(TAG, "[%s] Responded to GET /z/s", config_.serial_no.c_str());
+    return;
+  }
+
+  // Case 11: Inbound PUT /z/s (Zone Setpoint Update)
+  if (coap.code == COAP_CODE_PUT && (coap.uri_path == "z/s" || coap.uri_path.rfind("z/s", 0) == 0)) {
+    auto tlvs = protocol::parse_tlvs(coap.payload.data(), coap.payload.size());
+    for (const auto &t : tlvs) {
+      if (t.tag == TLV_ZONE_TARGET_TEMP_6200 && t.value.size() >= 2) {
+        uint16_t raw_temp = (t.value[0] << 8) | t.value[1];
+        config_.target_temp_celsius = raw_temp / 100.0f;
+      } else if (t.tag == TLV_ZONE_MODE_6160 && !t.value.empty()) {
+        config_.zone_mode = t.value[0];
+      } else if (t.tag == TLV_ZONE_ID_6020 && !t.value.empty()) {
+        config_.zone_id = t.value[0];
+      }
+    }
+    // Reply with 2.04 Changed ACK
+    std::vector<uint8_t> ack_coap = protocol::build_coap_ack(coap.mid, COAP_CODE_CHANGED,
+                                                            coap.token.data(), coap.token.size());
+    std::vector<uint8_t> pt = protocol::encapsulate_6lowpan_udp(ack_coap.data(), ack_coap.size(),
+                                                               config_.mac_addr, mac.src_mac,
+                                                               coap.dst_port, coap.src_port,
+                                                               0x7E);
+    std::vector<uint8_t> frame = build_encrypted_icmp_frame(pt, mac.src_mac, rx_key);
+    if (!frame.empty()) outbound_frames.push_back(frame);
+    ESP_LOGI(TAG, "[%s] Updated setpoint from PUT /z/s: target_temp=%.2fC, mode=%u, replied 2.04 Changed",
+             config_.serial_no.c_str(), config_.target_temp_celsius, config_.zone_mode);
+    return;
+  }
+
   // Case 6: Standard CON request requiring empty 2.04 Changed ACK
   if (coap.type == COAP_TYPE_CON) {
     std::vector<uint8_t> ack_coap = protocol::build_coap_ack(coap.mid, COAP_CODE_CHANGED,
@@ -441,6 +600,8 @@ std::vector<uint8_t> RUStateMachine::build_encrypted_coap_frame(uint8_t type, ui
     uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000ULL);
     PendingCON pending;
     pending.mid = mid;
+    pending.seq = seq;
+    pending.mac_confirmed = false;
     pending.frame = frame;
     pending.timeout_ms = 2000;
     pending.next_tx_ms = now_ms + pending.timeout_ms; // First retry after ACK_TIMEOUT
@@ -535,8 +696,13 @@ void RUStateMachine::advance_onboarding(std::vector<std::vector<uint8_t>> &outbo
       // sen ACK received → OPERATIONAL
       config_.state = STATE_OPERATIONAL;
       config_.last_telemetry_ts = (uint32_t)(esp_timer_get_time() / 1000000ULL);
+      config_.last_link_probe_ts = config_.last_telemetry_ts;
       config_.pending_cons.clear();
-      ESP_LOGI(TAG, "[%s] Onboarding complete! STATE_OPERATIONAL", config_.serial_no.c_str());
+      std::vector<uint8_t> echo_pt = protocol::build_echo_request(0x1234, config_.seq_num++, nullptr, 0,
+                                                                 config_.mac_addr, config_.ib_mac);
+      std::vector<uint8_t> frame = build_encrypted_icmp_frame(echo_pt, config_.ib_mac);
+      if (!frame.empty()) outbound_frames.push_back(frame);
+      ESP_LOGI(TAG, "[%s] Onboarding complete! STATE_OPERATIONAL (emitted initial Echo Request probe)", config_.serial_no.c_str());
       break;
     }
     default:

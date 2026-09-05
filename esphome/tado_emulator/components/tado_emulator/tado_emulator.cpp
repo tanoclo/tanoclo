@@ -148,6 +148,26 @@ void TadoEmulatorComponent::process_queued_packet(const RxPacket &pkt) {
     return;
   }
 
+  // Handle MAC-level ACKs (Enhanced ACK 0xEE42 or standard ACK 0x0002)
+  if (mac.is_ack) {
+    if (devices_mutex_ != nullptr && xSemaphoreTakeRecursive(devices_mutex_, pdMS_TO_TICKS(50)) == pdTRUE) {
+      for (auto &dev : devices_) {
+        const auto &cfg = dev.get_config();
+        bool match = (std::memcmp(cfg.mac_addr, mac.dst_mac, 8) == 0) ||
+                     (cfg.short_addr != 0 && cfg.short_addr == (mac.dst_mac[0] | ((uint16_t)mac.dst_mac[1] << 8)));
+        if (mac.header_len == 3) {
+          match = true;
+        }
+        if (match) {
+          ESP_LOGD(TAG, "RX MAC ACK seq=%u for dev=%s", mac.seq, cfg.serial_no.c_str());
+          dev.handle_mac_ack(mac.seq);
+        }
+      }
+      xSemaphoreGiveRecursive(devices_mutex_);
+    }
+    return;
+  }
+
   if (devices_mutex_ != nullptr && xSemaphoreTakeRecursive(devices_mutex_, pdMS_TO_TICKS(50)) == pdTRUE) {
     for (auto &dev : devices_) {
       const auto &cfg = dev.get_config();

@@ -89,7 +89,19 @@ enum TLVTag : uint16_t {
   TLV_FW_BUILD_ID = 0x0210,      // ASCII commit hash string
   TLV_ACTUATOR_ACTIVE = 0x028c,  // bool
   TLV_ZONE_TEMP_4060 = 0x4060,   // s16be, scale 0.01
-  TLV_ZONE_DEMAND_40A0 = 0x40a0  // u8, %
+  TLV_ZONE_DEMAND_40A0 = 0x40a0, // u8, %
+  TLV_DEV_SERIAL_0001 = 0x0001,
+  TLV_DEV_CAPABILITIES_01F9 = 0x01f9,
+  TLV_EXTUI_TARGET_URL_S = 0x01d4,
+  TLV_EXTUI_TARGET_URL_P = 0x01d5,
+  TLV_DEV_HW_FLAGS_01F5 = 0x01f5,
+  TLV_DEV_HW_FLAGS_01F6 = 0x01f6,
+  TLV_DEV_HW_FLAGS_01F7 = 0x01f7,
+  TLV_DEV_HW_FLAGS_01F8 = 0x01f8,
+  TLV_DEV_HW_FLAGS_013F = 0x013f,
+  TLV_ZONE_ID_6020 = 0x6020,
+  TLV_ZONE_MODE_6160 = 0x6160,
+  TLV_ZONE_TARGET_TEMP_6200 = 0x6200
 };
 
 // Decoded Frame Structures
@@ -101,6 +113,7 @@ struct ParsedMac {
   uint8_t dst_mac[8]{0};
   uint8_t src_mac[8]{0};
   bool is_broadcast{false};
+  bool is_ack{false};
   uint8_t header_len{16};
 };
 
@@ -165,6 +178,7 @@ std::vector<uint8_t> encapsulate_6lowpan_udp(const uint8_t *coap_data, size_t co
                                             uint8_t dispatch_mode = 0x7E);
 uint16_t compute_ipv6_checksum(const uint8_t *src_mac, const uint8_t *dst_mac, uint8_t proto,
                               const uint8_t *payload, size_t len);
+void mac_to_ipv6(const uint8_t *mac, uint8_t *ip);
 
 // ICMPv6
 bool parse_icmpv6(const uint8_t *decrypted, size_t len, ParsedICMPv6 &out);
@@ -173,7 +187,7 @@ std::vector<uint8_t> build_echo_request(uint16_t id, uint16_t seq, const uint8_t
 std::vector<uint8_t> build_echo_reply(uint16_t id, uint16_t seq, const uint8_t *body_data, size_t body_len,
                                      const uint8_t *src_mac, const uint8_t *dst_mac);
 std::vector<uint8_t> build_router_solicitation(const uint8_t *src_mac, const uint8_t *dst_mac);
-std::vector<uint8_t> build_neighbor_advertisement(const uint8_t *src_mac, const uint8_t *dst_mac);
+std::vector<uint8_t> build_neighbor_advertisement(const uint8_t *src_mac, const uint8_t *dst_mac, bool solicited = true);
 
 // RFC 7252 CoAP
 ParsedCoAP parse_coap(const uint8_t *data, size_t len);
@@ -207,6 +221,9 @@ std::vector<uint8_t> build_z_p_tlv(float temp_c, float hum_pct);
 std::vector<uint8_t> build_d_lock_tlv(bool locked);
 std::vector<uint8_t> build_d_fw_state_tlv(uint16_t fw_version = 13762, uint16_t other_slot = 13059,
                                          const std::string &build_id = "c54baf8");
+std::vector<uint8_t> build_d_info_tlv(const std::string &serial_no, uint16_t fw_version = 13762);
+std::vector<uint8_t> build_z_extui_tlv(const std::string &url_s, const std::string &url_p);
+std::vector<uint8_t> build_z_s_tlv(uint8_t mode, uint8_t zone_id, float target_temp_c);
 
 } // namespace protocol
 } // namespace tado_emulator
