@@ -3751,33 +3751,45 @@ paths:
       parameters:
         - *a1
         - in: query
-          name: fromDate
+          name: days
           required: false
           schema:
-            type: string
-            format: date
-        - in: query
-          name: toDate
-          required: false
-          schema:
-            type: string
-            format: date
+            type: integer
+            example: 30
       responses:
         "200":
           description: Daily energy consumption series
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    date:
-                      type: string
-                      format: date
-                    consumptionKWh:
-                      type: number
-                      example: 12.4
+                type: object
+                properties:
+                  homeId:
+                    type: integer
+                  days:
+                    type: integer
+                  boilerCapacityKw:
+                    type: number
+                  dailySummary:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        date:
+                          type: string
+                          format: date
+                        totalKwh:
+                          type: number
+                        avgPowerPercent:
+                          type: number
+                        avgTemperature:
+                          type: number
+                          nullable: true
+                        avgHumidity:
+                          type: number
+                          nullable: true
+                        samples:
+                          type: integer
   /homes/{homeId}/emailNotificationSettings:
     get:
       summary: Get home email notification preferences.

@@ -23,7 +23,7 @@ const _log = getLogger('homes-api');
 // --- lines 1203 to 1219 ---
 router.get('/:homeId/energy', async (req, res) => {
     try {
-        const homeId = req.params.homeId;
+        const homeId = parseInt(req.params.homeId, 10);
         const pool = db.getPool();
         const days = parseInt(req.query.days) || 30;
         const to = new Date();
@@ -43,7 +43,7 @@ router.get('/:homeId/energy', async (req, res) => {
 // --- lines 1220 to 1234 ---
 router.get('/:homeId/energy/daily', async (req, res) => {
     try {
-        const homeId = req.params.homeId;
+        const homeId = parseInt(req.params.homeId, 10);
         const pool = db.getPool();
         const days = parseInt(req.query.days) || 30;
 
