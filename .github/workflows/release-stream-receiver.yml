@@ -4,8 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'RF Sniffer Release version (e.g. 0.2.0)'
-        required: true
+        description: 'RF Sniffer Release version (e.g. 0.3.0). Leave empty to auto-bump patch.'
+        required: false
+        default: ''
         type: string
 
 permissions:
@@ -16,14 +17,12 @@ concurrency:
   group: tanoclo-workflows-queue
   queue: max
 
-env:
-  VERSION: ${{ github.event.inputs.version }}
-
 jobs:
   version-bump:
     runs-on: ubuntu-latest
     outputs:
-      tag: stream-receiver-v${{ github.event.inputs.version }}
+      tag: stream-receiver-v${{ steps.set-version.outputs.version }}
+      version: ${{ steps.set-version.outputs.version }}
       changelog: ${{ steps.changelog.outputs.changelog }}
     steps:
       - name: Checkout main
@@ -38,6 +37,53 @@ jobs:
         with:
           node-version: 24
           package-manager-cache: false
+
+      - name: Determine Stream Receiver version
+        id: set-version
+        run: |
+          node -e "
+            const { execSync } = require('child_process');
+            const fs = require('fs');
+
+            let inputVersion = ('${{ github.event.inputs.version }}' || '').trim();
+            let finalVersion = '';
+
+            if (inputVersion) {
+              finalVersion = inputVersion.replace(/^v/, '');
+            } else {
+              let prev = '';
+              try {
+                prev = execSync('git describe --tags --match \"stream-receiver-v*\" --abbrev=0 2>/dev/null', { encoding: 'utf8' }).trim();
+              } catch (e) {}
+
+              let currentVersion = '';
+              if (prev && prev.includes('stream-receiver-v')) {
+                currentVersion = prev.replace('stream-receiver-v', '');
+              } else {
+                try {
+                  const pkg = JSON.parse(fs.readFileSync('tanoclo-stream-receiver/package.json', 'utf8'));
+                  currentVersion = pkg.version || '0.2.8';
+                } catch (e) {
+                  currentVersion = '0.2.8';
+                }
+              }
+
+              const m = currentVersion.match(/^(\d+)\.(\d+)\.(\d+)(.*)$/);
+              if (m) {
+                finalVersion = m[1] + '.' + m[2] + '.' + (parseInt(m[3], 10) + 1);
+              } else {
+                finalVersion = currentVersion;
+              }
+            }
+
+            console.log('Resolved Stream Receiver version: ' + finalVersion);
+            if (process.env.GITHUB_ENV) {
+              fs.appendFileSync(process.env.GITHUB_ENV, 'VERSION=' + finalVersion + '\n');
+            }
+            if (process.env.GITHUB_OUTPUT) {
+              fs.appendFileSync(process.env.GITHUB_OUTPUT, 'version=' + finalVersion + '\n');
+            }
+          "
 
       - name: Bump RF Sniffer versions
         run: |
@@ -161,7 +207,7 @@ jobs:
       - name: Checkout tagged version
         uses: actions/checkout@v7
         with:
-          ref: stream-receiver-v${{ env.VERSION }}
+          ref: stream-receiver-v${{ needs.version-bump.outputs.version }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
@@ -185,7 +231,7 @@ jobs:
           push: true
           tags: |
             ghcr.io/tanoclo/tanoclo-stream-receiver:latest
-            ghcr.io/tanoclo/tanoclo-stream-receiver:${{ env.VERSION }}
+            ghcr.io/tanoclo/tanoclo-stream-receiver:${{ needs.version-bump.outputs.version }}
 
   create-release:
     needs: [version-bump, docker-images]
@@ -194,6 +240,6 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: stream-receiver-v${{ env.VERSION }}
-          name: TaNoClo RF Sniffer v${{ env.VERSION }}
+          tag_name: stream-receiver-v${{ needs.version-bump.outputs.version }}
+          name: TaNoClo RF Sniffer v${{ needs.version-bump.outputs.version }}
           body: ${{ needs.version-bump.outputs.changelog }}

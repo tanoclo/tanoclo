@@ -4,8 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'WS Server Release version (e.g. 0.2.0)'
-        required: true
+        description: 'WS Server Release version (e.g. 0.3.0). Leave empty to auto-bump patch.'
+        required: false
+        default: ''
         type: string
 
 permissions:
@@ -16,14 +17,12 @@ concurrency:
   group: tanoclo-workflows-queue
   queue: max
 
-env:
-  VERSION: ${{ github.event.inputs.version }}
-
 jobs:
   version-bump:
     runs-on: ubuntu-latest
     outputs:
-      tag: ws-server-v${{ github.event.inputs.version }}
+      tag: ws-server-v${{ steps.set-version.outputs.version }}
+      version: ${{ steps.set-version.outputs.version }}
       changelog: ${{ steps.changelog.outputs.changelog }}
     steps:
       - name: Checkout main
@@ -39,6 +38,53 @@ jobs:
           node-version: 24
           package-manager-cache: false
 
+      - name: Determine WS Server version
+        id: set-version
+        run: |
+          node -e "
+            const { execSync } = require('child_process');
+            const fs = require('fs');
+
+            let inputVersion = ('${{ github.event.inputs.version }}' || '').trim();
+            let finalVersion = '';
+
+            if (inputVersion) {
+              finalVersion = inputVersion.replace(/^v/, '');
+            } else {
+              let prev = '';
+              try {
+                prev = execSync('git describe --tags --match \"ws-server-v*\" --abbrev=0 2>/dev/null', { encoding: 'utf8' }).trim();
+              } catch (e) {}
+
+              let currentVersion = '';
+              if (prev && prev.includes('ws-server-v')) {
+                currentVersion = prev.replace('ws-server-v', '');
+              } else {
+                try {
+                  const pkg = JSON.parse(fs.readFileSync('ws-server/package.json', 'utf8'));
+                  currentVersion = pkg.version || '0.2.11';
+                } catch (e) {
+                  currentVersion = '0.2.11';
+                }
+              }
+
+              const m = currentVersion.match(/^(\d+)\.(\d+)\.(\d+)(.*)$/);
+              if (m) {
+                finalVersion = m[1] + '.' + m[2] + '.' + (parseInt(m[3], 10) + 1);
+              } else {
+                finalVersion = currentVersion;
+              }
+            }
+
+            console.log('Resolved WS Server version: ' + finalVersion);
+            if (process.env.GITHUB_ENV) {
+              fs.appendFileSync(process.env.GITHUB_ENV, 'VERSION=' + finalVersion + '\n');
+            }
+            if (process.env.GITHUB_OUTPUT) {
+              fs.appendFileSync(process.env.GITHUB_OUTPUT, 'version=' + finalVersion + '\n');
+            }
+          "
+
       - name: Bump WS Server versions
         run: |
           VERSION="${{ env.VERSION }}"
@@ -47,7 +93,7 @@ jobs:
           # package.json files
           node -e "
             const fs = require('fs');
-            const files = ['package.json', 'ws-server/package.json', 'frontend-new/package.json'];
+            const files = ['package.json', 'ws-server/package.json'];
             for (const f of files) {
               if (fs.existsSync(f)) {
                 const pkg = JSON.parse(fs.readFileSync(f, 'utf8'));
@@ -144,7 +190,6 @@ jobs:
         run: |
           npm install --package-lock-only --ignore-scripts 2>/dev/null || true
           cd ws-server && npm install --package-lock-only --ignore-scripts 2>/dev/null || true && cd ..
-          cd frontend-new && npm install --package-lock-only --ignore-scripts 2>/dev/null || true && cd ..
 
       - name: Commit and tag
         run: |
@@ -165,7 +210,7 @@ jobs:
       - name: Checkout tagged version
         uses: actions/checkout@v7
         with:
-          ref: ws-server-v${{ env.VERSION }}
+          ref: ws-server-v${{ needs.version-bump.outputs.version }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
@@ -189,7 +234,7 @@ jobs:
           push: true
           tags: |
             ghcr.io/tanoclo/tanoclo-ws-server:latest
-            ghcr.io/tanoclo/tanoclo-ws-server:${{ env.VERSION }}
+            ghcr.io/tanoclo/tanoclo-ws-server:${{ needs.version-bump.outputs.version }}
 
   create-release:
     needs: [version-bump, docker-images]
@@ -198,6 +243,6 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ws-server-v${{ env.VERSION }}
-          name: TaNoClo WS Server v${{ env.VERSION }}
+          tag_name: ws-server-v${{ needs.version-bump.outputs.version }}
+          name: TaNoClo WS Server v${{ needs.version-bump.outputs.version }}
           body: ${{ needs.version-bump.outputs.changelog }}

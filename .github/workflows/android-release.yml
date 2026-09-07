@@ -4,8 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Native APK Release Version (e.g. 0.2.0)'
-        required: true
+        description: 'Native APK Release Version (e.g. 0.3.0). Leave empty to auto-bump patch.'
+        required: false
+        default: ''
         type: string
 
 permissions:
@@ -38,6 +39,54 @@ jobs:
           node-version: 24
           package-manager-cache: false
 
+      - name: Determine Android version
+        id: resolve-version
+        run: |
+          curl -s -f https://raw.githubusercontent.com/tanoclo/tanoclo/ota/manifest.json -o /tmp/manifest_prev.json || true
+
+          node -e "
+            const { execSync } = require('child_process');
+            const fs = require('fs');
+
+            let inputVersion = ('${{ github.event.inputs.version }}' || '').trim();
+            let finalVersion = '';
+
+            if (inputVersion) {
+              finalVersion = inputVersion.replace(/^v/, '');
+            } else {
+              let currentVersion = '';
+              if (fs.existsSync('/tmp/manifest_prev.json')) {
+                try {
+                  const m = JSON.parse(fs.readFileSync('/tmp/manifest_prev.json', 'utf8'));
+                  if (m.apkVersionName) currentVersion = m.apkVersionName;
+                } catch (e) {}
+              }
+
+              if (!currentVersion) {
+                try {
+                  const prevTag = execSync('git describe --tags --match \"android-v*\" --abbrev=0 2>/dev/null', { encoding: 'utf8' }).trim();
+                  if (prevTag) currentVersion = prevTag.replace(/^.*android-v/, '');
+                } catch (e) {}
+              }
+
+              if (!currentVersion) {
+                currentVersion = '0.2.8';
+              }
+
+              const m = currentVersion.match(/^(\d+)\.(\d+)\.(\d+)(.*)$/);
+              if (m) {
+                finalVersion = m[1] + '.' + m[2] + '.' + (parseInt(m[3], 10) + 1);
+              } else {
+                finalVersion = currentVersion;
+              }
+            }
+
+            console.log('Resolved Android version: ' + finalVersion);
+            if (process.env.GITHUB_ENV) {
+              fs.appendFileSync(process.env.GITHUB_ENV, 'APK_VERSION=' + finalVersion + '\n');
+            }
+          "
+
       - name: Install dependencies & build web SPA
         run: |
           cd frontend-new
@@ -58,7 +107,7 @@ jobs:
         run: |
           cd frontend-new/android
           chmod +x ./gradlew
-          ./gradlew assembleRelease -PVERSION_NAME=${{ github.event.inputs.version }} -PVERSION_CODE=${{ github.run_number }}
+          ./gradlew assembleRelease -PVERSION_NAME=${{ env.APK_VERSION }} -PVERSION_CODE=${{ github.run_number }}
 
       - name: Force-push single orphan commit to ota branch
         run: |
@@ -75,7 +124,7 @@ jobs:
           cp "$APK_PATH" /tmp/tanoclo.apk
 
           # 2. Collect release notes from git log
-          PREV_TAG=$(git describe --tags --match "ws-server-v*" --abbrev=0 2>/dev/null || echo "")
+          PREV_TAG=$(git describe --tags --match "android-v*" --abbrev=0 2>/dev/null || git describe --tags --match "ws-server-v*" --abbrev=0 2>/dev/null || echo "")
           if [ -n "$PREV_TAG" ]; then
             NOTES=$(git log "$PREV_TAG"..HEAD --oneline --no-merges | head -20 | sed 's/^[a-f0-9]* /- /')
           else
@@ -103,7 +152,7 @@ jobs:
           if [ -f /tmp/manifest.json ]; then cp /tmp/manifest.json manifest.json; fi
 
           RUN_NUM=${{ github.run_number }}
-          APK_VERSION="${{ github.event.inputs.version }}"
+          APK_VERSION="${{ env.APK_VERSION }}"
           APK_SHA=$(sha256sum tanoclo.apk | awk '{print $1}')
           APK_SIZE=$(wc -c < tanoclo.apk | tr -d ' ')
 
@@ -113,7 +162,7 @@ jobs:
             const releaseNotes = process.env.RELEASE_NOTES || 'Native APK update';
             let manifest = {
               webVersionCode: ${RUN_NUM},
-              webVersionName: '${APK_VERSION}',
+              webVersionName: '0.2.10',
               apkVersionCode: ${RUN_NUM},
               apkVersionName: '${APK_VERSION}',
               apkSha256: '${APK_SHA}',
@@ -136,3 +185,7 @@ jobs:
 
           git commit -m "release: native APK v${APK_VERSION}"
           git push -f origin ota_orphan:ota
+
+          # 7. Tag native release
+          git tag "android-v${APK_VERSION}" 2>/dev/null || true
+          git push origin "android-v${APK_VERSION}" 2>/dev/null || true
