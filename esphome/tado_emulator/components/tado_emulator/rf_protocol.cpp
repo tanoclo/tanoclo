@@ -207,14 +207,16 @@ bool parse_csl_beacon(const uint8_t *frame, size_t len, uint8_t &seq, uint16_t &
   if (frame[off] != 0x25) return false;
 
   seq = frame[off + 1];
-  pan_id = frame[off + 2] | ((uint16_t)frame[off + 3] << 8);
-  dst_short = ((uint16_t)frame[off + 4] << 8) | frame[off + 5]; // Big-endian
-  countdown = frame[off + 8] | ((uint16_t)frame[off + 9] << 8); // Little-endian
+  pan_id = frame[off + 2] | ((uint16_t)frame[off + 3] << 8);    // Little-endian PAN ID (0xABCD)
+  dst_short = frame[off + 4] | ((uint16_t)frame[off + 5] << 8); // Little-endian Destination Short
+  countdown = frame[off + 8] | ((uint16_t)frame[off + 9] << 8); // Little-endian Countdown
   return true;
 }
 
 std::vector<uint8_t> build_csl_data_poll(uint8_t seq, uint16_t pan_id, const uint8_t *src_mac, uint16_t dst_short) {
   // Real CSL Data Poll / Beacon ACK: 0x69 0x88 <seq> <pan_le> <dst_short_le> <src_mac_8b>
+  // Real capture: 0f 69 88 <seq> 4f b9 4f b9 <src_mac_8b>
+  // Wire PAN ID for unicast CSL data poll is dst_short (0x4FB9)
   std::vector<uint8_t> pkt;
   pkt.push_back(0x69);
   pkt.push_back(0x88);
@@ -224,6 +226,39 @@ std::vector<uint8_t> build_csl_data_poll(uint8_t seq, uint16_t pan_id, const uin
   pkt.push_back(dst_short & 0xFF);
   pkt.push_back((dst_short >> 8) & 0xFF);
   for (int i = 0; i < 8; i++) pkt.push_back(src_mac[i]);
+  return pkt;
+}
+
+std::vector<uint8_t> build_enhanced_mac_ack(uint8_t seq, const uint8_t *src_mac, const uint8_t *dst_mac) {
+  // Real Tado 802.15.4e Enhanced MAC ACK (29 bytes total):
+  // FCF: 0x42 0xEE (0xEE42 LE)
+  // Seq: echoed sequence number (1 byte)
+  // Dst MAC: 8 bytes (wire LE, e.g. Bridge MAC 93 fa 55 31 07 c5 1b 00)
+  // Src MAC: 8 bytes (wire LE, e.g. Device MAC 5a b4 3a 31 07 c5 1b 00)
+  // Header IEs: 0x04 0x0D (CSL IE: Element ID 0x1A, Length 13)
+  // CSL Phase: 0xB1 0x00 (2 bytes)
+  // CSL Period: 0x35 0x0C (3125 * 10us = 31.25ms window)
+  // CSL Sample Time: 0x80 0x3F (2 bytes)
+  // Kermit CRC-16: 2 bytes over the 27 preceding bytes
+  std::vector<uint8_t> pkt;
+  pkt.reserve(29);
+  pkt.push_back(0x42);
+  pkt.push_back(0xEE);
+  pkt.push_back(seq);
+  for (int i = 0; i < 8; i++) pkt.push_back(dst_mac ? dst_mac[i] : 0);
+  for (int i = 0; i < 8; i++) pkt.push_back(src_mac ? src_mac[i] : 0);
+  pkt.push_back(0x04);
+  pkt.push_back(0x0D);
+  pkt.push_back(0xB1);
+  pkt.push_back(0x00);
+  pkt.push_back(0x35);
+  pkt.push_back(0x0C);
+  pkt.push_back(0x80);
+  pkt.push_back(0x3F);
+
+  uint16_t crc = crc16_kermit(pkt.data(), pkt.size());
+  pkt.push_back(crc & 0xFF);
+  pkt.push_back((crc >> 8) & 0xFF);
   return pkt;
 }
 
@@ -403,12 +438,8 @@ void mac_to_ipv6(const uint8_t *mac, uint8_t *ip) {
   ip[15] = mac[0];
 }
 
-uint16_t compute_ipv6_checksum(const uint8_t *src_mac, const uint8_t *dst_mac, uint8_t proto,
-                              const uint8_t *payload, size_t len) {
-  uint8_t src_ip[16], dst_ip[16];
-  mac_to_ipv6(src_mac, src_ip);
-  mac_to_ipv6(dst_mac, dst_ip);
-
+uint16_t compute_ipv6_checksum_ex(const uint8_t src_ip[16], const uint8_t dst_ip[16], uint8_t proto,
+                                  const uint8_t *payload, size_t len) {
   uint32_t sum = 0;
   // Pseudo-header: IPv6 src + dst
   for (size_t i = 0; i < 16; i += 2) {
@@ -436,10 +467,19 @@ uint16_t compute_ipv6_checksum(const uint8_t *src_mac, const uint8_t *dst_mac, u
   return ~((uint16_t)sum);
 }
 
+uint16_t compute_ipv6_checksum(const uint8_t *src_mac, const uint8_t *dst_mac, uint8_t proto,
+                              const uint8_t *payload, size_t len) {
+  uint8_t src_ip[16], dst_ip[16];
+  mac_to_ipv6(src_mac, src_ip);
+  mac_to_ipv6(dst_mac, dst_ip);
+  return compute_ipv6_checksum_ex(src_ip, dst_ip, proto, payload, len);
+}
+
 std::vector<uint8_t> encapsulate_6lowpan_udp(const uint8_t *coap_data, size_t coap_len,
-                                            const uint8_t *src_mac, const uint8_t *dst_mac,
-                                            uint16_t src_port, uint16_t dst_port,
-                                            uint8_t dispatch_mode) {
+                                             const uint8_t *src_mac, const uint8_t *dst_mac,
+                                             uint16_t src_port, uint16_t dst_port,
+                                             uint8_t dispatch_mode,
+                                             uint32_t frame_counter) {
   std::vector<uint8_t> pt;
 
   // 1. MAC suffix (3 bytes in LE: src_mac[5..7])
@@ -450,16 +490,14 @@ std::vector<uint8_t> encapsulate_6lowpan_udp(const uint8_t *coap_data, size_t co
   // 2. Inner Protocol Header (0x04)
   pt.push_back(0x04);
 
-  // 3. Sequence Counter (1 byte)
-  static uint8_t s_proto_seq = 1;
-  pt.push_back(s_proto_seq++);
+  // 3. 32-bit Frame Counter (little-endian)
+  pt.push_back((uint8_t)(frame_counter & 0xFF));
+  pt.push_back((uint8_t)((frame_counter >> 8) & 0xFF));
+  pt.push_back((uint8_t)((frame_counter >> 16) & 0xFF));
+  pt.push_back((uint8_t)((frame_counter >> 24) & 0xFF));
 
-  // 4. 4-byte Tado Custom Dispatch: [short_addr_le:2][cluster:1][mode:1]
-  uint16_t short_addr = src_mac[0] | ((uint16_t)src_mac[1] << 8);
-  pt.push_back(short_addr & 0xFF);
-  pt.push_back((short_addr >> 8) & 0xFF);
-  pt.push_back(0x00); // Subnetwork / cluster
-  pt.push_back(dispatch_mode); // 0x7E (Pairing/Uncompressed) or 0x7A (Operational)
+  // 4. 6LoWPAN IPHC Dispatch Mode (0x7E for Pairing/Uncompressed or 0x7A for Operational)
+  pt.push_back(dispatch_mode);
 
   // 5. Compute UDP Checksum over pseudo-header
   std::vector<uint8_t> udp_pkt;
@@ -543,7 +581,8 @@ bool parse_icmpv6(const uint8_t *buf, size_t len, ParsedICMPv6 &out) {
 }
 
 std::vector<uint8_t> build_echo_request(uint16_t id, uint16_t seq, const uint8_t *body_data, size_t body_len,
-                                       const uint8_t *src_mac, const uint8_t *dst_mac) {
+                                        const uint8_t *src_mac, const uint8_t *dst_mac,
+                                        uint32_t frame_counter) {
   std::vector<uint8_t> icmp;
   icmp.push_back(ICMPV6_TYPE_ECHO_REQUEST); // 128
   icmp.push_back(0);                       // Code 0
@@ -566,10 +605,10 @@ std::vector<uint8_t> build_echo_request(uint16_t id, uint16_t seq, const uint8_t
   std::vector<uint8_t> pt;
   pt.push_back(src_mac[5]); pt.push_back(src_mac[6]); pt.push_back(src_mac[7]);
   pt.push_back(0x04);
-  pt.push_back(0x01);
-  uint16_t short_addr = src_mac[0] | ((uint16_t)src_mac[1] << 8);
-  pt.push_back(short_addr & 0xFF); pt.push_back((short_addr >> 8) & 0xFF);
-  pt.push_back(0x00);
+  pt.push_back((uint8_t)(frame_counter & 0xFF));
+  pt.push_back((uint8_t)((frame_counter >> 8) & 0xFF));
+  pt.push_back((uint8_t)((frame_counter >> 16) & 0xFF));
+  pt.push_back((uint8_t)((frame_counter >> 24) & 0xFF));
   pt.push_back(0x7B); // Dispatch 0x7B
   pt.push_back(0x33);
   pt.push_back(0x3A); // Next Header = 58 (0x3A)
@@ -579,34 +618,28 @@ std::vector<uint8_t> build_echo_request(uint16_t id, uint16_t seq, const uint8_t
 }
 
 std::vector<uint8_t> build_echo_reply(uint16_t id, uint16_t seq, const uint8_t *body_data, size_t body_len,
-                                     const uint8_t *src_mac, const uint8_t *dst_mac) {
+                                      const uint8_t *src_mac, const uint8_t *dst_mac,
+                                      uint32_t frame_counter) {
   std::vector<uint8_t> icmp;
   icmp.push_back(ICMPV6_TYPE_ECHO_REPLY); // 129
   icmp.push_back(0);                     // Code 0
   icmp.push_back(0);                     // Checksum placeholder MSB
   icmp.push_back(0);                     // Checksum placeholder LSB
-  icmp.push_back((id >> 8) & 0xFF);
-  icmp.push_back(id & 0xFF);
-  icmp.push_back((seq >> 8) & 0xFF);
-  icmp.push_back(seq & 0xFF);
-  if (body_data && body_len > 4) {
-    icmp.insert(icmp.end(), body_data + 4, body_data + body_len);
-  }
 
-  // Checksum over pseudo-header + ICMPv6
+  // Checksum over pseudo-header + 4-byte ICMPv6 body
   uint16_t csum = compute_ipv6_checksum(src_mac, dst_mac, 58, icmp.data(), icmp.size());
   icmp[2] = (csum >> 8) & 0xFF;
   icmp[3] = csum & 0xFF;
 
-  // Wrap in Tado 6LoWPAN IPHC Mode 0x7B
+  // Wrap in Tado 6LoWPAN IPHC Mode 0x7A (operational 17-byte echo reply)
   std::vector<uint8_t> pt;
   pt.push_back(src_mac[5]); pt.push_back(src_mac[6]); pt.push_back(src_mac[7]);
   pt.push_back(0x04);
-  pt.push_back(0x01);
-  uint16_t short_addr = src_mac[0] | ((uint16_t)src_mac[1] << 8);
-  pt.push_back(short_addr & 0xFF); pt.push_back((short_addr >> 8) & 0xFF);
-  pt.push_back(0x00);
-  pt.push_back(0x7B); // Dispatch 0x7B
+  pt.push_back((uint8_t)(frame_counter & 0xFF));
+  pt.push_back((uint8_t)((frame_counter >> 8) & 0xFF));
+  pt.push_back((uint8_t)((frame_counter >> 16) & 0xFF));
+  pt.push_back((uint8_t)((frame_counter >> 24) & 0xFF));
+  pt.push_back(0x7A); // Dispatch 0x7A
   pt.push_back(0x33);
   pt.push_back(0x3A); // Next Header = 58 (0x3A)
   pt.insert(pt.end(), icmp.begin(), icmp.end());
@@ -644,7 +677,10 @@ std::vector<uint8_t> build_router_solicitation(const uint8_t *src_mac, const uin
   return pt;
 }
 
-std::vector<uint8_t> build_neighbor_advertisement(const uint8_t *src_mac, const uint8_t *dst_mac, bool solicited) {
+std::vector<uint8_t> build_neighbor_advertisement(const uint8_t *src_mac, const uint8_t *dst_mac,
+                                                  bool solicited,
+                                                  uint32_t frame_counter,
+                                                  const uint8_t *target_ip_override) {
   std::vector<uint8_t> icmp;
   icmp.push_back(ICMPV6_TYPE_NEIGHBOR_ADVERT); // 136
   icmp.push_back(0);                          // Code 0
@@ -653,9 +689,13 @@ std::vector<uint8_t> build_neighbor_advertisement(const uint8_t *src_mac, const 
   icmp.push_back(solicited ? 0x60 : 0x20);    // Flags: S=1, O=1 (0x60) if solicited; O=1 (0x20) if unsolicited
   icmp.push_back(0); icmp.push_back(0); icmp.push_back(0);
 
-  // Target IPv6 (our link-local address)
+  // Target IPv6
   uint8_t target_ip[16];
-  mac_to_ipv6(src_mac, target_ip);
+  if (target_ip_override) {
+    std::memcpy(target_ip, target_ip_override, 16);
+  } else {
+    mac_to_ipv6(src_mac, target_ip);
+  }
   icmp.insert(icmp.end(), target_ip, target_ip + 16);
 
   // Option 2: Target Link-Layer Address (8 bytes EUI-64)
@@ -664,19 +704,33 @@ std::vector<uint8_t> build_neighbor_advertisement(const uint8_t *src_mac, const 
   for (int i = 7; i >= 0; i--) icmp.push_back(src_mac[i]); // Big-endian EUI-64
   for (int i = 0; i < 6; i++) icmp.push_back(0x00);        // Pad to 16 bytes
 
-  uint16_t csum = compute_ipv6_checksum(src_mac, dst_mac, 58, icmp.data(), icmp.size());
+  bool is_global = (target_ip[0] == 0xAA && target_ip[1] == 0xAA);
+  uint8_t src_ip[16], dst_ip[16];
+  mac_to_ipv6(src_mac, src_ip);
+  mac_to_ipv6(dst_mac, dst_ip);
+  if (is_global) {
+    src_ip[0] = 0xAA; src_ip[1] = 0xAA;
+    dst_ip[0] = 0xAA; dst_ip[1] = 0xAA;
+  }
+
+  uint16_t csum = compute_ipv6_checksum_ex(src_ip, dst_ip, 58, icmp.data(), icmp.size());
   icmp[2] = (csum >> 8) & 0xFF;
   icmp[3] = csum & 0xFF;
 
   std::vector<uint8_t> pt;
   pt.push_back(src_mac[5]); pt.push_back(src_mac[6]); pt.push_back(src_mac[7]);
   pt.push_back(0x04);
-  pt.push_back(0x01);
-  uint16_t short_addr = src_mac[0] | ((uint16_t)src_mac[1] << 8);
-  pt.push_back(short_addr & 0xFF); pt.push_back((short_addr >> 8) & 0xFF);
-  pt.push_back(0x00);
+  pt.push_back((uint8_t)(frame_counter & 0xFF));
+  pt.push_back((uint8_t)((frame_counter >> 8) & 0xFF));
+  pt.push_back((uint8_t)((frame_counter >> 16) & 0xFF));
+  pt.push_back((uint8_t)((frame_counter >> 24) & 0xFF));
   pt.push_back(0x7B);
-  pt.push_back(0x33);
+  if (is_global) {
+    pt.push_back(0xF7);
+    pt.push_back(0x00);
+  } else {
+    pt.push_back(0x33);
+  }
   pt.push_back(0x3A);
   pt.insert(pt.end(), icmp.begin(), icmp.end());
 
@@ -705,8 +759,10 @@ ParsedCoAP parse_coap(const uint8_t *data, size_t len) {
   }
 
   uint16_t opt_num = 0;
+  bool has_payload_marker = false;
   while (cur < len) {
     if (data[cur] == 0xFF) {
+      has_payload_marker = true;
       cur++; // Payload marker
       break;
     }
@@ -718,7 +774,10 @@ ParsedCoAP parse_coap(const uint8_t *data, size_t len) {
     if (delta4 == 15 || len4 == 15) {
       // Reserved or trailing marker scan
       while (cur < len && data[cur] != 0xFF) cur++;
-      if (cur < len && data[cur] == 0xFF) cur++;
+      if (cur < len && data[cur] == 0xFF) {
+        has_payload_marker = true;
+        cur++;
+      }
       break;
     }
 
@@ -758,8 +817,8 @@ ParsedCoAP parse_coap(const uint8_t *data, size_t len) {
     }
   }
 
-  // Remaining bytes are payload (strip Kermit CRC-16 trailer if present on empty ACK)
-  if (cur < len) {
+  // Remaining bytes are payload ONLY if explicit payload marker (0xFF) was encountered
+  if (has_payload_marker && cur < len) {
     size_t pl_len = len - cur;
     if (out.code == COAP_CODE_EMPTY && pl_len == 2) {
       // Kermit CRC16 trailer on empty ACK, discard
@@ -1058,9 +1117,15 @@ std::vector<uint8_t> build_d_info_tlv(const std::string &serial_no, uint16_t fw_
   append_tlv_u16(tlv, TLV_FW_OTHER_SLOT, fw_version);
   append_tlv_string(tlv, TLV_DEV_SERIAL_0001, serial_no);
   append_tlv_u8(tlv, TLV_DEV_HW_FLAGS_01F5, 0x01);
-  append_tlv_u8(tlv, TLV_DEV_HW_FLAGS_01F6, 0x0D);
-  append_tlv_u8(tlv, TLV_DEV_HW_FLAGS_01F7, 0x7F);
-  append_tlv_u8(tlv, TLV_DEV_HW_FLAGS_01F8, 0x00);
+  if (serial_no.rfind("RU", 0) == 0) {
+    append_tlv_u8(tlv, TLV_DEV_HW_FLAGS_01F6, 0x0B); // RU02 Hardware Type = 11 (0x0B)
+    append_tlv_u8(tlv, TLV_DEV_HW_FLAGS_01F7, 0x00); // RU Capabilities = 0x00
+    append_tlv_u8(tlv, TLV_DEV_HW_FLAGS_01F8, 0x0D); // RU Sub-GHz Radio Type = 13 (0x0D)
+  } else {
+    append_tlv_u8(tlv, TLV_DEV_HW_FLAGS_01F6, 0x05); // VA02 Hardware Type = 5
+    append_tlv_u8(tlv, TLV_DEV_HW_FLAGS_01F7, 0x7F); // VA Capabilities = 0x7F
+    append_tlv_u8(tlv, TLV_DEV_HW_FLAGS_01F8, 0x00); // VA Radio Type = 0x00
+  }
   append_tlv_u8(tlv, TLV_DEV_HW_FLAGS_013F, 0x00);
   return tlv;
 }
@@ -1081,6 +1146,24 @@ std::vector<uint8_t> build_z_s_tlv(uint8_t mode, uint8_t zone_id, float target_t
   append_tlv_u8(tlv, 0x6180, 0);
   append_tlv_u8(tlv, TLV_ZONE_ID_6020, zone_id);
   append_tlv_u8(tlv, 0x62e0, 0);
+  return tlv;
+}
+
+std::vector<uint8_t> build_d_config_tlv(uint32_t home_id, uint8_t zone_id, uint8_t zone_role) {
+  std::vector<uint8_t> tlv;
+  append_tlv_u8(tlv, TLV_DEVICE_FLAG_0143, 0);
+  append_tlv_s16(tlv, TLV_TEMPERATURE_OFFSET_0140, 0);
+  append_tlv_u16(tlv, TLV_DEVICE_TYPE_015D, 71); // RU02 = 71
+  append_tlv_u32(tlv, TLV_HOME_ID_015C, home_id);
+  append_tlv_u8(tlv, TLV_DEVICE_CONFIG_FLAG_02B3, 0);
+  // Default RU bindings: role 0x0d for zone 0, plus assigned zone if non-zero
+  uint8_t z0_pair[2] = {0x0d, 0x00};
+  append_tlv_bytes(tlv, TLV_ZONE_BINDING_015E, z0_pair, 2);
+  if (zone_id != 0) {
+    uint8_t assigned_pair[2] = {zone_role != 0 ? zone_role : (uint8_t)0x02, zone_id};
+    append_tlv_bytes(tlv, TLV_ZONE_BINDING_015E, assigned_pair, 2);
+  }
+  append_tlv_u16(tlv, TLV_DEVICE_UI_FLAGS_0158, 0);
   return tlv;
 }
 

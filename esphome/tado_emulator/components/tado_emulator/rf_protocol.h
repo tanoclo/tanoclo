@@ -101,7 +101,14 @@ enum TLVTag : uint16_t {
   TLV_DEV_HW_FLAGS_013F = 0x013f,
   TLV_ZONE_ID_6020 = 0x6020,
   TLV_ZONE_MODE_6160 = 0x6160,
-  TLV_ZONE_TARGET_TEMP_6200 = 0x6200
+  TLV_ZONE_TARGET_TEMP_6200 = 0x6200,
+  TLV_DEVICE_FLAG_0143 = 0x0143,
+  TLV_TEMPERATURE_OFFSET_0140 = 0x0140,
+  TLV_DEVICE_TYPE_015D = 0x015d,
+  TLV_HOME_ID_015C = 0x015c,
+  TLV_DEVICE_CONFIG_FLAG_02B3 = 0x02b3,
+  TLV_ZONE_BINDING_015E = 0x015e,
+  TLV_DEVICE_UI_FLAGS_0158 = 0x0158
 };
 
 // Decoded Frame Structures
@@ -164,6 +171,7 @@ std::vector<uint8_t> build_mac_header(uint8_t seq, const uint8_t *src_mac, const
 bool is_csl_beacon(const uint8_t *frame, size_t len);
 bool parse_csl_beacon(const uint8_t *frame, size_t len, uint8_t &seq, uint16_t &pan_id, uint16_t &dst_short, uint16_t &countdown);
 std::vector<uint8_t> build_csl_data_poll(uint8_t seq, uint16_t pan_id, const uint8_t *src_mac, uint16_t dst_short);
+std::vector<uint8_t> build_enhanced_mac_ack(uint8_t seq, const uint8_t *src_mac, const uint8_t *dst_mac);
 
 // Cryptography (AES-128-CCM & AES-128-ECB)
 bool decrypt_ccm(const uint8_t *frame, size_t len, const uint8_t *key, std::vector<uint8_t> &out_plaintext, bool verify_crc = false);
@@ -173,21 +181,29 @@ bool decrypt_aes128_ecb(const uint8_t *ciphertext_16b, const uint8_t *key, uint8
 // 6LoWPAN IPHC / NHC
 int find_coap_offset(const uint8_t *buf, size_t len, uint16_t *out_src_port = nullptr, uint16_t *out_dst_port = nullptr);
 std::vector<uint8_t> encapsulate_6lowpan_udp(const uint8_t *coap_data, size_t coap_len,
-                                            const uint8_t *src_mac, const uint8_t *dst_mac,
-                                            uint16_t src_port = 5683, uint16_t dst_port = 4005,
-                                            uint8_t dispatch_mode = 0x7E);
+                                             const uint8_t *src_mac, const uint8_t *dst_mac,
+                                             uint16_t src_port = 5683, uint16_t dst_port = 4005,
+                                             uint8_t dispatch_mode = 0x7E,
+                                             uint32_t frame_counter = 1);
 uint16_t compute_ipv6_checksum(const uint8_t *src_mac, const uint8_t *dst_mac, uint8_t proto,
-                              const uint8_t *payload, size_t len);
+                               const uint8_t *payload, size_t len);
+uint16_t compute_ipv6_checksum_ex(const uint8_t src_ip[16], const uint8_t dst_ip[16], uint8_t proto,
+                                  const uint8_t *payload, size_t len);
 void mac_to_ipv6(const uint8_t *mac, uint8_t *ip);
 
 // ICMPv6
 bool parse_icmpv6(const uint8_t *decrypted, size_t len, ParsedICMPv6 &out);
 std::vector<uint8_t> build_echo_request(uint16_t id, uint16_t seq, const uint8_t *body_data, size_t body_len,
-                                       const uint8_t *src_mac, const uint8_t *dst_mac);
+                                        const uint8_t *src_mac, const uint8_t *dst_mac,
+                                        uint32_t frame_counter = 1);
 std::vector<uint8_t> build_echo_reply(uint16_t id, uint16_t seq, const uint8_t *body_data, size_t body_len,
-                                     const uint8_t *src_mac, const uint8_t *dst_mac);
+                                      const uint8_t *src_mac, const uint8_t *dst_mac,
+                                      uint32_t frame_counter = 1);
 std::vector<uint8_t> build_router_solicitation(const uint8_t *src_mac, const uint8_t *dst_mac);
-std::vector<uint8_t> build_neighbor_advertisement(const uint8_t *src_mac, const uint8_t *dst_mac, bool solicited = true);
+std::vector<uint8_t> build_neighbor_advertisement(const uint8_t *src_mac, const uint8_t *dst_mac,
+                                                  bool solicited = true,
+                                                  uint32_t frame_counter = 1,
+                                                  const uint8_t *target_ip_override = nullptr);
 
 // RFC 7252 CoAP
 ParsedCoAP parse_coap(const uint8_t *data, size_t len);
@@ -224,6 +240,7 @@ std::vector<uint8_t> build_d_fw_state_tlv(uint16_t fw_version = 13762, uint16_t 
 std::vector<uint8_t> build_d_info_tlv(const std::string &serial_no, uint16_t fw_version = 13762);
 std::vector<uint8_t> build_z_extui_tlv(const std::string &url_s, const std::string &url_p);
 std::vector<uint8_t> build_z_s_tlv(uint8_t mode, uint8_t zone_id, float target_temp_c);
+std::vector<uint8_t> build_d_config_tlv(uint32_t home_id, uint8_t zone_id = 0, uint8_t zone_role = 0x02);
 
 } // namespace protocol
 } // namespace tado_emulator

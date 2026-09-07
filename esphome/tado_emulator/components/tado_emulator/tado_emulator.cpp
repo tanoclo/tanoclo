@@ -55,10 +55,16 @@ void TadoEmulatorComponent::radio_read_fifo() {
   }
 }
 
-bool TadoEmulatorComponent::transmit_frame(const std::vector<uint8_t> &frame) {
+bool TadoEmulatorComponent::transmit_frame(const std::vector<uint8_t> &frame, uint32_t fc) {
   if (frame.empty()) return false;
-  ESP_LOGD(TAG, "TX frame len=%d [0..3]=%02X %02X %02X %02X", (int)frame.size(),
-           frame[0], frame.size() > 1 ? frame[1] : 0, frame.size() > 2 ? frame[2] : 0, frame.size() > 3 ? frame[3] : 0);
+  uint8_t seq = (frame.size() >= 3) ? frame[2] : 0;
+  if (fc > 0) {
+    ESP_LOGD(TAG, "TX frame len=%d seq=%u fc=%lu [0..3]=%02X %02X %02X %02X", (int)frame.size(),
+             seq, (unsigned long)fc, frame[0], frame.size() > 1 ? frame[1] : 0, frame.size() > 2 ? frame[2] : 0, frame.size() > 3 ? frame[3] : 0);
+  } else {
+    ESP_LOGD(TAG, "TX frame len=%d seq=%u [0..3]=%02X %02X %02X %02X", (int)frame.size(),
+             seq, frame[0], frame.size() > 1 ? frame[1] : 0, frame.size() > 2 ? frame[2] : 0, frame.size() > 3 ? frame[3] : 0);
+  }
   return radio_.send_frame(frame.data(), frame.size());
 }
 
@@ -105,18 +111,26 @@ void TadoEmulatorComponent::setup() {
 }
 
 void TadoEmulatorComponent::loop() {
-  uint32_t now_ms = millis();
+  uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000ULL);
   uint32_t now_s = (uint32_t)(esp_timer_get_time() / 1000000ULL);
 
   if (devices_mutex_ != nullptr && xSemaphoreTakeRecursive(devices_mutex_, pdMS_TO_TICKS(50)) == pdTRUE) {
     for (auto &dev : devices_) {
-      std::vector<std::vector<uint8_t>> outbound;
+      std::vector<OutboundFrame> outbound;
       dev.tick(now_ms, now_s, outbound);
       for (const auto &frame : outbound) {
         transmit_frame(frame);
       }
     }
     xSemaphoreGiveRecursive(devices_mutex_);
+  }
+
+  static uint32_t s_last_nvs_sync = 0;
+  if (now_s - s_last_nvs_sync >= 300) {
+    s_last_nvs_sync = now_s;
+    if (!devices_.empty()) {
+      save_to_nvs();
+    }
   }
 }
 
@@ -130,8 +144,8 @@ void TadoEmulatorComponent::process_queued_packet(const RxPacket &pkt) {
     if (protocol::parse_csl_beacon(pkt.data, pkt.length, seq, pan, dst_short, cd)) {
       if (devices_mutex_ != nullptr && xSemaphoreTakeRecursive(devices_mutex_, pdMS_TO_TICKS(10)) == pdTRUE) {
         for (auto &dev : devices_) {
-          std::vector<std::vector<uint8_t>> outbound;
-          dev.process_csl_strobe(seq, dst_short, cd, outbound);
+          std::vector<OutboundFrame> outbound;
+          dev.process_csl_strobe(seq, pan, dst_short, cd, outbound);
           for (const auto &frame : outbound) {
             transmit_frame(frame);
           }
@@ -169,14 +183,16 @@ void TadoEmulatorComponent::process_queued_packet(const RxPacket &pkt) {
   }
 
   if (devices_mutex_ != nullptr && xSemaphoreTakeRecursive(devices_mutex_, pdMS_TO_TICKS(50)) == pdTRUE) {
+    bool logged_broadcast = false;
     for (auto &dev : devices_) {
       const auto &cfg = dev.get_config();
 
       // Check if frame matches device destination MAC or is broadcast
       bool match = mac.is_broadcast;
       if (!match) {
-        match = (std::memcmp(cfg.mac_addr, mac.dst_mac, 6) == 0) ||
-                (cfg.short_addr == (mac.dst_mac[0] | ((uint16_t)mac.dst_mac[1] << 8)));
+        match = (std::memcmp(cfg.mac_addr, mac.dst_mac, 8) == 0) ||
+                (std::memcmp(cfg.mac_addr, mac.dst_mac, 6) == 0) ||
+                (cfg.short_addr != 0 && cfg.short_addr == (mac.dst_mac[0] | ((uint16_t)mac.dst_mac[1] << 8)));
       }
 
       if (match) {
@@ -188,7 +204,7 @@ void TadoEmulatorComponent::process_queued_packet(const RxPacket &pkt) {
         // Try op_key first if device has operational key
         if (cfg.has_op_key && protocol::decrypt_ccm(pkt.data, pkt.length, cfg.op_key, decrypted)) {
           dec_ok = true;
-          used_key = "OP";
+          used_key = "OPERATIONAL";
           active_key = cfg.op_key;
         } else if (protocol::decrypt_ccm(pkt.data, pkt.length, PAIRING_KEY, decrypted)) {
           dec_ok = true;
@@ -197,14 +213,51 @@ void TadoEmulatorComponent::process_queued_packet(const RxPacket &pkt) {
         }
 
         if (dec_ok) {
-          ESP_LOGI(TAG, "Decrypted RX frame len=%d for dev=%s (key=%s)", (int)decrypted.size(),
-                   cfg.serial_no.c_str(), used_key);
+          uint8_t rx_seq = mac.seq;
+          uint32_t rx_fc = (decrypted.size() >= 8 && decrypted[3] == 0x04) ?
+                           (decrypted[4] | ((uint32_t)decrypted[5] << 8) | ((uint32_t)decrypted[6] << 16) | ((uint32_t)decrypted[7] << 24)) : 0;
+
+
+          bool is_for_us = !mac.is_broadcast &&
+                           ((std::memcmp(cfg.mac_addr, mac.dst_mac, 8) == 0) ||
+                            (std::memcmp(cfg.mac_addr, mac.dst_mac, 6) == 0) ||
+                            (cfg.short_addr != 0 && cfg.short_addr == (mac.dst_mac[0] | ((uint16_t)mac.dst_mac[1] << 8))));
+
+          if (is_for_us) {
+            if (rx_fc > 0) {
+              ESP_LOGD(TAG, "Decrypted RX frame len=%d seq=%u fc=%lu for dev=%s (key=%s)", (int)decrypted.size(),
+                       rx_seq, (unsigned long)rx_fc, cfg.serial_no.c_str(), used_key);
+            } else {
+              ESP_LOGD(TAG, "Decrypted RX frame len=%d seq=%u for dev=%s (key=%s)", (int)decrypted.size(),
+                       rx_seq, cfg.serial_no.c_str(), used_key);
+            }
+
+            // Immediately emit 802.15.4 Enhanced MAC ACK (0xEE42) if requested by Bridge
+            if (auto_mac_ack_ && (mac.fcf & 0x0020)) {
+              std::vector<uint8_t> mac_ack = protocol::build_enhanced_mac_ack(rx_seq, cfg.mac_addr, mac.src_mac);
+              transmit_frame(mac_ack);
+              ESP_LOGD(TAG, "[%s] Emitted Enhanced MAC ACK seq=%u (0xEE42, 29B) to Bridge",
+                       cfg.serial_no.c_str(), rx_seq);
+            }
+          } else {
+            if (!logged_broadcast) {
+              if (rx_fc > 0) {
+                ESP_LOGD(TAG, "Decrypted RX frame len=%d seq=%u fc=%lu (key=%s)", (int)decrypted.size(),
+                         rx_seq, (unsigned long)rx_fc, used_key);
+              } else {
+                ESP_LOGD(TAG, "Decrypted RX frame len=%d seq=%u (key=%s)", (int)decrypted.size(),
+                         rx_seq, used_key);
+              }
+              logged_broadcast = true;
+            }
+          }
+
           bool was_operational = (cfg.state == STATE_OPERATIONAL);
-          std::vector<std::vector<uint8_t>> outbound;
+          std::vector<OutboundFrame> outbound;
           dev.process_inbound_decrypted(mac, decrypted.data(), decrypted.size(), outbound, active_key);
           if (!was_operational && dev.get_config().state == STATE_OPERATIONAL) {
             save_to_nvs();
-            ESP_LOGI(TAG, "Device %s successfully paired and saved to NVS!", cfg.serial_no.c_str());
+            ESP_LOGI(TAG, "Device %s successfully paired and saved to NVS.", cfg.serial_no.c_str());
           }
           for (const auto &frame : outbound) {
             transmit_frame(frame);
@@ -255,6 +308,7 @@ void TadoEmulatorComponent::save_to_nvs() {
       nvs_set_u32(handle, (prefix + "hid").c_str(), cfg.home_id);
       nvs_set_u32(handle, (prefix + "zid").c_str(), cfg.zone_id);
       nvs_set_blob(handle, (prefix + "ibm").c_str(), cfg.ib_mac, 8);
+      nvs_set_u32(handle, (prefix + "fc").c_str(), cfg.frame_counter);
     }
 
     nvs_commit(handle);
@@ -296,6 +350,10 @@ void TadoEmulatorComponent::load_from_nvs() {
       nvs_get_u32(handle, (prefix + "zid").c_str(), &cfg.zone_id);
       blen = 8;
       if (nvs_get_blob(handle, (prefix + "ibm").c_str(), cfg.ib_mac, &blen) == ESP_OK) cfg.ib_mac_known = true;
+      uint32_t fc = 1;
+      if (nvs_get_u32(handle, (prefix + "fc").c_str(), &fc) == ESP_OK && fc > 0) {
+        cfg.frame_counter = fc + 100;
+      }
 
       cfg.derive_short_addr();
       devices_.emplace_back(cfg);
@@ -459,7 +517,7 @@ void TadoEmulatorComponent::handle_cmd_request(AsyncWebServerRequest *request, c
           float hum = (float)json_get_num(body, "humidity_percent", cfg.target_humidity_pct);
           uint16_t bat = (uint16_t)json_get_num(body, "battery_mv", cfg.target_battery_mv);
 
-          std::vector<std::vector<uint8_t>> outbound;
+          std::vector<OutboundFrame> outbound;
           dev.trigger_telemetry(temp, hum, bat, outbound);
           for (const auto &f : outbound) {
             transmit_frame(f);
@@ -583,7 +641,7 @@ void TadoEmulatorComponent::handle_cmd_request(AsyncWebServerRequest *request, c
       }
       devices_.emplace_back(cfg);
       auto &new_dev = devices_.back();
-      std::vector<std::vector<uint8_t>> outbound;
+      std::vector<OutboundFrame> outbound;
       new_dev.trigger_pairing(outbound);
       for (const auto &f : outbound) {
         transmit_frame(f);

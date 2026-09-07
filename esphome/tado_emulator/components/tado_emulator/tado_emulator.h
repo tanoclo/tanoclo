@@ -58,7 +58,8 @@ class TadoEmulatorComponent : public Component,
 
   void radio_read_fifo();
   void process_queued_packet(const RxPacket &pkt);
-  bool transmit_frame(const std::vector<uint8_t> &frame);
+  bool transmit_frame(const std::vector<uint8_t> &frame, uint32_t fc = 0);
+  bool transmit_frame(const OutboundFrame &frame) { return transmit_frame(frame.data, frame.fc); }
 
  private:
   InternalGPIOPin *rst_pin_{nullptr};

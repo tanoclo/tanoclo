@@ -18,3 +18,4 @@ test_config.json
 *.log
 *.log.*
 .default.json
+*scratch*

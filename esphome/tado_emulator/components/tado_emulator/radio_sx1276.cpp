@@ -83,7 +83,7 @@ bool SX1276Radio::init_radio() {
   write_reg(REG_OP_MODE, 0x01); // STDBY, FSK
   delay(10);
 
-  // Bitrate: 50 kbps (matches native CC110L reference)
+  // Bitrate: 50 kbps
   write_reg(REG_BITRATE_MSB, 0x02);
   write_reg(REG_BITRATE_LSB, 0x80);
 
@@ -267,11 +267,13 @@ bool SX1276Radio::read_rx_packet(RxPacket &pkt) {
 
   size_t bytes_read = 0;
   uint32_t start_drain = millis();
+  // At 50kbps, 1 byte = 160us. 128 bytes = ~20.5ms airtime. Allow ample margin (minimum 25ms, up to 45ms for full packets).
+  uint32_t max_drain_ms = 25 + (len / 4);
   while (bytes_read < len) {
     if (!(read_reg(REG_IRQ_FLAGS_2) & 0x40)) {
       pkt.data[bytes_read++] = read_reg(REG_FIFO);
     } else {
-      if (millis() - start_drain > 15) break;
+      if (millis() - start_drain > max_drain_ms) break;
       delayMicroseconds(50);
     }
   }
