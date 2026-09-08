@@ -448,7 +448,13 @@ async function getZoneBindingsForDevice(deviceId) {
 
     if (isWirelessSensor) {
         if (currentDeviceZoneId) {
-            return ['09' + Number(currentDeviceZoneId).toString(16).padStart(2, '0')];
+            const [zRows] = await p.execute(
+                'SELECT measuring_device_serial FROM zones WHERE id = ? AND home_id = ?',
+                [currentDeviceZoneId, dbDev.home_id]
+            );
+            const isLeader = zRows.length === 0 || zRows[0].measuring_device_serial === currentDeviceSerial;
+            const prefix = isLeader ? '09' : '03';
+            return [prefix + Number(currentDeviceZoneId).toString(16).padStart(2, '0')];
         }
         return [];
     }

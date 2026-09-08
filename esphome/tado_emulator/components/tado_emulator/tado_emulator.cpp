@@ -170,7 +170,8 @@ void TadoEmulatorComponent::process_queued_packet(const RxPacket &pkt) {
         bool match = (std::memcmp(cfg.mac_addr, mac.dst_mac, 8) == 0) ||
                      (cfg.short_addr != 0 && cfg.short_addr == (mac.dst_mac[0] | ((uint16_t)mac.dst_mac[1] << 8)));
         if (mac.header_len == 3) {
-          match = true;
+          // 3-byte ACK has no addressing. Match to device whose last TX used this seq.
+          match = (cfg.seq_num > 0 && mac.seq == (uint8_t)(cfg.seq_num - 1));
         }
         if (match) {
           ESP_LOGD(TAG, "RX MAC ACK seq=%u for dev=%s", mac.seq, cfg.serial_no.c_str());
@@ -255,9 +256,14 @@ void TadoEmulatorComponent::process_queued_packet(const RxPacket &pkt) {
           bool was_operational = (cfg.state == STATE_OPERATIONAL);
           std::vector<OutboundFrame> outbound;
           dev.process_inbound_decrypted(mac, decrypted.data(), decrypted.size(), outbound, active_key);
-          if (!was_operational && dev.get_config().state == STATE_OPERATIONAL) {
+          bool config_changed = (!was_operational && dev.get_config().state == STATE_OPERATIONAL) ||
+                                (cfg.zone_id != dev.get_config().zone_id) ||
+                                (cfg.is_measuring_leader != dev.get_config().is_measuring_leader) ||
+                                (cfg.home_id != dev.get_config().home_id);
+          if (config_changed) {
             save_to_nvs();
-            ESP_LOGI(TAG, "Device %s successfully paired and saved to NVS.", cfg.serial_no.c_str());
+            ESP_LOGI(TAG, "Device %s state/config saved to NVS (zone=%lu, leader=%d).",
+                     cfg.serial_no.c_str(), (unsigned long)dev.get_config().zone_id, dev.get_config().is_measuring_leader);
           }
           for (const auto &frame : outbound) {
             transmit_frame(frame);
@@ -307,6 +313,8 @@ void TadoEmulatorComponent::save_to_nvs() {
       nvs_set_u8(handle, (prefix + "st").c_str(), (uint8_t)cfg.state);
       nvs_set_u32(handle, (prefix + "hid").c_str(), cfg.home_id);
       nvs_set_u32(handle, (prefix + "zid").c_str(), cfg.zone_id);
+      nvs_set_u8(handle, (prefix + "zrl").c_str(), cfg.zone_role);
+      nvs_set_u8(handle, (prefix + "ldr").c_str(), cfg.is_measuring_leader ? 1 : 0);
       nvs_set_blob(handle, (prefix + "ibm").c_str(), cfg.ib_mac, 8);
       nvs_set_u32(handle, (prefix + "fc").c_str(), cfg.frame_counter);
     }
@@ -348,6 +356,11 @@ void TadoEmulatorComponent::load_from_nvs() {
       cfg.state = (RUState)st;
       nvs_get_u32(handle, (prefix + "hid").c_str(), &cfg.home_id);
       nvs_get_u32(handle, (prefix + "zid").c_str(), &cfg.zone_id);
+      nvs_get_u8(handle, (prefix + "zrl").c_str(), &cfg.zone_role);
+      uint8_t ldr = 0;
+      if (nvs_get_u8(handle, (prefix + "ldr").c_str(), &ldr) == ESP_OK) {
+        cfg.is_measuring_leader = (ldr == 1);
+      }
       blen = 8;
       if (nvs_get_blob(handle, (prefix + "ibm").c_str(), cfg.ib_mac, &blen) == ESP_OK) cfg.ib_mac_known = true;
       uint32_t fc = 1;
@@ -390,6 +403,14 @@ void TadoEmulatorComponent::handleRequest(AsyncWebServerRequest *request) {
 #else
   const auto &url = request->url();
 #endif
+  // API key validation (if configured)
+  if (!api_key_.empty()) {
+    bool auth_ok = (request->hasArg("key") && std::string(request->arg("key")) == api_key_);
+    if (!auth_ok) {
+      request->send(401, "application/json", "{\"error\":\"Unauthorized\"}");
+      return;
+    }
+  }
   if (url == "/api/status") {
     handle_status_request(request);
   } else if (url == "/api/cmd") {
@@ -420,6 +441,8 @@ void TadoEmulatorComponent::handle_status_request(AsyncWebServerRequest *request
       json += "\"hum\":" + std::to_string(cfg.target_humidity_pct) + ",";
       json += "\"bat\":" + std::to_string(cfg.target_battery_mv) + ",";
       json += "\"child_lock\":" + std::string(cfg.child_lock ? "true" : "false") + ",";
+      json += "\"leader\":" + std::string(cfg.is_measuring_leader ? "true" : "false") + ",";
+      json += "\"zone_id\":" + std::to_string(cfg.zone_id) + ",";
       json += "\"last_telemetry\":" + std::to_string(cfg.last_telemetry_ts) + "}";
     }
     xSemaphoreGiveRecursive(devices_mutex_);
@@ -546,6 +569,8 @@ void TadoEmulatorComponent::handle_cmd_request(AsyncWebServerRequest *request, c
     cfg.ipv6_address = json_get_str(body, "ipv6");
     cfg.home_id = (uint32_t)json_get_num(body, "home_id", 0);
     cfg.zone_id = (uint32_t)json_get_num(body, "zone_id", 0);
+    cfg.is_measuring_leader = (body.find("\"is_measuring_leader\":true") != std::string::npos ||
+                               body.find("\"leader\":true") != std::string::npos);
 
     std::string mac_hex = json_get_str(body, "mac");
     if (!mac_hex.empty() && mac_hex.length() >= 16) {

@@ -192,17 +192,18 @@ function handleAckReceived(midInput, deviceIdOrMsg) {
         }
     }
 
+    let payload = null;
+    let coapMsg = null;
+    if (deviceIdOrMsg && typeof deviceIdOrMsg === 'object' && deviceIdOrMsg.coapMsg) {
+        coapMsg = deviceIdOrMsg.coapMsg;
+        if (coapMsg.payload) {
+            const raw = coapMsg.payload;
+            payload = Buffer.isBuffer(raw) ? raw : Buffer.from(raw.data || raw);
+        }
+    }
+
     const cb = _ackCallbacks.get(mid) || _ackCallbacks.get(midInput);
     if (cb) {
-        let payload = null;
-        let coapMsg = null;
-        if (deviceIdOrMsg && typeof deviceIdOrMsg === 'object' && deviceIdOrMsg.coapMsg) {
-            coapMsg = deviceIdOrMsg.coapMsg;
-            if (coapMsg.payload) {
-                const raw = coapMsg.payload;
-                payload = Buffer.isBuffer(raw) ? raw : Buffer.from(raw.data || raw);
-            }
-        }
         const hex = payload ? payload.toString('hex') : null;
         const bytes = payload ? Array.from(payload) : null;
         const code = coapMsg ? (coapMsg.codeStr || (coap.formatCode ? coap.formatCode(coapMsg.code) : coapMsg.code)) : null;
@@ -214,7 +215,22 @@ function handleAckReceived(midInput, deviceIdOrMsg) {
 
     const q = _pendingQueries.get(mid) || _pendingQueries.get(midInput);
     if (q) {
-        _log('debug', `[cmd-api] Ignoring simple ACK for Query MID ${mid} from ${displayId}. Waiting for actual Content payload response.`);
+        if (payload && payload.length > 0) {
+            if (q.timer) clearTimeout(q.timer);
+            _pendingQueries.delete(mid);
+            _pendingQueries.delete(midInput);
+            let etag = null;
+            if (coapMsg && coapMsg.options) {
+                const etagOpt = coapMsg.options.find(o => o.num === 4 || o.num === coap.OPT_ETAG);
+                if (etagOpt && etagOpt.value) {
+                    etag = Buffer.isBuffer(etagOpt.value) ? etagOpt.value : Buffer.from(etagOpt.value);
+                }
+            }
+            _log('debug', `[cmd-api] Resolving query for MID ${mid} from ${displayId} with payload (${payload.length}B)`);
+            q.resolve({ payload, etag, coapMsg });
+        } else {
+            _log('debug', `[cmd-api] Ignoring simple ACK for Query MID ${mid} from ${displayId}. Waiting for actual Content payload response.`);
+        }
     }
 }
 

@@ -677,6 +677,15 @@ router.post('/devices/:serialNo/sync', async (req, res) => {
         const devIpv6 = emDev.ipv6_address || (dbDev && dbDev.ipv6_address) || null;
         const devMac = devIpv6 ? deriveMacFromIpv6(devIpv6) : null;
 
+        let isMeasuringLeader = false;
+        if (dbDev && dbDev.zone_id) {
+            const [zoneRows] = await db.getPool().execute(
+                'SELECT measuring_device_serial FROM zones WHERE id = ? AND home_id = ?',
+                [dbDev.zone_id, homeId]
+            );
+            isMeasuringLeader = (zoneRows.length > 0 && zoneRows[0].measuring_device_serial === serialNo);
+        }
+
         const syncPayload = {
             cmd: 'sync',
             api_key: emDev.api_key,
@@ -689,7 +698,8 @@ router.post('/devices/:serialNo/sync', async (req, res) => {
             factory_key: emDev.factory_key || null,
             op_key: emDev.op_key || null,
             home_id: homeId ? parseInt(homeId, 10) : 0,
-            zone_id: (dbDev && dbDev.zone_id) ? parseInt(dbDev.zone_id, 10) : 0
+            zone_id: (dbDev && dbDev.zone_id) ? parseInt(dbDev.zone_id, 10) : 0,
+            is_measuring_leader: isMeasuringLeader
         };
 
         const espRes = await sendEsp32Command(emDev.esp32_ip, emDev.esp32_port, emDev.api_key, syncPayload);

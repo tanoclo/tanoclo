@@ -14,6 +14,8 @@ static const char *const TAG = "tado_ru_fsm";
 
 RUStateMachine::RUStateMachine(const EmulatedDeviceConfig &cfg) : config_(cfg) {
   config_.derive_short_addr();
+  config_.last_telemetry_ts = (uint32_t)(esp_timer_get_time() / 1000000ULL);
+  config_.last_fallback_push_ts = config_.last_telemetry_ts;
 }
 
 void RUStateMachine::trigger_telemetry(float temp_c, float hum_pct, uint16_t battery_mv,
@@ -124,13 +126,38 @@ void RUStateMachine::tick(uint32_t now_ms, uint32_t now_s, std::vector<OutboundF
   // 1. Operational State: Idle Heartbeat Fallback & Periodic NA keepalive
   if (config_.state == STATE_OPERATIONAL) {
     // Operational keepalive managed via periodic telemetry (/sen) and responding to IB NS/pings
-
     if (config_.last_telemetry_ts == 0) {
       config_.last_telemetry_ts = now_s;
-    } else if (now_s - config_.last_telemetry_ts >= config_.idle_fallback_s) {
+    } else if (now_s > config_.last_telemetry_ts && (now_s - config_.last_telemetry_ts >= config_.idle_fallback_s)) {
+      config_.last_telemetry_ts = now_s;
       // Idle fallback triggered. Transmit heartbeat with cached values
       trigger_telemetry(config_.target_temp_celsius, config_.target_humidity_pct,
                         config_.target_battery_mv, outbound_frames);
+    }
+
+    // Firmware-true fallback sync (every 3600s periodic sync)
+    if (config_.last_fallback_push_ts == 0) {
+      config_.last_fallback_push_ts = now_s;
+    } else if (now_s > config_.last_fallback_push_ts && (now_s - config_.last_fallback_push_ts >= 3600)) {
+      config_.last_fallback_push_ts = now_s;
+
+      // 1. Device-level fallback: PUT d/{serial}/fallback (TLV 0x0182 = 0x00)
+      std::vector<uint8_t> dev_fb_tlv;
+      protocol::append_tlv_u8(dev_fb_tlv, TLV_DEVICE_FALLBACK_0182, 0x00);
+      std::string dev_fb_path = "d/" + config_.serial_no + "/fallback";
+      OutboundFrame dev_fb_frame = build_encrypted_coap_frame(COAP_TYPE_CON, COAP_CODE_PUT, dev_fb_path,
+                                                             dev_fb_tlv.data(), dev_fb_tlv.size(), config_.ib_mac);
+      if (!dev_fb_frame.empty()) outbound_frames.push_back(std::move(dev_fb_frame));
+
+      // 2. Zone-level fallback (if measuring leader and zone_id assigned): PUT h/{home}/z/{zone}/fallback (TLV 0x6460 = 0x00)
+      if (config_.is_measuring_leader && config_.home_id != 0 && config_.zone_id != 0) {
+        std::vector<uint8_t> zone_fb_tlv;
+        protocol::append_tlv_u8(zone_fb_tlv, TLV_ZONE_FALLBACK_6460, 0x00);
+        std::string zone_fb_path = "h/" + std::to_string(config_.home_id) + "/z/" + std::to_string(config_.zone_id) + "/fallback";
+        OutboundFrame zone_fb_frame = build_encrypted_coap_frame(COAP_TYPE_CON, COAP_CODE_PUT, zone_fb_path,
+                                                                 zone_fb_tlv.data(), zone_fb_tlv.size(), config_.ib_mac);
+        if (!zone_fb_frame.empty()) outbound_frames.push_back(std::move(zone_fb_frame));
+      }
     }
     return;
   }
@@ -591,14 +618,6 @@ void RUStateMachine::handle_mac_ack(uint8_t seq) {
   }
 }
 
-static bool is_measuring_target_url(const std::string &url, const uint8_t *mac, const std::string &ipv6_addr) {
-  if (url.empty() || url == "coap://" || url == "coap://[::]") return false;
-  char mac_suffix[16];
-  snprintf(mac_suffix, sizeof(mac_suffix), "%02x%02x:%02x%02x", mac[4], mac[5], mac[6], mac[7]);
-  if (url.find(mac_suffix) != std::string::npos) return true;
-  if (!ipv6_addr.empty() && url.find(ipv6_addr) != std::string::npos) return true;
-  return false;
-}
 
 void RUStateMachine::handle_coap_message(const ParsedCoAP &coap, const ParsedMac &mac,
                                          std::vector<OutboundFrame> &outbound_frames,
@@ -850,9 +869,12 @@ void RUStateMachine::handle_coap_message(const ParsedCoAP &coap, const ParsedMac
       if (t.tag == TLV_ZONE_BINDING_015E && t.value.size() >= 2) {
         config_.zone_role = t.value[0];
         config_.zone_id = t.value[1];
+        config_.is_measuring_leader = (config_.zone_id != 0 && ((config_.zone_role & 0x08) != 0));
       } else if (t.tag == TLV_HOME_ID_015C && t.value.size() >= 4) {
         config_.home_id = ((uint32_t)t.value[0] << 24) | ((uint32_t)t.value[1] << 16) |
                           ((uint32_t)t.value[2] << 8) | (uint32_t)t.value[3];
+      } else if (t.tag == TLV_TEMPERATURE_OFFSET_0140 && t.value.size() >= 2) {
+        config_.temp_offset_raw = (int16_t)((t.value[0] << 8) | t.value[1]);
       }
     }
     std::vector<uint8_t> ack_coap = protocol::build_coap_ack(coap.mid, COAP_CODE_CHANGED,
@@ -900,9 +922,6 @@ void RUStateMachine::handle_coap_message(const ParsedCoAP &coap, const ParsedMac
         config_.target_url_p.assign((const char *)t.value.data(), t.value.size());
       }
     }
-    // Update Zone Measuring Leader state based on zone assignment and target_url_p matching our own address
-    config_.is_measuring_leader = (config_.zone_id != 0 &&
-                                   is_measuring_target_url(config_.target_url_p, config_.mac_addr, config_.ipv6_address));
     // Reply with 2.01 Created ACK
     std::vector<uint8_t> ack_coap = protocol::build_coap_ack(coap.mid, COAP_CODE_CREATED,
                                                             coap.token.data(), coap.token.size());
@@ -921,24 +940,51 @@ void RUStateMachine::handle_coap_message(const ParsedCoAP &coap, const ParsedMac
     return;
   }
 
-  // Case 9: Inbound GET /z/p (Zone Telemetry Query)
-  if (coap.code == COAP_CODE_GET && (coap.uri_path == "z/p" || coap.uri_path.rfind("z/p", 0) == 0)) {
-    std::vector<uint8_t> zp_tlv = protocol::build_z_p_tlv(config_.target_temp_celsius, config_.target_humidity_pct);
-    std::vector<uint8_t> ack_coap = protocol::serialize_coap(COAP_TYPE_ACK, COAP_CODE_CONTENT, coap.mid,
-                                                            coap.token.data(), coap.token.size(), "",
-                                                            zp_tlv.data(), zp_tlv.size());
-    std::vector<uint8_t> pt = protocol::encapsulate_6lowpan_udp(ack_coap.data(), ack_coap.size(),
-                                                               config_.mac_addr, mac.src_mac,
-                                                               coap.dst_port, coap.src_port,
-                                                               0x7E, config_.frame_counter++);
-    OutboundFrame frame = build_encrypted_icmp_frame(pt, mac.src_mac, rx_key);
-    if (!frame.empty()) {
-      track_outbound_response(frame.seq, coap.mid);
-      outbound_frames.push_back(std::move(frame));
+  // Case 9: Inbound GET or PUT /z/p (Zone Telemetry Query or Update)
+  if (coap.uri_path == "z/p" || coap.uri_path.rfind("z/p", 0) == 0) {
+    if (coap.code == COAP_CODE_GET) {
+      std::vector<uint8_t> zp_tlv = protocol::build_z_p_tlv(config_.target_temp_celsius, config_.target_humidity_pct);
+      std::vector<uint8_t> ack_coap = protocol::serialize_coap(COAP_TYPE_ACK, COAP_CODE_CONTENT, coap.mid,
+                                                              coap.token.data(), coap.token.size(), "",
+                                                              zp_tlv.data(), zp_tlv.size());
+      std::vector<uint8_t> pt = protocol::encapsulate_6lowpan_udp(ack_coap.data(), ack_coap.size(),
+                                                                 config_.mac_addr, mac.src_mac,
+                                                                 coap.dst_port, coap.src_port,
+                                                                 0x7E, config_.frame_counter++);
+      OutboundFrame frame = build_encrypted_icmp_frame(pt, mac.src_mac, rx_key);
+      if (!frame.empty()) {
+        track_outbound_response(frame.seq, coap.mid);
+        outbound_frames.push_back(std::move(frame));
+      }
+      ESP_LOGI(TAG, "[%s] Responded to GET /z/p with temp=%.2f hum=%.1f",
+               config_.serial_no.c_str(), config_.target_temp_celsius, config_.target_humidity_pct);
+      return;
+    } else if (coap.code == COAP_CODE_PUT) {
+      auto tlvs = protocol::parse_tlvs(coap.payload.data(), coap.payload.size());
+      for (const auto &t : tlvs) {
+        if (t.tag == TLV_ZONE_TEMP_4060 && t.value.size() >= 2) {
+          int16_t raw_temp = (int16_t)((t.value[0] << 8) | t.value[1]);
+          config_.target_temp_celsius = raw_temp / 100.0f;
+        } else if (t.tag == TLV_HUMIDITY_PERCENT && t.value.size() >= 2) {
+          uint16_t raw_hum = (t.value[0] << 8) | t.value[1];
+          config_.target_humidity_pct = raw_hum / 10.0f;
+        }
+      }
+      std::vector<uint8_t> ack_coap = protocol::build_coap_ack(coap.mid, COAP_CODE_CHANGED,
+                                                              coap.token.data(), coap.token.size());
+      std::vector<uint8_t> pt = protocol::encapsulate_6lowpan_udp(ack_coap.data(), ack_coap.size(),
+                                                                 config_.mac_addr, mac.src_mac,
+                                                                 coap.dst_port, coap.src_port,
+                                                                 0x7E, config_.frame_counter++);
+      OutboundFrame frame = build_encrypted_icmp_frame(pt, mac.src_mac, rx_key);
+      if (!frame.empty()) {
+        track_outbound_response(frame.seq, coap.mid);
+        outbound_frames.push_back(std::move(frame));
+      }
+      ESP_LOGI(TAG, "[%s] Processed PUT /z/p: temp=%.2fC hum=%.1f%% -> replied 2.04 Changed",
+               config_.serial_no.c_str(), config_.target_temp_celsius, config_.target_humidity_pct);
+      return;
     }
-    ESP_LOGI(TAG, "[%s] Responded to GET /z/p with temp=%.2f hum=%.1f",
-             config_.serial_no.c_str(), config_.target_temp_celsius, config_.target_humidity_pct);
-    return;
   }
 
   // Case 10: Inbound GET /z/s (Zone State Query)
@@ -969,10 +1015,6 @@ void RUStateMachine::handle_coap_message(const ParsedCoAP &coap, const ParsedMac
         config_.target_temp_celsius = raw_temp / 100.0f;
       } else if (t.tag == TLV_ZONE_MODE_6160 && !t.value.empty()) {
         config_.zone_mode = t.value[0];
-      } else if (t.tag == TLV_ZONE_ID_6020 && !t.value.empty()) {
-        config_.zone_id = t.value[0];
-        config_.is_measuring_leader = (config_.zone_id != 0 &&
-                                       is_measuring_target_url(config_.target_url_p, config_.mac_addr, config_.ipv6_address));
       }
     }
     // Reply with 2.04 Changed ACK

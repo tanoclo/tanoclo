@@ -127,6 +127,7 @@ struct EmulatedDeviceConfig {
   std::string target_url_p{"coap://"};
   std::string target_url_s{"coap://"};
   uint8_t zone_mode{1};                 // 1 = heating
+  int16_t temp_offset_raw{0};           // 0x0140 temperature offset (s16be, scale 0.01°C)
 
   // Timing and Sequence Tracking
   uint8_t seq_num{1};
@@ -138,6 +139,7 @@ struct EmulatedDeviceConfig {
   uint32_t last_csl_poll_time_{0};
   uint8_t pair_tx_count_{0};
   uint32_t idle_fallback_s{900};        // 15 minutes idle fallback interval
+  uint32_t last_fallback_push_ts{0};
 
   // CON retransmission queue (RFC 7252 §4.2)
   std::vector<PendingCON> pending_cons;

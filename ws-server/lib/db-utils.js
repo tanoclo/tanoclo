@@ -158,7 +158,7 @@ async function buildDeviceConfigTLV(deviceId) {
                 fields['0x8400'] = `coap://[${leaderDev.ipv6_address}]/z/p`;
                 fields['0x8200'] = `coap://[${leaderDev.ipv6_address}]/z/cpe`;
             }
-            fields['0x6020'] = 1;
+            fields['0x6020'] = dbDev.zone_id;
             fields['0x63e0'] = true;
         }
     }
