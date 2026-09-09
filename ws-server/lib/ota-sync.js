@@ -9,6 +9,8 @@ const https = require('https');
 const http = require('http');
 const crypto = require('crypto');
 const AdmZip = require('adm-zip');
+const { getLogger } = require('./logger');
+const log = getLogger('ota-sync');
 
 const frontendDistPath = path.join(__dirname, '../frontend-dist');
 const otaDataDir = path.join(__dirname, '../data/ota');
@@ -95,7 +97,7 @@ function loadLocalManifest() {
       }
     }
   } catch (err) {
-    console.error('[OtaSync] Error reading local manifest:', err.message);
+    log('error', `Error reading local manifest: ${err.message}`);
   }
   if (!currentManifest) {
     currentManifest = {
@@ -133,7 +135,7 @@ function extractZipBuffer(zipBuffer, targetDir) {
   }
   const zip = new AdmZip(zipBuffer);
   zip.extractAllTo(dest, true);
-  console.log(`[OtaSync] Extracted web bundle assets to ${dest === frontendDistPath ? 'frontend-dist' : dest} successfully.`);
+  log('info', `Extracted web bundle assets to ${dest === frontendDistPath ? 'frontend-dist' : dest} successfully.`);
 }
 
 async function checkAndSync(force = false) {
@@ -152,14 +154,14 @@ async function checkAndSync(force = false) {
     const distUrl = process.env.OTA_DIST_URL || DEFAULT_OTA_DIST_URL;
     const apkUrl = process.env.OTA_APK_URL || DEFAULT_OTA_APK_URL;
 
-    console.log('[OtaSync] Fetching remote OTA manifest from:', manifestUrl);
+    log('info', `Fetching remote OTA manifest from: ${manifestUrl}`);
     let remoteManifest = null;
     try {
       const manifestBuf = await fetchUrlBuffer(manifestUrl);
       remoteManifest = JSON.parse(manifestBuf.toString('utf8'));
       fs.writeFileSync(manifestCacheFile, JSON.stringify(remoteManifest, null, 2));
     } catch (err) {
-      console.warn('[OtaSync] Could not fetch remote OTA manifest:', err.message);
+      log('warn', `Could not fetch remote OTA manifest: ${err.message}`);
     }
 
     const targetManifest = remoteManifest || currentManifest || {
@@ -181,18 +183,18 @@ async function checkAndSync(force = false) {
     // Compare against snapshot of LOCAL codes, not the already-overwritten currentManifest
     const needsExtraction = force || !indexHtmlReal || !distZipExists || (remoteManifest && remoteWebCode > prevLocalWebCode);
 
-    console.log(`[OtaSync] Web version check: local=${prevLocalWebCode} remote=${remoteWebCode} indexReal=${indexHtmlReal} distZipExists=${distZipExists} needsExtraction=${needsExtraction}`);
+    log('debug', `Web version check: local=${prevLocalWebCode} remote=${remoteWebCode} indexReal=${indexHtmlReal} distZipExists=${distZipExists} needsExtraction=${needsExtraction}`);
 
     if (needsExtraction && (remoteManifest?.zipUrl || distUrl)) {
       const downloadZipUrl = remoteManifest?.zipUrl || distUrl;
-      console.log('[OtaSync] Downloading updated dist.zip from:', downloadZipUrl);
+      log('info', `Downloading updated dist.zip from: ${downloadZipUrl}`);
       try {
         const zipBuffer = await fetchUrlBuffer(downloadZipUrl);
         fs.writeFileSync(distZipCacheFile, zipBuffer);
         extractZipBuffer(zipBuffer);
-        console.log('[OtaSync] dist.zip downloaded and extracted successfully');
+        log('info', 'dist.zip downloaded and extracted successfully');
       } catch (err) {
-        console.error('[OtaSync] Failed to download or extract dist.zip:', err.message);
+        log('error', `Failed to download or extract dist.zip: ${err.message}`);
       }
     }
 
@@ -201,15 +203,15 @@ async function checkAndSync(force = false) {
     if (!fs.existsSync(apkCacheFile) || (remoteManifest && remoteApkCode > prevLocalApkCode)) {
       const downloadApkUrl = remoteManifest?.apkUrl || apkUrl;
       try {
-        console.log(`[OtaSync] Downloading APK (local=${prevLocalApkCode} remote=${remoteApkCode}) from:`, downloadApkUrl);
+        log('info', `Downloading APK (local=${prevLocalApkCode} remote=${remoteApkCode}) from: ${downloadApkUrl}`);
         const apkBuffer = await fetchUrlBuffer(downloadApkUrl);
         fs.writeFileSync(apkCacheFile, apkBuffer);
       } catch (err) {
-        console.warn('[OtaSync] Optional APK download skipped:', err.message);
+        log('warn', `Optional APK download skipped: ${err.message}`);
       }
     }
   } catch (err) {
-    console.error('[OtaSync] Sync failed:', err);
+    log('error', `Sync failed: ${err.message}`);
   } finally {
     isSyncing = false;
   }
@@ -226,23 +228,24 @@ function boot(intervalMs = 3600000) {
   const indexHtmlReal = fs.existsSync(indexHtmlPath) && fs.statSync(indexHtmlPath).size > 500;
 
   if (!config.otaAutoUpdate && indexHtmlReal) {
-    console.log('[OtaSync] Auto-update disabled in settings. Frontend files exist, skipping OTA sync.');
+    log('info', 'Auto-update disabled in settings. Frontend files exist, skipping OTA sync.');
     return;
   }
 
   if (!config.otaAutoUpdate && !indexHtmlReal) {
-    console.log('[OtaSync] Auto-update disabled but no real frontend found — overruling to perform initial sync.');
+    log('info', 'Auto-update disabled but no real frontend found — overruling to perform initial sync.');
   }
 
   // Initial sync (forced if no real frontend files to ensure the UI loads)
-  checkAndSync(!indexHtmlReal).catch(err => console.error('[OtaSync] Boot sync error:', err));
+  checkAndSync(!indexHtmlReal).catch(err => log('error', `Boot sync error: ${err.message}`));
 
   // Only set up periodic timer if auto-update is enabled
   if (config.otaAutoUpdate) {
     if (checkTimer) clearInterval(checkTimer);
     checkTimer = setInterval(() => {
-      checkAndSync(false).catch(err => console.error('[OtaSync] Timer sync error:', err));
+      checkAndSync(false).catch(err => log('error', `Timer sync error: ${err.message}`));
     }, intervalMs);
+    if (checkTimer.unref) checkTimer.unref();
   }
 }
 

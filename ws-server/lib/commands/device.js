@@ -351,7 +351,9 @@ async function pushDevicePair(deviceId, enabled = true, pairId = null, durationS
         if (pool) {
             await pool.execute('UPDATE devices SET in_pairing_mode = ? WHERE serial_no = ?', [enabled ? 1 : 0, deviceId]).catch(() => {});
         }
-    } catch (e) {}
+    } catch (e) {
+        if (api._log) api._log('debug', `[pushDevicePair] Failed to update pairing mode for ${deviceId}: ${e.message}`);
+    }
 
     if (enabled) {
         const timer = setTimeout(async () => {

@@ -28,7 +28,7 @@ function blockBridge(deviceId, durationMs = 120000, onExpire = null) {
 
     // Find and terminate all matching sockets
     for (const [ws, bId] of wsToBridgeId.entries()) {
-        if (bId === cleanId || bId === deviceId || (cleanId && bId && bId.includes(cleanId))) {
+        if (bId === cleanId || bId === deviceId) {
             wsToBridgeId.delete(ws);
             try { ws.close(); } catch (e) {}
             try { ws.end(); } catch (e) {}
@@ -65,7 +65,7 @@ function unblockBridge(deviceId) {
     }
 
     for (const id of Array.from(blockedBridges.keys())) {
-        if (id === cleanId || id.includes(cleanId) || cleanId.includes(id)) {
+        if (id === cleanId) {
             const existing = blockedBridges.get(id);
             if (existing && existing.timer) clearTimeout(existing.timer);
             blockedBridges.delete(id);
@@ -88,7 +88,7 @@ function isBridgeBlocked(deviceId, ip = null) {
     }
 
     for (const [id, record] of blockedBridges.entries()) {
-        if (cleanId === id || cleanId.includes(id) || id.includes(cleanId)) {
+        if (cleanId === id) {
             if (Date.now() < record.unblockAt) {
                 return true;
             } else {

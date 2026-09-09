@@ -339,7 +339,7 @@ async function bootstrap() {
     try {
         conn = await mysql.createConnection({
             host: config.db.host,
-            port: 3306,
+            port: config.db.port || 3306,
             user: config.db.user,
             password: config.db.password,
             connectTimeout: 10000

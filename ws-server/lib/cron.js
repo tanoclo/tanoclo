@@ -331,7 +331,7 @@ async function maintenanceZone(homeId, zoneId, zoneData, initialOverlay) {
             // Detection: Has a new block started since our last persistent transition record?
             // This also handles catch-up on server restart.
             if (!lastTransition || lastTransition < blockStartLocal) {
-                const targetTemp = currentBlock.setting?.temperature?.celsius || 15.0;
+                const targetTemp = currentBlock.setting?.temperature?.celsius ?? 15.0;
                 log('info', `Schedule transition detected for Home ${homeId}, Zone ${zoneId}: ${targetTemp} °C (New block started at ${currentBlock.startTime})`);
 
                 const [currRows] = await pool.execute(

@@ -184,6 +184,7 @@ async function ensureProxyConnection(ws, deviceId, rawData) {
             });
 
             proxyWs.loggingEnabled = !!home.proxy_logging;
+            proxyWs._homeId = String(homeId);
             proxyConnections.set(ws, proxyWs);
 
             proxyWs.on('open', async () => {
@@ -281,13 +282,6 @@ async function shouldBlockProxyMessage(data, dir) {
             return true;
         }
 
-        if (hasBlockOptions && isFwPath) {
-            if (coapMsg.code === coap.CODE_POST || coapMsg.code === coap.CODE_CONTINUE) {
-                log('debug', `[PROXY BLOCK ${dir}] Blocked block transfer (possible firmware chunk)`);
-                return true;
-            }
-        }
-
         return false;
     } catch (e) {
         return false;
@@ -341,6 +335,7 @@ function clearProxyConnectionsForHome(homeId) {
     const targetHomeId = String(homeId);
     let count = 0;
     for (const [ws, proxyWs] of proxyConnections.entries()) {
+        if (proxyWs && proxyWs._homeId && proxyWs._homeId !== targetHomeId) continue;
         delete ws._proxyChecked;
         if (proxyWs) {
             if (proxyWs._pingInterval) clearInterval(proxyWs._pingInterval);
