@@ -16,35 +16,48 @@ RUStateMachine::RUStateMachine(const EmulatedDeviceConfig &cfg) : config_(cfg) {
   config_.derive_short_addr();
   config_.last_telemetry_ts = (uint32_t)(esp_timer_get_time() / 1000000ULL);
   config_.last_fallback_push_ts = config_.last_telemetry_ts;
+  config_.last_sen_tx_ts = 0;
+  config_.last_zp_tx_ts = 0;
 }
 
 void RUStateMachine::trigger_telemetry(float temp_c, float hum_pct, uint16_t battery_mv,
                                       std::vector<OutboundFrame> &outbound_frames) {
+  uint32_t now_s = (uint32_t)(esp_timer_get_time() / 1000000ULL);
   config_.target_temp_celsius = temp_c;
   config_.target_humidity_pct = hum_pct;
   config_.target_battery_mv = battery_mv;
-  config_.last_telemetry_ts = (uint32_t)(esp_timer_get_time() / 1000000ULL);
+  config_.last_telemetry_ts = now_s;
 
   ESP_LOGI(TAG, "[%s] Trigger telemetry: temp=%.2fC hum=%.1f%% bat=%dmV",
            config_.serial_no.c_str(), temp_c, hum_pct, battery_mv);
 
-  std::vector<uint8_t> tlv = protocol::build_d_sen_tlv(temp_c, hum_pct, battery_mv,
-                                                      config_.target_ambient_light, 0, 0);
-
-  std::string path = "d/" + config_.serial_no + "/sen";
-  OutboundFrame frame = build_encrypted_coap_frame(COAP_TYPE_CON, COAP_CODE_PUT, path,
-                                                  tlv.data(), tlv.size(), config_.ib_mac);
-  if (!frame.empty()) {
-    outbound_frames.push_back(std::move(frame));
-  }
-
-  // If measuring leader, also emit zone periodic measurement
+  // 1. Zone parameters (/z/p) is high-cadence feed for measuring leader
   if (config_.is_measuring_leader) {
     std::vector<uint8_t> z_tlv = protocol::build_z_p_tlv(temp_c, hum_pct);
     OutboundFrame z_frame = build_encrypted_coap_frame(COAP_TYPE_CON, COAP_CODE_PUT, "z/p",
                                                       z_tlv.data(), z_tlv.size(), config_.ib_mac);
     if (!z_frame.empty()) {
       outbound_frames.push_back(std::move(z_frame));
+      config_.last_zp_tx_ts = now_s;
+      config_.last_reported_temp = temp_c;
+    }
+  }
+
+  // 2. Device sensor (/d/{serial}/sen) is low-cadence health feed:
+  // Emit on initial boot, or if >= 900s (15 min) since last /sen, or if non-leader
+  bool need_sen = (config_.last_sen_tx_ts == 0) ||
+                  (now_s - config_.last_sen_tx_ts >= 900) ||
+                  (!config_.is_measuring_leader);
+
+  if (need_sen) {
+    std::vector<uint8_t> tlv = protocol::build_d_sen_tlv(temp_c, hum_pct, battery_mv,
+                                                        config_.target_ambient_light, 0, 0);
+    std::string path = "d/" + config_.serial_no + "/sen";
+    OutboundFrame frame = build_encrypted_coap_frame(COAP_TYPE_CON, COAP_CODE_PUT, path,
+                                                    tlv.data(), tlv.size(), config_.ib_mac);
+    if (!frame.empty()) {
+      outbound_frames.push_back(std::move(frame));
+      config_.last_sen_tx_ts = now_s;
     }
   }
 }
@@ -123,41 +136,72 @@ void RUStateMachine::tick(uint32_t now_ms, uint32_t now_s, std::vector<OutboundF
     }
   }
 
-  // 1. Operational State: Idle Heartbeat Fallback & Periodic NA keepalive
+  // 1. Operational State: Autonomous heartbeats & Hourly maintenance burst
   if (config_.state == STATE_OPERATIONAL) {
-    // Operational keepalive managed via periodic telemetry (/sen) and responding to IB NS/pings
-    if (config_.last_telemetry_ts == 0) {
-      config_.last_telemetry_ts = now_s;
-    } else if (now_s > config_.last_telemetry_ts && (now_s - config_.last_telemetry_ts >= config_.idle_fallback_s)) {
-      config_.last_telemetry_ts = now_s;
-      // Idle fallback triggered. Transmit heartbeat with cached values
-      trigger_telemetry(config_.target_temp_celsius, config_.target_humidity_pct,
-                        config_.target_battery_mv, outbound_frames);
+    // Autonomous zone measurement heartbeat (~300s / 5m for measuring leader)
+    if (config_.is_measuring_leader) {
+      if (config_.last_zp_tx_ts == 0) {
+        config_.last_zp_tx_ts = now_s;
+      } else if (now_s > config_.last_zp_tx_ts && (now_s - config_.last_zp_tx_ts >= 300)) {
+        config_.last_zp_tx_ts = now_s;
+        config_.last_telemetry_ts = now_s;
+        std::vector<uint8_t> z_tlv = protocol::build_z_p_tlv(config_.target_temp_celsius, config_.target_humidity_pct);
+        OutboundFrame z_frame = build_encrypted_coap_frame(COAP_TYPE_CON, COAP_CODE_PUT, "z/p",
+                                                          z_tlv.data(), z_tlv.size(), config_.ib_mac);
+        if (!z_frame.empty()) outbound_frames.push_back(std::move(z_frame));
+      }
     }
 
-    // Firmware-true fallback sync (every 3600s periodic sync)
+    // Autonomous device sensor heartbeat (~1200s / 20m)
+    if (config_.last_sen_tx_ts == 0) {
+      config_.last_sen_tx_ts = now_s;
+    } else if (now_s > config_.last_sen_tx_ts && (now_s - config_.last_sen_tx_ts >= 1200)) {
+      config_.last_sen_tx_ts = now_s;
+      config_.last_telemetry_ts = now_s;
+      std::vector<uint8_t> tlv = protocol::build_d_sen_tlv(
+          config_.target_temp_celsius, config_.target_humidity_pct,
+          config_.target_battery_mv, config_.target_ambient_light, 0, 0);
+      std::string path = "d/" + config_.serial_no + "/sen";
+      OutboundFrame frame = build_encrypted_coap_frame(COAP_TYPE_CON, COAP_CODE_PUT, path,
+                                                      tlv.data(), tlv.size(), config_.ib_mac);
+      if (!frame.empty()) outbound_frames.push_back(std::move(frame));
+    }
+
+    // Firmware-true hourly maintenance burst (every 3600s periodic sync)
     if (config_.last_fallback_push_ts == 0) {
       config_.last_fallback_push_ts = now_s;
     } else if (now_s > config_.last_fallback_push_ts && (now_s - config_.last_fallback_push_ts >= 3600)) {
       config_.last_fallback_push_ts = now_s;
 
-      // 1. Device-level fallback: PUT d/{serial}/fallback (TLV 0x0182 = 0x00)
+      // 1. Config check: GET d/{serial}/config (0-byte payload)
+      std::string cfg_path = "d/" + config_.serial_no + "/config";
+      OutboundFrame cfg_frame = build_encrypted_coap_frame(COAP_TYPE_CON, COAP_CODE_GET, cfg_path,
+                                                           nullptr, 0, config_.ib_mac);
+      if (!cfg_frame.empty()) outbound_frames.push_back(std::move(cfg_frame));
+
+      // 2. Actuator status: PUT d/{serial}/act (TLV 0x028c = 0x00)
+      std::vector<uint8_t> act_tlv;
+      protocol::append_tlv_u8(act_tlv, TLV_ACTUATOR_ACTIVE, 0);
+      std::string act_path = "d/" + config_.serial_no + "/act";
+      OutboundFrame act_frame = build_encrypted_coap_frame(COAP_TYPE_CON, COAP_CODE_PUT, act_path,
+                                                           act_tlv.data(), act_tlv.size(), config_.ib_mac);
+      if (!act_frame.empty()) outbound_frames.push_back(std::move(act_frame));
+
+      // 3. Error status: PUT d/{serial}/err (TLV 0x01a3 = 0x00000000)
+      std::vector<uint8_t> err_tlv;
+      protocol::append_tlv_u32(err_tlv, 0x01a3, 0);
+      std::string err_path = "d/" + config_.serial_no + "/err";
+      OutboundFrame err_frame = build_encrypted_coap_frame(COAP_TYPE_CON, COAP_CODE_PUT, err_path,
+                                                           err_tlv.data(), err_tlv.size(), config_.ib_mac);
+      if (!err_frame.empty()) outbound_frames.push_back(std::move(err_frame));
+
+      // 4. Device-level fallback: PUT d/{serial}/fallback (TLV 0x0182 = 0x00)
       std::vector<uint8_t> dev_fb_tlv;
       protocol::append_tlv_u8(dev_fb_tlv, TLV_DEVICE_FALLBACK_0182, 0x00);
       std::string dev_fb_path = "d/" + config_.serial_no + "/fallback";
       OutboundFrame dev_fb_frame = build_encrypted_coap_frame(COAP_TYPE_CON, COAP_CODE_PUT, dev_fb_path,
                                                              dev_fb_tlv.data(), dev_fb_tlv.size(), config_.ib_mac);
       if (!dev_fb_frame.empty()) outbound_frames.push_back(std::move(dev_fb_frame));
-
-      // 2. Zone-level fallback (if measuring leader and zone_id assigned): PUT h/{home}/z/{zone}/fallback (TLV 0x6460 = 0x00)
-      if (config_.is_measuring_leader && config_.home_id != 0 && config_.zone_id != 0) {
-        std::vector<uint8_t> zone_fb_tlv;
-        protocol::append_tlv_u8(zone_fb_tlv, TLV_ZONE_FALLBACK_6460, 0x00);
-        std::string zone_fb_path = "h/" + std::to_string(config_.home_id) + "/z/" + std::to_string(config_.zone_id) + "/fallback";
-        OutboundFrame zone_fb_frame = build_encrypted_coap_frame(COAP_TYPE_CON, COAP_CODE_PUT, zone_fb_path,
-                                                                 zone_fb_tlv.data(), zone_fb_tlv.size(), config_.ib_mac);
-        if (!zone_fb_frame.empty()) outbound_frames.push_back(std::move(zone_fb_frame));
-      }
     }
     return;
   }
