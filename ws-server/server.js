@@ -15,7 +15,6 @@ const tls = require('tls');
 const net = require('net');
 const WebSocket = require('ws');
 
-
 let apiProcess = null;
 
 const { getLogger } = require('./lib/logger');
@@ -95,9 +94,6 @@ const _cleanupOAuthTimer = setInterval(async () => {
 }, 3600000); // 1 hour
 _cleanupOAuthTimer.unref();
 
-
-
-
 async function populateIpv6Map() {
     try {
         const devices = await db.getAllDevices();
@@ -138,8 +134,8 @@ async function sendToDevice(deviceId, wsMessage) {
         throw new Error(`Device ${deviceId} not connected`);
     }
 
-    // Cache recreated downlink messages even when proxied
-    messageCache.cacheMessage(deviceId, wsMessage, 'recreated');
+    // Cache TANOCLO downlink messages even when proxied
+    messageCache.cacheMessage(deviceId, wsMessage, 'TANOCLO');
 
     let isReboot = false;
     let isConfig = false;
@@ -391,7 +387,7 @@ async function startServer() {
 
         config.onMqttChange(() => {
             log('info', '[MQTT] Settings changed, reconnecting client...');
-            mqttClient.reconnect().catch(() => {});
+            mqttClient.reconnect().catch(() => { });
         });
     } catch (err) {
         log('error', `Failed to load TLV labels: ${err.message}`);
@@ -469,7 +465,7 @@ async function startServer() {
                         log('error', `Failed to update disconnect state: ${err.message}`);
                     });
                     if (mqttPublisher) {
-                        mqttPublisher.publishDeviceAvailability(shortSerial, false).catch(() => {});
+                        mqttPublisher.publishDeviceAvailability(shortSerial, false).catch(() => { });
                     }
                 }
             }
@@ -490,19 +486,14 @@ async function startServer() {
 
     app.get('/health', (res, req) => {
         res.writeHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({
-            status: 'ok',
-            clients: clients.size,
-            uptime: process.uptime(),
-            memoryMB: Math.round(process.memoryUsage().rss / 1024 / 1024)
-        }));
+        res.end(JSON.stringify({ status: 'ok' }));
     });
 
     app.listen(INTERNAL_UWS_PORT, (listenSocket) => {
         if (listenSocket) {
             log('debug', `Internal uWS listening on port ${INTERNAL_UWS_PORT}`);
         } else {
-            log('error', `✗ Failed to listen on internal port ${INTERNAL_UWS_PORT}`);
+            log('error', `Failed to listen on internal port ${INTERNAL_UWS_PORT}`);
             process.exit(1);
         }
     });
@@ -516,7 +507,6 @@ async function startServer() {
     });
 
     // Command routes will be set up inside the child API process
-
     const cron = require('./lib/cron');
     commandApi.initialize({
         clients,
@@ -541,40 +531,70 @@ async function startServer() {
     log('debug', `Server startup complete`);
 }
 
-process.on('SIGINT', async () => {
+let isShuttingDown = false;
+
+async function handleShutdown() {
+    if (isShuttingDown) return;
+    isShuttingDown = true;
     log('debug', 'Shutting down...');
-    try { const { stop: stopRouter } = require('./lib/message-router'); stopRouter(); } catch (e) {}
-    try { stopProxyServer(); } catch (e) {}
+    try { const { stop: stopRouter } = require('./lib/message-router'); stopRouter(); } catch (e) { }
+    try { stopProxyServer(); } catch (e) { }
+
     if (apiProcess) {
-        try { apiProcess.kill('SIGINT'); } catch (e) {}
+        try {
+            await new Promise((resolve) => {
+                const timer = setTimeout(() => {
+                    if (apiProcess) {
+                        try { apiProcess.kill('SIGKILL'); } catch (e) { }
+                    }
+                    resolve();
+                }, 4000);
+                apiProcess.once('exit', () => {
+                    clearTimeout(timer);
+                    resolve();
+                });
+                apiProcess.kill('SIGTERM');
+            });
+        } catch (e) { }
     }
-    try { await workerPool.shutdown(); } catch (e) {}
+
+    try { await workerPool.shutdown(); } catch (e) { }
     if (mqttClient) {
-        try { await mqttClient.shutdown(); } catch (e) {}
+        try { await mqttClient.shutdown(); } catch (e) { }
     }
     try {
         const cron = require('./lib/cron');
         cron.stop();
-    } catch (e) {}
+    } catch (e) { }
     commandApi.stop();
 
+    const updatePromises = [];
     for (const [deviceId] of clients.entries()) {
         const shortSerial = extractShortSerial(deviceId);
         if (shortSerial) {
-            try { await db.updateDeviceConnectionState(shortSerial, false); } catch { }
+            updatePromises.push(db.updateDeviceConnectionState(shortSerial, false).catch(() => { }));
         }
     }
+    await Promise.race([
+        Promise.allSettled(updatePromises),
+        new Promise(resolve => setTimeout(resolve, 3000))
+    ]);
 
-    await db.close();
+    try {
+        await Promise.race([
+            db.close(),
+            new Promise(resolve => setTimeout(resolve, 3000))
+        ]);
+    } catch (e) { }
+
     process.exit(0);
-});
+}
 
-process.on('SIGTERM', () => process.emit('SIGINT'));
+process.on('SIGINT', handleShutdown);
+process.on('SIGTERM', handleShutdown);
 
 let apiRestartCount = 0;
 const API_MAX_RESTART_DELAY = 60000; // 1 minute max
-
-
 
 function startApiChildProcess() {
     const { fork } = require('child_process');
@@ -624,7 +644,7 @@ function startApiChildProcess() {
                         try {
                             const p = db.getPool();
                             await p.execute('UPDATE devices SET in_pairing_mode = 0 WHERE serial_no = ?', [expiredSerial]);
-                            await commandApi.pushDevicePair(expiredSerial, false).catch(() => {});
+                            await commandApi.pushDevicePair(expiredSerial, false).catch(e => log('debug', `[PAIRING_TIMEOUT] pushDevicePair failed: ${e.message}`));
                         } catch (err) {
                             log('error', `Failed to auto-disable pairing for ${expiredSerial}: ${err.message}`);
                         }
@@ -666,6 +686,7 @@ function startApiChildProcess() {
 
     apiProcess.on('exit', (code, signal) => {
         apiProcess = null;
+        if (isShuttingDown) return;
         apiRestartCount++;
         const delay = Math.min(5000 * Math.pow(1.5, apiRestartCount - 1), API_MAX_RESTART_DELAY);
         log('error', `[PROCESS] REST API child process exited (code=${code}, signal=${signal}). Restart #${apiRestartCount} in ${Math.round(delay / 1000)}s...`);

@@ -3,8 +3,6 @@
  * @brief Stylized action button component supporting multiple design variants.
  */
 
-
-
 /**
  * @brief Standard button component wrapper.
  * @param {string} props.variant - Theme style variant ('primary', 'secondary', 'destructive', 'text').
@@ -13,14 +11,14 @@
  * @param {boolean} props.disabled - Boolean indicating if the button is disabled.
  * @param {function} props.onClick - Click callback handler.
  */
-export default function Button({ 
-  children, 
-  variant = 'primary', 
-  className = '', 
-  style = {}, 
-  disabled = false, 
-  onClick, 
-  ...props 
+export default function Button({
+  children,
+  variant = 'primary',
+  className = '',
+  style = {},
+  disabled = false,
+  onClick,
+  ...props
 }) {
   const getStyles = () => {
     const base = {

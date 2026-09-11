@@ -3,8 +3,6 @@
  * @brief Renders a standard slide-switch toggle button.
  */
 
-
-
 /**
  * @brief Switch toggle component.
  * @param {boolean} props.checked - Whether the toggle is currently active (on).
@@ -12,12 +10,12 @@
  * @param {boolean} props.disabled - Boolean indicating if the toggle is disabled.
  * @param {string} props.label - Optional label text shown on the right.
  */
-export default function Toggle({ 
-  checked, 
-  onChange, 
-  disabled = false, 
-  label = '', 
-  ...props 
+export default function Toggle({
+  checked,
+  onChange,
+  disabled = false,
+  label = '',
+  ...props
 }) {
   return (
     <label style={{
@@ -37,7 +35,7 @@ export default function Toggle({
         borderRadius: '12px',
         transition: 'background-color var(--transition-fast)'
       }}>
-        <input 
+        <input
           type="checkbox"
           role="switch"
           aria-checked={checked}

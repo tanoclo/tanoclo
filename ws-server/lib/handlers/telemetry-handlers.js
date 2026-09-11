@@ -58,7 +58,23 @@ async function handleSensorData(ws, frame, coapMsg, decoded, peerInfo, pathInfo)
     let tempAmbient = f['0x012d'] ?? null;
     let humidity = f['0x0135'] ?? null;
     const rawBatteryMv = f['0x0162'] ?? null;
-    const batteryMv = rawBatteryMv != null ? battery.filterBatteryMv(shortSerial, rawBatteryMv) : null;
+    let batteryMv = null;
+    let batteryState = null;
+    let batteryPercent = null;
+
+    if (rawBatteryMv != null) {
+        const chemistry = await db.getDeviceBatteryConfig(shortSerial);
+        const bResult = battery.processBatteryReading(shortSerial, rawBatteryMv, chemistry, { fullSerial: deviceId });
+        batteryMv = bResult.mv;
+        batteryPercent = bResult.percent;
+        batteryState = bResult.batteryState;
+        if (bResult.guarded) {
+            log('info', `BATTERY GUARD ${shortSerial}: raw=${rawBatteryMv}mV guarded=${batteryMv}mV (${bResult.guardReason})`);
+        }
+        if (batteryMv !== rawBatteryMv) {
+            f['0x0162'] = batteryMv;
+        }
+    }
     const lightLevel = f['0x0136'] ?? null;
     const otVolt = f['0x0161'] ?? null;
     const resetReason = f['0x0160'] ?? null;
@@ -82,26 +98,7 @@ async function handleSensorData(ws, frame, coapMsg, decoded, peerInfo, pathInfo)
         ? mqttPublisher.getFriendlyResetReason(resetReason)
         : (resetReason !== null ? resetReason : 'null');
 
-    if (rawBatteryMv != null && batteryMv !== rawBatteryMv) {
-        log('info', `BATTERY GUARD ${shortSerial}: raw=${rawBatteryMv}mV guarded=${batteryMv}mV (transient drop suppressed)`);
-    }
     log('debug', `SENSOR ${shortSerial}: temp=${tempC}°C hum=${humPct}% bat=${batteryMv}mV light=${lightLevel} ot_volt=${otVoltV}V reset=${resetStr}`);
-
-    let batteryState = null;
-    let batteryPercent = null;
-
-    if (batteryMv != null) {
-        const chemistry = await db.getDeviceBatteryConfig(shortSerial);
-        batteryPercent = battery.getBatteryPercent(batteryMv, deviceId, chemistry);
-        // Update field with guarded value so MQTT/DB use the stabilised reading
-        if (batteryMv !== rawBatteryMv) f['0x0162'] = batteryMv;
-
-        if (batteryPercent != null) {
-            if (batteryPercent > 30) batteryState = 'NORMAL';
-            else if (batteryPercent > 5) batteryState = 'LOW';
-            else batteryState = 'DEPLETED';
-        }
-    }
 
     const zone = await db.getZoneForDevice(shortSerial);
     const homeId = zone?.homeId || pathInfo?.homeId || await db.getHomeForDevice(shortSerial);
@@ -151,21 +148,21 @@ async function handleSensorData(ws, frame, coapMsg, decoded, peerInfo, pathInfo)
 
     if (mqttPublisher && homeId) {
         db.getDeviceBySerial(shortSerial).then(dev => {
-            mqttPublisher.publishDeviceTelemetry(shortSerial, homeId, zone ? zone.zoneId : null, f, dev).catch(() => { });
+            mqttPublisher.publishDeviceTelemetry(shortSerial, homeId, zone ? zone.zoneId : null, f, dev).catch(e => log('debug', `[MQTT] Device telemetry failed for ${shortSerial}: ${e.message}`));
         }).catch(() => {
-            mqttPublisher.publishDeviceTelemetry(shortSerial, homeId, zone ? zone.zoneId : null, f, null).catch(() => { });
+            mqttPublisher.publishDeviceTelemetry(shortSerial, homeId, zone ? zone.zoneId : null, f, null).catch(e => log('debug', `[MQTT] Fallback device telemetry failed for ${shortSerial}: ${e.message}`));
         });
 
-        mqttPublisher.publishDeviceAvailability(shortSerial, true).catch(() => { });
+        mqttPublisher.publishDeviceAvailability(shortSerial, true).catch(e => log('debug', `[MQTT] Availability failed for ${shortSerial}: ${e.message}`));
 
         if (tempC != null && zone && (!zone.measuringSerial || zone.measuringSerial === deviceId || zone.measuringSerial === shortSerial)) {
             db.getPool().execute('SELECT * FROM zone_measurements WHERE zone_id = ? ORDER BY id DESC LIMIT 1', [zone.zoneId])
                 .then(([rows]) => {
                     if (rows.length > 0) {
-                        mqttPublisher.publishZoneTelemetry(zone.homeId, zone.zoneId, rows[0]).catch(() => { });
-                        mqttPublisher.publishZoneStateTelemetry(zone.homeId, zone.zoneId, rows[0]).catch(() => { });
+                        mqttPublisher.publishZoneTelemetry(zone.homeId, zone.zoneId, rows[0]).catch(e => log('debug', `[MQTT] Zone telemetry failed: ${e.message}`));
+                        mqttPublisher.publishZoneStateTelemetry(zone.homeId, zone.zoneId, rows[0]).catch(e => log('debug', `[MQTT] Zone state telemetry failed: ${e.message}`));
                     }
-                }).catch(() => { });
+                }).catch(e => log('debug', `[MQTT] Zone lookup failed: ${e.message}`));
         }
     }
 }
@@ -178,7 +175,7 @@ async function handleHvacConfig(ws, frame, coapMsg, decoded, peerInfo, pathInfo)
         const sanitizedFields = db.sanitizeHvacFields(decoded.fields);
         await db.upsertHeatingSystem(pathInfo.homeId, sanitizedFields);
         if (mqttPublisher) {
-            mqttPublisher.publishHvacTelemetry(pathInfo.homeId, sanitizedFields).catch(() => { });
+            mqttPublisher.publishHvacTelemetry(pathInfo.homeId, sanitizedFields).catch(e => log('debug', `[MQTT] HVAC config telemetry failed: ${e.message}`));
         }
     }
 }
@@ -203,7 +200,7 @@ async function handleHvac(ws, frame, coapMsg, decoded, peerInfo, pathInfo) {
         const sanitizedFields = db.sanitizeHvacFields(decoded.fields);
         await db.upsertHeatingSystem(homeId, sanitizedFields);
         if (mqttPublisher) {
-            mqttPublisher.publishHvacTelemetry(homeId, sanitizedFields).catch(() => { });
+            mqttPublisher.publishHvacTelemetry(homeId, sanitizedFields).catch(e => log('debug', `[MQTT] HVAC telemetry failed: ${e.message}`));
         }
     }
 }

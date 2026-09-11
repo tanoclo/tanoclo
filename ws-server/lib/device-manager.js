@@ -26,19 +26,43 @@ function blockBridge(deviceId, durationMs = 120000, onExpire = null) {
 
     unblockBridge(cleanId);
 
-    // Find and terminate all matching sockets
-    for (const [ws, bId] of wsToBridgeId.entries()) {
-        if (bId === cleanId || bId === deviceId) {
-            wsToBridgeId.delete(ws);
-            try { ws.close(); } catch (e) {}
-            try { ws.end(); } catch (e) {}
+    let bridgeIp = null;
+    const clientInfo = clients.get(cleanId);
+    if (clientInfo) {
+        if (clientInfo.ip) {
+            bridgeIp = clientInfo.ip;
+        } else if (clientInfo.ws) {
+            try {
+                if (typeof clientInfo.ws.getRemoteAddressAsText === 'function') {
+                    bridgeIp = Buffer.from(clientInfo.ws.getRemoteAddressAsText()).toString();
+                } else if (clientInfo.ws._socket && clientInfo.ws._socket.remoteAddress) {
+                    bridgeIp = clientInfo.ws._socket.remoteAddress;
+                }
+            } catch (e) { }
         }
     }
 
-    const clientInfo = clients.get(cleanId);
+    // Find and terminate all matching sockets
+    for (const [ws, bId] of wsToBridgeId.entries()) {
+        if (bId === cleanId || bId === deviceId) {
+            if (!bridgeIp) {
+                try {
+                    if (typeof ws.getRemoteAddressAsText === 'function') {
+                        bridgeIp = Buffer.from(ws.getRemoteAddressAsText()).toString();
+                    } else if (ws._socket && ws._socket.remoteAddress) {
+                        bridgeIp = ws._socket.remoteAddress;
+                    }
+                } catch (e) { }
+            }
+            wsToBridgeId.delete(ws);
+            try { ws.close(); } catch (e) { }
+            try { ws.end(); } catch (e) { }
+        }
+    }
+
     if (clientInfo && clientInfo.ws) {
-        try { clientInfo.ws.close(); } catch (e) {}
-        try { clientInfo.ws.end(); } catch (e) {}
+        try { clientInfo.ws.close(); } catch (e) { }
+        try { clientInfo.ws.end(); } catch (e) { }
     }
     clients.delete(cleanId);
 
@@ -46,12 +70,12 @@ function blockBridge(deviceId, durationMs = 120000, onExpire = null) {
     const timer = setTimeout(() => {
         blockedBridges.delete(cleanId);
         if (typeof onExpire === 'function') {
-            try { onExpire(cleanId); } catch (e) {}
+            try { onExpire(cleanId); } catch (e) { }
         }
     }, durationMs);
     timer.unref();
 
-    const record = { unblockAt, timer, pendingDisablePairing: true };
+    const record = { unblockAt, timer, pendingDisablePairing: true, ip: bridgeIp };
     blockedBridges.set(cleanId, record);
     return record;
 }
@@ -77,9 +101,12 @@ function isBridgeBlocked(deviceId, ip = null) {
     if (blockedBridges.size === 0) return false;
     const cleanId = extractShortSerial(deviceId);
     if (!cleanId) {
+        if (!ip) return false;
         for (const [id, record] of blockedBridges.entries()) {
             if (Date.now() < record.unblockAt) {
-                return true;
+                if (record.ip && record.ip === ip) {
+                    return true;
+                }
             } else {
                 unblockBridge(id);
             }
@@ -125,4 +152,3 @@ module.exports = {
     isBridgeBlocked,
     getBridgeBlockStatus
 };
-

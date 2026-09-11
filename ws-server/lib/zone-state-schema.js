@@ -6,8 +6,6 @@
 'use strict';
 
 /**
- * Zone State TLV Schema — single source of truth for z/s payloads.
- *
  * Hex FID representation as keys strictly to avoid friendly names in code logic.
  *
  * Field semantics:

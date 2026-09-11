@@ -116,7 +116,7 @@ function WeatherChart({ dayReportData }) {
         titleFont: { family: 'Inter, sans-serif' },
         bodyFont: { family: 'Inter, sans-serif' },
         callbacks: {
-          label: function(context) {
+          label: function (context) {
             const label = context.dataset.label || '';
             if (context.datasetIndex === 0) {
               return `${label}: ${context.parsed.y.toFixed(1)}°C`;
@@ -154,7 +154,7 @@ function WeatherChart({ dayReportData }) {
             family: 'Inter, sans-serif',
             size: 10
           },
-          callback: function(value) {
+          callback: function (value) {
             return value + '°';
           }
         }

@@ -74,7 +74,7 @@ export default function ReorderRooms({ isOpen, onClose }) {
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={t('dashboard.zones.reorder')}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-        
+
         {/* Reorder List */}
         <div style={{
           display: 'flex',
@@ -85,7 +85,7 @@ export default function ReorderRooms({ isOpen, onClose }) {
           overflow: 'hidden'
         }}>
           {localZones.map((z, idx) => (
-            <div 
+            <div
               key={z.id}
               style={{
                 display: 'flex',
@@ -148,17 +148,17 @@ export default function ReorderRooms({ isOpen, onClose }) {
 
         {/* Action Controls */}
         <div style={{ display: 'flex', gap: '1rem', marginTop: '0.5rem' }}>
-          <Button 
-            variant="secondary" 
-            onClick={onClose} 
+          <Button
+            variant="secondary"
+            onClick={onClose}
             disabled={isSaving}
             style={{ flex: 1 }}
           >
             {t('common.cancel')}
           </Button>
-          <Button 
-            variant="primary" 
-            onClick={handleSave} 
+          <Button
+            variant="primary"
+            onClick={handleSave}
             disabled={isSaving}
             style={{ flex: 1 }}
           >

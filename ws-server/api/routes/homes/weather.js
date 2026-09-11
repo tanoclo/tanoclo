@@ -19,7 +19,6 @@ const { buildHomeDetails, checkZoneConfigReadonly } = require('./helpers');
 const router = express.Router();
 const _log = getLogger('homes-api');
 
-// --- lines 235 to 410 ---
 const getAirComfortHandler = async (req, res) => {
     try {
         const homeId = req.params.homeId;
@@ -215,12 +214,7 @@ const getAirComfortHandler = async (req, res) => {
 router.get('/:homeId/airComfort', getAirComfortHandler);
 router.get('/:homeId/climateQuality', getAirComfortHandler);
 
-
-
 // GET /api/v2/homes/{homeId}/weather
-
-
-// --- lines 411 to 445 ---
 router.get('/:homeId/weather', async (req, res) => {
     try {
         const homeId = req.params.homeId;
@@ -254,8 +248,5 @@ router.get('/:homeId/weather', async (req, res) => {
         res.status(500).json({ error: 'internal_error' });
     }
 });
-
-// GET /api/v2/homes/{homeId}/installations
-
 
 module.exports = router;

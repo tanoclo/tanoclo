@@ -111,4 +111,13 @@ function parseResourceIds(displayPath, fallbackHomeId = null) {
     return { zoneId, homeId, circuitNumber };
 }
 
-module.exports = { reconstructBuffers, parseUtcDate, getTzOffsetMs, getLocalParts, parseLocalTimeInTimezone, getDayBoundsInTimezone, parseResourceIds };
+function silentCatch(promise, context = 'suppressed', logFn = null) {
+    if (!promise || typeof promise.catch !== 'function') return promise;
+    return promise.catch(e => {
+        if (typeof logFn === 'function') {
+            logFn('debug', `[${context}] Suppressed: ${e ? e.message : 'unknown'}`);
+        }
+    });
+}
+
+module.exports = { reconstructBuffers, parseUtcDate, getTzOffsetMs, getLocalParts, parseLocalTimeInTimezone, getDayBoundsInTimezone, parseResourceIds, silentCatch };

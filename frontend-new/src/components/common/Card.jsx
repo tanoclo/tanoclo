@@ -3,8 +3,6 @@
  * @brief Renders the base glassmorphism layout card container.
  */
 
-
-
 /**
  * @brief Layout container wrapper.
  * @param {string} props.className - Custom CSS class parameters.
@@ -13,9 +11,9 @@
  */
 export default function Card({ children, className = '', style = {}, onClick, ...props }) {
   const isClickable = !!onClick;
-  
+
   return (
-    <div 
+    <div
       className={`glass-panel ${className}`}
       onClick={onClick}
       style={{

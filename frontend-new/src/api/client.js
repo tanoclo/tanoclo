@@ -6,14 +6,33 @@
  * authentication header injection (Bearer token), and intelligent token-refresh routing when receiving
  * 401 unauthorized responses. Implements client refresh queues to avoid duplicate refresh calls.
  * 
- * SECURITY NOTE: Access and refresh tokens are stored in localStorage, which is vulnerable to XSS.
- * This is an acceptable trade-off for the native Capacitor app (sandboxed WebView). For the web app,
- * XSS risk is mitigated by Content Security Policy headers. If stricter isolation is needed in the
- * future, the refresh token could be moved to httpOnly cookies with backend support.
+ * SECURITY NOTE: On web, refresh tokens are stored exclusively in httpOnly SameSite cookies
+ * (tanoclo_rt) to mitigate XSS risk, while access tokens reside in localStorage (mitigated by CSP).
+ * On native (Capacitor), refresh tokens are isolated in hardware-backed Secure Storage (Android KeyStore /
+ * iOS Keychain) via @aparajita/capacitor-secure-storage. Authorization headers are origin-validated
+ * before injection to prevent token leakage to external domains.
  */
 
 import { STORAGE_KEYS, getApiBase } from '../utils/constants';
 import { refreshAccessToken } from './auth';
+import { getRefreshToken, setRefreshToken, removeRefreshToken } from '../utils/secureStorage';
+
+/**
+ * @brief Verifies whether target URL matches the configured internal API origin.
+ * @param {string} targetUrl - Target request address.
+ * @returns {boolean} True if destination is internal API server.
+ */
+function isInternalOrigin(targetUrl) {
+  try {
+    const base = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : 'http://localhost';
+    const parsedTarget = new URL(targetUrl, base);
+    const apiBase = getApiBase();
+    const parsedExpected = apiBase ? new URL(apiBase, base) : new URL(base);
+    return parsedTarget.origin === parsedExpected.origin;
+  } catch {
+    return false;
+  }
+}
 
 // Tracks global token-refresh status to prevent overlapping token-refresh api requests
 let isRefreshing = false;
@@ -45,14 +64,17 @@ function onRefreshed(token) {
  */
 export async function apiFetch(endpoint, options = {}) {
   const token = localStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
-  
+
   const headers = {
     'Accept': 'application/json',
     ...options.headers,
   };
 
-  // Inject authentication header if token exists in LocalStorage
-  if (token) {
+  const url = `${getApiBase()}${endpoint}`;
+  const isInternal = isInternalOrigin(url);
+
+  // Inject authentication header if token exists and destination is internal API
+  if (token && isInternal) {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
@@ -63,7 +85,6 @@ export async function apiFetch(endpoint, options = {}) {
     headers['Content-Type'] = 'application/json';
   }
 
-  const url = `${getApiBase()}${endpoint}`;
   const controller = new AbortController();
   // Enforce a strict 30-second request timeout abort
   const timeoutId = setTimeout(() => controller.abort(), 30000);
@@ -87,14 +108,14 @@ export async function apiFetch(endpoint, options = {}) {
 
   // Handle Token Expiration (401 Unauthorized)
   if (response.status === 401 && token) {
-    // On native (Capacitor), read refresh token from localStorage.
-    // On web, the httpOnly cookie carries it automatically — no localStorage needed.
+    // On native (Capacitor), read refresh token from SecureStorage.
+    // On web, the httpOnly cookie carries it automatically — no client storage needed.
     const isNative = typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.();
-    const refreshToken = isNative ? localStorage.getItem(STORAGE_KEYS.REFRESH_TOKEN) : null;
+    const refreshToken = isNative ? await getRefreshToken() : null;
 
     // On native without a stored refresh token, we can't refresh — logout immediately.
     if (isNative && !refreshToken) {
-      handleLogout();
+      await handleLogout();
       throw new Error('Unauthorized');
     }
 
@@ -105,15 +126,17 @@ export async function apiFetch(endpoint, options = {}) {
         // On native, the explicit token is passed in the request body.
         const data = await refreshAccessToken(refreshToken);
         localStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, data.access_token);
-        // Only store refresh token in localStorage on native (Capacitor) platforms
+        // Only store refresh token in secure storage on native (Capacitor) platforms
         if (isNative && data.refresh_token) {
-          localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, data.refresh_token);
+          await setRefreshToken(data.refresh_token);
         }
         isRefreshing = false;
         onRefreshed(data.access_token);
 
         // We refreshed the token ourselves. Retry the original request immediately.
-        headers['Authorization'] = `Bearer ${data.access_token}`;
+        if (isInternal) {
+          headers['Authorization'] = `Bearer ${data.access_token}`;
+        }
         const retryController = new AbortController();
         const retryTimeoutId = setTimeout(() => retryController.abort(), 30000);
         try {
@@ -131,7 +154,7 @@ export async function apiFetch(endpoint, options = {}) {
         isRefreshing = false;
         refreshSubscribers.forEach(cb => cb(null));
         refreshSubscribers = [];
-        handleLogout();
+        await handleLogout();
         throw err;
       }
     } else {
@@ -141,7 +164,9 @@ export async function apiFetch(endpoint, options = {}) {
           if (!newToken) {
             return reject(new Error('Token refresh failed'));
           }
-          headers['Authorization'] = `Bearer ${newToken}`;
+          if (isInternal) {
+            headers['Authorization'] = `Bearer ${newToken}`;
+          }
           const retryController = new AbortController();
           const retryTimeoutId = setTimeout(() => retryController.abort(), 30000);
           try {
@@ -195,12 +220,12 @@ async function handleResponse(response) {
  * the backend with the still-valid token from its React state closure. The backend logout
  * handler clears the httpOnly refresh token cookie.
  */
-function handleLogout() {
+async function handleLogout() {
   localStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
-  // Only remove refresh token from localStorage on native; on web the httpOnly cookie handles it
+  // Only remove refresh token on native; on web the httpOnly cookie handles it
   const isNative = typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.();
   if (isNative) {
-    localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN);
+    await removeRefreshToken();
   }
   // Dispatch custom event to let AuthContext know
   window.dispatchEvent(new Event('auth_logout'));

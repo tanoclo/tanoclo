@@ -85,6 +85,45 @@ async function getDeviceList(req, res) {
     }
 }
 
+// GET /api/v2/homes/{homeId}/deviceList
+async function getDeviceListEntries(req, res) {
+    try {
+        let homeId = req.params.homeId;
+        if (!homeId && req.user && req.user.homeId) {
+            homeId = req.user.homeId;
+        }
+        if (!homeId) return res.json({ entries: [] });
+
+        const parsedHomeId = parseInt(homeId, 10);
+        if (req.user && req.user.homes && !req.user.homes.includes(parsedHomeId)) {
+            return res.status(403).json({ error: 'forbidden' });
+        }
+
+        const pool = db.getPool();
+        const [devices] = await pool.execute('SELECT * FROM devices WHERE home_id = ?', [parsedHomeId]);
+
+        const entries = devices.map(d => {
+            const entry = {
+                type: d.device_type,
+                device: mapDevice(d)
+            };
+
+            if (d.zone_id) {
+                entry.zone = { discriminator: parseInt(d.zone_id, 10) };
+                if (['SU02', 'RU01', 'RU02', 'BU01'].includes(d.device_type)) {
+                    entry.zone.duties = ['UI'];
+                }
+            }
+
+            return entry;
+        });
+
+        res.json({ entries });
+    } catch (err) {
+        res.status(500).json({ error: 'internal_error' });
+    }
+}
+
 async function getDevice(req, res) {
     try {
         const { deviceId } = req.params;
@@ -357,11 +396,11 @@ async function createDevice(req, res) {
                 field_0140, connection_state_timestamp
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
-                upperSerialNo, parsedHomeId, zoneId, '54.2', 
+                upperSerialNo, parsedHomeId, zoneId, '54.2',
                 1, 'NORMAL', derivedType, 0,
-                derivedType.startsWith('IB') ? 0 : 1, 
-                derivedType.startsWith('IB') ? 0 : 1, 
-                1, 
+                derivedType.startsWith('IB') ? 0 : 1,
+                derivedType.startsWith('IB') ? 0 : 1,
+                1,
                 0.0, new Date().toISOString()
             ]
         );
@@ -508,7 +547,7 @@ async function setActuatorLimits(req, res) {
         if (lowSteps !== undefined && lowSteps !== null) { updates.push('field_0273 = ?'); params.push(Number(lowSteps)); }
         if (highSteps !== undefined && highSteps !== null) { updates.push('field_027c = ?'); params.push(Number(highSteps)); }
         if (driveConstant !== undefined && driveConstant !== null) { updates.push('field_0280 = ?'); params.push(Number(driveConstant)); }
-        
+
         if (updates.length > 0) {
             params.push(deviceId);
             params.push(homeId);
@@ -516,7 +555,7 @@ async function setActuatorLimits(req, res) {
         }
 
         const mqttHaDiscovery = require('../../lib/mqtt-ha-discovery');
-        mqttHaDiscovery.publishAllDiscovery().catch(() => {});
+        mqttHaDiscovery.publishAllDiscovery().catch(e => _log('debug', `[devices] Discovery publish failed: ${e.message}`));
 
         res.json({ success: true });
     } catch (err) {
@@ -567,7 +606,7 @@ async function setDisplaySettings(req, res) {
             params.push(deviceId);
             params.push(homeId);
             await pool.execute(`UPDATE devices SET ${updates.join(', ')} WHERE serial_no = ? AND home_id = ?`, params);
-            
+
             // Merge into config
             await db.updateDeviceConfig(deviceId, configFields);
         }
@@ -594,7 +633,7 @@ async function setFriendlyName(req, res) {
         await pool.execute('UPDATE devices SET friendly_name = ? WHERE serial_no = ? AND home_id = ?', [friendlyName, deviceId, homeId]);
 
         const mqttHaDiscovery = require('../../lib/mqtt-ha-discovery');
-        mqttHaDiscovery.publishAllDiscovery().catch(() => {});
+        mqttHaDiscovery.publishAllDiscovery().catch(e => _log('debug', `[devices] Discovery publish failed: ${e.message}`));
 
         res.json({ friendlyName });
     } catch (err) {
@@ -806,14 +845,14 @@ async function setDeviceRole(req, res) {
 
         if (targetRole === 200) {
             // Changing to Wireless Sensor:
-            // 1. Find circuits driven by THIS specific device before deleting
+            // 1. Find circuits driven by this specific device before deleting
             const [driverCircuits] = await pool.execute('SELECT number FROM heating_circuits WHERE home_id = ? AND driver_serial_no = ?', [homeId, deviceId]);
             const driverCircuitNums = driverCircuits.map(c => c.number);
 
             if (driverCircuitNums.length > 0) {
                 await pool.execute('DELETE FROM heating_circuits WHERE home_id = ? AND driver_serial_no = ?', [homeId, deviceId]);
 
-                // 2. Only delete DHW zones bound to the circuits driven by THIS device
+                // 2. Only delete DHW zones bound to the circuits driven by this device
                 const [dhwZones] = await pool.execute(
                     `SELECT id FROM zones WHERE home_id = ? AND type = 'HOT_WATER' AND heating_circuit IN (${driverCircuitNums.map(() => '?').join(',')})`,
                     [homeId, ...driverCircuitNums]
@@ -853,7 +892,7 @@ async function setDeviceRole(req, res) {
                 _log.warn(`Failed to push updated config to device ${deviceId}: ${err.message}`);
             });
             if (previousZoneId) {
-                await commandApi.pushZoneConfig(homeId, previousZoneId).catch(() => {});
+                await commandApi.pushZoneConfig(homeId, previousZoneId).catch(e => _log('debug', `[devices] Zone config push failed: ${e.message}`));
             }
         } else {
             // Changing to Wired Thermostat:
@@ -910,7 +949,7 @@ async function setDeviceRole(req, res) {
             });
             const [ibDevs] = await pool.execute("SELECT serial_no FROM devices WHERE home_id = ? AND device_type LIKE 'IB%' LIMIT 1", [homeId]);
             if (ibDevs.length > 0) {
-                await commandApi.pushConfigRefresh(ibDevs[0].serial_no).catch(() => {});
+                await commandApi.pushConfigRefresh(ibDevs[0].serial_no).catch(e => _log('debug', `[devices] Config refresh push failed: ${e.message}`));
             }
         }
 
@@ -924,7 +963,7 @@ async function setDeviceRole(req, res) {
 }
 
 router.get('/:homeId/devices', getDeviceList);
-router.get('/:homeId/deviceList', getDeviceList);
+router.get('/:homeId/deviceList', getDeviceListEntries);
 router.post('/:homeId/devices', createDevice);
 router.get('/:homeId/devices/:deviceId', getDevice);
 router.delete('/:homeId/devices/:deviceId', deleteDevice);

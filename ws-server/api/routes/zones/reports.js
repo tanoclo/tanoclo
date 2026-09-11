@@ -234,8 +234,6 @@ router.get('/:homeId/zones/:zoneId/dayReport', async (req, res) => {
                 const ts = parseUtcDate(row.timestamp).toISOString();
                 if (ts > actualEndUtc) return; // Prevent creating segments in future
 
-                // Tado boiler logic maps "is ON" to if it is demanding heat OR explicitly scheduled above 15
-                // Sometimes default off is 15.0 or 0
                 const t = row.field_6200 ? parseFloat(row.field_6200) : 0;
                 const hp = row.field_40a0 ? parseFloat(row.field_40a0) : 0;
                 const producing = (hp > 0 || t > 30);
@@ -259,7 +257,7 @@ router.get('/:homeId/zones/:zoneId/dayReport', async (req, res) => {
         // 3. Layer Overlays from measurements
         const overlays = rows.filter(r => r.field_6240 !== null && r.field_6240 !== undefined && r.field_6240 !== 0);
         if (overlays.length > 0) {
-            const allIntervals = []; // { from, to, value: { stripeType, setting } }
+            const allIntervals = [];
 
             scheduleBlocks.forEach((block, i) => {
                 const s = (i === 0) ? startUtc : parseTimeStringAsUtc(block.start_time);
@@ -383,8 +381,6 @@ router.get('/:homeId/zones/:zoneId/dayReport', async (req, res) => {
         } else {
             callForHeatData.push({ from: startUtc, to: actualEndUtc, value: 'NONE' });
         }
-
-        // DHW hotWaterProduction is already populated in the first pass above (line ~1775)
 
         if (stripes.length === 0) {
             const defSetting = { type: zoneType, power: 'OFF', temperature: { celsius: 20, fahrenheit: 68 } };

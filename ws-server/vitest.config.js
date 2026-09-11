@@ -11,7 +11,7 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
     test: {
         globals: true,
-        testTimeout: 60000, // Increase timeout to 60s for slow DB queries on some environments
+        testTimeout: 60000,
         fileParallelism: false, // Run test files sequentially to prevent database locks/deadlocks
         isolate: false,
         pool: 'forks',

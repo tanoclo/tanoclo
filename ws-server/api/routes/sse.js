@@ -19,7 +19,6 @@ const metrics = require('../../lib/metrics');
 const router = express.Router();
 const _log = getLogger('sse');
 
-// homeId -> Set<Response>
 const connections = new Map();
 const MAX_CONNECTIONS_PER_HOME = 20;
 
@@ -125,7 +124,7 @@ router.get('/homes/:homeId/events', sseAuth, (req, res) => {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache, no-transform',
         'Connection': 'keep-alive',
-        'X-Accel-Buffering': 'no' // nginx support
+        'X-Accel-Buffering': 'no'
     });
 
     res.write(`event: connected\ndata: ${JSON.stringify({ ts: new Date().toISOString() })}\n\n`);
@@ -141,7 +140,7 @@ router.get('/homes/:homeId/events', sseAuth, (req, res) => {
         const oldest = homeClients.values().next().value;
         _log('warn', `SSE: evicted oldest connection for home ${homeId} (limit ${MAX_CONNECTIONS_PER_HOME})`);
         removeClient(homeId, oldest);
-        try { oldest.end(); } catch (e) {}
+        try { oldest.end(); } catch (e) { }
     }
 
     const keepalive = setInterval(() => {
@@ -208,14 +207,14 @@ function broadcastToHome(homeId, event, data) {
     }
 }
 
-module.exports = {
-    router,
-    broadcastToHome
-};
-
 /** Update the metrics gauge with total SSE client count across all homes */
 function _updateSseGauge() {
     let total = 0;
     for (const clients of connections.values()) total += clients.size;
     metrics.gauge('sse_connections', total);
 }
+
+module.exports = {
+    router,
+    broadcastToHome
+};

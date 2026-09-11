@@ -3,7 +3,6 @@
  * @brief Renders the custom server endpoint setting input form on the Login Page.
  */
 
-
 import { Globe, RefreshCw } from 'lucide-react';
 
 /**
@@ -34,7 +33,7 @@ export default function ServerConfigForm({
           {t('auth.server_url')}
         </label>
         <div style={{ position: 'relative' }}>
-          <input 
+          <input
             type="text"
             value={inputUrl}
             onChange={(e) => setInputUrl(e.target.value)}
@@ -70,7 +69,7 @@ export default function ServerConfigForm({
         </div>
       )}
 
-      <button 
+      <button
         type="submit"
         disabled={isConnecting}
         style={{

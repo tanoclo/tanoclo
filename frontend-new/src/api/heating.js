@@ -39,7 +39,7 @@ export function getRunningTimes(homeId, params = {}) {
   if (params.to) query.append('to', params.to);
   if (params.aggregate) query.append('aggregate', params.aggregate);
   if (params.summary_only !== undefined) query.append('summary_only', String(params.summary_only));
-  
+
   const queryString = query.toString();
   return apiFetch(`/api/v2/homes/${homeId}/runningTimes${queryString ? `?${queryString}` : ''}`);
 }
@@ -56,4 +56,3 @@ export function updateHeatingCircuitDriver(homeId, circuitNumber, serialNo) {
     body: { serialNo }
   });
 }
-

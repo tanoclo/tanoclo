@@ -42,8 +42,8 @@ test('legacy test suite runs successfully', async () => {
           await db.updateDeviceConfig(testSerial, { '0x0140': newOffset });
           const dev = await db.getDeviceByFullSerial(testSerial);
           if (!dev) throw new Error('Device not found');
-          const json = JSON.parse(dev.last_config_json.toString());
-  
+          const json = typeof dev.last_config_json === 'string' ? JSON.parse(dev.last_config_json) : (dev.last_config_json || {});
+
           expect(json['0x0140']).toBe(newOffset);
   
           console.log('\n2. Testing Template Building (Device)...');

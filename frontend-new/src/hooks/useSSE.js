@@ -30,7 +30,7 @@ export function useSSE(homeId) {
   const [isConnected, setIsConnected] = useState(false);
   const [lastEventAt, setLastEventAt] = useState(null);
   const esRef = useRef(null);
-  const lastHeartbeatRef = useRef(Date.now());
+  const lastHeartbeatRef = useRef(null);
 
   useEffect(() => {
     if (!homeId) {
@@ -38,6 +38,7 @@ export function useSSE(homeId) {
       return;
     }
 
+    lastHeartbeatRef.current = Date.now();
     const apiBase = getApiBase();
     // Normalize url base (remove trailing slash if present)
     const base = apiBase.endsWith('/') ? apiBase.slice(0, -1) : apiBase;
@@ -92,7 +93,7 @@ export function useSSE(homeId) {
 
       // Close previous instance if any
       if (es) {
-        try { es.close(); } catch (_e) {}
+        try { es.close(); } catch (_e) { /* expected */ }
         es = null;
       }
       esRef.current = null;
@@ -135,7 +136,7 @@ export function useSSE(homeId) {
           logger.debug('SSE received zone-state:', e.data);
           markActivity();
           let parsed = null;
-          try { parsed = JSON.parse(e.data); } catch (_err) {}
+          try { parsed = JSON.parse(e.data); } catch (_err) { /* expected */ }
 
           mutateRef.current(SWR_KEYS.zoneStates(homeId));
           if (parsed && parsed.zoneId != null) {
@@ -148,7 +149,7 @@ export function useSSE(homeId) {
           logger.debug('SSE received zone-config:', e.data);
           markActivity();
           let parsed = null;
-          try { parsed = JSON.parse(e.data); } catch (_err) {}
+          try { parsed = JSON.parse(e.data); } catch (_err) { /* expected */ }
 
           mutateRef.current(SWR_KEYS.zones(homeId));
           mutateRef.current(SWR_KEYS.zoneStates(homeId));
@@ -162,7 +163,7 @@ export function useSSE(homeId) {
           logger.debug('SSE received device-state:', e.data);
           markActivity();
           let parsed = null;
-          try { parsed = JSON.parse(e.data); } catch (_err) {}
+          try { parsed = JSON.parse(e.data); } catch (_err) { /* expected */ }
 
           mutateRef.current(SWR_KEYS.devices(homeId));
           mutateRef.current(SWR_KEYS.zoneStates(homeId));
@@ -181,7 +182,7 @@ export function useSSE(homeId) {
           try {
             const parsed = JSON.parse(e.data);
             window.dispatchEvent(new CustomEvent('device-debug-response', { detail: parsed }));
-          } catch (_err) {}
+          } catch (_err) { /* expected */ }
         });
 
         // Presence update: invalidate and reload HOME/AWAY occupancy state
@@ -209,19 +210,17 @@ export function useSSE(homeId) {
         es.onerror = (err) => {
           logger.error('SSE Error, reconnecting:', err);
           if (es) {
-            try { es.close(); } catch (_e) {}
+            try { es.close(); } catch (_e) { /* expected */ }
             es = null;
           }
-          if (esRef.current === es) {
-            esRef.current = null;
-          }
+          esRef.current = null;
           scheduleReconnect(false);
         };
       } catch (err) {
         logger.error('Failed to establish SSE connection:', err);
         isConnecting = false;
         if (es) {
-          try { es.close(); } catch (_e) {}
+          try { es.close(); } catch (_e) { /* expected */ }
           es = null;
         }
         esRef.current = null;
@@ -235,11 +234,11 @@ export function useSSE(homeId) {
     // (server sends ping heartbeat every 20s)
     watchdogTimer = setInterval(() => {
       if (!active) return;
-      const elapsed = Date.now() - lastHeartbeatRef.current;
+      const elapsed = Date.now() - (lastHeartbeatRef.current || Date.now());
       if (esRef.current && elapsed > 60000) {
         logger.warn(`SSE watchdog: no heartbeat for ${Math.round(elapsed / 1000)}s. Reconnecting.`);
         if (esRef.current) {
-          try { esRef.current.close(); } catch (_e) {}
+          try { esRef.current.close(); } catch (_e) { /* expected */ }
           esRef.current = null;
         }
         scheduleReconnect(true);
@@ -258,7 +257,7 @@ export function useSSE(homeId) {
     // Reset reconnect state when the tab/app becomes visible again
     const handleVisibility = () => {
       if (document.visibilityState === 'visible' && active) {
-        const elapsed = Date.now() - lastHeartbeatRef.current;
+        const elapsed = Date.now() - (lastHeartbeatRef.current || Date.now());
         if (!esRef.current || elapsed > 40000) {
           logger.info('Tab/app became visible and SSE needs refresh — reconnecting');
           scheduleReconnect(true);
@@ -276,7 +275,7 @@ export function useSSE(homeId) {
       if (reconnectTimer) clearTimeout(reconnectTimer);
       if (watchdogTimer) clearInterval(watchdogTimer);
       if (es) {
-        try { es.close(); } catch (_e) {}
+        try { es.close(); } catch (_e) { /* expected */ }
       }
       esRef.current = null;
       setIsConnected(false);

@@ -18,8 +18,6 @@ const { mapMobileDevice } = require('../../lib/mappers');
 const router = express.Router();
 const _log = getLogger('mobileDevices-api');
 
-// mapMobileDevice is imported from lib/mappers.js
-
 async function ensureGeofencingAuth(req, res, next) {
     const authHeader = req.headers.authorization;
     if (!authHeader) {
@@ -147,7 +145,6 @@ router.post('/:homeId/mobileDevices', async (req, res) => {
 
         const pool = db.getPool();
 
-        // Check if device with the same name, user_id and home_id already exists
         const [existing] = await pool.execute(
             'SELECT id FROM mobile_devices WHERE name = ? AND user_id = ? AND home_id = ?',
             [name, userId, homeId]
@@ -164,7 +161,6 @@ router.post('/:homeId/mobileDevices', async (req, res) => {
                 [platform, osVersion, model, locale, geoEnabled, new Date().toISOString(), deviceId]
             );
         } else {
-            // Cleanup duplicate devices with same model or name for this user in this home
             try {
                 const [oldDevices] = await pool.execute(
                     'SELECT id FROM mobile_devices WHERE user_id = ? AND home_id = ? AND (model = ? OR name = ?)',
@@ -173,7 +169,7 @@ router.post('/:homeId/mobileDevices', async (req, res) => {
                 for (const oldDev of oldDevices) {
                     _log('info', `[POST mobileDevices] Removing duplicate device ${oldDev.id} for user ${userId}`);
                     await pool.execute('DELETE FROM mobile_devices WHERE id = ?', [oldDev.id]);
-                    
+
                     try {
                         const mqttHaDiscovery = require('../../lib/mqtt-ha-discovery');
                         await mqttHaDiscovery.unpublishMobileDevice(oldDev.id);
@@ -182,7 +178,7 @@ router.post('/:homeId/mobileDevices', async (req, res) => {
                     }
                     try {
                         const mqttPublisher = require('../../lib/mqtt-publisher');
-                        mqttPublisher.publishMobileDeviceTelemetry(homeId, oldDev.id, false, null, null, null, false).catch(() => {});
+                        mqttPublisher.publishMobileDeviceTelemetry(homeId, oldDev.id, false, null, null, null, false).catch(() => { });
                     } catch (pubErr) {
                         // ignore
                     }
@@ -390,7 +386,7 @@ async function handleGeolocationUpdate(req, res) {
         if (parsedTransition !== null) {
             const atHome = parsedTransition;
             _log('info', `[geolocation] Decoded transition via helper atHome=${atHome} (enter=${data.enter}, transition=${data.transition}) for device ${deviceId}`);
-            
+
             await pool.execute(
                 'UPDATE mobile_devices SET at_home = ?, last_seen = ?, latitude = NULL, longitude = NULL WHERE id = ? AND home_id = ?',
                 [atHome ? 1 : 0, new Date().toISOString(), deviceId, homeId]
@@ -405,7 +401,7 @@ async function handleGeolocationUpdate(req, res) {
             await presenceHelper.evaluateHomePresence(homeId);
         } else {
             _log('info', `[geolocation] Geolocation update received for device ${deviceId} but no transition parsed. Treating as check-in.`);
-            
+
             // 1. Update last_seen
             await pool.execute(
                 'UPDATE mobile_devices SET last_seen = ? WHERE id = ? AND home_id = ?',
@@ -439,8 +435,6 @@ router.put('/:homeId/mobileDevices/:deviceId/geolocationFix', ensureGeofencingAu
 
 // POST /api/v2/homes/{homeId}/mobileDevices/{deviceId}/token (Push Notifications)
 router.post('/:homeId/mobileDevices/:deviceId/token', ensureGeofencingAuth, async (req, res) => {
-    // Tado app sometimes sends push tokens here or just pings it. 
-    // We don't have push infrastructure, so we just acknowledge it.
     res.status(204).end();
 });
 

@@ -119,7 +119,8 @@ struct EmulatedDeviceConfig {
   bool ib_mac_known{false};
 
   // Cached sensor telemetry values
-  float target_temp_celsius{21.5f};
+  float target_temp_celsius{21.5f};     // Ambient temperature measured by sensor
+  float setpoint_temp_celsius{21.5f};   // Zone heating target setpoint (0x6200 from PUT /z/s)
   float target_humidity_pct{50.0f};
   uint16_t target_battery_mv{4500};     // 3xAAA nominal full = 4500 mV
   uint16_t target_ambient_light{6249};
@@ -190,6 +191,9 @@ class RUStateMachine {
   OutboundFrame build_encrypted_icmp_frame(const std::vector<uint8_t> &pt_icmp,
                                           const uint8_t *dest_mac = nullptr,
                                           const uint8_t *key_override = nullptr);
+  void emit_coap_ack_response(uint8_t coap_code, const ParsedCoAP &coap, const ParsedMac &mac,
+                              const uint8_t *rx_key, const uint8_t *payload, size_t payload_len,
+                              std::vector<OutboundFrame> &outbound_frames);
 
  private:
   EmulatedDeviceConfig config_;
@@ -207,6 +211,7 @@ class RUStateMachine {
   void advance_onboarding(std::vector<OutboundFrame> &outbound_frames);
   void track_outbound_coap(uint16_t mid, const std::string &path, uint8_t type, uint8_t code);
   std::string lookup_outbound_path(uint16_t mid);
+  // Ring buffer capped at 32 items for matching inbound ACKs with previous CON requests
   std::vector<OutboundCoAPTracker> outbound_coap_history_;
 };
 

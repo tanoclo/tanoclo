@@ -27,7 +27,7 @@ class WorkerPool {
         if (this.initialized) return;
         this.workerData = workerData;
         this._log = log || ((level, msg) => console.log(`[WorkerPool] [${level.toUpperCase()}] ${msg}`));
-        
+
         this._log('info', `Initializing pool with ${this.poolSize} workers...`);
         for (let i = 0; i < this.poolSize; i++) {
             this.createWorker();
@@ -68,7 +68,20 @@ class WorkerPool {
             }
             this.workers = this.workers.filter(w => w !== worker);
             this.activeWorkers.delete(worker);
-            
+
+            // Clean up any remaining tasks assigned to this worker
+            const crashedTasks = this.workerTaskMap.get(worker);
+            if (crashedTasks) {
+                for (const taskId of crashedTasks) {
+                    const pending = this.pendingTasks.get(taskId);
+                    if (pending) {
+                        pending.reject(new Error(`Worker stopped with exit code ${code}`));
+                        this.pendingTasks.delete(taskId);
+                    }
+                }
+                this.workerTaskMap.delete(worker);
+            }
+
             // Re-create worker to maintain pool size, with crash rate limiting
             if (this.initialized) {
                 const now = Date.now();
@@ -90,6 +103,8 @@ class WorkerPool {
     }
 
     handleWorkerFailure(worker, err) {
+        if (worker._failureHandled) return;
+        worker._failureHandled = true;
         this.workers = this.workers.filter(w => w !== worker);
         this.activeWorkers.delete(worker);
 
@@ -104,9 +119,9 @@ class WorkerPool {
         }
         this.workerTaskMap.delete(worker);
 
-        // Recreate the failed worker
-        this.createWorker();
-        
+        // Terminate worker so the 'exit' handler performs rate-limited recreation
+        try { worker.terminate(); } catch (e) { }
+
         // Process any new tasks that may have queued
         this.processQueue();
     }

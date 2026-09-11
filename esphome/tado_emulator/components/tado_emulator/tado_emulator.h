@@ -11,6 +11,7 @@
 #include <esphome/components/web_server_base/web_server_base.h>
 #include <vector>
 #include <string>
+#include <map>
 
 namespace esphome {
 namespace tado_emulator {
@@ -79,7 +80,7 @@ class TadoEmulatorComponent : public Component,
   TaskHandle_t radio_task_handle_{nullptr};
   TaskHandle_t processing_task_handle_{nullptr};
 
-  std::string pending_body_;
+  std::map<AsyncWebServerRequest *, std::string> pending_bodies_;
 
   void handle_cmd_request(AsyncWebServerRequest *request, const std::string &body);
   void handle_status_request(AsyncWebServerRequest *request);

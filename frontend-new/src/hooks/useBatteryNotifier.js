@@ -26,11 +26,11 @@ import logger from '../utils/logger';
  */
 export function useBatteryNotifier(mobileDeviceId, activeHomeId, isAuthenticated) {
   const { t } = useTranslation();
-  
+
   // 1. Fetch current mobile device settings (to check lowBatteryReminder configuration)
   const { data: deviceData } = useSWR(
-    isAuthenticated && activeHomeId && mobileDeviceId 
-      ? SWR_KEYS.mobileDevice(activeHomeId, mobileDeviceId) 
+    isAuthenticated && activeHomeId && mobileDeviceId
+      ? SWR_KEYS.mobileDevice(activeHomeId, mobileDeviceId)
       : null,
     () => apiFetch(`/api/v2/homes/${activeHomeId}/mobileDevices/${mobileDeviceId}`),
     { refreshInterval: 60000 }
@@ -60,6 +60,7 @@ export function useBatteryNotifier(mobileDeviceId, activeHomeId, isAuthenticated
     let stateChanged = false;
 
     for (const d of batteryDevices) {
+      if (d.is_emulated) continue;
       const serial = d.serial_no;
       const state = d.battery_state || 'NORMAL';
       const label = d.friendly_name || serial;
@@ -71,7 +72,7 @@ export function useBatteryNotifier(mobileDeviceId, activeHomeId, isAuthenticated
       if (isNewLowOrDepleted && oldState !== state) {
         const isDepleted = state === 'CRITICAL' || state === 'DEPLETED';
         const title = isDepleted ? t('battery.depleted_title', 'Battery Depleted!') : t('battery.low_title', 'Low Battery!');
-        const body = isDepleted 
+        const body = isDepleted
           ? t('battery.depleted_body', { device: label, defaultValue: `Battery critical/depleted for ${label}. Please replace immediately.` })
           : t('battery.low_body', { device: label, defaultValue: `Low battery for ${label}. Please replace soon.` });
 
@@ -116,7 +117,7 @@ export function useBatteryNotifier(mobileDeviceId, activeHomeId, isAuthenticated
             }
           }
         }
-        
+
         notifiedStates[serial] = state;
         stateChanged = true;
       } else if (!isNewLowOrDepleted && oldState !== 'NORMAL') {

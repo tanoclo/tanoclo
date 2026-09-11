@@ -3,7 +3,7 @@
  * @brief Heating system properties endpoints for individual homes.
  * 
  * Manages properties like underfloor heating toggles, boiler models associations,
- * and wiring configuration wizard settings.
+ * and wiring configuration settings.
  */
 
 const express = require('express');
@@ -19,7 +19,6 @@ const { buildHomeDetails, checkZoneConfigReadonly } = require('./helpers');
 const router = express.Router();
 const _log = getLogger('homes-api');
 
-// --- lines 485 to 505 ---
 router.get('/:homeId/heatingSystem', async (req, res) => {
     try {
         const homeId = req.params.homeId;
@@ -41,9 +40,6 @@ router.get('/:homeId/heatingSystem', async (req, res) => {
 });
 
 // PUT /api/v2/homes/{homeId}/heatingSystem/boiler
-
-
-// --- lines 506 to 528 ---
 router.put('/:homeId/heatingSystem/boiler', async (req, res) => {
     try {
         const homeId = req.params.homeId;
@@ -67,9 +63,6 @@ router.put('/:homeId/heatingSystem/boiler', async (req, res) => {
 });
 
 // PUT /api/v2/homes/{homeId}/heatingSystem/underfloorHeating
-
-
-// --- lines 529 to 549 ---
 router.put('/:homeId/heatingSystem/underfloorHeating', async (req, res) => {
     try {
         const homeId = req.params.homeId;
@@ -90,10 +83,6 @@ router.put('/:homeId/heatingSystem/underfloorHeating', async (req, res) => {
     }
 });
 
-// GET /api/v2/homes/{homeId}/incidentDetection
-
-
-// --- lines 609 to 632 ---
 router.get('/:homeId/heatingCircuits', async (req, res) => {
     try {
         const homeId = req.params.homeId;
@@ -119,10 +108,6 @@ router.get('/:homeId/heatingCircuits', async (req, res) => {
 });
 
 // PUT /api/v2/homes/{homeId}/heatingCircuits/{circuitNumber}/driverDevice
-// Changes which boiler/controller device drives a heating circuit
-
-
-// --- lines 633 to 693 ---
 router.put('/:homeId/heatingCircuits/:circuitNumber/driverDevice', async (req, res) => {
     try {
         const { homeId, circuitNumber } = req.params;
@@ -182,8 +167,5 @@ router.put('/:homeId/heatingCircuits/:circuitNumber/driverDevice', async (req, r
         res.status(500).json({ error: 'internal_error' });
     }
 });
-
-// GET /api/v2/homes/{homeId}/invitations
-
 
 module.exports = router;

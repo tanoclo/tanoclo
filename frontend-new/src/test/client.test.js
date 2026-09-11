@@ -46,6 +46,27 @@ describe('api/client.js - apiFetch', () => {
     expect(data).toEqual({ success: true });
   });
 
+  it('does not inject Authorization header when request target is external URL', async () => {
+    localStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, 'secret-token');
+
+    globalThis.fetch.mockResolvedValueOnce({
+      ok: true,
+      headers: { get: (h) => h === 'content-type' ? 'application/json' : null },
+      json: async () => ({ external: true }),
+    });
+
+    await apiFetch('https://external-domain.example.com/api/data');
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      'https://external-domain.example.com/api/data',
+      expect.objectContaining({
+        headers: expect.not.objectContaining({
+          Authorization: expect.anything(),
+        }),
+      })
+    );
+  });
+
   it('automatically stringifies object body payloads and sets Content-Type', async () => {
     globalThis.fetch.mockResolvedValueOnce({
       ok: true,

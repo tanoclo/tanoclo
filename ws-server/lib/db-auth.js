@@ -83,20 +83,16 @@ async function cleanupExpiredTokens() {
     if (isOffline()) return;
     const p = getPool();
 
-    let totalDeleted = 0;
     try {
-        const [r1] = await p.execute('DELETE FROM oauth_access_tokens WHERE expires_at < NOW()');
-        totalDeleted += r1.affectedRows;
-        const [r2] = await p.execute('DELETE FROM oauth_auth_codes WHERE expires_at < NOW()');
-        totalDeleted += r2.affectedRows;
-        const [r3] = await p.execute('DELETE FROM oauth_device_codes WHERE expires_at < NOW()');
-        totalDeleted += r3.affectedRows;
-        const [r4] = await p.execute('DELETE FROM oauth_refresh_tokens WHERE expires_at < NOW()');
-        totalDeleted += r4.affectedRows;
-        const [r5] = await p.execute('DELETE FROM oauth_sessions WHERE expires_at < NOW()');
-        totalDeleted += r5.affectedRows;
-        const [r6] = await p.execute('DELETE FROM oauth_consent_tokens WHERE expires_at < NOW()');
-        totalDeleted += r6.affectedRows;
+        const results = await Promise.all([
+            p.execute('DELETE FROM oauth_access_tokens WHERE expires_at < NOW()'),
+            p.execute('DELETE FROM oauth_auth_codes WHERE expires_at < NOW()'),
+            p.execute('DELETE FROM oauth_device_codes WHERE expires_at < NOW()'),
+            p.execute('DELETE FROM oauth_refresh_tokens WHERE expires_at < NOW()'),
+            p.execute('DELETE FROM oauth_sessions WHERE expires_at < NOW()'),
+            p.execute('DELETE FROM oauth_consent_tokens WHERE expires_at < NOW()')
+        ]);
+        const totalDeleted = results.reduce((sum, [r]) => sum + (r.affectedRows || 0), 0);
 
         if (totalDeleted > 0) {
             _log('info', `Cleaned up ${totalDeleted} expired OAuth records.`);

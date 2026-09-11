@@ -7,6 +7,7 @@
  */
 
 import { apiFetch } from './client';
+import { STORAGE_KEYS, getApiBase } from '../utils/constants';
 
 /**
  * Gets all devices in home
@@ -296,10 +297,19 @@ export function cancelMemoryDump(homeId, deviceId) {
  * Downloads completed dump file with authentication header
  */
 export async function downloadMemoryDumpFile(homeId, deviceId, fileName) {
-  const { STORAGE_KEYS } = await import('../utils/constants');
   const token = localStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
   const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
-  const res = await fetch(`/api/v2/homes/${homeId}/devices/${deviceId}/debug/dump/download`, { headers });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+  let res;
+  try {
+    const url = `${getApiBase()}/api/v2/homes/${homeId}/devices/${deviceId}/debug/dump/download`;
+    res = await fetch(url, { headers, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
   if (!res.ok) throw new Error(`Download failed: ${res.statusText}`);
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
@@ -311,6 +321,3 @@ export async function downloadMemoryDumpFile(homeId, deviceId, fileName) {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
-
-
-

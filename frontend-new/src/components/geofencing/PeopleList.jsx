@@ -6,7 +6,6 @@
  * mobile platform parameters, and administrative controls (Make Admin, Revoke Admin, Unlink Device).
  */
 
-
 import Card from '../common/Card';
 import Badge from '../common/Badge';
 import { useTranslation } from 'react-i18next';
@@ -22,11 +21,11 @@ import { User, Smartphone, MapPin } from 'lucide-react';
  * @param {function} props.onDeleteUser - User deletion callback.
  * @param {function} props.onDeleteDevice - Device unlinking callback.
  */
-export default function PeopleList({ 
-  users = [], 
-  devices = [], 
-  homeInfo, 
-  currentUser, 
+export default function PeopleList({
+  users = [],
+  devices = [],
+  homeInfo,
+  currentUser,
   onToggleAdminStatus,
   onDeleteUser,
   onDeleteDevice
@@ -88,9 +87,9 @@ export default function PeopleList({
         const _userIsAdmin = userIsTadoAdmin || userIsTaNoCloAdmin;
 
         return (
-          <Card 
-            key={user.id} 
-            style={{ 
+          <Card
+            key={user.id}
+            style={{
               padding: '1.25rem',
               display: 'flex',
               flexDirection: 'column',
@@ -163,10 +162,10 @@ export default function PeopleList({
                   </button>
                 )}
                 <Badge variant={presence.status === 'HOME' ? 'success' : 'secondary'}>
-                  {presence.status === 'HOME' 
-                    ? t('geofencing.people.at_home') 
-                    : (presence.status === 'UNKNOWN' 
-                      ? t('geofencing.people.unknown', { defaultValue: 'Unknown' }) 
+                  {presence.status === 'HOME'
+                    ? t('geofencing.people.at_home')
+                    : (presence.status === 'UNKNOWN'
+                      ? t('geofencing.people.unknown', { defaultValue: 'Unknown' })
                       : t('geofencing.people.away'))}
                 </Badge>
               </div>
@@ -192,7 +191,7 @@ export default function PeopleList({
                   const gpsEnabled = d.settings?.geoTrackingEnabled;
 
                   return (
-                    <div 
+                    <div
                       key={d.id}
                       style={{
                         display: 'flex',

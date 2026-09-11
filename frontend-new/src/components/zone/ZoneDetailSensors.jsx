@@ -3,8 +3,6 @@
  * @brief Renders the current sensor telemetry (inside temperature, humidity, active leaders) within ZoneDetail.
  */
 
-
-
 /**
  * @brief Zone detail overlay sensors row sub-panel.
  * @param {boolean} props.isDhw - Whether target zone is Domestic Hot Water.

@@ -16,7 +16,6 @@ const { getLogger } = require('../../lib/logger');
 const _log = getLogger('setup-snapshots');
 
 // --- State Snapshot Routes ---
-
 router.post('/homes/:id/snapshot/start', adminAuth, async (req, res) => {
     try {
         const result = await stateSnapshot.startCapture(parseInt(req.params.id));
@@ -125,7 +124,7 @@ router.post('/homes/:id/snapshot/import', adminAuth, async (req, res) => {
     try {
         const { snapshot_json } = req.body;
         if (!snapshot_json) return res.status(400).json({ error: 'snapshot_json required' });
-        const parsed = JSON.parse(snapshot_json); // validate JSON
+        const parsed = JSON.parse(snapshot_json);
         const pool = db.getPool();
         const [result] = await pool.execute(
             "INSERT INTO state_snapshots (home_id, status, snapshot_json, created_at) VALUES (?, 'complete', ?, ?)",

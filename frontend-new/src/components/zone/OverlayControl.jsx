@@ -20,15 +20,15 @@ import { Calendar, Hourglass, ShieldAlert } from 'lucide-react';
  * @param {function} props.onApply - Override submission event handler callback.
  * @param {function} props.onResume - Resume smart schedule event handler callback.
  */
-export default function OverlayControl({ 
-  zone, 
-  state, 
-  onApply, 
-  onResume 
+export default function OverlayControl({
+  zone,
+  state,
+  onApply,
+  onResume
 }) {
   const { t } = useTranslation();
   const isOverlay = !!state?.overlay;
-  
+
   const [termType, setTermType] = useState('TADO_MODE'); // TADO_MODE, TIMER, MANUAL
   const [timerDuration, setTimerDuration] = useState(60); // minutes, default 1 hour
 
@@ -90,12 +90,12 @@ export default function OverlayControl({
           <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
             {state.overlay.termination?.type === 'TADO_MODE' && t('zone_detail.until_next_change')}
             {state.overlay.termination?.type === 'MANUAL' && t('zone_detail.until_resume')}
-            {state.overlay.termination?.type === 'TIMER' && t('zone_detail.timer_minutes', { 
-              minutes: formatRemaining(state.overlay.termination?.remainingTimeInSeconds) 
+            {state.overlay.termination?.type === 'TIMER' && t('zone_detail.timer_minutes', {
+              minutes: formatRemaining(state.overlay.termination?.remainingTimeInSeconds)
             })}
           </span>
-          <Button 
-            variant="secondary" 
+          <Button
+            variant="secondary"
             onClick={onResume}
             style={{ width: '100%', marginTop: '0.25rem' }}
           >
@@ -109,7 +109,7 @@ export default function OverlayControl({
             <span style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--text-secondary)' }}>
               {t('settings.duration_mode')}
             </span>
-            <SegmentedControl 
+            <SegmentedControl
               options={termOptions}
               value={termType}
               onChange={setTermType}
@@ -118,20 +118,20 @@ export default function OverlayControl({
 
           {termType === 'TIMER' && (
             <div style={{ padding: '0 0.5rem' }}>
-              <Slider 
-                min={15} 
-                max={360} 
-                step={15} 
-                value={timerDuration} 
-                onChange={setTimerDuration} 
-                label={t('settings.override_time')} 
+              <Slider
+                min={15}
+                max={360}
+                step={15}
+                value={timerDuration}
+                onChange={setTimerDuration}
+                label={t('settings.override_time')}
                 unit=" min"
               />
             </div>
           )}
 
-          <Button 
-            variant="primary" 
+          <Button
+            variant="primary"
             onClick={handleApply}
             style={{ width: '100%', padding: '0.75rem' }}
           >

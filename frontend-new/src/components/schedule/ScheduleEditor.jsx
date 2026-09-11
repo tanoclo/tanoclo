@@ -134,7 +134,7 @@ export default function ScheduleEditor({ zoneId }) {
 
   // SWR fetch all blocks for the active timetable
   const { data: fetchedBlocks, error: _fetchError, mutate: mutateBlocks } = useSWR(
-    activeHomeId && (zoneId !== null && zoneId !== undefined) && activeTimetableId !== null 
+    activeHomeId && (zoneId !== null && zoneId !== undefined) && activeTimetableId !== null
       ? SWR_KEYS.timetableBlocks(activeHomeId, zoneId, activeTimetableId)
       : null,
     () => getTimetableBlocks(activeHomeId, zoneId, activeTimetableId)
@@ -148,7 +148,7 @@ export default function ScheduleEditor({ zoneId }) {
         if (block.start === block.end || block.end === '00:00') {
           end = '24:00';
         }
-        
+
         let setting = { ...block.setting };
         if (isDhw) {
           setting.type = 'HOT_WATER';
@@ -157,7 +157,7 @@ export default function ScheduleEditor({ zoneId }) {
             setting.temperature = { celsius: 50.0 };
           }
         }
-        
+
         return {
           ...block,
           end,
@@ -225,7 +225,7 @@ export default function ScheduleEditor({ zoneId }) {
           };
         }
       }
-      
+
       await apiFetch(`/api/v2/homes/${activeHomeId}/zones/${zoneId}/awayConfiguration`, {
         method: 'PUT',
         body: payload
@@ -348,7 +348,7 @@ export default function ScheduleEditor({ zoneId }) {
     // Find the largest block to split
     let targetIdx = 0;
     let maxDuration = 0;
-    
+
     dayBlocks.forEach((b, idx) => {
       const startMin = timeToMinutes(b.start);
       let endMin = timeToMinutes(b.end);
@@ -464,7 +464,7 @@ export default function ScheduleEditor({ zoneId }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', width: '100%' }}>
-      
+
       {/* Sub-tab selection */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', width: '100%', marginBottom: '0.5rem' }}>
         <div style={{
@@ -535,281 +535,281 @@ export default function ScheduleEditor({ zoneId }) {
       {activeSubTab === 'schedule' ? (
         <>
           {/* Timetable Mode Selector */}
-          <DaySelector 
+          <DaySelector
             value={activeTimetableId}
             onChange={handleTimetableTypeChange}
           />
 
-      {/* Timelines list */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-        {dayTypes.map((dt) => {
-          const blocks = getBlocksForDay(dt);
-          const isCollapsed = collapsedDays[dt];
+          {/* Timelines list */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {dayTypes.map((dt) => {
+              const blocks = getBlocksForDay(dt);
+              const isCollapsed = collapsedDays[dt];
 
-          return (
-            <div 
-              key={dt}
-              className="glass-panel"
-              style={{
-                padding: '1rem',
-                border: '1px solid var(--border-color)',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '0.75rem',
-                borderRadius: 'var(--radius-md)'
-              }}
-            >
-              {/* Timeline Header Row */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <button
-                  onClick={() => toggleCollapsed(dt)}
+              return (
+                <div
+                  key={dt}
+                  className="glass-panel"
                   style={{
-                    background: 'transparent',
-                    border: 'none',
+                    padding: '1rem',
+                    border: '1px solid var(--border-color)',
                     display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem',
-                    fontSize: '0.9rem',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    color: 'var(--text-primary)'
+                    flexDirection: 'column',
+                    gap: '0.75rem',
+                    borderRadius: 'var(--radius-md)'
                   }}
                 >
-                  {isCollapsed ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
-                  <span>{t('schedule.day_types.' + dt, { defaultValue: dt.replace(/_/g, ' ') })}</span>
-                </button>
-
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  {/* Add Block */}
-                  <button 
-                    onClick={() => handleAddBlock(dt)}
-                    style={{
-                      padding: '4px 8px',
-                      borderRadius: '4px',
-                      border: '1px solid var(--border-color)',
-                      backgroundColor: 'var(--bg-card-hover)',
-                      cursor: 'pointer',
-                      fontSize: '0.75rem',
-                      fontWeight: 600,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.25rem',
-                      color: 'var(--text-primary)'
-                    }}
-                  >
-                    <Plus size={12} />
-                    <span>{t('common.add')}</span>
-                  </button>
-                  
-                  {/* Copy */}
-                  <button 
-                    onClick={() => handleCopyDay(dt)}
-                    style={{
-                      padding: '4px 8px',
-                      borderRadius: '4px',
-                      border: '1px solid var(--border-color)',
-                      backgroundColor: 'var(--bg-card-hover)',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      color: 'var(--text-secondary)'
-                    }}
-                    title={t('schedule.copy_day')}
-                  >
-                    <Copy size={12} />
-                  </button>
-
-                  {/* Paste */}
-                  {copyBuffer && (
-                    <button 
-                      onClick={() => handlePasteDay(dt)}
+                  {/* Timeline Header Row */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <button
+                      onClick={() => toggleCollapsed(dt)}
                       style={{
-                        padding: '4px 8px',
-                        borderRadius: '4px',
-                        border: '1px solid var(--primary)',
-                        backgroundColor: 'var(--primary-glow)',
-                        cursor: 'pointer',
+                        background: 'transparent',
+                        border: 'none',
                         display: 'flex',
                         alignItems: 'center',
-                        color: 'var(--primary-light)'
+                        gap: '0.5rem',
+                        fontSize: '0.9rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        color: 'var(--text-primary)'
                       }}
-                      title={t('schedule.paste_day')}
                     >
-                      <Clipboard size={12} />
+                      {isCollapsed ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
+                      <span>{t('schedule.day_types.' + dt, { defaultValue: dt.replace(/_/g, ' ') })}</span>
                     </button>
-                  )}
-                </div>
-              </div>
 
-              {/* Timeline Horizontal Bar */}
-              {!isCollapsed && (
-                <div style={{ marginTop: '0.25rem' }}>
-                  <DayTimeline 
-                    dayType={dt}
-                    blocks={blocks}
-                    isDhw={isDhw}
-                    onBlockClick={(block, idx) => handleBlockClick(block, idx, dt)}
-                  />
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      {/* Add Block */}
+                      <button
+                        onClick={() => handleAddBlock(dt)}
+                        style={{
+                          padding: '4px 8px',
+                          borderRadius: '4px',
+                          border: '1px solid var(--border-color)',
+                          backgroundColor: 'var(--bg-card-hover)',
+                          cursor: 'pointer',
+                          fontSize: '0.75rem',
+                          fontWeight: 600,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.25rem',
+                          color: 'var(--text-primary)'
+                        }}
+                      >
+                        <Plus size={12} />
+                        <span>{t('common.add')}</span>
+                      </button>
 
-                  {/* Detailed Interactive Block Cards */}
-                  <div style={{
-                    display: 'flex',
-                    flexWrap: 'wrap',
-                    gap: '0.6rem',
-                    marginTop: '0.75rem',
-                    padding: '0.25rem 0'
-                  }}>
-                    {blocks.map((block, idx) => {
-                      const isPowerOn = block.setting?.power !== 'OFF';
-                      const label = isDhw 
-                        ? (isPowerOn 
-                            ? (block.setting?.temperature?.celsius ? `${block.setting.temperature.celsius.toFixed(0)}°C` : 'ON')
-                            : t('common.off'))
-                        : (isPowerOn
-                            ? `${block.setting?.temperature?.celsius?.toFixed(1)}°C`
-                            : t('common.off'));
-                      
-                      const blockColor = getBlockColor(block, isDhw);
+                      {/* Copy */}
+                      <button
+                        onClick={() => handleCopyDay(dt)}
+                        style={{
+                          padding: '4px 8px',
+                          borderRadius: '4px',
+                          border: '1px solid var(--border-color)',
+                          backgroundColor: 'var(--bg-card-hover)',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          color: 'var(--text-secondary)'
+                        }}
+                        title={t('schedule.copy_day')}
+                      >
+                        <Copy size={12} />
+                      </button>
 
-                      return (
-                        <div 
-                          key={`${block.start}-${idx}`}
-                          onClick={() => handleBlockClick(block, idx, dt)}
+                      {/* Paste */}
+                      {copyBuffer && (
+                        <button
+                          onClick={() => handlePasteDay(dt)}
                           style={{
+                            padding: '4px 8px',
+                            borderRadius: '4px',
+                            border: '1px solid var(--primary)',
+                            backgroundColor: 'var(--primary-glow)',
+                            cursor: 'pointer',
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '0.75rem',
-                            padding: '0.5rem 0.85rem',
-                            backgroundColor: 'var(--bg-card)',
-                            border: '1px solid var(--border-color)',
-                            borderLeft: `4px solid ${blockColor}`,
-                            borderRadius: 'var(--radius-sm)',
-                            cursor: 'pointer',
-                            fontSize: '0.825rem',
-                            transition: 'all var(--transition-fast)',
-                            boxShadow: 'var(--glass-shadow)',
-                            userSelect: 'none'
+                            color: 'var(--primary-light)'
                           }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.backgroundColor = 'var(--bg-card-hover)';
-                            e.currentTarget.style.transform = 'translateY(-1px)';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.backgroundColor = 'var(--bg-card)';
-                            e.currentTarget.style.transform = 'translateY(0)';
-                          }}
+                          title={t('schedule.paste_day')}
                         >
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', textAlign: 'left' }}>
-                            <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
-                              {block.start} - {block.end}
-                            </span>
-                            <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontWeight: 500 }}>
-                              {label}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
+                          <Clipboard size={12} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Timeline Horizontal Bar */}
+                  {!isCollapsed && (
+                    <div style={{ marginTop: '0.25rem' }}>
+                      <DayTimeline
+                        dayType={dt}
+                        blocks={blocks}
+                        isDhw={isDhw}
+                        onBlockClick={(block, idx) => handleBlockClick(block, idx, dt)}
+                      />
+
+                      {/* Detailed Interactive Block Cards */}
+                      <div style={{
+                        display: 'flex',
+                        flexWrap: 'wrap',
+                        gap: '0.6rem',
+                        marginTop: '0.75rem',
+                        padding: '0.25rem 0'
+                      }}>
+                        {blocks.map((block, idx) => {
+                          const isPowerOn = block.setting?.power !== 'OFF';
+                          const label = isDhw
+                            ? (isPowerOn
+                              ? (block.setting?.temperature?.celsius ? `${block.setting.temperature.celsius.toFixed(0)}°C` : 'ON')
+                              : t('common.off'))
+                            : (isPowerOn
+                              ? `${block.setting?.temperature?.celsius?.toFixed(1)}°C`
+                              : t('common.off'));
+
+                          const blockColor = getBlockColor(block, isDhw);
+
+                          return (
+                            <div
+                              key={`${block.start}-${idx}`}
+                              onClick={() => handleBlockClick(block, idx, dt)}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '0.75rem',
+                                padding: '0.5rem 0.85rem',
+                                backgroundColor: 'var(--bg-card)',
+                                border: '1px solid var(--border-color)',
+                                borderLeft: `4px solid ${blockColor}`,
+                                borderRadius: 'var(--radius-sm)',
+                                cursor: 'pointer',
+                                fontSize: '0.825rem',
+                                transition: 'all var(--transition-fast)',
+                                boxShadow: 'var(--glass-shadow)',
+                                userSelect: 'none'
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.backgroundColor = 'var(--bg-card-hover)';
+                                e.currentTarget.style.transform = 'translateY(-1px)';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.backgroundColor = 'var(--bg-card)';
+                                e.currentTarget.style.transform = 'translateY(0)';
+                              }}
+                            >
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', textAlign: 'left' }}>
+                                <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
+                                  {block.start} - {block.end}
+                                </span>
+                                <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontWeight: 500 }}>
+                                  {label}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Edit Block Modal */}
+          {editingBlock && (
+            <Modal
+              isOpen={editingBlock !== null}
+              onClose={() => setEditingBlock(null)}
+              title={t('schedule.edit_block')}
+            >
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+
+                {/* Time Adjust Steppers */}
+                <div style={{ display: 'flex', gap: '1rem', width: '100%' }}>
+                  <div className="form-group" style={{ flex: 1 }}>
+                    <span className="form-label">{t('schedule.start_time')}</span>
+                    <input
+                      type="time"
+                      className="form-input"
+                      value={editStart}
+                      onChange={(e) => setEditStart(e.target.value)}
+                      disabled={editingIndex === 0} // First block must start at 00:00
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ flex: 1 }}>
+                    <span className="form-label">{t('schedule.end_time')}</span>
+                    <input
+                      type="time"
+                      className="form-input"
+                      value={editEnd}
+                      onChange={(e) => setEditEnd(e.target.value)}
+                      disabled={editingIndex === getBlocksForDay(editingDayType).length - 1} // Last block must end at 24:00/00:00
+                    />
                   </div>
                 </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
 
-      {/* Edit Block Modal */}
-      {editingBlock && (
-        <Modal 
-          isOpen={editingBlock !== null} 
-          onClose={() => setEditingBlock(null)}
-          title={t('schedule.edit_block')}
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-            
-            {/* Time Adjust Steppers */}
-            <div style={{ display: 'flex', gap: '1rem', width: '100%' }}>
-              <div className="form-group" style={{ flex: 1 }}>
-                <span className="form-label">{t('schedule.start_time')}</span>
-                <input 
-                  type="time" 
-                  className="form-input"
-                  value={editStart}
-                  onChange={(e) => setEditStart(e.target.value)}
-                  disabled={editingIndex === 0} // First block must start at 00:00
-                />
+                {/* Power (DHW only) */}
+                {isDhw && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+                    <span style={{ fontSize: '0.9rem', fontWeight: 500, color: 'var(--text-secondary)' }}>
+                      {t('schedule.hot_water_output')}
+                    </span>
+                    <Toggle
+                      checked={editPower === 'ON'}
+                      onChange={(checked) => setEditPower(checked ? 'ON' : 'OFF')}
+                      label={editPower}
+                    />
+                  </div>
+                )}
+
+                {/* Setpoint (Heating or DHW ON) */}
+                {(!isDhw || editPower === 'ON') && (
+                  <div style={{ width: '100%' }}>
+                    <Slider
+                      min={isDhw ? 30.0 : 5.0}
+                      max={isDhw ? 65.0 : 25.0}
+                      step={isDhw ? 1.0 : 0.5}
+                      value={editTemp}
+                      onChange={setEditTemp}
+                      label={isDhw ? t('schedule.target_hw_temp') : t('zone_detail.target_temp')}
+                      unit="°C"
+                    />
+                  </div>
+                )}
+
+                {/* Action buttons */}
+                <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', width: '100%' }}>
+                  <Button
+                    variant="destructive"
+                    onClick={handleDeleteBlock}
+                    disabled={getBlocksForDay(editingDayType).length <= 1}
+                    style={{ flexShrink: 0 }}
+                  >
+                    <Trash2 size={16} />
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => setEditingBlock(null)}
+                    style={{ flex: 1 }}
+                  >
+                    {t('common.cancel')}
+                  </Button>
+                  <Button
+                    variant="primary"
+                    onClick={handleSaveBlockEdit}
+                    style={{ flex: 1 }}
+                  >
+                    {t('common.save')}
+                  </Button>
+                </div>
+
               </div>
-
-              <div className="form-group" style={{ flex: 1 }}>
-                <span className="form-label">{t('schedule.end_time')}</span>
-                <input 
-                  type="time" 
-                  className="form-input"
-                  value={editEnd}
-                  onChange={(e) => setEditEnd(e.target.value)}
-                  disabled={editingIndex === getBlocksForDay(editingDayType).length - 1} // Last block must end at 24:00/00:00
-                />
-              </div>
-            </div>
-
-            {/* Power (DHW only) */}
-            {isDhw && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-                <span style={{ fontSize: '0.9rem', fontWeight: 500, color: 'var(--text-secondary)' }}>
-                  {t('schedule.hot_water_output')}
-                </span>
-                <Toggle 
-                  checked={editPower === 'ON'} 
-                  onChange={(checked) => setEditPower(checked ? 'ON' : 'OFF')}
-                  label={editPower}
-                />
-              </div>
-            )}
-
-            {/* Setpoint (Heating or DHW ON) */}
-            {(!isDhw || editPower === 'ON') && (
-              <div style={{ width: '100%' }}>
-                <Slider 
-                  min={isDhw ? 30.0 : 5.0} 
-                  max={isDhw ? 65.0 : 25.0} 
-                  step={isDhw ? 1.0 : 0.5} 
-                  value={editTemp} 
-                  onChange={setEditTemp} 
-                  label={isDhw ? t('schedule.target_hw_temp') : t('zone_detail.target_temp')} 
-                  unit="°C"
-                />
-              </div>
-            )}
-
-            {/* Action buttons */}
-            <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', width: '100%' }}>
-              <Button 
-                variant="destructive"
-                onClick={handleDeleteBlock}
-                disabled={getBlocksForDay(editingDayType).length <= 1}
-                style={{ flexShrink: 0 }}
-              >
-                <Trash2 size={16} />
-              </Button>
-              <Button 
-                variant="secondary"
-                onClick={() => setEditingBlock(null)}
-                style={{ flex: 1 }}
-              >
-                {t('common.cancel')}
-              </Button>
-              <Button 
-                variant="primary"
-                onClick={handleSaveBlockEdit}
-                style={{ flex: 1 }}
-              >
-                {t('common.save')}
-              </Button>
-            </div>
-
-          </div>
-        </Modal>
-      )}
+            </Modal>
+          )}
         </>
       ) : (
         /* Render Away Settings Card */
@@ -835,8 +835,8 @@ export default function ScheduleEditor({ zoneId }) {
                         {t('schedule.dhw_away_desc')}
                       </p>
                     </div>
-                    <Toggle 
-                      checked={dhwAwayPower === 'ON'} 
+                    <Toggle
+                      checked={dhwAwayPower === 'ON'}
                       onChange={(checked) => setDhwAwayPower(checked ? 'ON' : 'OFF')}
                       label={dhwAwayPower}
                     />
@@ -844,13 +844,13 @@ export default function ScheduleEditor({ zoneId }) {
 
                   {dhwAwayPower === 'ON' && (
                     <div style={{ padding: '0.5rem 0' }}>
-                      <Slider 
-                        min={30.0} 
-                        max={65.0} 
-                        step={1.0} 
-                        value={dhwAwayTemp} 
-                        onChange={setDhwAwayTemp} 
-                        label={t('schedule.target_hw_temp')} 
+                      <Slider
+                        min={30.0}
+                        max={65.0}
+                        step={1.0}
+                        value={dhwAwayTemp}
+                        onChange={setDhwAwayTemp}
+                        label={t('schedule.target_hw_temp')}
                         unit="°C"
                       />
                     </div>
@@ -866,9 +866,9 @@ export default function ScheduleEditor({ zoneId }) {
                         {t('schedule.auto_adjust_desc')}
                       </p>
                     </div>
-                    <Toggle 
-                      checked={autoAdjust} 
-                      onChange={setAutoAdjust} 
+                    <Toggle
+                      checked={autoAdjust}
+                      onChange={setAutoAdjust}
                     />
                   </div>
 
@@ -903,13 +903,13 @@ export default function ScheduleEditor({ zoneId }) {
 
                       {/* Minimum Away Temperature slider */}
                       <div style={{ padding: '0.5rem 0' }}>
-                        <Slider 
-                          min={5.0} 
-                          max={25.0} 
-                          step={0.5} 
-                          value={minAwayTemp} 
-                          onChange={setMinAwayTemp} 
-                          label={t('schedule.min_away_temp')} 
+                        <Slider
+                          min={5.0}
+                          max={25.0}
+                          step={0.5}
+                          value={minAwayTemp}
+                          onChange={setMinAwayTemp}
+                          label={t('schedule.min_away_temp')}
                           unit="°C"
                         />
                       </div>
@@ -917,13 +917,13 @@ export default function ScheduleEditor({ zoneId }) {
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', borderTop: '1px solid var(--border-color)', paddingTop: '1.25rem' }}>
                       <div style={{ padding: '0.5rem 0' }}>
-                        <Slider 
-                          min={5.0} 
-                          max={25.0} 
-                          step={0.5} 
-                          value={minAwayTemp} 
-                          onChange={setMinAwayTemp} 
-                          label={t('schedule.fixed_away_temp')} 
+                        <Slider
+                          min={5.0}
+                          max={25.0}
+                          step={0.5}
+                          value={minAwayTemp}
+                          onChange={setMinAwayTemp}
+                          label={t('schedule.fixed_away_temp')}
                           unit="°C"
                         />
                         <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
@@ -935,8 +935,8 @@ export default function ScheduleEditor({ zoneId }) {
                 </div>
               )}
 
-              <Button 
-                variant="primary" 
+              <Button
+                variant="primary"
                 onClick={handleSaveAwayConfig}
                 disabled={awaySaving}
                 style={{ width: '100%', padding: '0.75rem', marginTop: '0.5rem' }}

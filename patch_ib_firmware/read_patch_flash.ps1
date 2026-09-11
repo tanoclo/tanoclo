@@ -214,7 +214,8 @@ if (-not $explicitSlots) {
             $writeSpiB = $true
         }
     }
-} elseif (-not $NoFlash.IsPresent) {
+}
+elseif (-not $NoFlash.IsPresent) {
     $writeInternal = $FlashInternal.IsPresent
     $writeSpiA = $FlashSpiA.IsPresent
     $writeSpiB = $FlashSpiB.IsPresent
@@ -223,9 +224,11 @@ if (-not $explicitSlots) {
 $spiSlot = 0
 if ($writeSpiA -and $writeSpiB) {
     $spiSlot = 3
-} elseif ($writeSpiA) {
+}
+elseif ($writeSpiA) {
     $spiSlot = 1
-} elseif ($writeSpiB) {
+}
+elseif ($writeSpiB) {
     $spiSlot = 2
 }
 
@@ -285,7 +288,8 @@ if (Test-Path $extractedCaCer) {
         Copy-Item "out/tadoRootCA.der" "original/tadoRootCA.der" -Force
         Copy-Item "out/$unmoddedInternal" "original/$unmoddedInternal" -Force
         Copy-Item "out/$unmoddedSpi" "original/$unmoddedSpi" -Force
-    } else {
+    }
+    else {
         Write-Host "Read Patch Flash - Extracted RootCA ($cerHash) does not match original Tado RootCA. Skipping original directory true backup."
     }
 }
@@ -294,7 +298,8 @@ if (-not $skipFlash) {
     Write-Host "Read Patch Flash - Flashing modded binaries"
     & (Join-Path $scriptDir "flash.ps1") -FlashInternal:$writeInternal -FlashSpi:($writeSpiA -or $writeSpiB)
     Write-Host "Read Patch Flash - Done flashing modded binaries"
-} else {
+}
+else {
     Write-Host "Read Patch Flash - Skipping flashing step (flash nothing selected)"
 }
 

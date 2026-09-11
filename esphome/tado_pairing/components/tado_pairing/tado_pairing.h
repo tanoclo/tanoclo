@@ -5,6 +5,12 @@
  * This component interfaces with an SX1276 radio transceiver over SPI, configures
  * FSK packet parameters matching Tado's protocol, and performs active mimicry 
  * challenges to extract the operational RF keys from the Tado Internet Bridge (IB).
+
+ * NOTE: This firmware is completely wrong about many things, but it works.
+ * Please do not use this firmware as an example for anything.
+ * tado_emulator is the correct example to use for learning how RF pairing is supposed to work.
+ * TO-DO: Rebase this component on tado_emulator
+ 
  */
 
 #pragma once

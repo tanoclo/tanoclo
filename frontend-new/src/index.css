@@ -3,17 +3,17 @@
 :root {
   /* Design Tokens - Default Dark Mode */
   --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
-  
+
   /* Brand Colors */
   --primary-hue: 220;
   --primary: hsl(var(--primary-hue), 85%, 55%);
   --primary-light: hsl(var(--primary-hue), 85%, 65%);
   --primary-glow: hsla(var(--primary-hue), 85%, 55%, 0.15);
-  
+
   --secondary-hue: 160;
   --secondary: hsl(var(--secondary-hue), 70%, 45%);
   --secondary-light: hsl(var(--secondary-hue), 70%, 55%);
-  
+
   /* Status Colors */
   --success: hsl(140, 70%, 45%);
   --success-glow: hsla(140, 70%, 45%, 0.15);
@@ -31,7 +31,7 @@
   --bg-input: hsla(220, 20%, 8%, 0.8);
   --border-color: hsla(220, 20%, 25%, 0.4);
   --border-color-hover: hsla(220, 20%, 35%, 0.6);
-  
+
   /* Typography Colors */
   --text-primary: hsl(0, 0%, 96%);
   --text-secondary: hsl(220, 12%, 65%);
@@ -47,7 +47,7 @@
   --transition-fast: 0.15s ease;
   --transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   --transition-slow: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-  
+
   /* Zone State Gradients (Dark Mode) */
   --gradient-comfort: linear-gradient(135deg, hsla(140, 70%, 15%, 0.8) 0%, hsla(140, 80%, 8%, 0.8) 100%);
   --gradient-heating: linear-gradient(135deg, hsla(25, 75%, 22%, 0.8) 0%, hsla(20, 80%, 10%, 0.8) 100%);
@@ -66,13 +66,13 @@
   --bg-input: hsla(220, 20%, 93%, 0.8);
   --border-color: hsla(220, 20%, 75%, 0.3);
   --border-color-hover: hsla(220, 20%, 60%, 0.5);
-  
+
   --text-primary: hsl(220, 24%, 12%);
   --text-secondary: hsl(220, 16%, 35%);
   --text-muted: hsl(220, 12%, 55%);
-  
+
   --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.08);
-  
+
   /* Zone State Gradients (Light Mode) */
   --gradient-comfort: linear-gradient(135deg, hsla(140, 60%, 90%, 0.9) 0%, hsla(140, 60%, 80%, 0.9) 100%);
   --gradient-heating: linear-gradient(135deg, hsla(25, 75%, 90%, 0.9) 0%, hsla(20, 75%, 82%, 0.9) 100%);
@@ -111,11 +111,15 @@ a {
   text-decoration: none;
   transition: color var(--transition-fast);
 }
+
 a:hover {
   color: var(--primary-light);
 }
 
-button, input, select, textarea {
+button,
+input,
+select,
+textarea {
   font-family: inherit;
   font-size: inherit;
   color: inherit;
@@ -126,13 +130,16 @@ button, input, select, textarea {
   width: 8px;
   height: 8px;
 }
+
 ::-webkit-scrollbar-track {
   background: var(--bg-app);
 }
+
 ::-webkit-scrollbar-thumb {
   background: var(--border-color);
   border-radius: var(--radius-sm);
 }
+
 ::-webkit-scrollbar-thumb:hover {
   background: var(--border-color-hover);
 }
@@ -172,23 +179,49 @@ button, input, select, textarea {
 
 /* Micro-animations */
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes scaleIn {
-  from { opacity: 0; transform: scale(0.95); }
-  to { opacity: 1; transform: scale(1); }
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 @keyframes pulse-soft {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.8; transform: scale(0.98); }
+
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.8;
+    transform: scale(0.98);
+  }
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .animate-fade-in {
@@ -330,4 +363,3 @@ button, input, select, textarea {
   flex: 1;
   overflow-y: auto;
 }
-

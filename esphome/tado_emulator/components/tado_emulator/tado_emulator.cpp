@@ -48,9 +48,14 @@ void TadoEmulatorComponent::processing_task_entry(void *param) {
 
 void TadoEmulatorComponent::radio_read_fifo() {
   RxPacket pkt;
+  uint8_t count = 0;
   while (radio_.read_rx_packet(pkt)) {
     if (rx_queue_ != nullptr) {
       xQueueSend(rx_queue_, &pkt, 0);
+    }
+    if (++count >= 8) {
+      taskYIELD();
+      count = 0;
     }
   }
 }
@@ -125,6 +130,8 @@ void TadoEmulatorComponent::loop() {
     xSemaphoreGiveRecursive(devices_mutex_);
   }
 
+  // Note: now_s wraps after ~136 years. Unsigned subtraction (now_s - s_last_nvs_sync)
+  // handles any 32-bit counter rollover safely.
   static uint32_t s_last_nvs_sync = 0;
   if (now_s - s_last_nvs_sync >= 300) {
     s_last_nvs_sync = now_s;
@@ -283,8 +290,14 @@ void TadoEmulatorComponent::add_device(const EmulatedDeviceConfig &cfg) {
 }
 
 RUStateMachine *TadoEmulatorComponent::find_device(const std::string &serial) {
-  for (auto &dev : devices_) {
-    if (dev.get_config().serial_no == serial) return &dev;
+  if (devices_mutex_ != nullptr && xSemaphoreTakeRecursive(devices_mutex_, pdMS_TO_TICKS(100)) == pdTRUE) {
+    for (auto &dev : devices_) {
+      if (dev.get_config().serial_no == serial) {
+        xSemaphoreGiveRecursive(devices_mutex_);
+        return &dev;
+      }
+    }
+    xSemaphoreGiveRecursive(devices_mutex_);
   }
   return nullptr;
 }
@@ -294,86 +307,94 @@ RUStateMachine *TadoEmulatorComponent::find_device(const std::string &serial) {
 // ---------------------------------------------------------------------------
 
 void TadoEmulatorComponent::save_to_nvs() {
+  if (devices_mutex_ == nullptr) return;
+  if (xSemaphoreTakeRecursive(devices_mutex_, pdMS_TO_TICKS(100)) != pdTRUE) return;
+
   nvs_handle_t handle;
   esp_err_t err = nvs_open("tado_emul", NVS_READWRITE, &handle);
-  if (err != ESP_OK) return;
-
-  if (devices_mutex_ != nullptr && xSemaphoreTakeRecursive(devices_mutex_, pdMS_TO_TICKS(100)) == pdTRUE) {
-    uint32_t count = devices_.size();
-    nvs_set_u32(handle, "dev_count", count);
-
-    for (uint32_t i = 0; i < count; i++) {
-      std::string prefix = "d" + std::to_string(i) + "_";
-      const auto &cfg = devices_[i].get_config();
-      nvs_set_str(handle, (prefix + "ser").c_str(), cfg.serial_no.c_str());
-      nvs_set_blob(handle, (prefix + "mac").c_str(), cfg.mac_addr, 8);
-      nvs_set_blob(handle, (prefix + "opk").c_str(), cfg.op_key, 16);
-      nvs_set_blob(handle, (prefix + "fak").c_str(), cfg.factory_key, 16);
-      nvs_set_blob(handle, (prefix + "tok").c_str(), cfg.session_token, 8);
-      nvs_set_u8(handle, (prefix + "st").c_str(), (uint8_t)cfg.state);
-      nvs_set_u32(handle, (prefix + "hid").c_str(), cfg.home_id);
-      nvs_set_u32(handle, (prefix + "zid").c_str(), cfg.zone_id);
-      nvs_set_u8(handle, (prefix + "zrl").c_str(), cfg.zone_role);
-      nvs_set_u8(handle, (prefix + "ldr").c_str(), cfg.is_measuring_leader ? 1 : 0);
-      nvs_set_blob(handle, (prefix + "ibm").c_str(), cfg.ib_mac, 8);
-      nvs_set_u32(handle, (prefix + "fc").c_str(), cfg.frame_counter);
-    }
-
-    nvs_commit(handle);
-    nvs_close(handle);
+  if (err != ESP_OK) {
     xSemaphoreGiveRecursive(devices_mutex_);
+    return;
   }
+
+  uint32_t count = devices_.size();
+  nvs_set_u32(handle, "dev_count", count);
+
+  for (uint32_t i = 0; i < count; i++) {
+    std::string prefix = "d" + std::to_string(i) + "_";
+    const auto &cfg = devices_[i].get_config();
+    nvs_set_str(handle, (prefix + "ser").c_str(), cfg.serial_no.c_str());
+    nvs_set_blob(handle, (prefix + "mac").c_str(), cfg.mac_addr, 8);
+    nvs_set_blob(handle, (prefix + "opk").c_str(), cfg.op_key, 16);
+    nvs_set_blob(handle, (prefix + "fak").c_str(), cfg.factory_key, 16);
+    nvs_set_blob(handle, (prefix + "tok").c_str(), cfg.session_token, 8);
+    nvs_set_u8(handle, (prefix + "st").c_str(), (uint8_t)cfg.state);
+    nvs_set_u32(handle, (prefix + "hid").c_str(), cfg.home_id);
+    nvs_set_u32(handle, (prefix + "zid").c_str(), cfg.zone_id);
+    nvs_set_u8(handle, (prefix + "zrl").c_str(), cfg.zone_role);
+    nvs_set_u8(handle, (prefix + "ldr").c_str(), cfg.is_measuring_leader ? 1 : 0);
+    nvs_set_blob(handle, (prefix + "ibm").c_str(), cfg.ib_mac, 8);
+    nvs_set_u32(handle, (prefix + "fc").c_str(), cfg.frame_counter);
+  }
+
+  nvs_commit(handle);
+  nvs_close(handle);
+  xSemaphoreGiveRecursive(devices_mutex_);
 }
 
 void TadoEmulatorComponent::load_from_nvs() {
+  if (devices_mutex_ == nullptr) return;
+  if (xSemaphoreTakeRecursive(devices_mutex_, pdMS_TO_TICKS(100)) != pdTRUE) return;
+
   nvs_handle_t handle;
   esp_err_t err = nvs_open("tado_emul", NVS_READONLY, &handle);
-  if (err != ESP_OK) return;
+  if (err != ESP_OK) {
+    xSemaphoreGiveRecursive(devices_mutex_);
+    return;
+  }
 
   uint32_t count = 0;
   nvs_get_u32(handle, "dev_count", &count);
 
-  if (devices_mutex_ != nullptr && xSemaphoreTakeRecursive(devices_mutex_, pdMS_TO_TICKS(100)) == pdTRUE) {
-    devices_.clear();
-    for (uint32_t i = 0; i < count; i++) {
-      std::string prefix = "d" + std::to_string(i) + "_";
-      EmulatedDeviceConfig cfg;
-      char sbuf[32]{0};
-      size_t slen = sizeof(sbuf);
-      if (nvs_get_str(handle, (prefix + "ser").c_str(), sbuf, &slen) == ESP_OK) {
-        cfg.serial_no = sbuf;
-      }
-      size_t blen = 8;
-      nvs_get_blob(handle, (prefix + "mac").c_str(), cfg.mac_addr, &blen);
-      blen = 16;
-      if (nvs_get_blob(handle, (prefix + "opk").c_str(), cfg.op_key, &blen) == ESP_OK) cfg.has_op_key = true;
-      blen = 16;
-      if (nvs_get_blob(handle, (prefix + "fak").c_str(), cfg.factory_key, &blen) == ESP_OK) cfg.has_factory_key = true;
-      blen = 8;
-      if (nvs_get_blob(handle, (prefix + "tok").c_str(), cfg.session_token, &blen) == ESP_OK) cfg.has_session_token = true;
-      uint8_t st = 0;
-      nvs_get_u8(handle, (prefix + "st").c_str(), &st);
-      cfg.state = (RUState)st;
-      nvs_get_u32(handle, (prefix + "hid").c_str(), &cfg.home_id);
-      nvs_get_u32(handle, (prefix + "zid").c_str(), &cfg.zone_id);
-      nvs_get_u8(handle, (prefix + "zrl").c_str(), &cfg.zone_role);
-      uint8_t ldr = 0;
-      if (nvs_get_u8(handle, (prefix + "ldr").c_str(), &ldr) == ESP_OK) {
-        cfg.is_measuring_leader = (ldr == 1);
-      }
-      blen = 8;
-      if (nvs_get_blob(handle, (prefix + "ibm").c_str(), cfg.ib_mac, &blen) == ESP_OK) cfg.ib_mac_known = true;
-      uint32_t fc = 1;
-      if (nvs_get_u32(handle, (prefix + "fc").c_str(), &fc) == ESP_OK && fc > 0) {
-        cfg.frame_counter = fc + 100;
-      }
-
-      cfg.derive_short_addr();
-      devices_.emplace_back(cfg);
+  devices_.clear();
+  for (uint32_t i = 0; i < count; i++) {
+    std::string prefix = "d" + std::to_string(i) + "_";
+    EmulatedDeviceConfig cfg;
+    char sbuf[32]{0};
+    size_t slen = sizeof(sbuf);
+    if (nvs_get_str(handle, (prefix + "ser").c_str(), sbuf, &slen) == ESP_OK) {
+      cfg.serial_no = sbuf;
     }
-    nvs_close(handle);
-    xSemaphoreGiveRecursive(devices_mutex_);
+    size_t blen = 8;
+    nvs_get_blob(handle, (prefix + "mac").c_str(), cfg.mac_addr, &blen);
+    blen = 16;
+    if (nvs_get_blob(handle, (prefix + "opk").c_str(), cfg.op_key, &blen) == ESP_OK) cfg.has_op_key = true;
+    blen = 16;
+    if (nvs_get_blob(handle, (prefix + "fak").c_str(), cfg.factory_key, &blen) == ESP_OK) cfg.has_factory_key = true;
+    blen = 8;
+    if (nvs_get_blob(handle, (prefix + "tok").c_str(), cfg.session_token, &blen) == ESP_OK) cfg.has_session_token = true;
+    uint8_t st = 0;
+    nvs_get_u8(handle, (prefix + "st").c_str(), &st);
+    cfg.state = (RUState)st;
+    nvs_get_u32(handle, (prefix + "hid").c_str(), &cfg.home_id);
+    nvs_get_u32(handle, (prefix + "zid").c_str(), &cfg.zone_id);
+    nvs_get_u8(handle, (prefix + "zrl").c_str(), &cfg.zone_role);
+    uint8_t ldr = 0;
+    if (nvs_get_u8(handle, (prefix + "ldr").c_str(), &ldr) == ESP_OK) {
+      cfg.is_measuring_leader = (ldr == 1);
+    }
+    blen = 8;
+    if (nvs_get_blob(handle, (prefix + "ibm").c_str(), cfg.ib_mac, &blen) == ESP_OK) cfg.ib_mac_known = true;
+    uint32_t fc = 1;
+    if (nvs_get_u32(handle, (prefix + "fc").c_str(), &fc) == ESP_OK && fc > 0) {
+      cfg.frame_counter = fc + 100;
+    }
+
+    cfg.derive_short_addr();
+    devices_.emplace_back(cfg);
   }
+  nvs_close(handle);
+  xSemaphoreGiveRecursive(devices_mutex_);
 }
 
 // ---------------------------------------------------------------------------
@@ -391,9 +412,18 @@ bool TadoEmulatorComponent::canHandle(AsyncWebServerRequest *request) const {
   return false;
 }
 
+static bool constant_time_eq(const std::string &a, const std::string &b) {
+  if (a.length() != b.length()) return false;
+  uint8_t result = 0;
+  for (size_t i = 0; i < a.length(); i++) {
+    result |= (uint8_t)(a[i] ^ b[i]);
+  }
+  return result == 0;
+}
+
 void TadoEmulatorComponent::handleBody(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
-  if (index == 0) pending_body_.clear();
-  pending_body_.append((const char *)data, len);
+  if (index == 0) pending_bodies_[request].clear();
+  pending_bodies_[request].append((const char *)data, len);
 }
 
 void TadoEmulatorComponent::handleRequest(AsyncWebServerRequest *request) {
@@ -405,7 +435,22 @@ void TadoEmulatorComponent::handleRequest(AsyncWebServerRequest *request) {
 #endif
   // API key validation (if configured)
   if (!api_key_.empty()) {
-    bool auth_ok = (request->hasArg("key") && std::string(request->arg("key")) == api_key_);
+    bool auth_ok = false;
+    if (request->hasHeader("X-ESP-API-Key")) {
+#if USE_ESP32
+      auto hdr = request->get_header("X-ESP-API-Key");
+      if (hdr.has_value() && constant_time_eq(*hdr, api_key_)) auth_ok = true;
+#else
+      const auto *hdr = request->getHeader("X-ESP-API-Key");
+      if (hdr != nullptr && constant_time_eq(hdr->value().c_str(), api_key_)) auth_ok = true;
+#endif
+    }
+    if (!auth_ok && request->hasArg("key")) {
+      auth_ok = constant_time_eq(request->arg("key").c_str(), api_key_);
+    }
+    if (!auth_ok && request->hasArg("api_key")) {
+      auth_ok = constant_time_eq(request->arg("api_key").c_str(), api_key_);
+    }
     if (!auth_ok) {
       request->send(401, "application/json", "{\"error\":\"Unauthorized\"}");
       return;
@@ -414,7 +459,12 @@ void TadoEmulatorComponent::handleRequest(AsyncWebServerRequest *request) {
   if (url == "/api/status") {
     handle_status_request(request);
   } else if (url == "/api/cmd") {
-    std::string body = pending_body_;
+    std::string body;
+    auto it = pending_bodies_.find(request);
+    if (it != pending_bodies_.end()) {
+      body = std::move(it->second);
+      pending_bodies_.erase(it);
+    }
     if (body.empty()) {
       if (request->hasArg("plain")) {
         body = request->arg("plain");
@@ -423,7 +473,6 @@ void TadoEmulatorComponent::handleRequest(AsyncWebServerRequest *request) {
       }
     }
     handle_cmd_request(request, body);
-    pending_body_.clear();
   } else {
     request->send(404, "text/plain", "Not Found");
   }
@@ -478,26 +527,62 @@ static std::string url_decode(const std::string &in) {
 }
 
 static std::string json_get_str(const std::string &body, const std::string &key) {
-  size_t k = body.find("\"" + key + "\"");
+  std::string target = "\"" + key + "\"";
+  size_t k = body.find(target);
   if (k == std::string::npos) return "";
-  size_t colon = body.find(':', k + key.length() + 2);
+  size_t colon = body.find(':', k + target.length());
   if (colon == std::string::npos) return "";
   size_t q1 = body.find('"', colon + 1);
   if (q1 == std::string::npos) return "";
-  size_t q2 = body.find('"', q1 + 1);
-  if (q2 == std::string::npos) return "";
-  return body.substr(q1 + 1, q2 - q1 - 1);
+  size_t cur = q1 + 1;
+  while (cur < body.length()) {
+    if (body[cur] == '"' && body[cur - 1] != '\\') break;
+    cur++;
+  }
+  if (cur >= body.length()) return "";
+  std::string val = body.substr(q1 + 1, cur - q1 - 1);
+  size_t esc = 0;
+  while ((esc = val.find("\\\"", esc)) != std::string::npos) {
+    val.erase(esc, 1);
+  }
+  return val;
 }
 
 static double json_get_num(const std::string &body, const std::string &key, double def_val = 0.0) {
-  size_t k = body.find("\"" + key + "\"");
+  std::string target = "\"" + key + "\"";
+  size_t k = body.find(target);
   if (k == std::string::npos) return def_val;
-  size_t colon = body.find(':', k + key.length() + 2);
+  size_t colon = body.find(':', k + target.length());
   if (colon == std::string::npos) return def_val;
   size_t val_start = colon + 1;
   while (val_start < body.length() && (body[val_start] == ' ' || body[val_start] == '\t')) val_start++;
   if (val_start >= body.length()) return def_val;
-  return atof(body.substr(val_start).c_str());
+  size_t val_end = body.find_first_of(",}\r\n ", val_start);
+  if (val_end == std::string::npos) val_end = body.length();
+  std::string num_str = body.substr(val_start, val_end - val_start);
+  char *endp = nullptr;
+  double res = strtod(num_str.c_str(), &endp);
+  return (endp == num_str.c_str()) ? def_val : res;
+}
+
+static std::string redact_sensitive_json(const std::string &input) {
+  std::string result = input;
+  const char *keys[] = {"op_key", "factory_key"};
+  for (const char *k : keys) {
+    std::string pattern = std::string("\"") + k + "\"";
+    size_t pos = 0;
+    while ((pos = result.find(pattern, pos)) != std::string::npos) {
+      size_t colon = result.find(':', pos + pattern.length());
+      if (colon == std::string::npos) break;
+      size_t q1 = result.find('"', colon + 1);
+      if (q1 == std::string::npos) break;
+      size_t q2 = result.find('"', q1 + 1);
+      if (q2 == std::string::npos) break;
+      result.replace(q1 + 1, q2 - q1 - 1, "***REDACTED***");
+      pos = q1 + 15;
+    }
+  }
+  return result;
 }
 
 static void hex_to_bytes(const std::string &hex, uint8_t *bytes, size_t max_len) {
@@ -527,10 +612,12 @@ void TadoEmulatorComponent::handle_cmd_request(AsyncWebServerRequest *request, c
     body = url_decode(body);
   }
 
-  ESP_LOGI(TAG, "API CMD received: %s", body.c_str());
+  ESP_LOGI(TAG, "API CMD received: %s", redact_sensitive_json(body).c_str());
+
+  std::string cmd = json_get_str(body, "cmd");
 
   // 1. send_telemetry
-  if (body.find("send_telemetry") != std::string::npos || body.find("telemetry") != std::string::npos) {
+  if (cmd == "send_telemetry" || cmd == "telemetry" || (cmd.empty() && (body.find("send_telemetry") != std::string::npos || body.find("telemetry") != std::string::npos))) {
     std::string ser = json_get_str(body, "serial");
     if (devices_mutex_ != nullptr && xSemaphoreTakeRecursive(devices_mutex_, pdMS_TO_TICKS(200)) == pdTRUE) {
       for (auto &dev : devices_) {
@@ -539,6 +626,9 @@ void TadoEmulatorComponent::handle_cmd_request(AsyncWebServerRequest *request, c
           float temp = (float)json_get_num(body, "temp_celsius", cfg.target_temp_celsius);
           float hum = (float)json_get_num(body, "humidity_percent", cfg.target_humidity_pct);
           uint16_t bat = (uint16_t)json_get_num(body, "battery_mv", cfg.target_battery_mv);
+
+          // Force d/sen emission by resetting throttle (API-triggered = always send both z/p + d/sen)
+          dev.get_config_mut().last_sen_tx_ts = 0;
 
           std::vector<OutboundFrame> outbound;
           dev.trigger_telemetry(temp, hum, bat, outbound);
@@ -557,7 +647,7 @@ void TadoEmulatorComponent::handle_cmd_request(AsyncWebServerRequest *request, c
   }
 
   // 2. sync (Reboot recovery / credential restoration - no RF pairing)
-  if (body.find("\"sync\"") != std::string::npos || body.find("cmd\":\"sync\"") != std::string::npos) {
+  if (cmd == "sync" || (cmd.empty() && (body.find("\"sync\"") != std::string::npos || body.find("cmd\":\"sync\"") != std::string::npos))) {
     std::string ser = json_get_str(body, "serial");
     if (ser.empty()) {
       request->send(400, "application/json", "{\"error\":\"Missing serial for sync\"}");
@@ -614,7 +704,7 @@ void TadoEmulatorComponent::handle_cmd_request(AsyncWebServerRequest *request, c
   }
 
   // 3. pair / pair_device
-  if (body.find("pair") != std::string::npos) {
+  if (cmd == "pair" || cmd == "pair_device" || (cmd.empty() && body.find("pair") != std::string::npos)) {
     std::string new_ser = json_get_str(body, "serial");
     if (new_ser.empty()) new_ser = "RU" + std::to_string(2400000000ULL + (millis() % 90000000ULL));
 
@@ -679,8 +769,8 @@ void TadoEmulatorComponent::handle_cmd_request(AsyncWebServerRequest *request, c
     }
   }
 
-  // 3. remove / remove_device
-  if (body.find("remove") != std::string::npos) {
+  // 4. remove / remove_device
+  if (cmd == "remove" || cmd == "remove_device" || (cmd.empty() && body.find("remove") != std::string::npos)) {
     std::string ser = json_get_str(body, "serial");
     if (!ser.empty() && devices_mutex_ != nullptr && xSemaphoreTakeRecursive(devices_mutex_, pdMS_TO_TICKS(100)) == pdTRUE) {
       for (auto it = devices_.begin(); it != devices_.end(); ++it) {

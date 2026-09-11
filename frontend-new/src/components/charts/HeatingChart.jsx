@@ -6,7 +6,6 @@
  * (100, 50, 20, 0) and plots them on a stepped chronological timeline.
  */
 
-
 import { Line } from 'react-chartjs-2';
 import { useTranslation } from 'react-i18next';
 
@@ -92,7 +91,7 @@ export default function HeatingChart({ dayReportData }) {
         titleFont: { family: 'Inter, sans-serif' },
         bodyFont: { family: 'Inter, sans-serif' },
         callbacks: {
-          label: function(context) {
+          label: function (context) {
             const val = context.parsed.y;
             let status = t('zone.heating_off');
             if (val === 100) status = t('zone.heating_high');
@@ -130,7 +129,7 @@ export default function HeatingChart({ dayReportData }) {
             family: 'Inter, sans-serif',
             size: 10
           },
-          callback: function(value) {
+          callback: function (value) {
             if (value === 0) return t('zone.heating_off');
             if (value === 20) return t('common.low');
             if (value === 50) return t('common.normal');

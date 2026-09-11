@@ -6,7 +6,6 @@
  * boiling flame animations when hot water is active, and shows current tank temperatures.
  */
 
-
 import { Droplet, ShieldAlert, Thermometer, Flame } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -35,18 +34,18 @@ export default function DHWCard({ zone, state, onClick }) {
     }
     const t = Math.max(30, Math.min(65, temp));
     const stops = [
-      { t: 30, h: 200, s: 80, l: 45 },    // Blueish
-      { t: 40, h: 145, s: 70, l: 40 },    // Teal
-      { t: 48, h: 60, s: 85, l: 42 },     // Yellow
-      { t: 55, h: 30, s: 95, l: 45 },     // Orange
-      { t: 65, h: 5, s: 100, l: 40 }      // Red
+      { t: 30, h: 200, s: 80, l: 45 },
+      { t: 40, h: 145, s: 70, l: 40 },
+      { t: 48, h: 60, s: 85, l: 42 },
+      { t: 55, h: 30, s: 95, l: 45 },
+      { t: 65, h: 5, s: 100, l: 40 }
     ];
     let lower = stops[0];
     let upper = stops[stops.length - 1];
     for (let i = 0; i < stops.length - 1; i++) {
-      if (t >= stops[i].t && t <= stops[i+1].t) {
+      if (t >= stops[i].t && t <= stops[i + 1].t) {
         lower = stops[i];
-        upper = stops[i+1];
+        upper = stops[i + 1];
         break;
       }
     }
@@ -87,7 +86,7 @@ export default function DHWCard({ zone, state, onClick }) {
   };
 
   return (
-    <div 
+    <div
       onClick={onClick}
       style={getCardStyle()}
       onMouseEnter={(e) => {
@@ -116,14 +115,14 @@ export default function DHWCard({ zone, state, onClick }) {
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
           {isOffline && <ShieldAlert size={16} />}
           {isHeating && !isOffline && (
-            <Flame 
-              size={18} 
-              style={{ 
+            <Flame
+              size={18}
+              style={{
                 color: '#ff7a00',
                 fill: '#ff5d00',
                 filter: 'drop-shadow(0 0 6px rgba(255, 93, 0, 0.8))',
-                animation: 'pulse-soft 1.5s infinite' 
-              }} 
+                animation: 'pulse-soft 1.5s infinite'
+              }}
             />
           )}
         </div>
@@ -142,12 +141,12 @@ export default function DHWCard({ zone, state, onClick }) {
       </div>
 
       {/* Bottom Name & Info */}
-      <div 
-        style={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'flex-end', 
-          width: '100%', 
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-end',
+          width: '100%',
           zIndex: 2
         }}
       >

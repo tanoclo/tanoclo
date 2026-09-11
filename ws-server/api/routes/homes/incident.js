@@ -3,7 +3,6 @@
  * @brief Incident detection settings endpoints for homes.
  * 
  * Supports reading and updating the incident detection enabled status parameters
- * for auto-assist warnings.
  */
 
 const express = require('express');
@@ -19,7 +18,6 @@ const { buildHomeDetails, checkZoneConfigReadonly } = require('./helpers');
 const router = express.Router();
 const _log = getLogger('homes-api');
 
-// --- lines 550 to 562 ---
 router.get('/:homeId/incidentDetection', async (req, res) => {
     try {
         const homeId = req.params.homeId;
@@ -33,9 +31,6 @@ router.get('/:homeId/incidentDetection', async (req, res) => {
 });
 
 // PUT /api/v2/homes/{homeId}/incidentDetection
-
-
-// --- lines 563 to 579 ---
 router.put('/:homeId/incidentDetection', async (req, res) => {
     try {
         const homeId = req.params.homeId;
@@ -47,12 +42,5 @@ router.put('/:homeId/incidentDetection', async (req, res) => {
         res.status(500).json({ error: 'internal_error' });
     }
 });
-
-// mapDevice is imported from lib/mappers.js
-
-// GET /:homeId/devices is handled by devices.js (canonical handler)
-
-// GET /api/v2/homes/{homeId}/deviceList
-
 
 module.exports = router;

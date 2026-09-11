@@ -1,13 +1,13 @@
 # ==============================================================================
 # config.yaml
 # Description: Configuration schema and metadata definitions for the Home Assistant
-#              WebSocket Server addon. Configures database credentials, ports (988, 3111),
+#              WebSocket Server app. Configures database credentials, ports (988, 3111),
 #              certificates lookup, log levels, and domain strings.
 # ==============================================================================
 name: "TaNoClo WebSocket Server"
 version: "0.2.12"
 slug: "tanoclo-ws-server"
-description: "Self-hosted Tado WebSocket and API Server replica"
+description: "Self-hosted Tado compatible WebSocket and API Server"
 url: "https://github.com/tanoclo/tanoclo"
 image: "ghcr.io/tanoclo/tanoclo-ws-server"
 arch:

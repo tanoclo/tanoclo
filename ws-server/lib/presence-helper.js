@@ -67,7 +67,7 @@ async function updateHomePresenceState(homeId, newPresence) {
     }
 
     // 4. Trigger MQTT update for home presence
-    await mqttPublisher.publishHomeTelemetry(homeId).catch(() => { });
+    await mqttPublisher.publishHomeTelemetry(homeId).catch(e => _log('debug', `[presence] publishHomeTelemetry failed for home ${homeId}: ${e.message}`));
 }
 
 async function evaluateHomePresence(homeId) {

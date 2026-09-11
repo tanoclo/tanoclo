@@ -63,7 +63,7 @@ export default function ZoneDetail({ zoneId, isOpen, onClose }) {
   const { user } = useAuth();
 
   const isAdmin = homeInfo && user ? (homeInfo.isCurrentUserAdmin || String(user.id) === String(homeInfo.adminUserId)) : false;
-  
+
   const zone = zones?.find(z => z.id === zoneId);
   const state = zoneStates?.zoneStates?.[zoneId];
   const isDhw = zone?.type === 'HOT_WATER' || zone?.type === 'DHW';
@@ -120,22 +120,22 @@ export default function ZoneDetail({ zoneId, isOpen, onClose }) {
 
     const stepsList = [];
     shorterTimers.forEach(m => {
-      stepsList.push({ type: 'TIMER', minutes: m, label: m < 60 ? `${m}m` : `${Math.floor(m/60)}h${m%60 > 0 ? ` ${m%60}m` : ''}` });
+      stepsList.push({ type: 'TIMER', minutes: m, label: m < 60 ? `${m}m` : `${Math.floor(m / 60)}h${m % 60 > 0 ? ` ${m % 60}m` : ''}` });
     });
     if (nextChangeMins > 0) {
-      stepsList.push({ 
-        type: 'TADO_MODE', 
-        minutes: nextChangeMins, 
+      stepsList.push({
+        type: 'TADO_MODE',
+        minutes: nextChangeMins,
         label: t('zone_detail.next_change'),
         isNextSchedule: true
       });
     }
     longerTimers.forEach(m => {
-      stepsList.push({ type: 'TIMER', minutes: m, label: m < 60 ? `${m}m` : `${Math.floor(m/60)}h${m%60 > 0 ? ` ${m%60}m` : ''}` });
+      stepsList.push({ type: 'TIMER', minutes: m, label: m < 60 ? `${m}m` : `${Math.floor(m / 60)}h${m % 60 > 0 ? ` ${m % 60}m` : ''}` });
     });
-    stepsList.push({ 
-      type: 'MANUAL', 
-      label: t('zone_detail.infinite') 
+    stepsList.push({
+      type: 'MANUAL',
+      label: t('zone_detail.infinite')
     });
     return stepsList;
   };
@@ -168,7 +168,7 @@ export default function ZoneDetail({ zoneId, isOpen, onClose }) {
   const _handleSliderRelease = async (newIdx) => {
     const stepsList = getSteps();
     const selectedStep = stepsList[newIdx];
-    
+
     const payload = {
       setting: {
         type: isDhw ? 'HOT_WATER' : 'HEATING',
@@ -178,11 +178,11 @@ export default function ZoneDetail({ zoneId, isOpen, onClose }) {
         type: selectedStep.type
       }
     };
-    
+
     if (selectedStep.type === 'TIMER') {
       payload.termination.durationInSeconds = selectedStep.minutes * 60;
     }
-    
+
     if (isDhw) {
       if (targetTemp >= 30.0) {
         payload.setting.temperature = { celsius: targetTemp };
@@ -211,7 +211,6 @@ export default function ZoneDetail({ zoneId, isOpen, onClose }) {
     }
   };
 
-  // Fetch telemetry via custom TaNoClo endpoint if showTelemetry is active
   const { data: telemetryData, error: telemetryError } = useSWR(
     showTelemetry && activeHomeId && (zoneId !== null && zoneId !== undefined) && telemetryDate
       ? SWR_KEYS.dayReport(activeHomeId, zoneId, telemetryDate)
@@ -321,19 +320,19 @@ export default function ZoneDetail({ zoneId, isOpen, onClose }) {
     }
     const t = Math.max(5, Math.min(25, temp));
     const stops = [
-      { t: 5, h: 210, s: 80, l: 45 },    // Blueish
-      { t: 15, h: 145, s: 70, l: 40 },   // Greenish-teal
-      { t: 18, h: 100, s: 70, l: 40 },   // Green
-      { t: 19, h: 50, s: 95, l: 45 },    // Yellow
-      { t: 21, h: 35, s: 95, l: 45 },    // Yellow-orange
-      { t: 25, h: 15, s: 100, l: 40 }    // Dark Orange
+      { t: 5, h: 210, s: 80, l: 45 },
+      { t: 15, h: 145, s: 70, l: 40 },
+      { t: 18, h: 100, s: 70, l: 40 },
+      { t: 19, h: 50, s: 95, l: 45 },
+      { t: 21, h: 35, s: 95, l: 45 },
+      { t: 25, h: 15, s: 100, l: 40 }
     ];
     let lower = stops[0];
     let upper = stops[stops.length - 1];
     for (let i = 0; i < stops.length - 1; i++) {
-      if (t >= stops[i].t && t <= stops[i+1].t) {
+      if (t >= stops[i].t && t <= stops[i + 1].t) {
         lower = stops[i];
-        upper = stops[i+1];
+        upper = stops[i + 1];
         break;
       }
     }
@@ -353,18 +352,18 @@ export default function ZoneDetail({ zoneId, isOpen, onClose }) {
     }
     const t = Math.max(30, Math.min(65, temp));
     const stops = [
-      { t: 30, h: 200, s: 80, l: 45 },    // Blueish
-      { t: 40, h: 145, s: 70, l: 40 },    // Teal
-      { t: 48, h: 60, s: 85, l: 42 },     // Yellow
-      { t: 55, h: 30, s: 95, l: 45 },     // Orange
-      { t: 65, h: 5, s: 100, l: 40 }      // Red
+      { t: 30, h: 200, s: 80, l: 45 },
+      { t: 40, h: 145, s: 70, l: 40 },
+      { t: 48, h: 60, s: 85, l: 42 },
+      { t: 55, h: 30, s: 95, l: 45 },
+      { t: 65, h: 5, s: 100, l: 40 }
     ];
     let lower = stops[0];
     let upper = stops[stops.length - 1];
     for (let i = 0; i < stops.length - 1; i++) {
-      if (t >= stops[i].t && t <= stops[i+1].t) {
+      if (t >= stops[i].t && t <= stops[i + 1].t) {
         lower = stops[i];
-        upper = stops[i+1];
+        upper = stops[i + 1];
         break;
       }
     }
@@ -405,7 +404,7 @@ export default function ZoneDetail({ zoneId, isOpen, onClose }) {
         type: termType
       }
     };
-    
+
     if (termType === 'TIMER') {
       payload.termination.durationInSeconds = durationInMinutes * 60;
       setCountdownSeconds(durationInMinutes * 60);
@@ -415,7 +414,7 @@ export default function ZoneDetail({ zoneId, isOpen, onClose }) {
     } else {
       setCountdownSeconds(0);
     }
-    
+
     if (isDhw) {
       if (tempToSave >= 30.0) {
         payload.setting.temperature = { celsius: tempToSave };
@@ -474,11 +473,11 @@ export default function ZoneDetail({ zoneId, isOpen, onClose }) {
   const isHeatingOn = state?.activityDataPoints?.heatingPower?.percentage > 0;
 
   return createPortal(
-    <div 
+    <div
       className="animate-fade-in modal-overlay-backdrop"
       onClick={onClose}
     >
-      <div 
+      <div
         className="animate-scale-in modal-container-card"
         style={{
           background: getBackgroundColor(),
@@ -507,7 +506,7 @@ export default function ZoneDetail({ zoneId, isOpen, onClose }) {
               <AlertTriangle size={18} style={{ flexShrink: 0, color: '#ef4444' }} />
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', width: '100%' }}>
                 <strong>{t('zone_detail.open_window_detected')}</strong>
-                <button 
+                <button
                   onClick={handleDismissOpenWindow}
                   style={{
                     backgroundColor: '#ffffff',
@@ -537,7 +536,7 @@ export default function ZoneDetail({ zoneId, isOpen, onClose }) {
               width: '100%',
               display: 'flex',
               flexDirection: 'column',
-              alignItems: 'center',
+              alignItems: 'stretch',
               gap: '0.75rem',
               backgroundColor: theme === 'light' ? '#ffffff' : '#1f2937',
               borderRadius: '16px',
@@ -546,7 +545,7 @@ export default function ZoneDetail({ zoneId, isOpen, onClose }) {
             }}>
               {/* Date selector */}
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.5rem', width: '100%', justifyContent: 'center' }}>
-                <button 
+                <button
                   type="button"
                   onClick={() => {
                     const d = new Date(telemetryDate);
@@ -557,9 +556,9 @@ export default function ZoneDetail({ zoneId, isOpen, onClose }) {
                 >
                   &lt;
                 </button>
-                <input 
-                  type="date" 
-                  value={telemetryDate} 
+                <input
+                  type="date"
+                  value={telemetryDate}
                   onChange={(e) => setTelemetryDate(e.target.value)}
                   style={{
                     backgroundColor: theme === 'light' ? '#f3f4f6' : 'rgba(255,255,255,0.15)',
@@ -573,7 +572,7 @@ export default function ZoneDetail({ zoneId, isOpen, onClose }) {
                     fontSize: '0.85rem'
                   }}
                 />
-                <button 
+                <button
                   type="button"
                   onClick={() => {
                     const d = new Date(telemetryDate);
@@ -610,8 +609,8 @@ export default function ZoneDetail({ zoneId, isOpen, onClose }) {
             /* Temperature Dial */
             !isOffline && (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', marginBottom: '1.25rem' }}>
-                <TemperatureDial 
-                  value={targetTemp} 
+                <TemperatureDial
+                  value={targetTemp}
                   onChange={handleDialChange}
                   disabled={isOffline}
                   min={isDhw ? TEMP_MIN_DHW : TEMP_MIN_HEATING}
@@ -630,7 +629,7 @@ export default function ZoneDetail({ zoneId, isOpen, onClose }) {
           )}
 
           {/* Actions Link Bar (Schedule / Charts Trigger) */}
-          <ZoneDetailSchedule 
+          <ZoneDetailSchedule
             isAdmin={isAdmin}
             zone={zone}
             showTelemetry={showTelemetry}
@@ -641,7 +640,7 @@ export default function ZoneDetail({ zoneId, isOpen, onClose }) {
           />
 
           {/* Active Overlay Info / Mode selectors */}
-          <ZoneDetailControls 
+          <ZoneDetailControls
             isOverlay={isOverlay}
             isPreviewMode={isPreviewMode}
             termType={termType}

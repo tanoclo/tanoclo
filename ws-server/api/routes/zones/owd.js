@@ -75,7 +75,7 @@ router.put('/:homeId/zones/:zoneId/openWindowDetection', async (req, res) => {
 
         const newEnabled = enabled !== undefined ? enabled : currentEnabled;
         let newTimeout = timeoutInSeconds !== undefined ? parseInt(timeoutInSeconds, 10) : currentTimeout;
-        // H4 fix: Bound timeout to reasonable range (60s - 3600s)
+
         if (isNaN(newTimeout) || newTimeout < 60) newTimeout = 60;
         if (newTimeout > 3600) newTimeout = 3600;
 
@@ -84,7 +84,6 @@ router.put('/:homeId/zones/:zoneId/openWindowDetection', async (req, res) => {
 
         await db.updateZoneOpenWindowSettings(homeId, zoneId, newEnabled, newTimeout, newDeviation, newNvmState);
 
-        // Push config refresh to zone devices so firmware learns about OWD change
         const [devices] = await pool.execute('SELECT serial_no FROM devices WHERE zone_id = ? AND home_id = ?', [zoneId, homeId]);
         for (const dev of devices) {
             await commandApi.pushConfigRefresh(dev.serial_no).catch(e =>
@@ -102,7 +101,6 @@ router.put('/:homeId/zones/:zoneId/openWindowDetection', async (req, res) => {
         res.status(500).json({ error: 'internal_error' });
     }
 });
-
 
 // GET /api/v2/homes/{homeId}/zones/{zoneId}/earlyStart
 router.get('/:homeId/zones/:zoneId/earlyStart', async (req, res) => {
@@ -198,7 +196,6 @@ async function getOrSeedMeasurement(homeId, zoneId, pool) {
     return defaultMeasure;
 }
 
-// Delegate to canonical implementation in db.js (which handles day wraparound, TEST_PARITY_TIME, etc.)
 async function getCurrentScheduleBlock(homeId, zoneId, pool) {
     const block = await db.getCurrentScheduleBlock(homeId, zoneId);
     return block ? block.setting : null;
@@ -298,7 +295,6 @@ async function getNextScheduleBlock(homeId, zoneId, pool) {
 
     return null;
 }
-
 
 async function getStateInternal(homeId, zoneId, pool) {
     const measurement = await getOrSeedMeasurement(homeId, zoneId, pool);

@@ -6,7 +6,6 @@
  * 1-day block (same schedule Mon-Sun), 3-day blocks (Mon-Fri, Sat, Sun), or 7-day blocks (independent Mon-Sun).
  */
 
-
 import SegmentedControl from '../common/SegmentedControl';
 import { useTranslation } from 'react-i18next';
 
@@ -29,7 +28,7 @@ export default function DaySelector({ value, onChange }) {
       <span style={{ fontSize: '0.875rem', fontWeight: 500, color: 'var(--text-secondary)' }}>
         {t('schedule.timetable_type')}
       </span>
-      <SegmentedControl 
+      <SegmentedControl
         options={options}
         value={value}
         onChange={onChange}

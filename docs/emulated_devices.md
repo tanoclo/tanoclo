@@ -136,9 +136,12 @@ CREATE TABLE IF NOT EXISTS `emulated_devices` (
 ```
 
 ### 3.2 Security & Authentication
-All REST communication between `ws-server` and ESP32 hardware nodes is secured via HMAC-SHA256 request headers:
-- Header: `X-ESP-API-Key: <256-bit-key>`
-- Unauthorized requests return `401 Unauthorized`.
+REST communication between `ws-server` and ESP32 hardware nodes can be secured via a shared API key:
+- Configured in ESPHome YAML via `tado_emulator.api_key`.
+- Configured or rotated in Setup Portal (`/setup/emulated/nodes/:id/api-key`).
+- `ws-server` transmits the key via header `X-ESP-API-Key: <key>` and query parameter `?key=<key>`.
+- If `api_key` is left blank in YAML, authentication is disabled (backwards-compatible).
+- If configured, unauthorized requests return `401 Unauthorized`.
 
 ### 3.3 Server REST API Endpoints (`api/routes/setup/emulated.js`)
 

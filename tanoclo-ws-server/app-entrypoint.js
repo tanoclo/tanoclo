@@ -1,6 +1,6 @@
 /**
- * @file addon-entrypoint.js
- * @brief Home Assistant addon entry point for TaNoClo Websocket and HTTP API Server.
+ * @file app-entrypoint.js
+ * @brief Home Assistant App entry point for TaNoClo Websocket and HTTP API Server.
  * 
  * Extracts Home Assistant configuration properties (database connection strings, ports, domain parameters),
  * manages persistent JWT secrets generation, and spawns the main server.js module from the ws-server folder.
@@ -16,7 +16,7 @@ try {
         options = JSON.parse(fs.readFileSync('/data/options.json', 'utf8'));
     }
 } catch (e) {
-    console.error('[Addon Entrypoint] Error reading options.json:', e.message);
+    console.error('[App Entrypoint] Error reading options.json:', e.message);
 }
 
 // Map configuration values to environment variables
@@ -26,7 +26,7 @@ if (options.db_host) {
     if (/^[a-zA-Z0-9._:-]+$/.test(options.db_host)) {
         env.DB_HOST = options.db_host;
     } else {
-        console.error('[Addon Entrypoint] WARNING: db_host contains invalid characters, using default.');
+        console.error('[App Entrypoint] WARNING: db_host contains invalid characters, using default.');
     }
 }
 if (options.db_port) env.DB_PORT = String(options.db_port);
@@ -34,7 +34,7 @@ if (options.db_name) env.DB_NAME = options.db_name;
 if (options.db_user) env.DB_USER = options.db_user;
 env.DB_PASS = options.db_password || '';
 if (!options.db_password) {
-    console.warn('[Addon Entrypoint] WARNING: db_password is empty. Configure a database password for security.');
+    console.warn('[App Entrypoint] WARNING: db_password is empty. Configure a database password for security.');
 }
 
 // Handle JWT Secret - persistent auto-generation if not set
@@ -47,9 +47,9 @@ if (!jwtSecret) {
         jwtSecret = require('crypto').randomBytes(32).toString('hex');
         try {
             fs.writeFileSync(secretPath, jwtSecret, { encoding: 'utf8', mode: 0o600 });
-            console.log('[Addon Entrypoint] Generated and saved new persistent JWT secret');
+            console.log('[App Entrypoint] Generated and saved new persistent JWT secret');
         } catch (err) {
-            console.error('[Addon Entrypoint] Failed to save persistent JWT secret:', err.message);
+            console.error('[App Entrypoint] Failed to save persistent JWT secret:', err.message);
         }
     }
 }
@@ -75,20 +75,20 @@ env.SSL_KEY_PATH = '/ssl/tanoclo_key.pem';
 env.SSL_CERT_PATH = '/ssl/tanoclo_cert.pem';
 env.TADO_ROOT_CA_PATH = '/ssl/tadoRootCA.cer';
 
-console.log('[Addon Entrypoint] Launching TaNoClo server...');
-const server = spawn('node', ['server.js'], { 
-    stdio: 'inherit', 
+console.log('[App Entrypoint] Launching TaNoClo server...');
+const server = spawn('node', ['server.js'], {
+    stdio: 'inherit',
     env,
     cwd: path.join(__dirname, '../ws-server')
 });
 
 // Forward OS termination signals to the spawned server child process
 process.on('SIGTERM', () => {
-    console.log('[Addon Entrypoint] SIGTERM received. Terminating child server...');
+    console.log('[App Entrypoint] SIGTERM received. Terminating child server...');
     server.kill('SIGTERM');
 });
 process.on('SIGINT', () => {
-    console.log('[Addon Entrypoint] SIGINT received. Terminating child server...');
+    console.log('[App Entrypoint] SIGINT received. Terminating child server...');
     server.kill('SIGINT');
 });
 

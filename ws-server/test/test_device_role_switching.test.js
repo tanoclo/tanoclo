@@ -47,12 +47,16 @@ describe('RU Device Role & Zone Bindings', () => {
             device_type: 'RU02',
             home_id: 1,
             field_015d: null,
+            battery_state: 'DEPLETED',
+            battery_percent: 0,
             is_emulated: 1
         };
         const mappedEmulated = mapDevice(emulatedRu);
         expect(mappedEmulated.field_015d).toBe(200);
         expect(mappedEmulated.deviceRole).toBe('WIRELESS_SENSOR');
         expect(mappedEmulated.isEmulated).toBe(true);
+        expect(mappedEmulated.batteryState).toBeUndefined();
+        expect(mappedEmulated.batteryPercentage).toBeUndefined();
     });
 
     it('getZoneBindingsForDevice returns role 0x09 single pair for wireless sensor RU', async () => {

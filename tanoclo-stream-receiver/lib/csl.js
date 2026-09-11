@@ -16,8 +16,7 @@
  */
 function isCSLBeacon(frame) {
     if (!frame || frame.length < 10) return false;
-    // Multipurpose frame (Frame Type = 5 in low 3 bits -> byte 0 has 0x05 or 0x25)
-    return frame[0] === 0x25;
+    return frame[0] === 0x25 || (frame[0] === 0x0C && frame[1] === 0x25);
 }
 
 /**
@@ -26,7 +25,7 @@ function isCSLBeacon(frame) {
  * @returns {boolean}
  */
 function isMACCoordinationFrame(frame) {
-    if (!frame || frame.length < 16) return false;
+    if (!frame || frame.length < 19) return false;
     const fcf = frame.readUInt16LE(0);
     return fcf === 0xEE42 || fcf === 0x6E42;
 }
@@ -34,8 +33,9 @@ function isMACCoordinationFrame(frame) {
 /**
  * Parses an IEEE 802.15.4e CSL Multipurpose wake-up beacon burst frame.
  * Structure (12 bytes):
- * - Byte 0:    FCF (0x25: Multipurpose, short dst, uncompressed)
- * - Byte 1:    Sequence number
+ * - Optional Byte 0: Length prefix (0x0C)
+ * - Byte 0 (or 1):    FCF (0x25: Multipurpose, short dst, uncompressed)
+ * - Byte 1 (or 2):    Sequence number
  * - Bytes 2..3: 16-bit PAN ID (Little-Endian)
  * - Bytes 4..5: 16-bit Destination Short Address (or 0xFFFF broadcast)
  * - Bytes 6..7: CSL Phase / Time to sample window
@@ -48,15 +48,17 @@ function isMACCoordinationFrame(frame) {
 function parseCSLBeacon(frame) {
     if (!frame || frame.length < 10) return null;
 
-    if (frame[0] !== 0x25) return null;
+    const off = (frame[0] === 0x0C) ? 1 : 0;
+    if (frame.length < off + 10) return null;
+    if (frame[off] !== 0x25) return null;
 
-    const seq = frame[1];
-    const panId = frame.readUInt16LE(2);
-    const dstShort = frame.readUInt16LE(4);
+    const seq = frame[off + 1];
+    const panId = frame.readUInt16LE(off + 2);
+    const dstShort = frame.readUInt16LE(off + 4);
     const isBroadcast = dstShort === 0xFFFF;
-    const phase = frame.length >= 8 ? frame.readUInt16LE(6) : 0;
-    const countdown = frame.length >= 10 ? frame.readUInt16LE(8) : 0;
-    const period = frame.length >= 12 ? frame.readUInt16LE(10) : 0;
+    const phase = frame.length >= off + 8 ? frame.readUInt16LE(off + 6) : 0;
+    const countdown = frame.length >= off + 10 ? frame.readUInt16LE(off + 8) : 0;
+    const period = frame.length >= off + 12 ? frame.readUInt16LE(off + 10) : 0;
 
     return {
         type: 'CSL_BEACON',
@@ -78,15 +80,14 @@ function parseCSLBeacon(frame) {
  * @returns {object|null}
  */
 function parseMACCoordinationFrame(frame) {
-    if (!frame || frame.length < 18) return null;
+    if (!frame || frame.length < 19) return null;
 
     const fcf = frame.readUInt16LE(0);
     const seq = frame[2];
-    const panId = frame.readUInt16LE(3);
-    const dstMacBuf = frame.subarray(5, 11); // 6-byte compressed MAC prefix
-    const srcMacBuf = frame.subarray(11, 19); // 8-byte full EUI-64 MAC
+    const dstMacBuf = frame.subarray(3, 11); // 8-byte full EUI-64 MAC LE
+    const srcMacBuf = frame.subarray(11, 19); // 8-byte full EUI-64 MAC LE
 
-    const dstMac = Array.from(dstMacBuf).reverse().map(b => b.toString(16).padStart(2, '0')).join(':') + ':c5:1b:00';
+    const dstMac = Array.from(dstMacBuf).reverse().map(b => b.toString(16).padStart(2, '0')).join(':');
     const srcMac = Array.from(srcMacBuf).reverse().map(b => b.toString(16).padStart(2, '0')).join(':');
     const payload = frame.subarray(19);
 
@@ -94,7 +95,6 @@ function parseMACCoordinationFrame(frame) {
         type: 'MAC_COORDINATION',
         fcf,
         seq,
-        panId,
         dstMac,
         srcMac,
         payload

@@ -71,4 +71,3 @@ To package and compile the application as a native Android APK:
 3. **Output APK**:
    The successfully compiled release APK will be generated at:
    `frontend-new/android/app/build/outputs/apk/release/app-release.apk`
-

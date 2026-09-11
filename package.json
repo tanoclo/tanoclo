@@ -9,6 +9,6 @@
     "test": "npm test --prefix ws-server"
   },
   "devDependencies": {
-    "@vitest/coverage-v8": "^4.1.10"
+    "@vitest/coverage-v8": "^5.0.0"
   }
 }

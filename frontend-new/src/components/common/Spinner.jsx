@@ -3,7 +3,6 @@
  * @brief Standard loading indicator utilizing lucide loader icon with infinite spin keyframe.
  */
 
-
 import { Loader2 } from 'lucide-react';
 
 /**
@@ -14,7 +13,7 @@ import { Loader2 } from 'lucide-react';
  */
 export default function Spinner({ size = 24, className = '', style = {}, ...props }) {
   return (
-    <Loader2 
+    <Loader2
       size={size}
       className={className}
       style={{

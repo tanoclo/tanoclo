@@ -1,11 +1,11 @@
 # Stage 1: Install production dependencies
-FROM node:24.16.0-slim AS deps
+FROM node:24-slim AS deps
 WORKDIR /app/ws-server
 COPY ws-server/package*.json ./
 RUN npm ci --omit=dev
 
 # Stage 2: Build final production image
-FROM node:24.16.0-slim
+FROM node:24-slim
 WORKDIR /app/ws-server
 COPY --from=deps /app/ws-server/node_modules ./node_modules
 COPY ws-server/ ./

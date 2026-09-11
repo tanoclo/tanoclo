@@ -7,7 +7,6 @@
  * Integrates both hardware-based OWD registers and custom backend software-based detection models.
  */
 
-
 import Card from '../common/Card';
 import Button from '../common/Button';
 import Toggle from '../common/Toggle';

@@ -1,6 +1,6 @@
 # TaNoClo (TadoNoCloud): Self-Hosted Tado Backend
 
-TaNoClo is a self-hosted replacement backend for the Tado smart heating ecosystem. It replicates the Tado Cloud backend APIs and WebSocket server, allowing you to run your Tado Internet Bridge, smart radiator valves (TRVs), and frontend applications completely locally, without internet access or cloud dependencies.
+TaNoClo is a self-hosted replacement backend for the Tado smart heating ecosystem. It provides a Tado device compatible REST API and WebSocket server, allowing you to run your Tado Internet Bridge, smart radiator valves (TRVs), and frontend applications completely locally, without internet access or cloud dependencies.
 
 > [!TIP]
 > Follow the [Quick-start Guide](QUICKSTART.md) for a complete step-by-step setup walkthrough.
@@ -14,9 +14,9 @@ The repository is organized into specialized components. Each has its own dedica
 | Component | Guide | Purpose / Scope |
 | :--- | :--- | :--- |
 | **WebSocket & REST API Server** | [ws-server/README.md](ws-server/README.md) | Node.js backend architecture and setup portal. |
-| **Modern React Frontend** | [frontend-new/README.md](frontend-new/README.md) | Vite + React web management interface, schedules, and Capacitor mobile app integration. |
+| **Modern React Frontend** | [frontend-new/README.md](frontend-new/README.md) | Vite + React web management interface, schedules, and Capacitor mobile app. |
 | **Home Assistant Server App** | [tanoclo-ws-server/DOCS.md](tanoclo-ws-server/DOCS.md) | Configuration and deployment guide for the TaNoClo WebSocket Server as a Home Assistant OS app. |
-| **Home Assistant RF Sniffer App** | [tanoclo-stream-receiver/DOCS.md](tanoclo-stream-receiver/DOCS.md) | Home Assistant companion app receiving live RF sniffer packet streams and publishing sensor telemetry to MQTT. |
+| **Home Assistant RF Sniffer App** | [tanoclo-stream-receiver/DOCS.md](tanoclo-stream-receiver/DOCS.md) | Home Assistant OS app receiving live RF sniffer packet streams and publishing sensor telemetry to MQTT. |
 | **Firmware Patcher** | [patch_ib_firmware/README.md](patch_ib_firmware/README.md) | OpenOCD scripts, memory stub, and automated tools for dumping, patching, and flashing the Internet Bridge. |
 | **ESPHome Firmware Suite** | [esphome/README.md](esphome/README.md) | ESP32 + SX1276 firmware projects: passive RF sniffer, network key retrieval, and multi-device Tado emulator. |
 | **Specifications & Reference** | [docs/](docs/) | Technical specifications for CoAP/TLV formats, device calibration, pairing flows, RF physical layer, and WebSocket framing. |
@@ -28,7 +28,7 @@ The repository is organized into specialized components. Each has its own dedica
 TaNoClo replaces Tado's cloud infrastructure with a high-performance local stack:
 
 * **WebSocket Gateway:** It handles binary WebSocket connections directly from patched Internet Bridges, decrypting bridge frames and routing encapsulated CoAP packets.
-* **REST API Gateway:** An HTTP server that is automatically spawned. It exposes Tado compatible REST endpoints, authorizing mobile apps via OAuth2 and executing commands on connected devices.
+* **REST API Gateway:** An HTTP server that is automatically spawned. It exposes Tado compatible REST endpoints, authorizing mobile apps via OAuth2 and executes commands on connected devices.
 * **Admin & Setup Portal:** A built-in web management interface for home administration, user credentials, database seeding, ESP32 emulator management, and real-time CoAP message decoding.
 * **Database Layer:** A MariaDB database persisting measurements, device schedules, battery records, and system configurations.
 * **RF Sniffing & Emulation Suite:**
@@ -104,7 +104,7 @@ Configure your local DNS server (e.g. AdGuard Home, Pi-hole, or dnsmasq) to reso
 See [tanoclo-ws-server/DOCS.md](tanoclo-ws-server/DOCS.md) for a step-by-step setup guide and [ws-server/README.md](ws-server/README.md) for detailed information about the backend server and Setup Portal.
 
 ### Native Home Assistant App
-A complete Home Assistant OS app is available in the `tanoclo-ws-server/` directory. It packages the uWebSockets.js gateway and the Express REST engine into a single container that runs locally alongside official HA add-ons (like MariaDB and Mosquitto), terminating TLS natively using your local certificate store. Read [tanoclo-ws-server/DOCS.md](tanoclo-ws-server/DOCS.md) for a step-by-step setup guide.
+A complete Home Assistant OS app is available in the `tanoclo-ws-server/` directory. It packages the uWebSockets.js gateway and the Express REST engine into a single container that runs locally alongside official HA apps (like MariaDB and Mosquitto), terminating TLS natively using your local certificate. Read [tanoclo-ws-server/DOCS.md](tanoclo-ws-server/DOCS.md) for a step-by-step setup guide.
 
 ## 🔌 Integration & Usage Types
 
@@ -152,7 +152,7 @@ TaNoClo is an ongoing active project. Contribution and testing are highly apprec
 * **Complete Internet Bridge Emulation**: Working towards a pure hardware/software emulator for the Internet Bridge (e.g. ESP32-based RF to MQTT bridge) to eliminate the need for patching the physical IB firmware.
 * **App Distribution**: Package and deploy the patched mobile apps into the Google Play Store and Apple Store.
 * **Translation Audit**: Human verification and refinement of multi-lingual translations.
-* **Documentation**: Maintain documentation to a level that is understandable for the average user.
+* **Documentation**: Maintaining and improving documentation to a level that is understandable for the average user.
 
 ---
 

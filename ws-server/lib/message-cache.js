@@ -340,7 +340,7 @@ function resolveDeviceId(decoded, fallbackDeviceId) {
  *
  * @param {string} fallbackDeviceId - Caller-resolved device ID (may be bridge ID)
  * @param {Buffer|string} rawData   - Full WS frame binary data
- * @param {string} source           - 'real' or 'recreated'
+ * @param {string} source           - 'TADO' or 'TANOCLO'
  * @param {Buffer|string|null} requestRawData - Optional explicit request to pair
  */
 function cacheMessage(fallbackDeviceId, rawData, source, requestRawData) {
@@ -393,18 +393,20 @@ function cacheMessage(fallbackDeviceId, rawData, source, requestRawData) {
             request,
         };
 
+        const cacheSource = String(source || '').toUpperCase() === 'TANOCLO' ? 'TANOCLO' : 'TADO';
+
         // Insert into cache structure: device → path → source → [entries]
         checkDateRollover();
 
         if (!_cache[deviceId]) _cache[deviceId] = {};
         if (!_cache[deviceId][msgPath]) _cache[deviceId][msgPath] = {};
-        if (!_cache[deviceId][msgPath][source]) _cache[deviceId][msgPath][source] = [];
+        if (!_cache[deviceId][msgPath][cacheSource]) _cache[deviceId][msgPath][cacheSource] = [];
 
-        const arr = _cache[deviceId][msgPath][source];
+        const arr = _cache[deviceId][msgPath][cacheSource];
         arr.push(entry);
 
         // --- Mismatch Detection ---
-        const otherSource = (source === 'real' ? 'recreated' : 'real');
+        const otherSource = (cacheSource === 'TADO' ? 'TANOCLO' : 'TADO');
         const otherArr = _cache[deviceId][msgPath]?.[otherSource] || [];
 
         // Find counterpart by MID (for responses) or by path (for commands)
@@ -450,8 +452,6 @@ function getCache() {
     return _cache;
 }
 
-module.exports = { init, decodeMessage, storeRequest, getRequest, cacheMessage, getCache, shutdown };
-
 /**
  * Clear all pending TTL timers to allow clean process exit.
  */
@@ -461,3 +461,5 @@ function shutdown() {
     }
     _requestStore.clear();
 }
+
+module.exports = { init, decodeMessage, storeRequest, getRequest, cacheMessage, getCache, shutdown };

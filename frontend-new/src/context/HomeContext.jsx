@@ -81,8 +81,8 @@ export function HomeProvider({ children }) {
   };
 
   // Fetch Home metadata (coordinates, settings)
-  const { 
-    data: homeInfo, 
+  const {
+    data: homeInfo,
     error: homeInfoError,
     mutate: mutateHomeInfo
   } = useSWR(
@@ -92,10 +92,10 @@ export function HomeProvider({ children }) {
   );
 
   // Fetch Home presence state (HOME/AWAY)
-  const { 
-    data: homeState, 
+  const {
+    data: homeState,
     error: homeStateError,
-    mutate: mutateHomeState 
+    mutate: mutateHomeState
   } = useSWR(
     isAuthenticated && activeHomeId ? SWR_KEYS.homeState(activeHomeId) : null,
     () => getHomeState(activeHomeId),
@@ -103,8 +103,8 @@ export function HomeProvider({ children }) {
   );
 
   // Fetch Home weather
-  const { 
-    data: weather, 
+  const {
+    data: weather,
     error: weatherError,
     mutate: mutateWeather
   } = useSWR(
@@ -114,10 +114,10 @@ export function HomeProvider({ children }) {
   );
 
   // Fetch Zone list
-  const { 
-    data: rawZones, 
+  const {
+    data: rawZones,
     error: zonesError,
-    mutate: mutateZones 
+    mutate: mutateZones
   } = useSWR(
     isAuthenticated && activeHomeId ? SWR_KEYS.zones(activeHomeId) : null,
     () => getZones(activeHomeId),
@@ -128,6 +128,7 @@ export function HomeProvider({ children }) {
 
   const zones = useMemo(() => {
     return sortZonesByUserOrder(rawZones, user?.id, activeHomeId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rawZones, user?.id, activeHomeId, zoneOrderRevision]);
 
   const saveUserZoneOrder = (zoneIds) => {
@@ -136,10 +137,10 @@ export function HomeProvider({ children }) {
   };
 
   // Fetch Zone states (polling fallback)
-  const { 
-    data: zoneStates, 
+  const {
+    data: zoneStates,
     error: zoneStatesError,
-    mutate: mutateZoneStates 
+    mutate: mutateZoneStates
   } = useSWR(
     isAuthenticated && activeHomeId ? SWR_KEYS.zoneStates(activeHomeId) : null,
     () => getZoneStates(activeHomeId),
@@ -158,7 +159,7 @@ export function HomeProvider({ children }) {
     sseLastEventAt,
     isLoading: isAuthenticated && activeHomeId && (!homeInfo || !zones || !zoneStates) && !homeInfoError && !zonesError && !zoneStatesError,
     error: homeInfoError || homeStateError || weatherError || zonesError || zoneStatesError,
-    
+
     // Mutators
     mutateHomeInfo,
     mutateHomeState,
@@ -166,7 +167,7 @@ export function HomeProvider({ children }) {
     mutateZones,
     mutateZoneStates,
     saveUserZoneOrder,
-    
+
     // Quick refresh helper triggered by pull-to-refresh or navigation events
     refreshAll: async () => {
       await Promise.all([

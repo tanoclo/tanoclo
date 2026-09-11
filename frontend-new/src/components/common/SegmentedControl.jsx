@@ -3,8 +3,6 @@
  * @brief Renders a standard inline segmented toggle control block (e.g. tabs switch, unit switch).
  */
 
-
-
 /**
  * @brief Segmented control switch component.
  * @param {Array} props.options - Array of items containing value, label, and optional icon parameters.
@@ -12,15 +10,15 @@
  * @param {function} props.onChange - Selection transition callback handler.
  * @param {object} props.style - Inline styling overrides.
  */
-export default function SegmentedControl({ 
-  options = [], 
-  value, 
-  onChange, 
+export default function SegmentedControl({
+  options = [],
+  value,
+  onChange,
   style = {},
-  ...props 
+  ...props
 }) {
   return (
-    <div 
+    <div
       style={{
         display: 'inline-flex',
         backgroundColor: 'var(--bg-input)',

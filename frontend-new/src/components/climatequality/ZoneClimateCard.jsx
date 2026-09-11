@@ -7,7 +7,6 @@
  * and handles weather correlation checks to suggest opening windows when outside weather allows.
  */
 
-
 import { useTranslation } from 'react-i18next';
 import Card from '../common/Card';
 import ComfortCompass from './ComfortCompass';
@@ -43,12 +42,12 @@ export default function ZoneClimateCard({ name, comfort, state, outsideTemp }) {
     }
 
     const tText = isCold ? t('air_comfort.explanation.cold')
-                : isWarm ? t('air_comfort.explanation.warm')
-                : null;
+      : isWarm ? t('air_comfort.explanation.warm')
+        : null;
 
     const hText = isHumid ? t('air_comfort.explanation.humid')
-                : isDry ? t('air_comfort.explanation.dry')
-                : null;
+      : isDry ? t('air_comfort.explanation.dry')
+        : null;
 
     const conditions = (tText && hText) ? `${tText} ${t('common.and')} ${hText}` : (tText || hText);
 
@@ -93,8 +92,8 @@ export default function ZoneClimateCard({ name, comfort, state, outsideTemp }) {
   const getStatusBadge = (tL, hL, zoneFreshness) => {
     const f = zoneFreshness?.toUpperCase() || (
       (tL === 'TOO_COLD' || tL === 'HOT' || tL === 'TOO_HOT' || hL === 'TOO_DRY' || hL === 'TOO_HUMID') ? 'POOR' :
-      (tL === 'COLD' || tL === 'WARM' || hL === 'DRY' || hL === 'HUMID') ? 'FAIR' :
-      'GOOD'
+        (tL === 'COLD' || tL === 'WARM' || hL === 'DRY' || hL === 'HUMID') ? 'FAIR' :
+          'GOOD'
     );
     if (f === 'POOR') {
       return { label: t('air_comfort.freshness_poor'), color: 'var(--danger)' };
@@ -121,12 +120,12 @@ export default function ZoneClimateCard({ name, comfort, state, outsideTemp }) {
           <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>
             {name}
           </h3>
-          <p style={{ 
-            fontSize: '0.8rem', 
-            fontWeight: 700, 
-            color: badge.color, 
+          <p style={{
+            fontSize: '0.8rem',
+            fontWeight: 700,
+            color: badge.color,
             marginTop: '2px',
-            letterSpacing: '0.5px' 
+            letterSpacing: '0.5px'
           }}>
             {badge.label}
           </p>
@@ -134,22 +133,22 @@ export default function ZoneClimateCard({ name, comfort, state, outsideTemp }) {
 
         {/* Small badge reading values */}
         <div style={{ display: 'flex', gap: '0.5rem' }}>
-          <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '2px', 
-            fontSize: '0.8rem', 
-            color: 'var(--text-secondary)' 
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '2px',
+            fontSize: '0.8rem',
+            color: 'var(--text-secondary)'
           }}>
             <Thermometer size={14} style={{ color: 'var(--primary)' }} />
             <strong>{temp != null ? `${temp.toFixed(1)}°` : '--'}</strong>
           </div>
-          <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '2px', 
-            fontSize: '0.8rem', 
-            color: 'var(--text-secondary)' 
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '2px',
+            fontSize: '0.8rem',
+            color: 'var(--text-secondary)'
           }}>
             <Droplets size={14} style={{ color: 'var(--secondary)' }} />
             <strong>{humidity != null ? `${humidity.toFixed(0)}%` : '--'}</strong>
@@ -163,9 +162,9 @@ export default function ZoneClimateCard({ name, comfort, state, outsideTemp }) {
       </div>
 
       {/* Explanation text */}
-      <p style={{ 
-        fontSize: '0.825rem', 
-        color: 'var(--text-secondary)', 
+      <p style={{
+        fontSize: '0.825rem',
+        color: 'var(--text-secondary)',
         lineHeight: 1.4,
         margin: 0,
         textAlign: 'center'

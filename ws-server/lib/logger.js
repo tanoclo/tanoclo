@@ -117,7 +117,7 @@ function getLogger(context) {
 
             const ctxStr = context ? `[${context}] ` : '';
             let msgStr = args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ');
-            
+
             // Apply serial masking and sensitive data redaction for production-like (INFO+) output
             msgStr = maskSerials(msgStr, level);
             msgStr = redactSensitive(msgStr, level);

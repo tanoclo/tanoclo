@@ -32,7 +32,7 @@ ChartJS.register(
 );
 
 // Register a custom tooltip positioner that aligns to the mouse/touch position dynamically
-Tooltip.positioners.mouseFollow = function(items, eventPosition) {
+Tooltip.positioners.mouseFollow = function (items, eventPosition) {
   if (!eventPosition || eventPosition.x === undefined || eventPosition.y === undefined) {
     return Tooltip.positioners.average(items);
   }
@@ -71,12 +71,12 @@ function HeatingActivityChart({ runningTimesData, zones = [], aggregate = 'day' 
 
   const { summary, runningTimes = [] } = runningTimesData;
 
-  const totalHours = summary?.totalRunningTimeInSeconds 
-    ? (summary.totalRunningTimeInSeconds / 3600).toFixed(1) 
+  const totalHours = summary?.totalRunningTimeInSeconds
+    ? (summary.totalRunningTimeInSeconds / 3600).toFixed(1)
     : '0.0';
 
-  const meanHours = summary?.meanInSecondsPerDay 
-    ? (summary.meanInSecondsPerDay / 3600).toFixed(1) 
+  const meanHours = summary?.meanInSecondsPerDay
+    ? (summary.meanInSecondsPerDay / 3600).toFixed(1)
     : '0.0';
 
   if (runningTimes.length === 0) {
@@ -126,7 +126,7 @@ function HeatingActivityChart({ runningTimesData, zones = [], aggregate = 'day' 
   // Map each active zone to a dataset
   const datasets = activeZoneIds.map((zoneId, idx) => {
     const color = colors[idx % colors.length];
-    
+
     // For each bucket, get this zone's hours
     const dataPoints = runningTimes.map(bucket => {
       const zData = bucket.zones?.find(z => z.id === zoneId);
@@ -171,7 +171,7 @@ function HeatingActivityChart({ runningTimesData, zones = [], aggregate = 'day' 
         titleFont: { family: 'Inter, sans-serif' },
         bodyFont: { family: 'Inter, sans-serif' },
         callbacks: {
-          label: function(context) {
+          label: function (context) {
             return `${context.dataset.label}: ${t('heating_activity.hours_count', { count: context.parsed.y.toFixed(1) })}`;
           }
         }
@@ -189,7 +189,7 @@ function HeatingActivityChart({ runningTimesData, zones = [], aggregate = 'day' 
         ticks: {
           color: '#8a99ad',
           font: { family: 'Inter, sans-serif', size: 9 },
-          callback: function(value) { return `${value} ${t('heating_activity.hrs')}`; }
+          callback: function (value) { return `${value} ${t('heating_activity.hrs')}`; }
         }
       }
     }
@@ -248,7 +248,7 @@ function HeatingActivityChart({ runningTimesData, zones = [], aggregate = 'day' 
         borderColor: 'rgba(255, 255, 255, 0.12)',
         borderWidth: 1,
         callbacks: {
-          label: function(context) {
+          label: function (context) {
             return `${context.label}: ${t('heating_activity.hours_count', { count: context.parsed.toFixed(1) })}`;
           }
         }
@@ -300,7 +300,7 @@ function HeatingActivityChart({ runningTimesData, zones = [], aggregate = 'day' 
         {/* Breakdown List */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
           {zoneBreakdown.map((item) => (
-            <div 
+            <div
               key={item.id}
               style={{
                 display: 'flex',

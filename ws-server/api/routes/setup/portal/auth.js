@@ -17,7 +17,6 @@ const { getLogger } = require('../../../../lib/logger');
 const router = express.Router();
 const _log = getLogger('setup-api');
 
-// --- TOTP helper (lines 22-65) ---
 const TOTP = {
     verify(secret, code, window = 1) {
         if (!secret) return true;

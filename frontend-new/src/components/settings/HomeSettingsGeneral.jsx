@@ -6,7 +6,6 @@
  * local timezone offsets matching IANA databases, and administrator contact coordinates (phone, email).
  */
 
-
 import { useState } from 'react';
 import Card from '../common/Card';
 import Button from '../common/Button';
@@ -325,8 +324,8 @@ export default function HomeSettingsGeneral({
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
           <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{t('settings.home_name')}</label>
-          <input 
-            type="text" 
+          <input
+            type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
@@ -346,12 +345,12 @@ export default function HomeSettingsGeneral({
         </div>
 
         <h3 style={{ fontSize: '0.95rem', fontWeight: 700, margin: '0.5rem 0 0 0', borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>{t('settings.physical_address')}</h3>
-        
+
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '1rem' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', gridColumn: isMobile ? 'span 1' : 'span 2' }}>
             <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{t('settings.street_address')}</label>
-            <input 
-              type="text" 
+            <input
+              type="text"
               value={address.addressLine1}
               onChange={(e) => setAddress({ ...address, addressLine1: e.target.value })}
               maxLength={200}
@@ -370,8 +369,8 @@ export default function HomeSettingsGeneral({
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', gridColumn: isMobile ? 'span 1' : 'span 2' }}>
             <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{t('settings.address_line2')}</label>
-            <input 
-              type="text" 
+            <input
+              type="text"
               value={address.addressLine2}
               onChange={(e) => setAddress({ ...address, addressLine2: e.target.value })}
               maxLength={200}
@@ -390,8 +389,8 @@ export default function HomeSettingsGeneral({
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{t('settings.postal_code')}</label>
-            <input 
-              type="text" 
+            <input
+              type="text"
               value={address.zipCode}
               onChange={(e) => setAddress({ ...address, zipCode: e.target.value })}
               maxLength={20}
@@ -410,8 +409,8 @@ export default function HomeSettingsGeneral({
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{t('settings.city')}</label>
-            <input 
-              type="text" 
+            <input
+              type="text"
               value={address.city}
               onChange={(e) => setAddress({ ...address, city: e.target.value })}
               maxLength={200}
@@ -430,7 +429,7 @@ export default function HomeSettingsGeneral({
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', gridColumn: isMobile ? 'span 1' : 'span 2' }}>
             <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{t('settings.country')}</label>
-            <select 
+            <select
               value={address.country}
               onChange={(e) => setAddress({ ...address, country: e.target.value })}
               style={{
@@ -461,7 +460,7 @@ export default function HomeSettingsGeneral({
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr auto', gap: '1rem', alignItems: 'flex-end' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
             <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{t('settings.timezone') || 'Time Zone'}</label>
-            <select 
+            <select
               value={timezone}
               onChange={(e) => setTimezone(e.target.value)}
               style={{
@@ -484,7 +483,7 @@ export default function HomeSettingsGeneral({
               ))}
             </select>
           </div>
-          
+
           <Button
             type="button"
             variant="secondary"
@@ -501,8 +500,8 @@ export default function HomeSettingsGeneral({
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '1rem' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{t('settings.contact_name') || 'Contact Name'}</label>
-            <input 
-              type="text" 
+            <input
+              type="text"
               value={contactName}
               onChange={(e) => setContactName(e.target.value)}
               maxLength={100}
@@ -521,8 +520,8 @@ export default function HomeSettingsGeneral({
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{t('settings.contact_email') || 'Contact Email'}</label>
-            <input 
-              type="email" 
+            <input
+              type="email"
               value={contactEmail}
               onChange={(e) => setContactEmail(e.target.value)}
               maxLength={255}
@@ -541,8 +540,8 @@ export default function HomeSettingsGeneral({
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', gridColumn: isMobile ? 'span 1' : 'span 2' }}>
             <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{t('settings.contact_phone') || 'Contact Phone'}</label>
-            <input 
-              type="text" 
+            <input
+              type="text"
               value={contactPhone}
               onChange={(e) => setContactPhone(e.target.value)}
               maxLength={30}
@@ -560,9 +559,9 @@ export default function HomeSettingsGeneral({
           </div>
         </div>
 
-        <Button 
-          type="submit" 
-          variant="primary" 
+        <Button
+          type="submit"
+          variant="primary"
           disabled={isSavingProperties}
           style={{ alignSelf: 'flex-end', marginTop: '0.5rem' }}
         >
@@ -586,7 +585,7 @@ export default function HomeSettingsGeneral({
             {t('settings.boost_temperature', 'Boost All Temperature (°C)')}
           </label>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-            <input 
+            <input
               type="number"
               min={TEMP_MIN_HEATING}
               max={TEMP_MAX_HEATING}

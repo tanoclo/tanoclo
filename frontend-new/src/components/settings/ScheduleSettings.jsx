@@ -3,7 +3,6 @@
  * @brief Renders the Zone Schedule picker list and wraps ScheduleEditor.
  */
 
-
 import { ArrowLeft, Calendar } from 'lucide-react';
 import Button from '../common/Button';
 import Card from '../common/Card';

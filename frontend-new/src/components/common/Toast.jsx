@@ -17,11 +17,11 @@ import { CheckCircle, AlertTriangle, AlertCircle, Info, X } from 'lucide-react';
  * @param {number} props.duration - Active lifespan duration in ms before triggering onClose.
  * @param {function} props.onClose - Dismissal callback hook.
  */
-export default function Toast({ 
-  message, 
-  type = 'info', 
-  duration = 4000, 
-  onClose 
+export default function Toast({
+  message,
+  type = 'info',
+  duration = 4000,
+  onClose
 }) {
   const { t } = useTranslation();
 
@@ -61,12 +61,12 @@ export default function Toast({
   };
 
   const theme = getTheme();
-  const displayMessage = typeof message === 'string' 
-    ? t(`errors.${message}`, { defaultValue: t(message, { defaultValue: message }) }) 
+  const displayMessage = typeof message === 'string'
+    ? t(`errors.${message}`, { defaultValue: t(message, { defaultValue: message }) })
     : message;
 
   return (
-    <div 
+    <div
       className="glass-panel animate-fade-in"
       style={{
         backgroundColor: 'var(--bg-card)',
@@ -90,7 +90,7 @@ export default function Toast({
         {displayMessage}
       </span>
       {onClose && (
-        <button 
+        <button
           onClick={onClose}
           style={{
             background: 'transparent',

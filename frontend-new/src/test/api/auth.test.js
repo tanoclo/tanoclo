@@ -7,6 +7,7 @@ describe('api/auth.js', () => {
   beforeEach(() => {
     vi.resetModules();
     localStorage.clear();
+    sessionStorage.clear();
     fetch.mockReset();
     globalThis.window = globalThis.window || {};
     globalThis.window.location = { href: 'http://localhost:5173/', origin: 'http://localhost:5173' };
@@ -29,7 +30,7 @@ describe('api/auth.js', () => {
     it('sends correct grant_type without refresh token (web mode)', async () => {
       fetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ access_token: 'new-at', refresh_token: 'new-rt' }),
+        json: async () => ({ access_token: 'new-token' }),
       });
 
       const { refreshAccessToken } = await import('../../api/auth');
@@ -39,24 +40,28 @@ describe('api/auth.js', () => {
       const [url, opts] = fetch.mock.calls[0];
       expect(url).toContain('/oauth2/token');
       expect(opts.method).toBe('POST');
+      expect(opts.credentials).toBe('include');
+
       const body = new URLSearchParams(opts.body);
       expect(body.get('grant_type')).toBe('refresh_token');
       expect(body.get('client_id')).toBe('tado-mobile-app');
-      expect(body.has('refresh_token')).toBe(false);
-      expect(result.access_token).toBe('new-at');
+      expect(body.get('refresh_token')).toBeNull();
+      expect(result.access_token).toBe('new-token');
     });
 
-    it('passes refresh token when provided (native mode)', async () => {
+    it('sends refresh_token in body when provided (native mode)', async () => {
       fetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ access_token: 'at', refresh_token: 'rt' }),
+        json: async () => ({ access_token: 'new-token-native' }),
       });
 
       const { refreshAccessToken } = await import('../../api/auth');
-      await refreshAccessToken('my-refresh-token');
+      const result = await refreshAccessToken('my-refresh-token');
 
       const body = new URLSearchParams(fetch.mock.calls[0][1].body);
+      expect(body.get('grant_type')).toBe('refresh_token');
       expect(body.get('refresh_token')).toBe('my-refresh-token');
+      expect(result.access_token).toBe('new-token-native');
     });
 
     it('throws on non-OK response', async () => {
@@ -73,8 +78,8 @@ describe('api/auth.js', () => {
     });
 
     it('exchanges code with correct body and cleans PKCE state', async () => {
-      localStorage.setItem('pkce_code_verifier', 'test-verifier');
-      localStorage.setItem('pkce_redirect_uri', 'https://example.com/');
+      sessionStorage.setItem('pkce_code_verifier', 'test-verifier');
+      sessionStorage.setItem('pkce_redirect_uri', 'https://example.com/');
 
       fetch.mockResolvedValueOnce({
         ok: true,
@@ -92,13 +97,14 @@ describe('api/auth.js', () => {
       expect(result.access_token).toBe('at');
 
       // PKCE state cleaned up
+      expect(sessionStorage.getItem('pkce_code_verifier')).toBeNull();
+      expect(sessionStorage.getItem('pkce_redirect_uri')).toBeNull();
+      expect(sessionStorage.getItem('pkce_state')).toBeNull();
       expect(localStorage.getItem('pkce_code_verifier')).toBeNull();
-      expect(localStorage.getItem('pkce_redirect_uri')).toBeNull();
-      expect(localStorage.getItem('pkce_state')).toBeNull();
     });
 
     it('throws descriptive error on failed exchange', async () => {
-      localStorage.setItem('pkce_code_verifier', 'v');
+      sessionStorage.setItem('pkce_code_verifier', 'v');
       fetch.mockResolvedValueOnce({
         ok: false,
         json: async () => ({ error_description: 'Invalid code' }),
@@ -110,17 +116,17 @@ describe('api/auth.js', () => {
   });
 
   describe('initiateLoginFlow', () => {
-    it('stores PKCE verifier and state in localStorage, redirects', async () => {
+    it('stores PKCE verifier and state in sessionStorage, redirects', async () => {
       globalThis.window.location = { href: 'http://localhost:5173/', origin: 'http://localhost:5173' };
       globalThis.location = globalThis.window.location;
 
       const { initiateLoginFlow } = await import('../../api/auth');
       await initiateLoginFlow();
 
-      expect(localStorage.getItem('pkce_code_verifier')).toBeTruthy();
-      expect(localStorage.getItem('pkce_code_verifier').length).toBe(64);
-      expect(localStorage.getItem('pkce_state')).toBeTruthy();
-      expect(localStorage.getItem('pkce_redirect_uri')).toBe('http://localhost:5173/');
+      expect(sessionStorage.getItem('pkce_code_verifier')).toBeTruthy();
+      expect(sessionStorage.getItem('pkce_code_verifier').length).toBe(64);
+      expect(sessionStorage.getItem('pkce_state')).toBeTruthy();
+      expect(sessionStorage.getItem('pkce_redirect_uri')).toBe('http://localhost:5173/');
       expect(window.location.href).toContain('/oauth2/authorize');
       expect(window.location.href).toContain('code_challenge_method=S256');
     });

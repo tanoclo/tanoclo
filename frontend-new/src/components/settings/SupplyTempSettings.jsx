@@ -88,7 +88,7 @@ export default function SupplyTempSettings({ homeId }) {
       </div>
 
       <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-        
+
         {/* Maximum Flow Temperature slider */}
         <Card style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -122,9 +122,9 @@ export default function SupplyTempSettings({ homeId }) {
           </div>
         </Card>
 
-        <Button 
-          type="submit" 
-          variant="primary" 
+        <Button
+          type="submit"
+          variant="primary"
           disabled={isSaving}
           style={{ alignSelf: 'flex-end' }}
         >

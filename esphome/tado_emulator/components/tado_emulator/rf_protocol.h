@@ -68,7 +68,8 @@ enum TLVTag : uint16_t {
   TLV_CLIENT_NONCE = 0x0007,
   TLV_PAIRING_RAW_OP_KEY = 0x0012, // 16-byte raw plaintext op_key
   TLV_TIME_UTC = 0x0033,
-  TLV_FW_OTHER_SLOT = 0x0035,
+  TLV_FW_OTHER_SLOT = 0x0035,        // In fw/state: other slot version (u16be); In /d/info: build/version ID
+  TLV_D_INFO_BUILD_VERSION = 0x0035, // Alias for /d/info hardware details response
   TLV_DEV_TYPE_CODE = 0x0036,
   TLV_FW_TARGET_OR_REPORTED = 0x0039,
   TLV_FW_VERSION_ACTIVE = 0x003a,

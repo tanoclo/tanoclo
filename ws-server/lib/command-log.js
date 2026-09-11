@@ -87,9 +87,9 @@ function write(category, message) {
 
     // Date rollover
     if (dateStr !== _currentDate) {
-        flush().catch(() => {});
+        flush().catch(() => { });
         _currentDate = dateStr;
-        cleanOldFiles().catch(() => {});
+        cleanOldFiles().catch(() => { });
     }
 
     const line = `[${ts}] [${category}] ${message}`;
@@ -98,7 +98,7 @@ function write(category, message) {
     // Also echo to console for visibility
     console.log(`\x1b[36m${line}\x1b[0m`); // cyan for command log
 
-    if (_logBuffer.length > 50) flush().catch(() => {});
+    if (_logBuffer.length > 50) flush().catch(() => { });
 }
 
 let _isFlushing = false;
@@ -118,7 +118,7 @@ async function flush() {
 
 // Periodic flush
 const flushInterval = setInterval(() => {
-    flush().catch(() => {});
+    flush().catch(() => { });
 }, FLUSH_INTERVAL_MS);
 if (flushInterval.unref) {
     flushInterval.unref();
@@ -149,7 +149,7 @@ async function cleanOldFiles() {
             if (!dateMatch) continue;
             const fileDate = new Date(dateMatch[1] + 'T00:00:00Z');
             if (fileDate < cutoff) {
-                await fs.promises.unlink(path.join(logDir, file)).catch(() => {});
+                await fs.promises.unlink(path.join(logDir, file)).catch(() => { });
             }
         }
     } catch (e) { /* ignore */ }

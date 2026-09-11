@@ -6,7 +6,6 @@
  * or TIMER (timed fallback duration selection in seconds).
  */
 
-
 import Card from '../common/Card';
 
 /**
@@ -33,9 +32,9 @@ export default function ZoneSettingsOverlay({
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
         <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', cursor: 'pointer' }}>
-          <input 
-            type="radio" 
-            name="overlayType" 
+          <input
+            type="radio"
+            name="overlayType"
             value="TADO_MODE"
             checked={overlayType === 'TADO_MODE'}
             onChange={() => handleOverlayTypeChange('TADO_MODE')}
@@ -44,9 +43,9 @@ export default function ZoneSettingsOverlay({
         </label>
 
         <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', cursor: 'pointer' }}>
-          <input 
-            type="radio" 
-            name="overlayType" 
+          <input
+            type="radio"
+            name="overlayType"
             value="MANUAL"
             checked={overlayType === 'MANUAL'}
             onChange={() => handleOverlayTypeChange('MANUAL')}
@@ -55,9 +54,9 @@ export default function ZoneSettingsOverlay({
         </label>
 
         <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', cursor: 'pointer' }}>
-          <input 
-            type="radio" 
-            name="overlayType" 
+          <input
+            type="radio"
+            name="overlayType"
             value="TIMER"
             checked={overlayType === 'TIMER'}
             onChange={() => handleOverlayTypeChange('TIMER')}

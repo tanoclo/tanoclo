@@ -7,7 +7,6 @@
  * and current zone (room) membership assignment select selectors.
  */
 
-
 import Card from '../common/Card';
 import Button from '../common/Button';
 import { ShieldAlert } from 'lucide-react';
@@ -69,9 +68,9 @@ export default function DeviceSettingsGeneral({
 
   const zoneDevices = (devices || currentZone?.devices || []).filter(
     d => String(d.zoneId) === String(device?.zoneId) &&
-         !d.deviceType?.startsWith('IB') &&
-         !d.deviceType?.startsWith('GW') &&
-         d.deviceType !== 'BRIDGE'
+      !d.deviceType?.startsWith('IB') &&
+      !d.deviceType?.startsWith('GW') &&
+      d.deviceType !== 'BRIDGE'
   );
   const isOnlyDeviceInZone = zoneDevices.length <= 1;
 
@@ -103,9 +102,9 @@ export default function DeviceSettingsGeneral({
               minWidth: '150px'
             }}
           />
-          <Button 
-            variant="primary" 
-            onClick={handleSaveFriendlyName} 
+          <Button
+            variant="primary"
+            onClick={handleSaveFriendlyName}
             disabled={isSavingFriendlyName}
             style={{ flex: '1 0 auto', justifyContent: 'center', minWidth: '80px' }}
           >
@@ -186,10 +185,10 @@ export default function DeviceSettingsGeneral({
                 }}>
                   {
                     batteryInfo?.battery_state === 'LOW' ? t('common.low') :
-                    batteryInfo?.battery_state === 'CRITICAL' ? t('common.critical') :
-                    batteryInfo?.battery_state === 'DEPLETED' ? t('common.depleted') :
-                    batteryInfo?.battery_state === 'GOOD' ? t('common.good') :
-                    t('common.normal')
+                      batteryInfo?.battery_state === 'CRITICAL' ? t('common.critical') :
+                        batteryInfo?.battery_state === 'DEPLETED' ? t('common.depleted') :
+                          batteryInfo?.battery_state === 'GOOD' ? t('common.good') :
+                            t('common.normal')
                   }
                 </span>
               </div>

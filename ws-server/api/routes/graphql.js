@@ -14,8 +14,7 @@ const { getLogger } = require('../../lib/logger');
 const router = express.Router();
 const _log = getLogger('graphql-api');
 
-// The ivar graphql endpoint should not be covered by authorization
-// router.use(authMiddleware);
+router.use(authMiddleware);
 
 async function searchManufacturers(query, variables, res) {
     const match = query.match(/searchText\s*:\s*"([^"]+)"/);
@@ -118,27 +117,6 @@ async function getSystem(id, res) {
     });
 }
 
-async function getTariffAccountAndPermissions(variables, res) {
-    res.json({
-        data: {
-            home: {
-                tariff: {
-                    account: {
-                        isOwnedByCurrentUser: false,
-                        isLinkedToHome: false,
-                        isPendingHomeLink: false
-                    },
-                    accessPermissions: {
-                        canAccessEnergyReadings: false,
-                        canAccessEnergyPrices: false,
-                        canAccessPushNotificationSettings: false
-                    }
-                }
-            }
-        }
-    });
-}
-
 // POST /api/v2/graphql
 router.post('/', async (req, res) => {
     try {
@@ -151,10 +129,6 @@ router.post('/', async (req, res) => {
 
         if (query.includes('searchSystems')) {
             return await searchSystems(query, variables, res);
-        }
-
-        if (query.includes('TariffAccountAndPermissions')) {
-            return await getTariffAccountAndPermissions(variables, res);
         }
 
         const systemMatch = query.match(/system\s*\(\s*id\s*:\s*(\d+)\s*\)/);

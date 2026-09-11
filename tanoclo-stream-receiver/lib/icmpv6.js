@@ -132,7 +132,7 @@ function parseICMPv6(buf) {
  * @param {Buffer} payload
  * @returns {Buffer}
  */
-function buildEchoReply(identifier, sequence = 0, payload = Buffer.alloc(0)) {
+function buildEchoReply(identifier, sequence = 0, payload = Buffer.alloc(0), srcIp = null, dstIp = null) {
     const header = Buffer.alloc(8);
     header[0] = ICMPv6Type.ECHO_REPLY;
     header[1] = 0; // Code 0
@@ -142,6 +142,18 @@ function buildEchoReply(identifier, sequence = 0, payload = Buffer.alloc(0)) {
 
     const packet = Buffer.concat([header, payload]);
     let sum = 0;
+
+    // Add IPv6 pseudo-header if source and destination IPs are provided (RFC 4443 Section 2.3)
+    if (srcIp && srcIp.length === 16 && dstIp && dstIp.length === 16) {
+        for (let i = 0; i < 16; i += 2) {
+            sum += srcIp.readUInt16BE(i);
+            sum += dstIp.readUInt16BE(i);
+        }
+        sum += (packet.length >> 16) & 0xFFFF;
+        sum += packet.length & 0xFFFF;
+        sum += 58; // Next Header: ICMPv6 (0x3A)
+    }
+
     for (let i = 0; i < packet.length - 1; i += 2) {
         sum += packet.readUInt16BE(i);
     }

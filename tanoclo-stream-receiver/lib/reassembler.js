@@ -38,11 +38,22 @@ class SixLoWPANReassembler {
      * @returns {object} Result descriptor
      */
     process(decrypted, timestamp) {
-        if (!decrypted || decrypted.length <= 8) {
+        if (!decrypted || decrypted.length <= 7) {
             return { type: 'unfragmented', data: decrypted };
         }
 
-        const dispatch = decrypted[8];
+        let dispatchOffset = 8;
+        if (decrypted[3] === 0x04) {
+            dispatchOffset = 8;
+        } else if ((decrypted[3] & 0xF8) === 0xC0 || (decrypted[3] & 0xF8) === 0xE0) {
+            dispatchOffset = 3;
+        }
+
+        if (decrypted.length <= dispatchOffset) {
+            return { type: 'unfragmented', data: decrypted };
+        }
+
+        const dispatch = decrypted[dispatchOffset];
         const isFrag1 = (dispatch & 0xF8) === 0xC0;
         const isFragn = (dispatch & 0xF8) === 0xE0;
 
@@ -50,12 +61,12 @@ class SixLoWPANReassembler {
             return { type: 'unfragmented', data: decrypted };
         }
 
-        if (decrypted.length < 12) {
+        if (decrypted.length < dispatchOffset + 4) {
             return { type: 'unfragmented', data: decrypted };
         }
 
-        const size = ((decrypted[8] & 0x07) << 8) | decrypted[9];
-        const tag = (decrypted[10] << 8) | decrypted[11];
+        const size = ((dispatch & 0x07) << 8) | decrypted[dispatchOffset + 1];
+        const tag = (decrypted[dispatchOffset + 2] << 8) | decrypted[dispatchOffset + 3];
 
         // Filter out duplicate fragments for recently completed datagrams
         const now = Date.now();
@@ -108,13 +119,14 @@ class SixLoWPANReassembler {
         if (isFrag1) {
             fragType = 'FRAG1';
             compressedOffset = 0;
-            payload = decrypted.subarray(12);
+            const fragPayloadOffset = dispatchOffset + 4;
+            payload = decrypted.subarray(fragPayloadOffset);
             dg.frag1_decrypted = decrypted;
 
             // Calculate precise expansion dynamically
             const coapOffset = findCoapOffsetInFrag1(decrypted);
             if (coapOffset !== -1) {
-                const preciseExpansion = 48 - (coapOffset - 12);
+                const preciseExpansion = 48 - (coapOffset - fragPayloadOffset);
                 if (preciseExpansion !== dg.expansion || !dg.hasExactExpansion) {
                     const oldExpansion = dg.expansion;
                     dg.expansion = preciseExpansion;
@@ -144,12 +156,12 @@ class SixLoWPANReassembler {
             }
         } else {
             fragType = 'FRAGN';
-            if (decrypted.length < 13) {
+            if (decrypted.length < dispatchOffset + 5) {
                 return { type: 'unfragmented', data: decrypted };
             }
-            const uncompressedOffset = decrypted[12] * 8;
+            const uncompressedOffset = decrypted[dispatchOffset + 4] * 8;
             compressedOffset = uncompressedOffset - dg.expansion;
-            payload = decrypted.subarray(13);
+            payload = decrypted.subarray(dispatchOffset + 5);
 
             // Trim FRAG1 if it overlapped with FRAGN offset (discarding frame CRC)
             if (dg.fragments.has(0) && compressedOffset > 0) {

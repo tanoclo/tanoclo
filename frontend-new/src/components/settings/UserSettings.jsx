@@ -38,7 +38,7 @@ export default function UserSettings() {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  
+
   const [locale, setLocale] = useState(user?.locale || 'en');
 
   const [isSavingName, setIsSavingName] = useState(false);
@@ -78,7 +78,7 @@ export default function UserSettings() {
       if (devId) {
         setHasMobileDevice(true);
         setCurrentDeviceId(devId);
-        
+
         try {
           const deviceData = await apiFetch(`/api/v2/homes/${activeHomeId}/mobileDevices/${devId}`);
           if (active && deviceData) {
@@ -250,7 +250,7 @@ export default function UserSettings() {
           </h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{t('settings.full_name')}</label>
-            <input 
+            <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -342,8 +342,8 @@ export default function UserSettings() {
         <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0 }}>
           {t('settings.reorder_zones_desc', { defaultValue: 'Customize the display order of rooms and zones on your dashboard for this account.' })}
         </p>
-        <Button 
-          variant="secondary" 
+        <Button
+          variant="secondary"
           onClick={() => setIsReorderOpen(true)}
           style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: '6px', padding: '0.5rem 1rem' }}
         >
@@ -460,10 +460,10 @@ export default function UserSettings() {
             <Mail size={16} color="var(--warning)" />
             {t('settings.change_email')}
           </h3>
-          
+
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{t('settings.new_email')}</label>
-            <input 
+            <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -481,7 +481,7 @@ export default function UserSettings() {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{t('settings.current_password_verify')}</label>
-            <input 
+            <input
               type="password"
               placeholder={t('settings.confirm_password_placeholder')}
               value={currentPassword}
@@ -514,7 +514,7 @@ export default function UserSettings() {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{t('settings.current_password')}</label>
-            <input 
+            <input
               type="password"
               placeholder={t('settings.confirm_password_placeholder')}
               value={currentPassword}
@@ -533,7 +533,7 @@ export default function UserSettings() {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{t('settings.new_password')}</label>
-            <input 
+            <input
               type="password"
               placeholder={t('settings.new_password_placeholder')}
               value={newPassword}
@@ -552,7 +552,7 @@ export default function UserSettings() {
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{t('settings.confirm_new_password')}</label>
-            <input 
+            <input
               type="password"
               placeholder={t('settings.confirm_password_placeholder_repeat')}
               value={confirmPassword}
@@ -576,7 +576,7 @@ export default function UserSettings() {
       </Card>
 
       {/* Room Reordering Modal */}
-      <ReorderRooms 
+      <ReorderRooms
         isOpen={isReorderOpen}
         onClose={() => setIsReorderOpen(false)}
       />

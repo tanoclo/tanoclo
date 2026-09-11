@@ -26,11 +26,11 @@ RUN REPO_URL="https://github.com/tanoclo/tanoclo.git" \
 WORKDIR /app/ws-server
 RUN npm ci --omit=dev
 
-# Copy the addon entrypoint from the build context
+# Copy the app entrypoint from the build context
 WORKDIR /app
-COPY addon-entrypoint.js ./tanoclo-ws-server/
+COPY app-entrypoint.js ./tanoclo-ws-server/
 
 WORKDIR /app/ws-server
 
 ENTRYPOINT []
-CMD [ "node", "/app/tanoclo-ws-server/addon-entrypoint.js" ]
+CMD [ "node", "/app/tanoclo-ws-server/app-entrypoint.js" ]

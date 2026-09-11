@@ -25,7 +25,7 @@ export default function DeviceRegistrationPage({ onRegister }) {
   const { t } = useTranslation();
   const { user } = useAuth();
   const { activeHomeId } = useHome();
-  
+
   const [deviceName, setDeviceName] = useState(() => localStorage.getItem('tanoclo_last_device_name') || '');
   const [isRegistering, setIsRegistering] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -129,7 +129,7 @@ export default function DeviceRegistrationPage({ onRegister }) {
       const newId = currentDevice.id;
       localStorage.setItem('tanoclo_mobile_device_id', newId);
       localStorage.setItem('tanoclo_last_device_name', deviceName.trim());
-      
+
       // Notify parent app
       onRegister(newId);
     } catch (err) {
@@ -212,7 +212,7 @@ export default function DeviceRegistrationPage({ onRegister }) {
             <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 500 }}>
               {t('device_registration.device_name')}
             </label>
-            <input 
+            <input
               type="text"
               value={deviceName}
               onChange={(e) => setDeviceName(e.target.value)}
@@ -287,7 +287,7 @@ export default function DeviceRegistrationPage({ onRegister }) {
             </div>
           )}
 
-          <button 
+          <button
             type="submit"
             disabled={isRegistering}
             style={{

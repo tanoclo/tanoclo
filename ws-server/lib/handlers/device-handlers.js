@@ -72,7 +72,7 @@ async function handleDeviceActuator(ws, frame, coapMsg, decoded, peerInfo, pathI
             if (mqttPublisher) {
                 db.getDeviceBySerial(shortSerial).then(dev => {
                     if (dev) {
-                        mqttPublisher.publishDeviceTelemetry(shortSerial, dev.home_id, dev.zone_id, null, dev).catch(() => { });
+                        mqttPublisher.publishDeviceTelemetry(shortSerial, dev.home_id, dev.zone_id, null, dev).catch(e => log('debug', `[MQTT] Device telemetry publish failed for ${shortSerial}: ${e.message}`));
                     }
                 }).catch(err => { log('warn', `Device telemetry publish database lookup failed: ${err.message}`); });
             }
@@ -142,7 +142,7 @@ async function checkAndMarkEmulatedDevicePaired(deviceId, fallbackHomeId) {
     try {
         const [emRows] = await db.getPool().execute('SELECT home_id, pairing_state FROM emulated_devices WHERE serial_no = ?', [deviceId]);
         if (emRows.length > 0 && emRows[0].pairing_state !== 'PAIRED') {
-            await db.updateEmulatedDevicePairingState(deviceId, 'PAIRED').catch(() => {});
+            await db.updateEmulatedDevicePairingState(deviceId, 'PAIRED').catch(e => log('debug', `[pairing] updateEmulatedDevicePairingState failed for ${deviceId}: ${e.message}`));
             const homeId = emRows[0].home_id || fallbackHomeId;
             if (homeId) {
                 try {
@@ -188,7 +188,7 @@ async function handleDeviceMount(ws, frame, coapMsg, decoded, peerInfo, pathInfo
             if (state !== undefined) {
                 const MOUNT_STATE_MAP = { 0: 'CALIBRATING', 1: 'CALIBRATED', 2: 'MOUNTED' };
                 const stateStr = MOUNT_STATE_MAP[state] || String(state);
-                mqttPublisher.publishMountingState(shortSerial, stateStr).catch(() => { });
+                mqttPublisher.publishMountingState(shortSerial, stateStr).catch(e => log('debug', `[MQTT] publishMountingState failed for ${shortSerial}: ${e.message}`));
             }
         }
     }
@@ -227,7 +227,7 @@ async function handleDeviceLock(ws, frame, coapMsg, decoded, peerInfo, pathInfo)
         await db.updateDeviceLock(deviceId, enabled);
         const shortSerial = extractShortSerial(deviceId);
         if (shortSerial && mqttPublisher) {
-            mqttPublisher.publishChildLock(shortSerial, enabled).catch(() => { });
+            mqttPublisher.publishChildLock(shortSerial, enabled).catch(e => log('debug', `[MQTT] publishChildLock failed for ${shortSerial}: ${e.message}`));
         }
     }
 }
@@ -251,7 +251,7 @@ async function handleDeviceError(ws, frame, coapMsg, decoded, peerInfo, pathInfo
             if (shortSerial) {
                 db.getDeviceBySerial(shortSerial).then(dev => {
                     if (dev) {
-                        mqttPublisher.publishDeviceTelemetry(shortSerial, dev.home_id, dev.zone_id, null, dev).catch(() => { });
+                        mqttPublisher.publishDeviceTelemetry(shortSerial, dev.home_id, dev.zone_id, null, dev).catch(e => log('debug', `[MQTT] Device error telemetry failed for ${shortSerial}: ${e.message}`));
                     }
                 }).catch(err => { log('warn', `Device error flags telemetry database lookup failed: ${err.message}`); });
             }
@@ -302,7 +302,7 @@ async function handleDeviceFirmware(ws, frame, coapMsg, decoded, peerInfo, pathI
             if (shortSerial) {
                 db.getDeviceBySerial(shortSerial).then(dev => {
                     if (dev) {
-                        mqttPublisher.publishDeviceTelemetry(shortSerial, dev.home_id, dev.zone_id, null, dev).catch(() => { });
+                        mqttPublisher.publishDeviceTelemetry(shortSerial, dev.home_id, dev.zone_id, null, dev).catch(e => log('debug', `[MQTT] Device FW telemetry failed for ${shortSerial}: ${e.message}`));
                     }
                 }).catch(err => { log('warn', `Device firmware telemetry database lookup failed: ${err.message}`); });
             }

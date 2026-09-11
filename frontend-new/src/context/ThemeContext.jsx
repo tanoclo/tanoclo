@@ -35,7 +35,7 @@ export function ThemeProvider({ children }) {
   useEffect(() => {
     localStorage.setItem(STORAGE_KEYS.THEME, theme);
     const root = window.document.documentElement;
-    
+
     if (theme === 'system') {
       const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
       const handleThemeChange = (e) => {

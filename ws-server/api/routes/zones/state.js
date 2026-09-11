@@ -303,7 +303,6 @@ async function copySchedule(homeId, zoneId, targetZoneIds) {
 }
 
 // POST /api/v2/homes/{homeId}/zones/{zoneId}/schedule/copy
-
 router.post('/:homeId/zones/:zoneId/state/openWindow/activate', async (req, res) => {
     try {
         const { homeId, zoneId } = req.params;

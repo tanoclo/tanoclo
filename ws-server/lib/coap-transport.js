@@ -16,6 +16,7 @@ let _db, _clients, _sendFn;
 let _log = getLogger('cmd-api');
 
 const _commandTracker = new Map();
+const _midToTrackingId = new Map();
 let _trackingIdCounter = 1;
 const _pendingCommands = new Map();
 const _pendingQueries = new Map();
@@ -115,8 +116,13 @@ function sendViaBridge(bridgeId, bridgeClient, targetIpv6, targetPort, coapBytes
                 ackedAt: null,
                 retries: 0,
             });
+            _midToTrackingId.set(mid, trackingId);
             if (_commandTracker.size > 500) {
                 const firstKey = _commandTracker.keys().next().value;
+                const oldEntry = _commandTracker.get(firstKey);
+                if (oldEntry && _midToTrackingId.get(oldEntry.mid) === firstKey) {
+                    _midToTrackingId.delete(oldEntry.mid);
+                }
                 _commandTracker.delete(firstKey);
             }
         }
@@ -131,17 +137,18 @@ function scheduleRetry(mid, bridgeId, wsFrame, attempt) {
         _log('warn', `[cmd-api] MID ${mid}: Giving up after ${attempt} retries (no ACK received)`);
         _pendingCommands.delete(mid);
         metrics.inc('commands_failed');
-        
+
         const cb = _ackCallbacks.get(mid);
         if (cb) {
             cb.reject(new Error('Timeout waiting for device ACK'));
             _ackCallbacks.delete(mid);
         }
 
-        for (const [, entry] of _commandTracker) {
-            if (entry.mid === mid && entry.status === 'pending') {
+        const trId = _midToTrackingId.get(mid);
+        if (trId !== undefined) {
+            const entry = _commandTracker.get(trId);
+            if (entry && entry.status === 'pending') {
                 entry.status = 'failed';
-                break;
             }
         }
         return;
@@ -151,10 +158,11 @@ function scheduleRetry(mid, bridgeId, wsFrame, attempt) {
         _log('debug', `[cmd-api] MID ${mid}: Retry ${attempt + 1}/${RETRY_INTERVALS.length} (no ACK after ${RETRY_INTERVALS[attempt]}ms)`);
         _sendFn(bridgeId, wsFrame);
         metrics.inc('commands_retried');
-        for (const [, entry] of _commandTracker) {
-            if (entry.mid === mid && entry.status === 'pending') {
+        const trId = _midToTrackingId.get(mid);
+        if (trId !== undefined) {
+            const entry = _commandTracker.get(trId);
+            if (entry && entry.status === 'pending') {
                 entry.retries = attempt + 1;
-                break;
             }
         }
         scheduleRetry(mid, bridgeId, wsFrame, attempt + 1);
@@ -183,11 +191,12 @@ function handleAckReceived(midInput, deviceIdOrMsg) {
         _pendingCommands.delete(midInput);
         metrics.inc('commands_acked');
 
-        for (const [, entry] of _commandTracker) {
-            if ((entry.mid === mid || entry.mid === midInput) && entry.status === 'pending') {
+        const trId = _midToTrackingId.get(mid) ?? _midToTrackingId.get(midInput);
+        if (trId !== undefined) {
+            const entry = _commandTracker.get(trId);
+            if (entry && entry.status === 'pending') {
                 entry.status = 'acked';
                 entry.ackedAt = new Date().toISOString();
-                break;
             }
         }
     }
@@ -365,6 +374,18 @@ async function queryDeviceConfig(deviceSerial, coapPath) {
     }
 }
 
+function isDebugMid(mid) {
+    if (mid === undefined || mid === null) return false;
+    const trId = _midToTrackingId.get(Number(mid)) ?? _midToTrackingId.get(mid);
+    if (trId !== undefined) {
+        const entry = _commandTracker.get(trId);
+        if (entry && entry.command && entry.command.startsWith('debug:')) {
+            return true;
+        }
+    }
+    return false;
+}
+
 module.exports = {
     init,
     getProxyMidCache,
@@ -378,5 +399,6 @@ module.exports = {
     waitForAck,
     _singleQueryAttempt,
     queryDeviceConfig,
-    _commandTracker
+    _commandTracker,
+    isDebugMid
 };

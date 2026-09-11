@@ -36,7 +36,7 @@ ChartJS.register(
 );
 
 // Register a custom tooltip positioner that aligns to the mouse/touch position dynamically
-Tooltip.positioners.mouseFollow = function(items, eventPosition) {
+Tooltip.positioners.mouseFollow = function (items, eventPosition) {
   if (!eventPosition || eventPosition.x === undefined || eventPosition.y === undefined) {
     return Tooltip.positioners.average(items);
   }
@@ -94,7 +94,8 @@ const getWeatherIcon = (state) => {
 
 function CombinedTelemetryChart({ dayReportData }) {
   const { t } = useTranslation();
-  const { resolvedTheme: theme } = useContext(ThemeContext);
+  const themeContext = useContext(ThemeContext);
+  const theme = themeContext?.resolvedTheme || 'dark';
   const isLight = theme === 'light';
 
   const isDhw = dayReportData?.zoneType === 'HOT_WATER' || dayReportData?.zoneType === 'DHW';
@@ -108,7 +109,7 @@ function CombinedTelemetryChart({ dayReportData }) {
 
   const { measuredData, settings, weather, callForHeat, hotWaterProduction } = dayReportData;
   const insideTempPoints = measuredData?.insideTemperature?.dataPoints || [];
-  
+
   if (insideTempPoints.length === 0) {
     return (
       <div style={{
@@ -158,7 +159,7 @@ function CombinedTelemetryChart({ dayReportData }) {
     const ts = new Date(pt.timestamp).getTime();
     let closest = null;
     let minDiff = Infinity;
-    
+
     (measuredData?.humidity?.dataPoints || []).forEach(hPt => {
       if (hPt.value === null || hPt.value === undefined) return;
       const diff = Math.abs(new Date(hPt.timestamp).getTime() - ts);
@@ -167,7 +168,7 @@ function CombinedTelemetryChart({ dayReportData }) {
         closest = hPt;
       }
     });
-    
+
     return (closest && minDiff <= 600000) ? closest.value * 100 : null;
   });
   const hasValidHumidity = !isDhw && humidityValues.some(v => v !== null);
@@ -212,7 +213,7 @@ function CombinedTelemetryChart({ dayReportData }) {
     const ts = new Date(pt.timestamp).getTime();
     let closest = null;
     let minDiff = Infinity;
-    
+
     (measuredData?.solarIntensity?.dataPoints || []).forEach(sPt => {
       if (sPt.value === null || sPt.value === undefined) return;
       const diff = Math.abs(new Date(sPt.timestamp).getTime() - ts);
@@ -221,7 +222,7 @@ function CombinedTelemetryChart({ dayReportData }) {
         closest = sPt;
       }
     });
-    
+
     return (closest && minDiff <= 600000) ? closest.value * 100 : null;
   });
 
@@ -343,27 +344,27 @@ function CombinedTelemetryChart({ dayReportData }) {
     beforeDraw: (chart) => {
       const { ctx, chartArea: { top, bottom, left, right } } = chart;
       const presenceIntervals = dayReportData?.presence?.dataIntervals || [];
-      
+
       presenceIntervals.forEach(interval => {
         const fromTime = new Date(interval.from).getTime();
         const toTime = new Date(interval.to).getTime();
         const isHome = interval.value;
-        
+
         const getPixelForTime = (timeMs) => {
           if (insideTempPoints.length === 0) return left;
           const firstMs = new Date(insideTempPoints[0].timestamp).getTime();
           const lastMs = new Date(insideTempPoints[insideTempPoints.length - 1].timestamp).getTime();
           if (timeMs <= firstMs) return left;
           if (timeMs >= lastMs) return right;
-          
+
           const ratio = (timeMs - firstMs) / (lastMs - firstMs);
           return left + ratio * (right - left);
         };
-        
+
         if (!isHome) { // Shade AWAY
           const xStart = getPixelForTime(fromTime);
           const xEnd = getPixelForTime(toTime);
-          
+
           ctx.save();
           ctx.fillStyle = isLight ? 'rgba(100, 116, 139, 0.12)' : 'rgba(75, 85, 99, 0.15)'; // Shading for away
           ctx.fillRect(xStart, top, xEnd - xStart, bottom - top);
@@ -392,7 +393,7 @@ function CombinedTelemetryChart({ dayReportData }) {
         titleFont: { family: 'Inter, sans-serif' },
         bodyFont: { family: 'Inter, sans-serif' },
         callbacks: {
-          label: function(context) {
+          label: function (context) {
             let label = context.dataset.label || '';
             if (label) {
               label += ': ';
@@ -424,12 +425,25 @@ function CombinedTelemetryChart({ dayReportData }) {
     scales: {
       x: {
         grid: {
-          color: isLight ? 'rgba(0, 0, 0, 0.08)' : 'rgba(255, 255, 255, 0.04)',
+          color: (context) => {
+            const lbl = labels[context.index];
+            if (['00:00', '04:00', '08:00', '12:00', '16:00', '20:00'].includes(lbl)) {
+              return isLight ? 'rgba(0, 0, 0, 0.08)' : 'rgba(255, 255, 255, 0.05)';
+            }
+            return 'transparent';
+          },
         },
         ticks: {
           color: isLight ? '#64748b' : '#8a99ad',
-          maxTicksLimit: 12,
-          font: { family: 'Inter, sans-serif', size: 10 }
+          font: { family: 'Inter, sans-serif', size: 10 },
+          maxRotation: 0,
+          callback: function (val) {
+            const lbl = this.getLabelForValue(val);
+            if (lbl && ['00:00', '04:00', '08:00', '12:00', '16:00', '20:00'].includes(lbl)) {
+              return lbl;
+            }
+            return '';
+          }
         }
       },
       y: {
@@ -442,7 +456,7 @@ function CombinedTelemetryChart({ dayReportData }) {
         ticks: {
           color: isLight ? '#64748b' : '#8a99ad',
           font: { family: 'Inter, sans-serif', size: 10 },
-          callback: function(value) {
+          callback: function (value) {
             return value + '°';
           }
         }
@@ -459,7 +473,7 @@ function CombinedTelemetryChart({ dayReportData }) {
         ticks: {
           color: isLight ? '#64748b' : '#8a99ad',
           font: { family: 'Inter, sans-serif', size: 10 },
-          callback: function(value) {
+          callback: function (value) {
             return value + '%';
           }
         }
@@ -469,36 +483,10 @@ function CombinedTelemetryChart({ dayReportData }) {
 
   const slots = weather?.slots || {};
   const slotKeys = Object.keys(slots).sort();
+  const hasRightAxis = (showHumidity && hasValidHumidity) || showHeating || showSolar;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', width: '100%' }}>
-      {/* Weather slots row */}
-      {slotKeys.length > 0 && (
-        <div style={{
-          display: 'flex',
-          justify: 'space-around',
-          alignItems: 'center',
-          backgroundColor: isLight ? 'rgba(0, 0, 0, 0.04)' : 'rgba(255, 255, 255, 0.08)',
-          borderRadius: '16px',
-          padding: '0.6rem 0.8rem',
-          border: `1px solid ${isLight ? 'rgba(0, 0, 0, 0.08)' : 'rgba(255, 255, 255, 0.1)'}`,
-          marginBottom: '0.25rem'
-        }}>
-          {slotKeys.map(time => {
-            const slot = slots[time];
-            return (
-              <div key={time} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-                <span style={{ fontSize: '0.65rem', color: isLight ? '#6b7280' : 'rgba(255, 255, 255, 0.6)', fontWeight: 600 }}>{time}</span>
-                {getWeatherIcon(slot.state)}
-                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: isLight ? '#1f2937' : '#ffffff' }}>
-                  {slot.temperature?.celsius?.toFixed(1)}°
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
       {/* Visibility Select Toggles */}
       <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
         <button
@@ -588,8 +576,47 @@ function CombinedTelemetryChart({ dayReportData }) {
         </button>
       </div>
 
-      <div style={{ height: '240px', width: '100%', position: 'relative', marginTop: '0.5rem' }}>
-        <Line data={data} options={options} plugins={[presencePlugin]} />
+      {/* Chart Section with Aligned Weather Timeline */}
+      <div style={{ display: 'flex', flexDirection: 'column', width: '100%', alignSelf: 'stretch', position: 'relative' }}>
+        {/* Weather slots row directly above chart canvas */}
+        {slotKeys.length > 0 && (
+          <div style={{
+            width: '100%',
+            boxSizing: 'border-box',
+            padding: hasRightAxis ? '0 38px 0 38px' : '0 10px 0 38px',
+            marginBottom: '0.35rem'
+          }}>
+            <div style={{
+              display: 'flex',
+              width: '100%',
+              justifyContent: 'space-around',
+              alignItems: 'center',
+              backgroundColor: isLight ? 'rgba(0, 0, 0, 0.03)' : 'rgba(255, 255, 255, 0.05)',
+              borderRadius: '12px',
+              padding: '0.45rem 0.5rem',
+              border: `1px solid ${isLight ? 'rgba(0, 0, 0, 0.06)' : 'rgba(255, 255, 255, 0.08)'}`,
+              boxSizing: 'border-box'
+            }}>
+              {slotKeys.map(time => {
+                const slot = slots[time];
+                return (
+                  <div key={time} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px', minWidth: '42px' }}>
+                    <span style={{ fontSize: '0.68rem', color: isLight ? '#64748b' : 'rgba(255, 255, 255, 0.65)', fontWeight: 600 }}>{time}</span>
+                    {getWeatherIcon(slot?.state)}
+                    <span style={{ fontSize: '0.78rem', fontWeight: 700, color: isLight ? '#1f2937' : '#ffffff' }}>
+                      {slot?.temperature?.celsius != null ? `${slot.temperature.celsius.toFixed(1)}°` : '--'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Chart Canvas */}
+        <div style={{ height: '240px', width: '100%', position: 'relative' }}>
+          <Line data={data} options={options} plugins={[presencePlugin]} />
+        </div>
       </div>
     </div>
   );

@@ -37,8 +37,11 @@ router.get('/dashboard', adminAuth, async (req, res) => {
         const [whitelist] = await pool.execute('SELECT * FROM websocket_whitelist');
 
         const [users] = await pool.execute(`
-            SELECT u.*, u.home_id as home_ids
+            SELECT u.*, u.home_id as home_ids, h.name as home_name,
+                   (CASE WHEN h.admin_user_id = u.id THEN 1 ELSE 0 END) as is_primary_admin
             FROM users u
+            LEFT JOIN homes h ON u.home_id = h.id
+            ORDER BY u.home_id ASC, u.name ASC
         `);
 
         const [admins] = await pool.execute('SELECT * FROM admin_users WHERE id = ?', [req.admin.id]);
@@ -344,10 +347,6 @@ router.get('/dashboard', adminAuth, async (req, res) => {
                                                         <label class="form-check-label" for="zcro_${h.id}">Config Readonly</label>
                                                     </div>
                                                     <div class="form-switch proxy-pill">
-                                                        <input class="form-check-input" type="checkbox" role="switch" id="dev_bypass_${h.id}" ${h.dev_bypass ? 'checked' : ''} onchange="toggleDevBypass(${h.id}, this.checked ? 1 : 0)">
-                                                        <label class="form-check-label" for="dev_bypass_${h.id}">Dev Bypass (DB only)</label>
-                                                    </div>
-                                                    <div class="form-switch proxy-pill">
                                                         <input class="form-check-input" type="checkbox" role="switch" id="ha_${h.id}" ${h.ha_discovery_enabled ? 'checked' : ''} onchange="toggleHaDiscovery(${h.id}, this.checked ? 1 : 0)">
                                                         <label class="form-check-label" for="ha_${h.id}">HA Discovery</label>
                                                     </div>
@@ -509,20 +508,61 @@ router.get('/dashboard', adminAuth, async (req, res) => {
                         <!-- Users Tab -->
                         <div class="tab-pane fade" id="users">
                             <h3>User Management</h3>
-                            <table class="table table-dark table-hover mt-3">
-                                <thead><tr><th>ID</th><th>Username</th><th>Name</th><th>Email</th><th>Homes</th><th>Actions</th></tr></thead>
+                            <div class="card bg-dark border-secondary p-3 mb-3 mt-3">
+                                <h5 class="text-white small mb-2">Add New User to Home</h5>
+                                <form onsubmit="submitAddUser(event)" class="row g-2 align-items-end">
+                                    <div class="col-md-2">
+                                        <label class="form-label small text-info mb-1">Target Home</label>
+                                        <select id="user_home_id" class="form-select form-select-sm bg-dark text-white border-secondary" required>
+                                            <option value="">Select Home...</option>
+                                            ${homes.map(h => `<option value="${h.id}">${h.name} (#${h.id})</option>`).join('')}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label small text-info mb-1">Full Name</label>
+                                        <input type="text" id="user_name" class="form-control form-control-sm bg-dark text-white border-secondary" placeholder="Jane Doe" required autocomplete="off">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label small text-info mb-1">Email / Username</label>
+                                        <input type="email" id="user_email" class="form-control form-control-sm bg-dark text-white border-secondary" placeholder="user@example.com" required autocomplete="off">
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label small text-info mb-1">Password</label>
+                                        <input type="password" id="user_password" class="form-control form-control-sm bg-dark text-white border-secondary" placeholder="Password" required autocomplete="new-password">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="d-flex gap-3 mb-2">
+                                            <div class="form-check form-check-inline mb-0">
+                                                <input class="form-check-input" type="checkbox" id="user_is_primary_admin">
+                                                <label class="form-check-label small text-white-50" for="user_is_primary_admin" title="Designate as primary Home Admin">Primary Admin</label>
+                                            </div>
+                                            <div class="form-check form-check-inline mb-0">
+                                                <input class="form-check-input" type="checkbox" id="user_is_tanoclo_admin">
+                                                <label class="form-check-label small text-white-50" for="user_is_tanoclo_admin" title="Grants TaNoClo Admin capabilities">TaNoClo Admin</label>
+                                            </div>
+                                        </div>
+                                        <button type="submit" class="btn btn-primary btn-sm w-100">+ Add User</button>
+                                    </div>
+                                </form>
+                            </div>
+                            <table class="table table-dark table-hover mt-3 align-middle">
+                                <thead><tr><th>ID</th><th>Name</th><th>Email / Username</th><th>Home</th><th>Role</th><th>Actions</th></tr></thead>
                                 <tbody>
                                     ${users.map(u => `
                                         <tr>
-                                            <td>${u.id}</td>
-                                            <td>${u.username}</td>
-                                            <td>${u.name}</td>
+                                            <td><small class="text-white-50">${u.id}</small></td>
+                                            <td><strong class="text-white">${u.name}</strong></td>
                                             <td>${u.email}</td>
-                                            <td>${u.home_ids || '-'}</td>
+                                            <td>${u.home_name ? u.home_name + ' <span class="text-white-50">(#' + u.home_id + ')</span>' : (u.home_id ? '#' + u.home_id : '-')}</td>
                                             <td>
-                                                <button class="btn btn-sm btn-outline-warning" onclick="resetUserPass('${u.id}')">Pwd</button>
-                                                <button class="btn btn-sm btn-outline-info" onclick="changeUserEmail('${u.id}')">Mail</button>
-                                                <button class="btn btn-sm btn-outline-danger" onclick="deleteUser('${u.id}')">Del</button>
+                                                ${u.is_primary_admin ? '<span class="badge bg-primary text-white me-1">Primary Admin</span>' : ''}
+                                                ${u.is_tanoclo_admin ? '<span class="badge bg-info text-dark me-1">TaNoClo Admin</span>' : ''}
+                                                ${!u.is_primary_admin && !u.is_tanoclo_admin ? '<span class="badge bg-secondary text-white">Member</span>' : ''}
+                                            </td>
+                                            <td>
+                                                <button class="btn btn-sm btn-outline-warning" onclick="resetUserPass('${u.id}')" title="Reset Password">Pwd</button>
+                                                <button class="btn btn-sm btn-outline-info" onclick="changeUserEmail('${u.id}')" title="Change Email">Mail</button>
+                                                <button class="btn btn-sm btn-outline-danger" onclick="deleteUser('${u.id}')" title="Delete User">Del</button>
                                             </td>
                                         </tr>
                                     `).join('')}
@@ -536,21 +576,43 @@ router.get('/dashboard', adminAuth, async (req, res) => {
                                 <div class="col-md-6">
                                     <div class="card bg-dark border-secondary p-4 h-100">
                                         <h4 class="text-white">Change Admin Password</h4>
+                                        <p class="small text-white-50">Requires your current password and 2FA code (if enabled).</p>
+                                        <!-- Hidden username field to help autofill engines -->
+                                        <input type="text" name="username" value="${admin.username}" style="display:none;" autocomplete="username">
                                         <div class="mb-3">
-                                            <!-- Hidden username field to help autofill engines -->
-                                            <input type="text" name="username" value="${admin.username}" style="display:none;" autocomplete="username">
+                                            <label class="form-label small text-info">Current Password</label>
+                                            <input type="password" id="admin_current_pass" class="form-control bg-dark text-white border-secondary" autocomplete="current-password" placeholder="Enter current password">
+                                        </div>
+                                        <div class="mb-3">
                                             <label class="form-label small text-info">New Password</label>
                                             <input type="password" id="admin_new_pass" class="form-control bg-dark text-white border-secondary" autocomplete="new-password" placeholder="Enter new password">
                                         </div>
-                                        <button class="btn btn-primary" onclick="updateAdminPass()">Update Password</button>
+                                        ${admin.totp_secret ? `
+                                        <div class="mb-3">
+                                            <label class="form-label small text-info">Current 2FA Code</label>
+                                            <input type="text" id="admin_pass_totp" class="form-control bg-dark text-white border-secondary" placeholder="6-digit code" maxlength="6" autocomplete="one-time-code">
+                                        </div>
+                                        ` : ''}
+                                        <button class="btn btn-primary" onclick="updateAdminPass(${admin.totp_secret ? 'true' : 'false'})">Update Password</button>
                                     </div>
                                 </div>
                                 <div class="col-md-6">
                                     <div class="card bg-dark border-secondary p-4 h-100">
                                         <h4 class="text-white">Two-Factor Authentication (2FA)</h4>
                                         <p class="small text-white-50">Current Status: <span class="badge ${admin.totp_secret ? 'bg-success' : 'bg-warning'}">${admin.totp_secret ? 'Enabled' : 'Disabled'}</span></p>
+                                        
                                         <div class="mb-3">
-                                            <label class="form-label small text-info">Update 2FA Secret (Base32)</label>
+                                            <label class="form-label small text-info">Current Password (Required)</label>
+                                            <input type="password" id="admin_totp_current_pass" class="form-control bg-dark text-white border-secondary" autocomplete="current-password" placeholder="Enter current password">
+                                        </div>
+                                        ${admin.totp_secret ? `
+                                        <div class="mb-3">
+                                            <label class="form-label small text-info">Current 2FA Code (Required)</label>
+                                            <input type="text" id="admin_totp_current_code" class="form-control bg-dark text-white border-secondary" placeholder="Current 6-digit 2FA code" maxlength="6" autocomplete="one-time-code">
+                                        </div>
+                                        ` : ''}
+                                        <div class="mb-3">
+                                            <label class="form-label small text-info">New 2FA Secret (Base32)</label>
                                             <div class="input-group">
                                                 <input type="text" id="admin_totp_secret" class="form-control bg-dark text-white border-secondary" placeholder="Click 'Gen' or enter a secret" autocomplete="off">
                                                 <button class="btn btn-outline-info" onclick="generateTotpSecret()" title="Generate new random secret">Gen</button>
@@ -560,8 +622,14 @@ router.get('/dashboard', adminAuth, async (req, res) => {
                                                 <strong>Note: Current secret is hidden for privacy.</strong>
                                             </div>
                                         </div>
-                                        <button class="btn btn-primary" onclick="updateAdminTotp()">Update 2FA Secret</button>
-                                        <button class="btn btn-link btn-sm text-danger h6 p-0 mt-3" onclick="disableAdminTotp()">Disable 2FA</button>
+                                        <div class="mb-3">
+                                            <label class="form-label small text-info">Code from NEW Secret (to verify)</label>
+                                            <input type="text" id="admin_totp_new_code" class="form-control bg-dark text-white border-secondary" placeholder="6-digit code from new secret" maxlength="6" autocomplete="one-time-code">
+                                        </div>
+                                        <div class="d-flex align-items-center justify-content-between mt-2">
+                                            <button class="btn btn-primary" onclick="updateAdminTotp(${admin.totp_secret ? 'true' : 'false'})">Update 2FA Secret</button>
+                                            ${admin.totp_secret ? `<button class="btn btn-link btn-sm text-danger h6 p-0 mb-0" onclick="disableAdminTotp()">Disable 2FA</button>` : ''}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -676,33 +744,16 @@ router.get('/dashboard', adminAuth, async (req, res) => {
                                         <label class="form-check-label small text-info" for="settings_swagger_enabled">Enable OpenAPI/Swagger Documentation</label>
                                         <div class="form-text text-white-50 small mt-1">Make interactive Swagger docs available at /api/docs (guarded by setup admin authentication).</div>
                                     </div>
-                                    <hr class="border-secondary">
-                                    <h5 class="text-white mb-2">Frontend OTA Updates</h5>
-                                    <div class="form-check form-switch mb-3">
-                                        <input class="form-check-input" type="checkbox" role="switch" id="settings_ota_auto_update">
-                                        <label class="form-check-label small text-info" for="settings_ota_auto_update">Auto-update Frontend</label>
-                                        <div class="form-text text-white-50 small mt-1">Automatically download and extract the latest frontend web assets from the GitHub OTA branch on startup and hourly. If disabled, existing frontend files are kept. Overruled once if no frontend files exist.</div>
-                                    </div>
-                                    <div class="d-flex gap-2 mb-4 align-items-center">
-                                        <button class="btn btn-outline-info btn-sm" id="ota_sync_btn" onclick="triggerOtaSync()">⟳ Sync Frontend Now</button>
-                                        <span id="ota_sync_status" class="small"></span>
-                                    </div>
-                                    <div class="d-flex gap-2 mb-4">
+                                    <div class="d-flex gap-2 mb-2">
                                         <button class="btn btn-primary btn-sm" onclick="saveServerSettings()">Save Settings</button>
-                                    </div>
-                                    <hr class="border-secondary">
-                                    <div>
-                                        <h5 class="text-white mb-2">Server Control</h5>
-                                        <p class="small text-white-50 mb-2">Restart the Node.js server. Docker will automatically restart the container. All WebSocket connections will be dropped and IB devices will reconnect.</p>
-                                        <button class="btn btn-danger btn-sm" id="restart_btn" onclick="restartServer()">⟳ Restart Server</button>
-                                        <div id="restart_status" class="mt-2 small"></div>
                                     </div>
                                 </div>
                             </div>
 
-                            <!-- MQTT Configuration -->
+                            <!-- Right Column: MQTT Configuration, Frontend OTA Updates, Server Control -->
                             <div class="col-md-6">
-                                <div class="card bg-dark border-secondary p-4 h-100">
+                                <!-- MQTT Configuration -->
+                                <div class="card bg-dark border-secondary p-4 mb-4">
                                     <h4 class="text-white mb-3">MQTT Configuration</h4>
                                     <div class="row g-2 mb-2">
                                         <div class="col-8">
@@ -737,6 +788,28 @@ router.get('/dashboard', adminAuth, async (req, res) => {
                                         <button class="btn btn-outline-info btn-sm" id="mqtt_test_btn" onclick="testMqttConnection()">Test Connection</button>
                                     </div>
                                     <div id="mqtt_status" class="mt-2 small"></div>
+                                </div>
+
+                                <!-- Frontend OTA Updates -->
+                                <div class="card bg-dark border-secondary p-4 mb-4">
+                                    <h4 class="text-white mb-3">Frontend OTA Updates</h4>
+                                    <div class="form-check form-switch mb-3">
+                                        <input class="form-check-input" type="checkbox" role="switch" id="settings_ota_auto_update">
+                                        <label class="form-check-label small text-info" for="settings_ota_auto_update">Auto-update Frontend</label>
+                                        <div class="form-text text-white-50 small mt-1">Automatically download and extract the latest frontend web assets from the GitHub OTA branch on startup and hourly. If disabled, existing frontend files are kept. Overruled once if no frontend files exist.</div>
+                                    </div>
+                                    <div class="d-flex gap-2 align-items-center">
+                                        <button class="btn btn-outline-info btn-sm" id="ota_sync_btn" onclick="triggerOtaSync()">⟳ Sync Frontend Now</button>
+                                        <span id="ota_sync_status" class="small"></span>
+                                    </div>
+                                </div>
+
+                                <!-- Server Control -->
+                                <div class="card bg-dark border-secondary p-4">
+                                    <h4 class="text-white mb-3">Server Control</h4>
+                                    <p class="small text-white-50 mb-2">Restart the Node.js server. Docker will automatically restart the container. All WebSocket connections will be dropped and IB devices will reconnect.</p>
+                                    <button class="btn btn-danger btn-sm" id="restart_btn" onclick="restartServer()">⟳ Restart Server</button>
+                                    <div id="restart_status" class="mt-2 small"></div>
                                 </div>
                             </div>
                         </div>
@@ -822,17 +895,21 @@ router.get('/dashboard', adminAuth, async (req, res) => {
                         <div class="card bg-dark border-secondary p-3 mb-4">
                             <h5 class="text-info">Register ESP32 Hardware Node</h5>
                             <div class="row g-2 align-items-end">
-                                <div class="col-md-4">
+                                <div class="col-md-3">
                                     <label class="form-label small text-white-50">Node Name</label>
                                     <input type="text" id="emul_node_name" class="form-control form-control-sm bg-dark text-white border-secondary" placeholder="ESP32 Sniffer/Emulator 1">
                                 </div>
-                                <div class="col-md-4">
+                                <div class="col-md-3">
                                     <label class="form-label small text-white-50">IP Address</label>
                                     <input type="text" id="emul_node_ip" class="form-control form-control-sm bg-dark text-white border-secondary" placeholder="192.168.1.150">
                                 </div>
                                 <div class="col-md-2">
                                     <label class="form-label small text-white-50">API Port</label>
                                     <input type="number" id="emul_node_port" class="form-control form-control-sm bg-dark text-white border-secondary" value="80">
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label small text-white-50">API Key (Optional)</label>
+                                    <input type="text" id="emul_node_key" class="form-control form-control-sm bg-dark text-white border-secondary" placeholder="From yaml">
                                 </div>
                                 <div class="col-md-2">
                                     <button class="btn btn-primary btn-sm w-100" onclick="addEsp32Node()">+ Add Node</button>
@@ -845,8 +922,8 @@ router.get('/dashboard', adminAuth, async (req, res) => {
                             <h5 class="text-white">Active ESP32 Nodes</h5>
                             <div class="table-responsive">
                                 <table class="table table-dark table-sm small align-middle mb-0">
-                                    <thead><tr><th>ID</th><th>Node Name</th><th>IP Address</th><th>Port</th><th>Status</th><th>Last Seen</th><th>Actions</th></tr></thead>
-                                    <tbody id="emul_nodes_tbody"><tr><td colspan="7" class="text-white-50">Loading nodes...</td></tr></tbody>
+                                    <thead><tr><th>ID</th><th>Node Name</th><th>IP Address</th><th>Port</th><th>API Key</th><th>Status</th><th>Last Seen</th><th>Actions</th></tr></thead>
+                                    <tbody id="emul_nodes_tbody"><tr><td colspan="8" class="text-white-50">Loading nodes...</td></tr></tbody>
                                 </table>
                             </div>
                         </div>
@@ -915,7 +992,6 @@ router.get('/dashboard', adminAuth, async (req, res) => {
                     // Home Actions
                     async function toggleProxy(id, val) { await apiCall('/setup/homes/'+id+'/proxy', 'POST', { enabled: val }); location.reload(); }
                     async function toggleProxyLog(id, val) { await apiCall('/setup/homes/'+id+'/proxy-log', 'POST', { enabled: val }); location.reload(); }
-                    async function toggleLogUpload(id, val) { await apiCall('/setup/homes/'+id+'/log-upload', 'POST', { enabled: val }); location.reload(); }
                     async function toggleCommandsInProxy(id, val) { await apiCall('/setup/homes/'+id+'/allow-commands-in-proxy', 'POST', { enabled: val }); location.reload(); }
                     async function toggleZoneConfigReadonly(id, val) { await apiCall('/setup/homes/'+id+'/zone-config-readonly', 'POST', { enabled: val }); location.reload(); }
                     async function toggleDevBypass(id, val) { await apiCall('/setup/homes/'+id+'/dev-bypass', 'POST', { enabled: val }); location.reload(); }
@@ -945,23 +1021,61 @@ router.get('/dashboard', adminAuth, async (req, res) => {
                     async function updateBatteryType(serial, type) { await apiCall('/setup/devices/'+serial+'/battery', 'POST', { type }); }
 
                     // User Actions
+                    async function submitAddUser(event) {
+                        event.preventDefault();
+                        const home_id = document.getElementById('user_home_id').value;
+                        const name = document.getElementById('user_name').value.trim();
+                        const email = document.getElementById('user_email').value.trim();
+                        const password = document.getElementById('user_password').value;
+                        const is_primary_admin = document.getElementById('user_is_primary_admin').checked;
+                        const is_tanoclo_admin = document.getElementById('user_is_tanoclo_admin').checked;
+
+                        if (!home_id || !name || !email || !password) {
+                            return alert('Please fill in home, name, email, and password.');
+                        }
+
+                        const res = await apiCall('/setup/users', 'POST', {
+                            home_id: parseInt(home_id, 10),
+                            name,
+                            email,
+                            password,
+                            is_primary_admin,
+                            is_tanoclo_admin
+                        });
+
+                        if (res && res.success) {
+                            alert('User successfully added to home!');
+                            location.reload();
+                        }
+                    }
                     async function resetUserPass(id) { const p = prompt('New Password:'); if(p) await apiCall('/setup/users/'+id+'/password', 'POST', { password: p }); }
                     async function changeUserEmail(id) { const e = prompt('New Email:'); if(e) await apiCall('/setup/users/'+id+'/email', 'POST', { email: e }); location.reload(); }
                     async function deleteUser(id) { if(confirm('Delete user?')) { await apiCall('/setup/users/'+id, 'DELETE'); location.reload(); } }
 
                     // Admin Security
-                    async function updateAdminPass() {
+                    async function updateAdminPass(hasTotp) {
+                        const current_password = document.getElementById('admin_current_pass').value;
+                        if (!current_password) return alert('Current password is required');
+
                         const password = document.getElementById('admin_new_pass').value;
-                        if (!password) return alert('Enter a password');
+                        if (!password) return alert('Enter a new password');
                         
                         let totp = null;
-                        if (confirm('Verify with 2FA code? (If 2FA is enabled, this is required)')) {
-                            totp = prompt('Enter 6-digit 2FA code:');
+                        if (hasTotp) {
+                            const totpInput = document.getElementById('admin_pass_totp');
+                            totp = totpInput ? totpInput.value.trim() : null;
+                            if (!totp) return alert('Current 2FA code is required');
                         }
 
-                        const data = await apiCall('/setup/admin/password', 'POST', { password, totp });
-                        if (data?.success) { alert('Password updated!'); document.getElementById('admin_new_pass').value = ''; }
-                        else if (data?.error) alert('Error: ' + data.error);
+                        const data = await apiCall('/setup/admin/password', 'POST', { current_password, password, totp });
+                        if (data?.success) {
+                            alert('Password updated!');
+                            document.getElementById('admin_current_pass').value = '';
+                            document.getElementById('admin_new_pass').value = '';
+                            if (document.getElementById('admin_pass_totp')) document.getElementById('admin_pass_totp').value = '';
+                        } else if (data?.error) {
+                            alert('Error: ' + data.error);
+                        }
                     }
                     function generateTotpSecret() {
                         const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
@@ -970,26 +1084,52 @@ router.get('/dashboard', adminAuth, async (req, res) => {
                         document.getElementById('admin_totp_secret').value = secret;
                         alert('New secret generated: ' + secret + '\\n\\nIMPORTANT: Add this to your authenticator app now. You will need a code from this new secret to confirm the update!');
                     }
-                    async function updateAdminTotp() {
-                        const secret = document.getElementById('admin_totp_secret').value;
+                    async function updateAdminTotp(hasTotp) {
+                        const current_password = document.getElementById('admin_totp_current_pass').value;
+                        if (!current_password) return alert('Current password is required');
+
+                        let current_totp = null;
+                        if (hasTotp) {
+                            const currentTotpInput = document.getElementById('admin_totp_current_code');
+                            current_totp = currentTotpInput ? currentTotpInput.value.trim() : null;
+                            if (!current_totp) return alert('Current 2FA code is required');
+                        }
+
+                        const secret = document.getElementById('admin_totp_secret').value.trim();
                         if (!secret) return alert('Enter or generate a secret first');
                         if (secret.length < 8) return alert('Secret must be at least 8 characters');
                         
-                        const totp = prompt('Enter 6-digit 2FA code from your NEW secret to confirm:');
-                        if (!totp) return;
+                        const newTotpInput = document.getElementById('admin_totp_new_code');
+                        const totp = newTotpInput ? newTotpInput.value.trim() : null;
+                        if (!totp) return alert('Enter 6-digit 2FA code from your NEW secret to verify');
 
-                        const data = await apiCall('/setup/admin/totp', 'POST', { secret, totp });
-                        if (data?.success) { alert('2FA Secret updated and verified! Refreshing...'); location.reload(); }
-                        else if (data?.error) alert('Error: ' + data.error);
+                        const data = await apiCall('/setup/admin/totp', 'POST', { current_password, secret, totp, current_totp });
+                        if (data?.success) {
+                            alert('2FA Secret updated and verified! Refreshing...');
+                            location.reload();
+                        } else if (data?.error) {
+                            alert('Error: ' + data.error);
+                        }
                     }
                     async function disableAdminTotp() {
-                        if (confirm('DANGER: This will disable 2FA for your admin account. Continue?')) {
-                            const totp = prompt('Enter current 6-digit 2FA code to confirm disabling:');
-                            if (!totp) return;
+                        const current_password = document.getElementById('admin_totp_current_pass').value;
+                        if (!current_password) return alert('Please enter your Current Password above first to disable 2FA');
 
-                            const data = await apiCall('/setup/admin/totp', 'POST', { secret: null, totp });
-                            if (data?.success) { alert('2FA disabled!'); location.reload(); }
-                            else if (data?.error) alert('Error: ' + data.error);
+                        const currentTotpInput = document.getElementById('admin_totp_current_code');
+                        let current_totp = currentTotpInput ? currentTotpInput.value.trim() : null;
+                        if (!current_totp) {
+                            current_totp = prompt('Enter current 6-digit 2FA code to confirm disabling:');
+                            if (!current_totp) return;
+                        }
+
+                        if (confirm('DANGER: This will disable 2FA for your admin account. Continue?')) {
+                            const data = await apiCall('/setup/admin/totp', 'POST', { current_password, secret: null, totp: current_totp, current_totp });
+                            if (data?.success) {
+                                alert('2FA disabled!');
+                                location.reload();
+                            } else if (data?.error) {
+                                alert('Error: ' + data.error);
+                            }
                         }
                     }
 
@@ -1646,24 +1786,33 @@ router.get('/dashboard', adminAuth, async (req, res) => {
                             const nodes = nodesRes.nodes || [];
                             
                             if (nodes.length === 0) {
-                                nodesTbody.innerHTML = '<tr><td colspan="7" class="text-white-50 text-center py-2">No ESP32 hardware nodes registered. Add one above.</td></tr>';
+                                nodesTbody.innerHTML = '<tr><td colspan="8" class="text-white-50 text-center py-2">No ESP32 hardware nodes registered. Add one above.</td></tr>';
                                 nodeSelect.innerHTML = '<option value="">No nodes available</option>';
                             } else {
-                                nodesTbody.innerHTML = nodes.map(n => '<tr>' +
-                                    '<td>' + n.id + '</td>' +
-                                    '<td><strong class="text-white">' + n.name + '</strong></td>' +
-                                    '<td><code>' + n.ip_address + '</code></td>' +
-                                    '<td>' + n.api_port + '</td>' +
-                                    '<td><span class="badge ' + (n.status === 'ONLINE' ? 'bg-success' : (n.status === 'OFFLINE' ? 'bg-danger' : 'bg-warning text-dark')) + '">' + n.status + '</span></td>' +
-                                    '<td class="small text-white-50">' + (n.last_seen ? new Date(n.last_seen).toLocaleTimeString() : '-') + '</td>' +
-                                    '<td class="table-actions-cell">' +
-                                        '<div class="d-inline-flex align-items-center gap-1 justify-content-end">' +
-                                            '<button class="btn-action-warning" data-node-id="' + n.id + '" onclick="clearEsp32Nvs(this.dataset.nodeId)" title="Clear all emulated devices from ESP32 NVRAM"><i class="bi bi-eraser-fill"></i> Clear NVRAM</button>' +
-                                            '<button class="btn-action-telemetry" id="reboot_btn_' + n.id + '" data-node-id="' + n.id + '" onclick="rebootEsp32Node(this.dataset.nodeId)" title="Reboot ESP32 hardware"><i class="bi bi-arrow-clockwise"></i> Reboot</button>' +
-                                            '<button class="btn-action-danger" data-node-id="' + n.id + '" onclick="deleteEsp32Node(this.dataset.nodeId)" title="Delete node from database"><i class="bi bi-trash"></i></button>' +
-                                        '</div>' +
-                                    '</td>' +
-                                '</tr>').join('');
+                                nodesTbody.innerHTML = nodes.map(n => {
+                                    const keyDisplay = n.api_key 
+                                        ? '<span class="font-monospace small text-white-50" title="' + n.api_key + '">••••••••</span> ' +
+                                          '<button class="btn btn-sm btn-link p-0 text-info" data-key="' + n.api_key + '" onclick="copyNodeApiKey(this)" title="Copy Key"><i class="bi bi-clipboard"></i></button> ' +
+                                          '<button class="btn btn-sm btn-link p-0 text-warning ms-1" data-id="' + n.id + '" data-key="' + n.api_key + '" onclick="editNodeApiKey(this.dataset.id, this.dataset.key)" title="Edit Key"><i class="bi bi-pencil"></i></button>'
+                                        : '<span class="text-white-50 small">None</span> <button class="btn btn-sm btn-link p-0 text-success ms-1" data-id="' + n.id + '" data-key="" onclick="editNodeApiKey(this.dataset.id, this.dataset.key)" title="Set Key"><i class="bi bi-plus-circle"></i></button>';
+
+                                    return '<tr>' +
+                                        '<td>' + n.id + '</td>' +
+                                        '<td><strong class="text-white">' + n.name + '</strong></td>' +
+                                        '<td><code>' + n.ip_address + '</code></td>' +
+                                        '<td>' + n.api_port + '</td>' +
+                                        '<td>' + keyDisplay + '</td>' +
+                                        '<td><span class="badge ' + (n.status === 'ONLINE' ? 'bg-success' : (n.status === 'OFFLINE' ? 'bg-danger' : (n.status === 'UNAUTHORIZED' ? 'bg-danger text-white' : 'bg-warning text-dark'))) + '">' + n.status + '</span></td>' +
+                                        '<td class="small text-white-50">' + (n.last_seen ? new Date(n.last_seen).toLocaleTimeString() : '-') + '</td>' +
+                                        '<td class="table-actions-cell">' +
+                                            '<div class="d-inline-flex align-items-center gap-1 justify-content-end">' +
+                                                '<button class="btn-action-warning" data-node-id="' + n.id + '" onclick="clearEsp32Nvs(this.dataset.nodeId)" title="Clear all emulated devices from ESP32 NVRAM"><i class="bi bi-eraser-fill"></i> Clear NVRAM</button>' +
+                                                '<button class="btn-action-telemetry" id="reboot_btn_' + n.id + '" data-node-id="' + n.id + '" onclick="rebootEsp32Node(this.dataset.nodeId)" title="Reboot ESP32 hardware"><i class="bi bi-arrow-clockwise"></i> Reboot</button>' +
+                                                '<button class="btn-action-danger" data-node-id="' + n.id + '" onclick="deleteEsp32Node(this.dataset.nodeId)" title="Delete node from database"><i class="bi bi-trash"></i></button>' +
+                                            '</div>' +
+                                        '</td>' +
+                                    '</tr>';
+                                }).join('');
 
                                 nodeSelect.innerHTML = '<option value="">Select Node...</option>' +
                                     nodes.map(n => '<option value="' + n.id + '">' + n.name + ' (' + n.ip_address + ')</option>').join('');
@@ -1696,17 +1845,36 @@ router.get('/dashboard', adminAuth, async (req, res) => {
                         }
                     }
 
+                    function copyNodeApiKey(btn) {
+                        const key = btn.getAttribute('data-key') || '';
+                        if (!key) return;
+                        navigator.clipboard.writeText(key).then(() => {
+                            alert('API Key copied to clipboard!');
+                        });
+                    }
+
                     async function addEsp32Node() {
                         const name = document.getElementById('emul_node_name').value.trim();
                         const ip_address = document.getElementById('emul_node_ip').value.trim();
                         const api_port = parseInt(document.getElementById('emul_node_port').value, 10) || 80;
+                        const api_key = document.getElementById('emul_node_key') ? document.getElementById('emul_node_key').value.trim() : '';
 
                         if (!name || !ip_address) return alert('Enter node name and IP address');
 
-                        const res = await apiCall('/setup/emulated/nodes', 'POST', { name, ip_address, api_port });
+                        const res = await apiCall('/setup/emulated/nodes', 'POST', { name, ip_address, api_port, api_key });
                         if (res && res.success) {
                             document.getElementById('emul_node_name').value = '';
                             document.getElementById('emul_node_ip').value = '';
+                            if (document.getElementById('emul_node_key')) document.getElementById('emul_node_key').value = '';
+                            loadEmulatedData();
+                        }
+                    }
+
+                    async function editNodeApiKey(id, currentKey) {
+                        const newKey = prompt('Enter API key for this ESP32 node (must match api_key in tado_emulator.yaml, leave empty to disable):', currentKey || '');
+                        if (newKey === null) return;
+                        const res = await apiCall('/setup/emulated/nodes/' + id + '/api-key', 'POST', { api_key: newKey.trim() });
+                        if (res && res.success) {
                             loadEmulatedData();
                         }
                     }
@@ -1780,7 +1948,7 @@ router.get('/dashboard', adminAuth, async (req, res) => {
                             const res = await apiCall('/setup/emulated/devices/' + serialNo + '/telemetry', 'POST', {
                                 temp_celsius: 21.5,
                                 humidity_percent: 48.5,
-                                battery_mv: 3050
+                                battery_mv: serialNo.startsWith('RU') ? 4500 : 3000
                             });
                             if (btn) {
                                 if (res && res.success) {

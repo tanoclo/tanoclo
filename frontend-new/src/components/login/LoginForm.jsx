@@ -3,7 +3,6 @@
  * @brief Renders the credentials inputs form on the Login Page.
  */
 
-
 import { RefreshCw } from 'lucide-react';
 
 /**
@@ -45,7 +44,7 @@ export default function LoginForm({
         <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 500 }}>
           {t('auth.username_or_email', { defaultValue: 'Username or Email' })}
         </label>
-        <input 
+        <input
           type="text"
           value={username}
           onChange={(e) => setUsername(e.target.value)}
@@ -70,7 +69,7 @@ export default function LoginForm({
         <label style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 500 }}>
           {t('auth.password', { defaultValue: 'Password' })}
         </label>
-        <input 
+        <input
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
@@ -93,7 +92,7 @@ export default function LoginForm({
 
       {!isNative && (
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.25rem' }}>
-          <input 
+          <input
             type="checkbox"
             id="remember"
             checked={remember}
@@ -126,7 +125,7 @@ export default function LoginForm({
         </div>
       )}
 
-      <button 
+      <button
         type="submit"
         disabled={isLoggingIn}
         style={{

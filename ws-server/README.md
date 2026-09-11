@@ -75,6 +75,7 @@ All settings are managed via environment variables and loaded through [lib/confi
 
 ### 2.1 Database Credentials
 *   **`DB_HOST`** (String): Hostname or IP address of the MariaDB server. Default: `'127.0.0.1'`.
+*   **`DB_PORT`** (Integer): Port of the MariaDB server. Default: `3306`.
 *   **`DB_NAME`** (String): Database schema name. Default: `'tanoclo'`.
 *   **`DB_USER`** (String): Database user account. Default: `'tanoclo'`.
 *   **`DB_PASS`** (String): Database password. Default: `''`.
@@ -87,14 +88,24 @@ All settings are managed via environment variables and loaded through [lib/confi
 *   **`SSL_KEY_PATH`** (String): Path to the SSL private key for local TLS termination. Default: `'certs/tanoclo_key.pem'`.
 *   **`SSL_CERT_PATH`** (String): Path to the SSL certificate for local TLS termination. Default: `'certs/tanoclo_cert.pem'`.
 *   **`TADO_ROOT_CA_PATH`** (String): Path to the cloned/intercepted Root CA certificate. Default: `'certs/tadoRootCA.cer'`.
-*   **`JWT_SECRET`** (String): Secret used to sign user JWT authorization tokens. Default: `'secret_key'`.
+*   **`JWT_SECRET`** (String): Secret used to sign user JWT authorization tokens. If none given this will be generated automatically when the server starts for the first time.
 
 ### 2.4 System Settings
 *   **`TANOCLO_DOMAIN`** (String): Base domain routing endpoint for host checks. Default: `'tanoclo.domain.com'`.
 *   **`LOG_LEVEL`** (String): Console log level (`debug`, `info`, `warn`, `error`). Default: `'debug'`.
-*   **`TANOCLO_ZONE_CONFIG_READONLY`** (Boolean): If `true`, blocks pushes of zone configurations to prevent accidental writes. Default: `true`.
-*   **`TANOCLO_SWAGGER_ENABLED`** (Boolean): Enables Swagger OpenAPI interactive documentation when `true`. Default: `true`.
-*   **`CARTO_API_KEY`** (String): API key for CARTO Basemaps raster tiles service. Removes watermark on geofence maps. Default: `''`.
+*   **`TANOCLO_ZONE_CONFIG_READONLY`** (Boolean): If `true`, blocks pushes of zone configurations to prevent accidental writes. Default: `true`. Can be changed on a per home basis from the Setup dashboard.
+*   **`TANOCLO_SWAGGER_ENABLED`** (Boolean): Enables Swagger OpenAPI interactive documentation when `true`. Default: `true`. Can be changed from the Setup dashboard.
+*   **`OTA_AUTO_UPDATE`** (Boolean): If `true`, auto-updates frontend bundles from GitHub OTA branch. Default: `true`. Can be changed from the Setup dashboard.
+*   **`CARTO_API_KEY`** (String): API key for CARTO Basemaps raster tiles service. Removes watermark on geofence maps. Default: `''`. Can be changed from the Setup dashboard.
+
+### 2.5 MQTT Configuration (Fallback Defaults)
+Fallback environment variables loaded on initial setup before database values are configured:
+*   **`MQTT_HOST`** (String): Hostname or IP address of the MQTT broker. Default: `''`.
+*   **`MQTT_PORT`** (Integer): MQTT broker port. Default: `1883`.
+*   **`MQTT_USERNAME`** (String): MQTT broker username. Default: `''`.
+*   **`MQTT_PASSWORD`** (String): MQTT broker password. Default: `''`.
+*   **`MQTT_ENABLED`** (Boolean): Enables Home Assistant MQTT auto-discovery when `true`. Default: `false`. Can be changed from the Setup dashboard.
+*   **`MQTT_HA_PATH`** (String): Home Assistant discovery topic prefix. Default: `'homeassistant'`.
 
 ---
 
@@ -104,6 +115,7 @@ All settings are managed via environment variables and loaded through [lib/confi
 The core routing and protocol layers are modularized into JavaScript files inside the [`lib/`](lib/) folder:
 
 *   **[`battery.js`](lib/battery.js):** Computes estimated battery drain curves and lifetimes for Smart Radiator Thermostats.
+*   **[`coap-dedup.js`](lib/coap-dedup.js):** Inbound CoAP Confirmable (CON) message deduplication cache (RFC 7252 §4.5).
 *   **[`coap-transport.js`](lib/coap-transport.js):** Low-level wrapper transmitting CoAP messages.
 *   **[`coap.js`](lib/coap.js):** Custom parser and builder for RFC 7252 CoAP packets.
 *   **[`command-api.js`](lib/command-api.js):** REST API endpoints to queue and push binary CoAP downlink commands to sleeping hardware.
@@ -145,6 +157,7 @@ The core routing and protocol layers are modularized into JavaScript files insid
     *   `path-classifier.js`: Maps packet paths.
 *   **[`logger.js`](lib/logger.js):** Console and file logging driver supporting rotation schemas.
 *   **[`mappers.js`](lib/mappers.js):** Data mappers translating raw DB structures to API JSON.
+*   **[`memory-dumper.js`](lib/memory-dumper.js):** Background worker coordinating chunked OTA memory dumps (SRAM, Flash) via CoAP commands.
 *   **[`message-cache.js`](lib/message-cache.js):** Transmit caches that temporarily store outbound commands until a battery-operated device wakes up.
 *   **[`message-router/`](lib/message-router/):** Core router coordinating inbound/outbound messaging (`index.js`, `uplink.js`, `downlink.js`).
 *   **[`metrics.js`](lib/metrics.js):** Exposes runtime diagnostic metrics.
@@ -168,13 +181,12 @@ The core routing and protocol layers are modularized into JavaScript files insid
 ### 3.2 Mobile & Setup REST API Route Handlers (`ws-server/api/routes/`)
 The web backend endpoints and portal endpoints are listed below:
 
-*   **[`auth.js`](api/routes/auth.js):** Handles OAuth2 credential verification, access token generation, and mobile device authorization (subdivided under `api/routes/auth/` into `token.js`, `device.js`, and `revoke.js`).
+*   **[`auth.js`](api/routes/auth.js):** Handles OAuth2 credential verification, access token generation, and mobile device authorization (subdivided under `api/routes/auth/` into `oauth-flows.js`, `tokens.js`, and `sessions.js`).
 *   **[`bridges.js`](api/routes/bridges.js):** Manages online/offline states of connected Internet Bridges.
 *   **[`devices.js`](api/routes/devices.js):** Operates hardware registers, checks firmware status, and reads battery states of Valve Actuators.
 *   **[`graphql.js`](api/routes/graphql.js):** Processes GraphQL queries.
 *   **[`heating.js`](api/routes/heating.js):** Configures advanced zone heating setups, target temperatures, and hot water settings.
-*   **[`homes.js`](api/routes/homes.js):** Central controller managing user homes, address registration, geofencing parameters, and heating control models. Subdivided into logical sub-routers under `api/routes/homes/` (including `base.js`, `heating.js`, `weather.js`, `users.js`, `energy.js`, `installations.js`, `logs.js`, `incident.js`, and `helpers.js`).
-*   **[`misc.js`](api/routes/misc.js):** Returns general time zone offsets, weather overlays, and overall system status.
+*   **[`homes.js`](api/routes/homes.js):** Central controller managing user homes, address registration, geofencing parameters, and heating control models. Subdivided into logical sub-routers under `api/routes/homes/` (including `base.js`, `heating.js`, `weather.js`, `users.js`, `energy.js`, `incident.js`, and `helpers.js`).
 *   **[`mobileDevices.js`](api/routes/mobileDevices.js):** Registers mobile phones and handles geofence reports.
 *   **[`ota.js`](api/routes/ota.js):** Serves frontend web and Capacitor mobile OTA update bundles.
 *   **[`setup-mqtt.js`](api/routes/setup-mqtt.js):** Manages MQTT broker configuration and home deletion/reset procedures.
@@ -220,20 +232,24 @@ npm start
 ```
 
 ### 4.3 Automated Verification Tests
-The server features test suites executed via **Vitest**:
-*   **Unit Tests:** Verifies CoAP parsing, TLV binary translations, WS bridge structures, and battery estimates.
+The server features test suites executed via **Vitest** and standalone verification runners:
+*   **Unit Tests:** Verifies CoAP parsing, deduplication, TLV binary translations, WS bridge structures, and battery estimates.
     ```bash
-    npx vitest run test/unit
+    npx vitest run test/test_unit
     ```
-*   **Integration Tests:** Validates complete server frame roundtrips.
+    *(or `npm run test:unit`)*
+*   **Integration & API Tests:** Runs database, routing, and REST API test suites.
     ```bash
-    npx vitest run test/integration
+    npx vitest run test/test_api_routes
+    npx vitest run test/test_command_api
     ```
-*   **Push Command Tests:** Validates REST HTTP API commands.
+*   **End-to-End WebSocket & Push Runners:** Standalone runners validating frame roundtrips and command dispatch.
     ```bash
-    npx vitest run test/push
+    npm run test:e2e        # node test/test_e2e_roundtrip.js
+    npm run test:e2e:push   # node test/test_e2e_push_verify.js
+    npm run test:ws         # node test/test_ws_comprehensive.js
     ```
-*   **Comprehensive Test Suite:** Runs all test suites.
+*   **Comprehensive Test Suite:** Runs all Vitest test suites.
     ```bash
     npx vitest run
     ```
@@ -259,19 +275,24 @@ To import your existing Tado home structure:
 To fully configure your local server with active schedules and zones:
 1.  **Configure local DNS routing**: Redirect `tanoclo.tado.lan` to point to the `ws-server` IP.
 2.  **Enable Proxy to Cloud**: Log into the Setup Portal, go to the Home Dashboard, and enable the proxy option. This tunnels your Internet Bridge communication back to the real Tado Cloud. Changing proxy modes automatically resets Internet Bridge WebSocket sessions to ensure a clean re-handshake.
-3.  **Start State Capture**: Navigate to **State Backup & Recovery** and click **Start Capture**.
+3.  **Start State Capture**: Navigate to **State Snapshot** and click **Start Capture**.
 4.  **Verify Device Check-In**: Let the devices check-in normally through the proxy, automatically recording configurations, active zones, and schedule blocks.
 5.  **Disable Proxy**: Turn off the proxy mode to disconnect from Tado's cloud and run 100% locally.
 
 ### 5.3 Setup Portal Capabilities
-The Setup Portal (`https://setup.tanoclo.yourdomain.com`) provides a comprehensive web management suite for system administrators:
+The Setup Portal provides a comprehensive web management suite for system administrators:
 
 *   **Home Management & Cloud Importer**:
     *   View all managed homes, device counts, zone counts, associated Internet Bridges, and linked administrator accounts.
     *   **OAuth Cloud Import**: 1-click import replicating home structures, zones, device bindings, smart schedules, and user accounts directly from Tado Cloud.
     *   **Proxy Toggling & Traffic Logging**: Individually toggle Cloud Proxy mode and append-only raw traffic capture per home.
+    *   **Zone Configuration Protection**: Toggle read-only zone configuration lock per home to prevent accidental schedule or zone overrides.
+    *   **Map Services**: Configure CARTO Basemaps API key for watermark-free geofencing maps.
     *   **Home Assistant Auto-Discovery Control**: Enable or disable MQTT entity discovery on a per-home basis.
     *   **Home Deletion & Reset**: Safely purge or reset managed homes and cascade-delete associated devices and metrics.
+*   **Actuator Limits Tuning**:
+    *   Configure mechanical travel step limits for Smart Radiator Thermostats (VA02) including Fully Extended (Limit Low), Fully Retracted (Limit High), and Calibration Drive Constant.
+    *   Set battery chemical profile (Alkaline vs Rechargeable NiMH) for accurate discharge curves.
 *   **WebSocket Whitelisting**:
     *   Restrict incoming Internet Bridge connections to an explicit whitelist of Home IDs and Bridge serial numbers.
     *   Block unauthorized hardware from attaching to the local WebSocket listener.
@@ -284,14 +305,19 @@ The Setup Portal (`https://setup.tanoclo.yourdomain.com`) provides a comprehensi
     *   Paste raw hexadecimal packet buffers to disassemble framing layers in real-time.
     *   Decodes 28-byte WebSocket bridge headers, RFC 7252 CoAP methods/paths/tokens/options, and recursively unpacks Tag-Length-Value (TLV) payload buffers with human-readable label lookups against the local FID catalog.
 *   **System Settings & MQTT Configuration**:
-    *   Configure MQTT broker endpoints, authentication, and port settings.
-    *   Adjust runtime log levels (`debug`, `info`, `warn`, `error`) and trigger server daemon restarts.
+    *   Configure MQTT broker endpoints, authentication, and port settings with an integrated connection tester.
+    *   Configure data retention cleanup periods for device measurements, zone measurements, and weather logs.
+    *   Toggle interactive OpenAPI / Swagger documentation at `/api/docs`.
+    *   Manage frontend OTA auto-updates from the GitHub OTA branch with a manual *Sync Frontend Now* trigger.
+    *   Adjust runtime log levels (`debug`, `info`, `warn`, `error`) and trigger server container restarts directly from the dashboard.
 *   **Emulated Devices & Hardware Node Registry**:
     *   Register and manage ESP32 hardware emulator nodes with IP/port configuration and live ping health checks.
+    *   Configure and rotate shared API keys (`X-ESP-API-Key`) securing HTTP communications between `ws-server` and the ESP32 `tado_emulator` web server.
     *   Create and provision virtual emulated devices (`RU...`) across registered nodes.
     *   Trigger automated over-the-air RF pairing routines directly from the browser.
     *   Inject dynamic telemetry (ambient temperature, relative humidity, battery voltage) in real-time.
     *   Synchronize, re-pair, or unpair virtual devices from node NVRAM and the server database.
-*   **State Backup & Recovery (Snapshots)**:
-    *   **1-Click JSON Export**: Download complete snapshots of all database tables (homes, zones, devices, schedules, measurements, users).
-    *   **1-Click Restore**: Upload and apply saved JSON state snapshots to restore complete server configurations instantaneously.
+*   **State Snapshot (Backup & Recovery)**:
+    *   **Live Capture**: Real-time progress matrix monitoring incoming CoAP config packets while in proxy mode.
+    *   **1-Click JSON Export**: Download complete snapshots of home configurations (devices, zones, circuits, schedules, topology).
+    *   **1-Click Restore & Import**: Upload and apply saved JSON state snapshots to restore complete home setups instantaneously.

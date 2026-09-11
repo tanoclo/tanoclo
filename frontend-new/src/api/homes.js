@@ -166,5 +166,3 @@ export function deleteUserFromHome(homeId, username) {
     method: 'DELETE'
   });
 }
-
-

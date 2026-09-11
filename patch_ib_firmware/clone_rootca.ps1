@@ -121,13 +121,13 @@ authorityKeyIdentifier = keyid
 
     $makeIssuerCert = {
         $null = openssl ca -batch -selfsign `
-          -config $conf `
-          -in $csr `
-          -keyfile (Join-Path $ca "private/ca.key") `
-          -startdate $start `
-          -enddate $end `
-          -extensions v3_req `
-          -out (Join-Path $ca "certs/issuer.pem") 2>$null
+            -config $conf `
+            -in $csr `
+            -keyfile (Join-Path $ca "private/ca.key") `
+            -startdate $start `
+            -enddate $end `
+            -extensions v3_req `
+            -out (Join-Path $ca "certs/issuer.pem") 2>$null
     }
 
     $bestDiff = 999999
@@ -149,13 +149,13 @@ authorityKeyIdentifier = keyid
         $tmpDer = Join-Path $work "tmp.der"
 
         $null = openssl ca -batch `
-          -config $conf `
-          -in $csr `
-          -keyfile (Join-Path $ca "private/ca.key") `
-          -startdate $start `
-          -enddate $end `
-          -extensions v3_ca `
-          -out $tmpPem 2>$null
+            -config $conf `
+            -in $csr `
+            -keyfile (Join-Path $ca "private/ca.key") `
+            -startdate $start `
+            -enddate $end `
+            -extensions v3_ca `
+            -out $tmpPem 2>$null
 
         $null = openssl x509 -in $tmpPem -out $tmpDer -outform DER 2>$null
 
@@ -185,6 +185,7 @@ authorityKeyIdentifier = keyid
     Write-Error "Clone RootCA - The cloned certificate must be exactly $origLen bytes to fit the firmware slot."
     exit 1
 
-} finally {
+}
+finally {
     Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
 }

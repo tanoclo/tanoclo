@@ -249,7 +249,7 @@ export default function EnergySettings({ homeId, zones }) {
         </div>
 
         {selectedTelemetryZoneId && (
-          <div style={{ marginTop: '0.5rem' }}>
+          <div style={{ marginTop: '0.5rem', width: '100%' }}>
             {isTelemetryLoading && (
               <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}>
                 <Spinner size={24} />
@@ -261,7 +261,7 @@ export default function EnergySettings({ homeId, zones }) {
               </div>
             )}
             {telemetryData && !isTelemetryLoading && (
-              <div style={{ minHeight: '300px' }}>
+              <div style={{ minHeight: '300px', width: '100%' }}>
                 <Suspense fallback={
                   <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}>
                     <Spinner size={24} />

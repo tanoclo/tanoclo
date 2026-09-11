@@ -6,7 +6,6 @@
  * temperature offset calibration inputs, and zone controller device assignments.
  */
 
-
 import Card from '../common/Card';
 import Button from '../common/Button';
 import Slider from '../common/Slider';
@@ -79,9 +78,9 @@ export default function ZoneSettingsGeneral({
               minWidth: '150px'
             }}
           />
-          <Button 
-            variant="primary" 
-            onClick={handleSaveName} 
+          <Button
+            variant="primary"
+            onClick={handleSaveName}
             disabled={isSavingName || !name.trim() || name === zone?.name}
             style={{ flex: '1 0 auto', justifyContent: 'center', minWidth: '80px' }}
           >
@@ -176,8 +175,8 @@ export default function ZoneSettingsGeneral({
             >
               <option value="none">{t('settings.none_no_controller')}</option>
               {(() => {
-                const zoneControllers = devices?.filter(d => 
-                  (d.deviceType?.startsWith('RU') || d.deviceType?.startsWith('WR')) && 
+                const zoneControllers = devices?.filter(d =>
+                  (d.deviceType?.startsWith('RU') || d.deviceType?.startsWith('WR')) &&
                   d.emulatedMode !== 'WIRELESS_SENSOR'
                 ) || [];
                 const zcRoomsCount = (zones || []).filter(z => z.type === 'HEATING' && (z.heatingCircuit !== null && z.heatingCircuit !== undefined && z.heatingCircuit !== '') && z.id !== zone?.id).length;
@@ -200,15 +199,15 @@ export default function ZoneSettingsGeneral({
           <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0 }}>
             {t('settings.linked_device_desc')}
           </p>
-          
+
           {((isDhw ? zone?.devices : devices?.filter(d => d.zoneId === zone?.id)) || []).map(d => (
-            <div 
+            <div
               key={d.serialNo}
               onClick={() => onNavigateToDevice && onNavigateToDevice(d.serialNo)}
               className="device-link-card"
-              style={{ 
-                padding: '0.75rem 1rem', 
-                border: '1px solid var(--border-color)', 
+              style={{
+                padding: '0.75rem 1rem',
+                border: '1px solid var(--border-color)',
                 borderRadius: 'var(--radius-sm)',
                 backgroundColor: 'var(--bg-input)',
                 display: 'flex',
@@ -243,13 +242,13 @@ export default function ZoneSettingsGeneral({
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             {devices?.filter(d => d.zoneId === zone?.id).map(d => (
-              <div 
+              <div
                 key={d.serialNo}
                 onClick={() => onNavigateToDevice && onNavigateToDevice(d.serialNo)}
                 className="device-link-card"
-                style={{ 
-                  padding: '0.75rem 1rem', 
-                  border: '1px solid var(--border-color)', 
+                style={{
+                  padding: '0.75rem 1rem',
+                  border: '1px solid var(--border-color)',
                   borderRadius: 'var(--radius-sm)',
                   backgroundColor: 'var(--bg-input)',
                   display: 'flex',

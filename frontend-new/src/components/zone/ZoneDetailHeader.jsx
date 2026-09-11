@@ -3,7 +3,6 @@
  * @brief Renders the top header layout bar inside the ZoneDetail sidebar sheet.
  */
 
-
 import { X } from 'lucide-react';
 
 /**
@@ -14,13 +13,13 @@ import { X } from 'lucide-react';
 export default function ZoneDetailHeader({ zoneName, onClose }) {
   return (
     <div className="modal-header-bar">
-      <button 
-        onClick={onClose} 
+      <button
+        onClick={onClose}
         style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#ffffff' }}
       >
         <X size={24} />
       </button>
-      
+
       <h2 style={{ fontSize: '1.2rem', fontWeight: 700, margin: 0 }}>
         {zoneName}
       </h2>

@@ -99,9 +99,9 @@ if ($maxSpiSeq -eq 0) {
 }
 
 $slotAMagic = "{0:x2}{1:x2}" -f $spiBytes[$activeSpiOffset + 5], $spiBytes[$activeSpiOffset + 4]
-$slotAVer   = "{0:x2}{1:x2}" -f $spiBytes[$activeSpiOffset + 7], $spiBytes[$activeSpiOffset + 6]
+$slotAVer = "{0:x2}{1:x2}" -f $spiBytes[$activeSpiOffset + 7], $spiBytes[$activeSpiOffset + 6]
 $slotBMagic = "{0:x2}{1:x2}" -f $spiBytes[$activeSpiOffset + 9], $spiBytes[$activeSpiOffset + 8]
-$slotBVer   = "{0:x2}{1:x2}" -f $spiBytes[$activeSpiOffset + 11], $spiBytes[$activeSpiOffset + 10]
+$slotBVer = "{0:x2}{1:x2}" -f $spiBytes[$activeSpiOffset + 11], $spiBytes[$activeSpiOffset + 10]
 
 Write-Host "SPI Active Descriptor: Slot A ver=$slotAVer magic=$slotAMagic, Slot B ver=$slotBVer magic=$slotBMagic"
 
@@ -111,10 +111,12 @@ $targetMagic = ""
 if ($slotAVer -eq "1701") {
     $targetSlot = "A"
     $targetMagic = $slotAMagic
-} elseif ($slotBVer -eq "1701") {
+}
+elseif ($slotBVer -eq "1701") {
     $targetSlot = "B"
     $targetMagic = $slotBMagic
-} else {
+}
+else {
     throw "ERROR: Version 92.1 not found in SPI Slot A or Slot B."
 }
 
@@ -125,7 +127,8 @@ $extractSize = 384 * 1024
 $spiSkip = 0
 if ($targetSlot -eq "A") {
     $spiSkip = 128 * 1024
-} else {
+}
+else {
     $spiSkip = 512 * 1024
 }
 

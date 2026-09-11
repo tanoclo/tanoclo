@@ -3,7 +3,6 @@
  * @brief Renders a standard confirmation dialog wrapper over Modal.
  */
 
-
 import Modal from './Modal';
 import Button from './Button';
 
@@ -18,15 +17,15 @@ import Button from './Button';
  * @param {string} props.cancelText - Label text of cancel button.
  * @param {string} props.variant - Theme style variant for confirm button ('primary', 'destructive').
  */
-export default function ConfirmModal({ 
-  isOpen, 
-  onClose, 
+export default function ConfirmModal({
+  isOpen,
+  onClose,
   onCancel,
-  onConfirm, 
-  title, 
-  message, 
-  confirmText = 'Confirm', 
-  cancelText = 'Cancel', 
+  onConfirm,
+  title,
+  message,
+  confirmText = 'Confirm',
+  cancelText = 'Cancel',
   variant = 'primary',
   isLoading = false
 }) {

@@ -1,13 +1,13 @@
 # build_all_and_patch.ps1
 # Build all and patch internal flash dump and create leaf certificates
 param(
-    [Parameter(Mandatory=$true, Position=0)]
+    [Parameter(Mandatory = $true, Position = 0)]
     [string]$inFw,
-    [Parameter(Mandatory=$true, Position=1)]
+    [Parameter(Mandatory = $true, Position = 1)]
     [string]$outFw,
-    [Parameter(Mandatory=$true, Position=2)]
+    [Parameter(Mandatory = $true, Position = 2)]
     [int]$endpointType,
-    [Parameter(Mandatory=$true, Position=3)]
+    [Parameter(Mandatory = $true, Position = 3)]
     [string]$outDir,
     [switch]$ReuseCerts
 )
@@ -58,7 +58,8 @@ try {
 
     if ([System.IO.Path]::IsPathRooted($outFw)) {
         $patchedFw = $outFw
-    } else {
+    }
+    else {
         $patchedFw = Join-Path $outDir $outFw
     }
 
@@ -76,7 +77,8 @@ try {
         }
 
         openssl x509 -in $origRootDer -inform DER -out $origRootPem -outform PEM
-    } else {
+    }
+    else {
         Write-Host "Build all and patch - Skipping RootCA extraction (reusing existing)"
     }
 
@@ -86,7 +88,8 @@ try {
         & $rootScript $origRootDer $rootKey $rootDer
 
         openssl x509 -in $rootDer -inform DER -out $rootPem -outform PEM
-    } else {
+    }
+    else {
         Write-Host "Build all and patch - Skipping cloned RootCA generation (reusing existing)"
     }
 
@@ -114,7 +117,8 @@ try {
         # Server-facing copies for ws-server compatibility
         Copy-Item $leafKey (Join-Path $outDir "tanoclo_key.pem") -Force
         Copy-Item $fullChain (Join-Path $outDir "tanoclo_cert.pem") -Force
-    } else {
+    }
+    else {
         Write-Host "Build all and patch - Skipping Intermediate + Leaf generation (reusing existing)"
     }
 
@@ -176,6 +180,7 @@ try {
     Write-Host "  Patched firmware:"
     Write-Host "    $patchedFw"
 
-} finally {
+}
+finally {
     Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
 }

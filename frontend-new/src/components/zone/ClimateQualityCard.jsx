@@ -6,7 +6,6 @@
  * (green for good, amber for fair, red for poor, slate for loading) mapping to indoor climate conditions.
  */
 
-
 import { Wind, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -19,8 +18,8 @@ export default function ClimateQualityCard({ climateQuality, onClick }) {
   const { t } = useTranslation();
 
   const rawFreshness = climateQuality?.freshness?.value?.toUpperCase();
-  const freshness = !climateQuality 
-    ? 'LOADING' 
+  const freshness = !climateQuality
+    ? 'LOADING'
     : (rawFreshness === 'POOR' ? 'POOR' : (rawFreshness === 'FAIR' ? 'FAIR' : 'GOOD'));
 
   // Dynamic Background: emerald for good, amber for fair, red for poor, slate for loading
@@ -70,7 +69,7 @@ export default function ClimateQualityCard({ climateQuality, onClick }) {
   };
 
   return (
-    <div 
+    <div
       onClick={onClick}
       style={getCardStyle()}
       onMouseEnter={(e) => {
@@ -84,12 +83,12 @@ export default function ClimateQualityCard({ climateQuality, onClick }) {
     >
       {/* Top Header Row */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', zIndex: 1 }}>
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          gap: '4px', 
-          backgroundColor: 'rgba(255, 255, 255, 0.2)', 
-          padding: '2px 8px', 
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '4px',
+          backgroundColor: 'rgba(255, 255, 255, 0.2)',
+          padding: '2px 8px',
           borderRadius: '12px',
           fontSize: '0.75rem',
           fontWeight: 700

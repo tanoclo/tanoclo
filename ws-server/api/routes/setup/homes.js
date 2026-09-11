@@ -94,11 +94,6 @@ router.post('/homes/:id/proxy-log', adminAuth, async (req, res) => {
     res.json({ success: true });
 });
 
-router.post('/homes/:id/log-upload', adminAuth, async (req, res) => {
-    const pool = db.getPool();
-    await pool.execute('UPDATE homes SET log_uploads_enabled = ? WHERE id = ?', [req.body.enabled, req.params.id]);
-    res.json({ success: true });
-});
 
 router.post('/homes/:id/allow-commands-in-proxy', adminAuth, async (req, res) => {
     const pool = db.getPool();

@@ -18,11 +18,11 @@ import { formatTemperature } from '../../utils/temperature';
  * @param {boolean} props.disabled - Active control disability parameter.
  * @param {number|null} props.currentTemp - Current room temperature telemetry.
  */
-export default function TemperatureDial({ 
-  value, 
-  onChange, 
-  min = 5.0, 
-  max = 25.0, 
+export default function TemperatureDial({
+  value,
+  onChange,
+  min = 5.0,
+  max = 25.0,
   step = 0.5,
   disabled = false,
   currentTemp = null
@@ -81,10 +81,10 @@ export default function TemperatureDial({
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     const dx = clientX - cx;
     const dy = clientY - cy;
-    
+
     let rad = Math.atan2(dy, dx);
     let deg = (rad * 180 / Math.PI + 360) % 360;
-    
+
     const newTemp = angleDegToTemp(deg);
     if (newTemp !== value) {
       onChange && onChange(newTemp);
@@ -137,7 +137,7 @@ export default function TemperatureDial({
   const isOff = value <= min;
 
   return (
-    <div 
+    <div
       role="spinbutton"
       aria-valuemin={min}
       aria-valuemax={max}
@@ -154,7 +154,7 @@ export default function TemperatureDial({
       }}
     >
       {/* Home Assistant Thermostat Dial Arc Container */}
-      <div 
+      <div
         style={{
           position: 'relative',
           width: '240px',
@@ -165,7 +165,7 @@ export default function TemperatureDial({
         }}
       >
         {/* SVG Circular Gauge Arc */}
-        <svg 
+        <svg
           ref={svgRef}
           viewBox="0 0 240 240"
           onPointerDown={handlePointerDown}
@@ -177,22 +177,22 @@ export default function TemperatureDial({
           }}
         >
           {/* Background Arc Track (270° from 135° to 45°) */}
-          <path 
-            d="M 56.36 183.64 A 90 90 0 1 1 183.64 183.64" 
-            fill="none" 
-            stroke="rgba(255, 255, 255, 0.25)" 
-            strokeWidth="12" 
-            strokeLinecap="round" 
+          <path
+            d="M 56.36 183.64 A 90 90 0 1 1 183.64 183.64"
+            fill="none"
+            stroke="rgba(255, 255, 255, 0.25)"
+            strokeWidth="12"
+            strokeLinecap="round"
           />
 
           {/* Active Target Setpoint Fill Arc */}
           {!isOff && (
-            <path 
-              d={fillArcPath} 
-              fill="none" 
-              stroke="#ffffff" 
-              strokeWidth="12" 
-              strokeLinecap="round" 
+            <path
+              d={fillArcPath}
+              fill="none"
+              stroke="#ffffff"
+              strokeWidth="12"
+              strokeLinecap="round"
               style={{
                 filter: 'drop-shadow(0 0 6px rgba(255, 255, 255, 0.5))'
               }}
@@ -202,13 +202,13 @@ export default function TemperatureDial({
           {/* Current Room Temperature Notch Dot */}
           {currentX != null && currentY != null && (
             <g>
-              <circle 
-                cx={currentX} 
-                cy={currentY} 
-                r="6" 
-                fill="#fbbf24" 
-                stroke="#1f2937" 
-                strokeWidth="2" 
+              <circle
+                cx={currentX}
+                cy={currentY}
+                r="6"
+                fill="#fbbf24"
+                stroke="#1f2937"
+                strokeWidth="2"
                 style={{
                   filter: 'drop-shadow(0 0 4px rgba(251, 191, 36, 0.8))'
                 }}
@@ -217,13 +217,13 @@ export default function TemperatureDial({
           )}
 
           {/* Target Setpoint Knob / Handle */}
-          <circle 
-            cx={targetX} 
-            cy={targetY} 
-            r="12" 
-            fill="#ffffff" 
-            stroke="#1f2937" 
-            strokeWidth="3" 
+          <circle
+            cx={targetX}
+            cy={targetY}
+            r="12"
+            fill="#ffffff"
+            stroke="#1f2937"
+            strokeWidth="3"
             style={{
               filter: 'drop-shadow(0 2px 8px rgba(0, 0, 0, 0.4))',
               transition: isDragging ? 'none' : 'all 0.15s ease'
@@ -262,7 +262,7 @@ export default function TemperatureDial({
           }}>
             {isOff ? '' : t('common.celsius', 'Celsius')}
           </span>
-          
+
           {/* Current Room Temp Badge inside dial center */}
           {currentTemp != null && (
             <span style={{

@@ -117,6 +117,8 @@ function publishDeviceTelemetry(deviceRecord, updates = {}) {
     if (updates.aux_temperature !== undefined) pub(`${prefix}/aux_temperature`, updates.aux_temperature);
     if (updates.humidity !== undefined) pub(`${prefix}/humidity`, updates.humidity);
     if (updates.light_level !== undefined) pub(`${prefix}/light_level`, updates.light_level);
+    if (updates.target_temperature !== undefined) pub(`${prefix}/target_temperature`, updates.target_temperature);
+    if (updates.temperature_offset !== undefined) pub(`${prefix}/temperature_offset`, updates.temperature_offset);
     if (updates.rssi !== undefined) pub(`${prefix}/rssi`, updates.rssi);
 
     // Valve Actuator fields

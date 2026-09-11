@@ -110,13 +110,13 @@ bool SX1276Radio::init_radio() {
   write_reg(REG_AFC_BW, 0x01);
 
   // AFC auto-clear on RX start
-  write_reg(0x1A, 0x20);
+  write_reg(REG_AFC_FEI, 0x20);
   // RSSI Threshold: -105 dBm
   write_reg(REG_RSSITHRESH, 0xD2);
 
   // TX Preamble: 4 bytes
-  write_reg(0x25, 0x00);
-  write_reg(0x26, 0x04);
+  write_reg(REG_PREAMBLE_MSB, 0x00);
+  write_reg(REG_PREAMBLE_LSB, 0x04);
 
   // 3-byte preamble detection, tolerance=10
   write_reg(REG_PREAMBLE_DETECT, 0xCA);

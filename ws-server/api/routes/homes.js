@@ -22,8 +22,6 @@ router.use('/', require('./homes/heating'));
 router.use('/', require('./homes/weather'));
 router.use('/', require('./homes/users'));
 router.use('/', require('./homes/energy'));
-router.use('/', require('./homes/installations'));
-router.use('/', require('./homes/logs'));
 router.use('/', require('./homes/incident'));
 
 module.exports = router;

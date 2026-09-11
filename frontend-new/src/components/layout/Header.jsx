@@ -81,11 +81,11 @@ export default function Header({ title = '', showBack = false, onBack }) {
 
         {/* User Profile Info */}
         {user && (
-          <div 
+          <div
             onClick={() => navigate('/account')}
-            style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
+            style={{
+              display: 'flex',
+              alignItems: 'center',
               gap: '0.5rem',
               cursor: 'pointer',
               padding: '4px 8px',

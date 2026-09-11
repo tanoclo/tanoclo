@@ -6,7 +6,6 @@
  * and physical valve Actuator calibration step boundaries (low/high limits, drive constants) for motor tuning.
  */
 
-
 import { useState, useEffect, useRef } from 'react';
 import Card from '../common/Card';
 import Button from '../common/Button';
@@ -157,7 +156,7 @@ export function formatFriendlyValue(fidStr, hex, val) {
   return '';
 }
 
-export function parseFriendlyToRaw(fidStr, friendlyStr, lenBytes) {
+export function parseFriendlyToRaw(fidStr, friendlyStr, _lenBytes) {
   if (!friendlyStr) return '';
   const fidNorm = (String(fidStr || '').toUpperCase().startsWith('0X')
     ? String(fidStr || '').toUpperCase()
@@ -301,7 +300,7 @@ export default function DeviceAdvancedSettings({
         if (res && res.status) {
           setServerDumpStatus(res.status);
         }
-      } catch (e) {
+      } catch (_e) {
         // Ignored in background poll
       }
     };
@@ -404,7 +403,7 @@ export default function DeviceAdvancedSettings({
 
     window.addEventListener('device-debug-response', handleSseDebugResponse);
     return () => window.removeEventListener('device-debug-response', handleSseDebugResponse);
-  }, [targetSerial, stFid, nvmFid, dbgAdr]);
+  }, [targetSerial, stFid, nvmFid, dbgAdr, showToast]);
 
   const handleReadSt = async () => {
     setStLoading(true);
@@ -1602,4 +1601,3 @@ export default function DeviceAdvancedSettings({
     </div>
   );
 }
-

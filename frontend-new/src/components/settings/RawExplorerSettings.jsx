@@ -4,7 +4,7 @@
  * 
  * Interacts with TaNoClo-specific backend diagnostic APIs to query exact
  * database states for zone/device raw TLV field IDs (FIDs), mapping friendly labels
- * to undocumented hex keys (like field_6200 for Schedule Target Temperature).
+ * to hex keys (like field_6200 for Schedule Target Temperature).
  */
 
 import { useState } from 'react';
@@ -65,9 +65,9 @@ export default function RawExplorerSettings() {
   const { t } = useTranslation();
   const { activeHomeId, zones, homeInfo } = useHome();
   const { data: allDevices } = useSWR(activeHomeId ? SWR_KEYS.devices(activeHomeId) : null, () => getDevices(activeHomeId));
-  
+
   const homeTimeZone = homeInfo?.dateTimeZone || 'UTC';
-  
+
   const getFriendlyLabel = (key) => {
     let lookupKey = key;
     if (!key.startsWith('field_') && key !== 'open_window_detected') {
@@ -79,7 +79,7 @@ export default function RawExplorerSettings() {
     }
     return FRIENDLY_LABELS[key] || key;
   };
-  
+
   const [explorerType, setExplorerType] = useState('zone');
   const [selectedZoneId, setSelectedZoneId] = useState('');
   const [selectedDeviceSerial, setSelectedDeviceSerial] = useState('');
@@ -106,7 +106,7 @@ export default function RawExplorerSettings() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', width: '100%', maxWidth: '800px' }}>
-      
+
       {/* Title */}
       <div style={{ minHeight: '42px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
         <h2 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, lineHeight: 1.2 }}>{t('settings.raw_explorer_title')}</h2>
@@ -119,7 +119,7 @@ export default function RawExplorerSettings() {
         <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
             <label style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{t('settings.source_type')}</label>
-            <select 
+            <select
               value={explorerType}
               onChange={(e) => {
                 setExplorerType(e.target.value);
@@ -144,7 +144,7 @@ export default function RawExplorerSettings() {
           {explorerType === 'zone' ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
               <label style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{t('settings.select_room_zone')}</label>
-              <select 
+              <select
                 value={selectedZoneId}
                 onChange={(e) => setSelectedZoneId(e.target.value)}
                 style={{
@@ -167,7 +167,7 @@ export default function RawExplorerSettings() {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
               <label style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{t('settings.select_smart_thermostat')}</label>
-              <select 
+              <select
                 value={selectedDeviceSerial}
                 onChange={(e) => setSelectedDeviceSerial(e.target.value)}
                 style={{
@@ -207,8 +207,8 @@ export default function RawExplorerSettings() {
             </div>
           )}
 
-          <Button 
-            onClick={handleFetchExplorer} 
+          <Button
+            onClick={handleFetchExplorer}
             disabled={isFetchingExplorer || (explorerType === 'zone' ? !selectedZoneId : !selectedDeviceSerial)}
             variant="primary"
             style={{ padding: '0.45rem 1rem' }}
@@ -242,8 +242,8 @@ export default function RawExplorerSettings() {
                       .map(key => {
                         const label = getFriendlyLabel(key);
                         return (
-                          <th 
-                            key={key} 
+                          <th
+                            key={key}
                             style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap' }}
                             title={label}
                           >
@@ -257,7 +257,7 @@ export default function RawExplorerSettings() {
                   {explorerData.measurements.map(row => (
                     <tr key={row.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
                       <td style={{ padding: '0.5rem 0.75rem', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }}>
-                        {parseTimestampToDate(row.timestamp).toLocaleTimeString([], { timeZone: homeTimeZone })}<br/>
+                        {parseTimestampToDate(row.timestamp).toLocaleTimeString([], { timeZone: homeTimeZone })}<br />
                         <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{parseTimestampToDate(row.timestamp).toLocaleDateString([], { timeZone: homeTimeZone })}</span>
                       </td>
                       {Object.entries(row)

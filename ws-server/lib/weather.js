@@ -146,7 +146,7 @@ async function updateAllHomesWeather() {
             }
             await updateHomeWeather(home.id, home.latitude, home.longitude);
             _dailyRequests += 2; // Two API calls (weather + AQI) per home update
-            
+
             // Introduce a short delay between requests if we have multiple homes
             if (homes.length > 5) {
                 await new Promise(r => setTimeout(r, 200));

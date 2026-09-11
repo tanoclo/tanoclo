@@ -88,7 +88,7 @@ router.get('/:homeId/zones', async (req, res) => {
                 mappedDevices[0].duties = Array.from(new Set(mappedDevices[0].duties));
                 const firstSerial = mappedDevices[0].shortSerialNo || mappedDevices[0].serialNo;
                 if (firstSerial && zone.type !== 'HOT_WATER') {
-                    pool.execute('UPDATE zones SET measuring_device_serial = ? WHERE id = ? AND home_id = ?', [firstSerial, zone.id, homeId]).catch(() => {});
+                    pool.execute('UPDATE zones SET measuring_device_serial = ? WHERE id = ? AND home_id = ?', [firstSerial, zone.id, homeId]).catch(() => { });
                 }
             }
 
@@ -281,7 +281,6 @@ router.post('/:homeId/zones', async (req, res) => {
     }
 });
 
-
 // GET /api/v2/homes/{homeId}/zones/{zoneId}/capabilities
 router.get('/:homeId/zones/:zoneId/capabilities', async (req, res) => {
     try {
@@ -316,8 +315,6 @@ router.get('/:homeId/zones/:zoneId/capabilities', async (req, res) => {
         res.status(500).json({ error: 'internal_error' });
     }
 });
-
-// GET /api/v2/homes/{homeId}/zones/{zoneId}/schedule/timetables
 
 router.get('/:homeId/zones/:zoneId/measuringDevice', async (req, res) => {
     try {
@@ -609,7 +606,7 @@ async function assignDeviceToZone(req, res, homeId, zoneId, serialNo) {
         }
 
         await pool.execute('UPDATE devices SET zone_id = ? WHERE serial_no = ? AND home_id = ?', [zoneId, serialNo, homeId]);
-        await pool.execute('UPDATE emulated_devices SET zone_id = ? WHERE serial_no = ? AND home_id = ?', [zoneId, serialNo, homeId]).catch(() => {});
+        await pool.execute('UPDATE emulated_devices SET zone_id = ? WHERE serial_no = ? AND home_id = ?', [zoneId, serialNo, homeId]).catch(() => { });
 
         // If the new zone didn't have a measuring device, set this one
         const [newZone] = await pool.execute('SELECT measuring_device_serial FROM zones WHERE id = ? AND home_id = ?', [zoneId, homeId]);
@@ -628,14 +625,12 @@ async function assignDeviceToZone(req, res, homeId, zoneId, serialNo) {
         if (!devBypass) {
             const commandApi = require('../../../lib/command-api');
 
-            // Tado sends 3x identify pulses (LED blink) when moving a device
             await commandApi.pushDeviceIdentify(serialNo).catch(err => { _log('warn', `pushDeviceIdentify attempt 1 failed: ${err.message}`); });
             await new Promise(r => setTimeout(r, 400));
             await commandApi.pushDeviceIdentify(serialNo).catch(err => { _log('warn', `pushDeviceIdentify attempt 2 failed: ${err.message}`); });
             await new Promise(r => setTimeout(r, 400));
             await commandApi.pushDeviceIdentify(serialNo).catch(err => { _log('warn', `pushDeviceIdentify attempt 3 failed: ${err.message}`); });
 
-            // Tado always pushes a config refresh to the bridge and device AFTER the blink sequence
             await new Promise(r => setTimeout(r, 400));
 
             const [ibDevs] = await pool.execute("SELECT serial_no FROM devices WHERE home_id = ? AND device_type LIKE 'IB%' LIMIT 1", [homeId]);
@@ -660,8 +655,6 @@ async function assignDeviceToZone(req, res, homeId, zoneId, serialNo) {
         res.status(500).json({ error: 'internal_error' });
     }
 }
-
-// POST /api/v2/homes/{homeId}/zones/{zoneId}/devices
 
 router.get('/:homeId/roomsAndDevices/rooms/:zoneId/zoneControllers', async (req, res) => {
     try {

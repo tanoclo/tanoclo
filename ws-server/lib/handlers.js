@@ -156,7 +156,7 @@ async function handleAuthKey(ws, frame, coapMsg, decoded, peerInfo, rawData) {
 }
 
 async function handlePairFound(ws, frame, coapMsg, decoded, peerInfo, rawData) {
-    // Disabled pairing socket drop/block for now during testing
+    // Disabled pairing socket drop/block
     /*
     const { isBridgeBlocked } = require('./device-manager');
     const bridgeId = wsToBridgeId ? wsToBridgeId.get(ws) : null;
@@ -260,8 +260,8 @@ async function handleAuthToken(ws, frame, coapMsg, decoded, peerInfo, rawData) {
         const { isBridgeBlocked } = require('./device-manager');
         if (isBridgeBlocked(deviceId)) {
             log('info', `[PAIRING_BLOCK] Rejecting handleAuthToken & closing socket for isolated Bridge ${deviceId}`);
-            try { ws.close(); } catch(e) {}
-            try { ws.end(); } catch(e) {}
+            try { ws.close(); } catch (e) { }
+            try { ws.end(); } catch (e) { }
             return;
         }
 
@@ -315,7 +315,7 @@ async function handleAuthToken(ws, frame, coapMsg, decoded, peerInfo, rawData) {
         if (shortSerial) {
             await db.updateDeviceConnectionState(shortSerial, true);
             if (mqttPublisher) {
-                mqttPublisher.publishDeviceAvailability(shortSerial, true).catch(() => { });
+                mqttPublisher.publishDeviceAvailability(shortSerial, true).catch(e => log('debug', `[MQTT] Availability publish failed for ${shortSerial}: ${e.message}`));
             }
             if (decoded && decoded.fields && decoded.fields['0x0007']) {
                 db.updateDeviceClientNonce(shortSerial, decoded.fields['0x0007']).catch(err => {

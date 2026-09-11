@@ -39,12 +39,12 @@ import logger from '../utils/logger';
 export default function HomePage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { 
+  const {
     activeHomeId,
-    zones, 
-    zoneStates, 
-    weather, 
-    isLoading, 
+    zones,
+    zoneStates,
+    weather,
+    isLoading,
     refreshAll,
     homeInfo,
     homeState
@@ -140,8 +140,8 @@ export default function HomePage() {
         return {
           room: z.id,
           overlay: {
-            setting: isDhw 
-              ? { type: 'HOT_WATER', power: 'ON' } 
+            setting: isDhw
+              ? { type: 'HOT_WATER', power: 'ON' }
               : { type: 'HEATING', power: 'ON', temperature: { celsius: boostTemp } },
             termination: {
               type: 'MANUAL'
@@ -197,8 +197,8 @@ export default function HomePage() {
     }
   };
 
-  const currentPresenceMode = homeState?.presenceLocked 
-    ? homeState?.presence 
+  const currentPresenceMode = homeState?.presenceLocked
+    ? homeState?.presence
     : 'AUTO';
 
   const handlePresenceModeChange = async (mode) => {
@@ -220,7 +220,7 @@ export default function HomePage() {
   return (
     <AppShell title={homeInfo?.name || t('dashboard.title')}>
       <div className="page-container" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-        
+
         {/* Consolidated control bar: presence + weather & quick actions */}
         <div style={{
           display: 'flex',
@@ -238,7 +238,7 @@ export default function HomePage() {
           <div style={{ display: 'flex', gap: '6px', alignItems: 'center', padding: '2px 0' }}>
             {['HOME', 'AWAY', 'AUTO'].map(mode => {
               const isActive = currentPresenceMode === mode;
-              
+
               // Decide base color dynamically
               let baseColor;
               if (mode === 'HOME') {
@@ -263,7 +263,7 @@ export default function HomePage() {
                     borderRadius: '20px',
                     cursor: 'pointer',
                     transition: 'all var(--transition-fast)',
-                    
+
                     // Solid green/red backgrounds always
                     backgroundColor: baseColor,
                     color: '#ffffff',
@@ -298,11 +298,11 @@ export default function HomePage() {
           }}>
             {/* Weather Info Section */}
             {weather && (
-              <div style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: '0.5rem', 
-                padding: '0.3rem 0.75rem', 
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                padding: '0.3rem 0.75rem',
                 borderRadius: '20px',
                 backgroundColor: 'var(--bg-app)',
                 border: '1px solid var(--border-color)',
@@ -322,8 +322,8 @@ export default function HomePage() {
 
             {/* Home Actions Dropdown */}
             <div style={{ position: 'relative', zIndex: 100 }}>
-              <Button 
-                variant="secondary" 
+              <Button
+                variant="secondary"
                 onClick={() => setIsQuickActionsOpen(prev => !prev)}
                 disabled={isLoading || isBulkActionLoading}
                 style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem', height: '32px', display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}
@@ -331,10 +331,10 @@ export default function HomePage() {
                 <span>{t('dashboard.zones.quick_actions') || 'Home Actions'}</span>
                 <ChevronDown size={14} />
               </Button>
-              
+
               {isQuickActionsOpen && (
                 <>
-                  <div 
+                  <div
                     onClick={() => setIsQuickActionsOpen(false)}
                     style={{
                       position: 'fixed',
@@ -463,8 +463,8 @@ export default function HomePage() {
           <>
             {/* Persistent low/depleted battery warnings */}
             {(() => {
-              const lowBatteryDevices = (batteryDevices || []).filter(d => 
-                d.battery_state === 'LOW' || d.battery_state === 'CRITICAL' || d.battery_state === 'DEPLETED'
+              const lowBatteryDevices = (batteryDevices || []).filter(d =>
+                !d.is_emulated && (d.battery_state === 'LOW' || d.battery_state === 'CRITICAL' || d.battery_state === 'DEPLETED')
               );
               if (lowBatteryDevices.length === 0) return null;
               return (
@@ -500,8 +500,8 @@ export default function HomePage() {
                       >
                         <AlertTriangle size={16} style={{ color: isDepleted ? 'var(--danger)' : 'var(--warning)', flexShrink: 0 }} />
                         <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                          {isDepleted 
-                            ? t('settings.battery_depleted_warning', { name: label }) 
+                          {isDepleted
+                            ? t('settings.battery_depleted_warning', { name: label })
                             : t('settings.battery_low_warning', { name: label })}
                         </span>
                       </div>
@@ -517,17 +517,17 @@ export default function HomePage() {
               gap: '1.25rem'
             }}>
               {orderedZones.map(zone => (
-                <ZoneCard 
-                  key={zone.id} 
+                <ZoneCard
+                  key={zone.id}
                   zone={zone}
                   state={zoneStates?.zoneStates?.[zone.id]}
                   onClick={() => setSelectedZoneId(zone.id)}
                 />
               ))}
-              
+
               {/* Climate Quality Card */}
               {activeHomeId && (
-                <ClimateQualityCard 
+                <ClimateQualityCard
                   climateQuality={climateQuality}
                   onClick={() => navigate('/climate-quality')}
                 />
@@ -541,9 +541,9 @@ export default function HomePage() {
           <Card style={{ padding: '3rem', textAlign: 'center' }}>
             <p style={{ color: 'var(--text-secondary)' }}>{t('dashboard.zones.no_zones_home')}</p>
             {loadingTimedOut && (
-              <Button 
-                variant="secondary" 
-                onClick={refreshAll} 
+              <Button
+                variant="secondary"
+                onClick={refreshAll}
                 style={{ marginTop: '1rem' }}
               >
                 {t('common.refresh')}
@@ -554,7 +554,7 @@ export default function HomePage() {
 
         {/* Zone Details Modal */}
         {selectedZoneId !== null && (
-          <ZoneDetail 
+          <ZoneDetail
             zoneId={selectedZoneId}
             isOpen={selectedZoneId !== null}
             onClose={() => setSelectedZoneId(null)}

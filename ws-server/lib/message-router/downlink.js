@@ -47,11 +47,7 @@ let commandApi;
 let metrics;
 let TADO_ROOT_CA;
 let extractShortSerial;
-
-// MID tracking
 let serverMid = 0;
-
-
 
 function init(opts) {
     if (opts.log !== undefined) log = opts.log;
@@ -154,7 +150,7 @@ async function captureDownlinkConfig(coapMsg, displayPath, activeDeviceId, pathI
         const decoded = await workerPool.tlvDecode(coapMsg.payload);
         if (decoded.ok) {
             const captureEtag = coap.optionFirst(coapMsg, coap.OPT_ETAG);
-            
+
             let canonicalPath = displayPath;
             if (displayPath.includes('hvac') && !displayPath.endsWith('/config') && !displayPath.includes('hvac/')) {
                 canonicalPath = `${displayPath}/config`;
@@ -185,9 +181,9 @@ async function captureDownlinkConfig(coapMsg, displayPath, activeDeviceId, pathI
 
 async function captureDownlinkZoneState(coapMsg, displayPath, activeDeviceId, pathInfo) {
     const isZoneState = displayPath && (
-        displayPath.match(/\/z\/\d+\/s$/) || 
-        displayPath.match(/^z\/\d+\/s$/) || 
-        displayPath.endsWith('z/s') || 
+        displayPath.match(/\/z\/\d+\/s$/) ||
+        displayPath.match(/^z\/\d+\/s$/) ||
+        displayPath.endsWith('z/s') ||
         displayPath === 'z/s'
     );
     if (isZoneState) {

@@ -1,6 +1,6 @@
 /**
- * @file addon-entrypoint.js
- * @brief Home Assistant addon entry point for TaNoClo RF Sniffer Stream Receiver.
+ * @file app-entrypoint.js
+ * @brief Home Assistant app entry point for TaNoClo RF Sniffer Stream Receiver.
  * 
  * Reads options.json configuration options file exported by the Home Assistant Supervisor supervisor,
  * maps properties (tcp ports, Pan IDs, MQTT hosts) to corresponding environment variables,
@@ -17,7 +17,7 @@ try {
         options = JSON.parse(fs.readFileSync('/data/options.json', 'utf8'));
     }
 } catch (e) {
-    console.error('[Addon Entrypoint] Error reading options.json:', e.message);
+    console.error('[App Entrypoint] Error reading options.json:', e.message);
 }
 
 // Map configuration values to environment variables
@@ -44,7 +44,7 @@ if (options.stats) {
     args.push('--stats');
 }
 
-console.log('[Addon Entrypoint] Launching TaNoClo RF Sniffer Receiver...');
+console.log('[App Entrypoint] Launching TaNoClo RF Sniffer Receiver...');
 
 const server = spawn('node', args, {
     stdio: 'inherit',

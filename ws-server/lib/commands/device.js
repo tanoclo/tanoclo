@@ -349,7 +349,9 @@ async function pushDevicePair(deviceId, enabled = true, pairId = null, durationS
     try {
         const pool = api._db ? api._db.getPool() : null;
         if (pool) {
-            await pool.execute('UPDATE devices SET in_pairing_mode = ? WHERE serial_no = ?', [enabled ? 1 : 0, deviceId]).catch(() => {});
+            await pool.execute('UPDATE devices SET in_pairing_mode = ? WHERE serial_no = ?', [enabled ? 1 : 0, deviceId]).catch(e => {
+                if (api._log) api._log('debug', `[pushDevicePair] DB update pairing failed: ${e.message}`);
+            });
         }
     } catch (e) {
         if (api._log) api._log('debug', `[pushDevicePair] Failed to update pairing mode for ${deviceId}: ${e.message}`);
@@ -361,11 +363,15 @@ async function pushDevicePair(deviceId, enabled = true, pairId = null, durationS
             try {
                 const pool = api._db ? api._db.getPool() : null;
                 if (pool) {
-                    await pool.execute('UPDATE devices SET in_pairing_mode = 0 WHERE serial_no = ?', [deviceId]).catch(() => {});
+                    await pool.execute('UPDATE devices SET in_pairing_mode = 0 WHERE serial_no = ?', [deviceId]).catch(e => {
+                        if (api._log) api._log('debug', `[pushDevicePair] Timeout DB clear failed: ${e.message}`);
+                    });
                 }
-                await pushDevicePair(deviceId, false, pairId).catch(() => {});
+                await pushDevicePair(deviceId, false, pairId).catch(e => {
+                    if (api._log) api._log('debug', `[pushDevicePair] Timeout disable push failed: ${e.message}`);
+                });
             } catch (err) {
-                // Ignore timeout errors
+                if (api._log) api._log('debug', `[pushDevicePair] Timeout handler error: ${err.message}`);
             }
         }, (durationSeconds || 300) * 1000);
         if (timer.unref) timer.unref();
@@ -927,5 +933,3 @@ module.exports = {
     pushDeviceRegistrationToBridge,
     handleDeviceRegistration
 };
-
-

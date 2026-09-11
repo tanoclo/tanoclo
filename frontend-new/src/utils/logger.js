@@ -31,10 +31,10 @@ let currentLevel = getLevel();
 // Semantic log dispatch object
 const logger = {
   debug: (...args) => currentLevel >= LOG_LEVELS.DEBUG && console.debug('[DEBUG]', ...args),
-  info:  (...args) => currentLevel >= LOG_LEVELS.INFO  && console.info('[INFO]', ...args),
-  warn:  (...args) => currentLevel >= LOG_LEVELS.WARN  && console.warn('[WARN]', ...args),
+  info: (...args) => currentLevel >= LOG_LEVELS.INFO && console.info('[INFO]', ...args),
+  warn: (...args) => currentLevel >= LOG_LEVELS.WARN && console.warn('[WARN]', ...args),
   error: (...args) => currentLevel >= LOG_LEVELS.ERROR && console.error('[ERROR]', ...args),
-  
+
   /**
    * @brief Modifies active log level at runtime.
    * @param {string} level - Log level name.
@@ -45,7 +45,7 @@ const logger = {
       /* ignore localStorage unavailable */
     }
   },
-  
+
   /**
    * @brief Returns current active level name.
    * @returns {string} Level name.
@@ -57,4 +57,3 @@ const logger = {
 if (typeof window !== 'undefined') window.tanocloLog = logger;
 
 export default logger;
-

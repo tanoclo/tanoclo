@@ -24742,7 +24742,18 @@ INSERT INTO `tlv_labels` (`id`, `hex_id`, `name`, `type`, `unit`, `scale`, `deci
 (280, '0x045a', 'ot_dhw_temperature', 's16be', '°C', 0.01, 2, 2, 'OpenTherm domestic hot water measured temperature', NULL),
 (281, '0x02b2', 'display_active_timeout', 'u16be', 'min', 1, 0, 0, 'Timeout duration for display activity/temporary overlay in minutes', NULL),
 (282, '0x045e', 'ot_dhw_flow_rate', 'u16be', 'L/min', 0.1, 1, 1, 'OpenTherm ID 19 domestic hot water flow rate in litres per minute', NULL),
-(283, '0x0462', 'ot_ch_water_pressure_bar', 's16be', 'bar', 0.1, 1, 1, 'OpenTherm ID 18 central heating system water pressure in bar', NULL);
+(283, '0x0462', 'ot_ch_water_pressure_bar', 's16be', 'bar', 0.1, 1, 1, 'OpenTherm ID 18 central heating system water pressure in bar', NULL),
+(284, '0x0001', 'device_serial_number_0001', 'string_ascii', NULL, NULL, NULL, NULL, 'Device serial number string (ASCII, seen in /d/info and commissioning)', NULL),
+(285, '0x0012', 'pairing_raw_op_key', 'bytes', 'aes128', NULL, NULL, NULL, '16-byte raw plaintext operational AES-128 key (seen in POST /d/pair)', NULL),
+(286, '0x0033', 'time_utc', 'u32be', 's', NULL, NULL, NULL, 'UTC timestamp in seconds (seen in /time response)', NULL),
+(287, '0x013f', 'dev_hw_flags_013f', 'u8', NULL, NULL, NULL, NULL, 'Device hardware flag (seen in /d/info)', NULL),
+(288, '0x01d4', 'zone_peer_uri_1d4', 'string_ascii', 'uri', NULL, NULL, NULL, 'Zone peer URI S (extui target URL S)', NULL),
+(289, '0x01d5', 'zone_peer_uri_1d5', 'string_ascii', 'uri', NULL, NULL, NULL, 'Zone peer URI P (extui target URL P)', NULL),
+(290, '0x01f5', 'dev_hw_flags_01f5', 'u8', NULL, NULL, NULL, NULL, 'Device hardware capability flag (seen in /d/info)', NULL),
+(291, '0x01f6', 'dev_hw_flags_01f6', 'u8', NULL, NULL, NULL, NULL, 'Device hardware type: 11 for RU02, 5 for VA02 (seen in /d/info)', NULL),
+(292, '0x01f7', 'dev_hw_flags_01f7', 'u8', NULL, NULL, NULL, NULL, 'Device capabilities: 0 for RU, 0x7F for VA (seen in /d/info)', NULL),
+(293, '0x01f8', 'dev_hw_flags_01f8', 'u8', NULL, NULL, NULL, NULL, 'Device sub-GHz radio type: 13 for RU, 0 for VA (seen in /d/info)', NULL),
+(294, '0x01f9', 'dev_capabilities_01f9', 'u16be', NULL, NULL, NULL, NULL, 'Device capabilities bitmask (seen in /d/info)', NULL);
 
 CREATE TABLE `users` (
   `id` varchar(36) NOT NULL,

@@ -12,13 +12,11 @@ import { useState, useEffect, useRef } from 'react';
 import useSWR from 'swr';
 import { useTranslation } from 'react-i18next';
 
-
 import Spinner from '../common/Spinner';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { getHomeDetails, updateHomeDetails, updateHomeGeolocation, updateAwayRadius } from '../../api/homes';
 import { getHomeTimezone, updateHomeTimezone } from '../../api/tanoclo';
-
 
 import logger from '../../utils/logger';
 import { useToast } from '../../context/ToastContext';
@@ -358,7 +356,7 @@ export default function HomeSettings({ homeId, homeInfo, mutateHomeInfo }) {
   const [radius, setRadius] = useState(300);
   const [isSavingProperties, setIsSavingProperties] = useState(false);
   const [isSavingLocation, setIsSavingLocation] = useState(false);
-  
+
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
@@ -522,7 +520,7 @@ export default function HomeSettings({ homeId, homeInfo, mutateHomeInfo }) {
       });
 
     }
-  }, [details, lat, lon, radius]);
+  }, [details, lat, lon, radius, homeInfo?.cartoApiKey]);
 
   // Update map view and marker when coordinates change externally (e.g., Use My Location)
   useEffect(() => {
@@ -602,7 +600,7 @@ export default function HomeSettings({ homeId, homeInfo, mutateHomeInfo }) {
       if (radius !== Math.round(homeInfo?.awayRadiusInMeters)) {
         await updateAwayRadius(homeId, radius);
       }
-      
+
       await Promise.all([
         mutateDetails(),
         mutateHomeInfo()
@@ -644,7 +642,7 @@ export default function HomeSettings({ homeId, homeInfo, mutateHomeInfo }) {
         </p>
       </div>
 
-      <HomeSettingsGeneral 
+      <HomeSettingsGeneral
         name={name}
         setName={setName}
         address={address}
@@ -668,7 +666,7 @@ export default function HomeSettings({ homeId, homeInfo, mutateHomeInfo }) {
         t={t}
       />
 
-      <HomeSettingsGeofencing 
+      <HomeSettingsGeofencing
         lat={lat}
         lon={lon}
         radius={radius}

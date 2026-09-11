@@ -39,6 +39,7 @@ const scheduleRetry = coapTransport.scheduleRetry;
 const handleAckReceived = coapTransport.handleAckReceived;
 const clearPendingRetries = coapTransport.clearPendingRetries;
 const waitForAck = coapTransport.waitForAck;
+const isDebugMid = coapTransport.isDebugMid;
 const _singleQueryAttempt = coapTransport._singleQueryAttempt;
 const queryDeviceConfig = coapTransport.queryDeviceConfig;
 
@@ -840,7 +841,7 @@ module.exports = {
     initialize, start, stop, getRouter, findBestDeviceIdForPing,
     findBridgeForHome, queryDeviceConfig, waitForAck, ZS_SCHEMA,
     getNextMid, isTaNoCloOriginatedMid, sendViaBridge, internalPushViabridge,
-    handleAckReceived, clearPendingRetries, checkZoneConfigReadonly,
+    handleAckReceived, clearPendingRetries, checkZoneConfigReadonly, isDebugMid,
     sortConfigFields, sortZoneStateFields, getCommandStatus, getCommandHistory,
     jsonResponse, handleGetClients, handleSend, handleSendRaw, handleCircuitConfig,
     handleZoneConfig, pushBoilerMaxFlowTemp, handleMetrics,

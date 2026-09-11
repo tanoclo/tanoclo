@@ -159,7 +159,6 @@ router.put('/:homeId/zoneOrder', async (req, res) => {
     }
 });
 
-// GET /api/v2/homes/{homeId}/emailNotificationSettings
 router.get('/:homeId/state', async (req, res) => {
     try {
         const homeId = req.params.homeId;
@@ -248,27 +247,5 @@ router.delete('/:homeId/presenceLock', async (req, res) => {
     }
 });
 
-// GET /api/v2/homes/{homeId}/users
-router.get('/:homeId/skills', async (req, res) => {
-    res.json({
-        "AUTO_ASSIST": [{
-            "source": "SUBSCRIPTION",
-            "productId": "com.tado.skills.autoassist",
-            "startDate": "2026-01-01T00:00:00.000Z",
-            "expirationDate": "2040-01-01T00:00:00.000Z",
-            "status": "ACTIVE",
-            "billingPeriod": "MONTHLY",
-            "freeTrial": { "active": false },
-            "store": "google",
-            "fromRequestingUser": true
-        }],
-        "PRE_2025_FREE_FEATURES": [{
-            "source": "TADO_MANAGED",
-            "status": "ACTIVE",
-            "type": "TADO_MANAGED",
-            "startDate": "2026-01-01T00:00:00.000Z"
-        }]
-    });
-});
 
 module.exports = router;

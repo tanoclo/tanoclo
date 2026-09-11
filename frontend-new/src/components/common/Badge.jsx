@@ -3,19 +3,17 @@
  * @brief Renders a status badge label using dynamic HSL variants.
  */
 
-
-
 /**
  * @brief Renders a stylized badge indicator.
  * @param {ReactNode} props.children - Node components wrapped inside badge.
  * @param {string} props.variant - Theme styling variant ('info', 'success', 'warning', 'danger', 'secondary').
  * @param {object} props.style - Inline styling parameter overrides.
  */
-export default function Badge({ 
-  children, 
-  variant = 'info', 
-  style = {}, 
-  ...props 
+export default function Badge({
+  children,
+  variant = 'info',
+  style = {},
+  ...props
 }) {
   const getStyles = () => {
     const base = {

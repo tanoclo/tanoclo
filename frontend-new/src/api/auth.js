@@ -24,7 +24,7 @@ async function generateCodeChallenge(codeVerifier) {
   const encoder = new TextEncoder();
   const data = encoder.encode(codeVerifier);
   const digest = await window.crypto.subtle.digest('SHA-256', data);
-  
+
   return btoa(String.fromCharCode(...new Uint8Array(digest)))
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
@@ -38,17 +38,17 @@ async function generateCodeChallenge(codeVerifier) {
  */
 export async function initiateLoginFlow() {
   const codeVerifier = generateRandomString(64);
-  localStorage.setItem('pkce_code_verifier', codeVerifier);
+  sessionStorage.setItem('pkce_code_verifier', codeVerifier);
 
   const codeChallenge = await generateCodeChallenge(codeVerifier);
-  
+
   // Save current location to return to it after authentication
   const currentUrl = new URL(window.location.href);
   const redirectUri = `${currentUrl.origin}/`;
-  localStorage.setItem('pkce_redirect_uri', redirectUri);
+  sessionStorage.setItem('pkce_redirect_uri', redirectUri);
 
   const state = generateRandomString(16);
-  localStorage.setItem('pkce_state', state);
+  sessionStorage.setItem('pkce_state', state);
 
   const params = new URLSearchParams({
     client_id: 'tado-mobile-app',
@@ -69,8 +69,8 @@ export async function initiateLoginFlow() {
  * @returns {Promise<object>}
  */
 export async function exchangeCodeForTokens(code) {
-  const codeVerifier = localStorage.getItem('pkce_code_verifier');
-  const redirectUri = localStorage.getItem('pkce_redirect_uri') || `${window.location.origin}/`;
+  const codeVerifier = sessionStorage.getItem('pkce_code_verifier');
+  const redirectUri = sessionStorage.getItem('pkce_redirect_uri') || `${window.location.origin}/`;
 
   if (!codeVerifier) {
     throw new Error('No PKCE code verifier found in storage');
@@ -97,8 +97,11 @@ export async function exchangeCodeForTokens(code) {
   }
 
   const data = await response.json();
-  
+
   // Clean up PKCE storage
+  sessionStorage.removeItem('pkce_code_verifier');
+  sessionStorage.removeItem('pkce_redirect_uri');
+  sessionStorage.removeItem('pkce_state');
   localStorage.removeItem('pkce_code_verifier');
   localStorage.removeItem('pkce_redirect_uri');
   localStorage.removeItem('pkce_state');

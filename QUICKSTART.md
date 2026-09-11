@@ -73,7 +73,7 @@ For detailed instructions and photos see [patch_ib_firmware/README.md](patch_ib_
 
 1. Download or clone this repository.
 2. Connect the ST-Link to your PC USB port. 
-3. With the ST-Link connected to your PC, open a terminal in the `/patch_ib_firmware` directory:
+3. With the ST-Link connected to your PC, open a terminal in the `/patch_ib_firmware` directory and run:
 
 * **Windows:**
   ```powershell
@@ -110,10 +110,10 @@ The patched Internet Bridge checks certificates against your cloned Root CA. Cop
    * `tanoclo_key.pem`
    * `tanoclo_cert.pem`
    * `tadoRootCA.cer`
-2. Place them into the `/ssl/` directory on your Home Assistant OS host (accessible via Samba, SSH, or the File Editor add-on).
+2. Place them into the `/ssl/` directory on your Home Assistant OS host (accessible via Samba, SSH, or the File Editor app).
 
-### 3.3 Set Up the Database (MariaDB Add-on)
-1. Install and start the official **MariaDB** Add-on from the Add-on Store.
+### 3.3 Set Up the Database (MariaDB App)
+1. Install and start the official **MariaDB** App from the App Store.
 2. In the **Configuration** tab of MariaDB, define a custom database database user and permissions:
    ```yaml
    databases:
@@ -125,33 +125,33 @@ The patched Internet Bridge checks certificates against your cloned Root CA. Cop
      - database: tanoclo
        username: tanoclo
    ```
-3. Restart the MariaDB Add-on.
+3. Restart the MariaDB App.
 
-### 3.4 Set Up the MQTT Broker (Mosquitto Add-on)
-1. Install and start the official **Mosquitto broker** Add-on.
+### 3.4 Set Up the MQTT Broker (Mosquitto App)
+1. Install and start the official **Mosquitto broker** App.
 2. In Home Assistant, go to **Settings** → **Devices & Services** → **Add Integration** → **MQTT** to hook it up. Ensure auto-discovery is active.
 
 ### 3.5 DNS Redirection (AdGuard Home / Pi-Hole)
 You must force the Tado domains and your custom subdomain to resolve to your Home Assistant machine's IP address.
 
-#### Option A: AdGuard Home (HA Add-on)
+#### Option A: AdGuard Home (HA App)
 1. Open the AdGuard Home Web UI.
 2. Go to **Filters** → **DNS Rewrites**.
 3. Add the following records, replacing `<HA_IP>` with your Home Assistant host local IP:
    * `tanoclo.tado.lan` → `<HA_IP>`
    * `*.tanoclo.yourdomain.com` → `<HA_IP>`
 
-#### Option B: Pi-Hole (HA Add-on)
+#### Option B: Pi-Hole (HA App)
 1. Open the Pi-Hole Admin Console.
 2. Go to **Local DNS** → **DNS Records**.
 3. Map `tanoclo.tado.lan` and `*.tanoclo.yourdomain.com` to your Home Assistant host IP.
 
-> [IMPORTANT]
+> [!IMPORTANT]
 > Ensure your network DHCP configuration is set to distribute the AdGuard/Pi-Hole IP address as the primary DNS server on your home network.
 
 ### 3.6 Configure HTTP Reverse Proxy (Nginx Proxy Manager)
 For secure client access (web portal & mobile apps), configure a reverse proxy to handle external TLS termination.
-1. Install and open the **Nginx Proxy Manager** Add-on.
+1. Install and open the **Nginx Proxy Manager** App.
 2. Add a new **Proxy Host**:
    * **Domain Names:** `*.tanoclo.yourdomain.com` (or `*.yoursubdomain.duckdns.org`)
    * **Scheme:** `http`
@@ -160,8 +160,8 @@ For secure client access (web portal & mobile apps), configure a reverse proxy t
 3. Under the **SSL** tab:
    * Select or request a (Let's Encrypt) Wildcard certificate. You must enable the **DNS Challenge** option to request wildcard (`*`) certificates.
 
-### 3.7 Configure and Start the TaNoClo Add-on
-1. Navigate back to **Settings** → **Add-ons** → **TaNoClo WebSocket Server**.
+### 3.7 Configure and Start the TaNoClo App
+1. Navigate back to **Settings** → **Apps** → **TaNoClo WebSocket Server**.
 2. Select the **Configuration** tab and fill in options:
    * **db_host:** `core-mariadb`
    * **db_name:** `tanoclo`
@@ -169,7 +169,7 @@ For secure client access (web portal & mobile apps), configure a reverse proxy t
    * **db_password:** `[YOUR_SECURE_PASSWORD]` (from Step 3.3)
    * **mqtt_host:** `mqtt://core-mosquitto:1883`
    * **tanoclo_domain:** `tanoclo.yourdomain.com`
-   * **jwt_secret:** *(Leave blank to let the add-on generate one automatically)*
+   * **jwt_secret:** *(Leave blank to let the app generate one automatically)*
    * **carto_api_key:** *(Optional: Enter CARTO Basemaps API key to remove raster watermark from maps)*
 3. Save settings and click **Start**.
 4. Check the logs to see if TaNoClo started successfully.
@@ -203,7 +203,7 @@ Before running offline, import your existing Tado installation settings (homes, 
 Now we capture the dynamic, active operational states of the valves as they communicate with the server.
 
 1. **Enable Proxy Mode:** Log into the Setup Portal, navigate to the Home settings dashboard, and toggle **Proxy to cloud**. This forces TaNoClo to transparently relay incoming Internet Bridge signals to the official Tado Cloud while capturing the data flow.
-2. **Start State Capture:** Go to the **State Backup & Recovery** tab and click **Start Capture**.
+2. **Start State Capture:** Go to the **State Snapshot** tab and click **Start Capture**.
 3. **Wait for sync:** Let the Internet Bridge and devices communicate through the proxy for a couple of hours. This ensures all schedules, limits, and dynamic settings from the devices are successfully recorded by the local engine.
 4. **Disable Proxy Mode:** Once the backup state indicates all devices have checked in and their states are verified, turn **off** proxy mode.
 5. Your Tado heating system is now running **100% offline**, decoupled from the Tado cloud.
@@ -213,7 +213,7 @@ Now we capture the dynamic, active operational states of the valves as they comm
 ## 6. Accessing the Frontend & Apps
 
 ### Web Management UI
-Access your climate portal at `https://app.tanoclo.yourdomain.com` to manage temperatures, set overlays and adjust schedules. Login with the home's Tado administrator email address (imported while seeding) and password (default for all imported users: tanoclo2026). You can (and should) change the passwords on the user page of the frontend or the setup portal. 
+Access your climate portal at `https://app.tanoclo.yourdomain.com` to manage temperatures, set overlays and adjust schedules. Login with the home's Tado administrator email address (imported while seeding) and password (default for all imported and newly invited/created users: tanoclo2026). You can (and should) change the passwords on the user page of the frontend or the setup portal. 
 
 ### Android Application
 1. Download the pre-built APK:
@@ -223,7 +223,7 @@ Access your climate portal at `https://app.tanoclo.yourdomain.com` to manage tem
 4. Login with your credentials
 
 ### Home Assistant Integration (MQTT)
-When MQTT discovery is active, Home Assistant will automatically discover your zones and valves. Go to **Settings** → **Devices & Services** → **MQTT** to find your heating devices. You can control target temperatures, view current temperatures, humidity levels, battery reports, and track geofenced users natively. It is advisable to remove the official Tado integration from HA when using this integration, to prevent mixups with simmarly named devices.
+When MQTT discovery is active, Home Assistant will automatically discover your zones and valves. Go to **Settings** → **Devices & Services** → **MQTT** to find your heating devices. You can control target temperatures, view current temperatures, humidity levels, battery reports, and track geofenced users natively. It is advisable to remove the official Tado integration from HA when using this integration, to prevent mixups with similarly named devices.
 
 ### iOS
 As we don't currently build for iOS you can use the web app for now to control the system on Apple devices. You can try to build for iOS using the following instructions (untested):

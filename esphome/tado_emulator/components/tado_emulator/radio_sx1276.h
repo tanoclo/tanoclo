@@ -37,10 +37,13 @@ enum SX1276Reg : uint8_t {
   REG_RSSIVALUE = 0x11,
   REG_RX_BW = 0x12,
   REG_AFC_BW = 0x13,
+  REG_AFC_FEI = 0x1A,
   REG_PREAMBLE_DETECT = 0x1F,
   REG_RX_TIMEOUT_1 = 0x20,
   REG_RX_TIMEOUT_2 = 0x21,
   REG_RX_TIMEOUT_3 = 0x22,
+  REG_PREAMBLE_MSB = 0x25,
+  REG_PREAMBLE_LSB = 0x26,
   REG_SYNC_CONFIG = 0x27,
   REG_SYNC_VALUE_1 = 0x28,
   REG_SYNC_VALUE_2 = 0x29,
@@ -64,6 +67,8 @@ enum SX1276Reg : uint8_t {
   REG_PA_DAC = 0x4D
 };
 
+// RxPacket occupies 264 bytes. A FreeRTOS queue depth of 16 consumes ~4.2KB RAM.
+// If queue depth needs to increase substantially, use heap pointers (std::unique_ptr<RxPacket>).
 struct RxPacket {
   uint8_t length{0};
   uint8_t data[256]{0};

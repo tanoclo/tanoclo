@@ -2,6 +2,6 @@
 # ==============================================================================
 # Script: run.sh
 # Description: Launch script for Docker container entrypoint. Spawns the main
-#              addon-entrypoint node process.
+#              app-entrypoint node process.
 # ==============================================================================
-node /app/addon-entrypoint.js
+node /app/app-entrypoint.js

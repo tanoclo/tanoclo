@@ -174,15 +174,15 @@ test('legacy test suite runs successfully', async () => {
   });
   
   // Cache it — should auto-pair with the request
-  messageCache.cacheMessage('IB04TEST00', serverResp, 'recreated');
+  messageCache.cacheMessage('IB04TEST00', serverResp, 'TANOCLO');
   
   const cache = messageCache.getCache();
   // The response has no uri-path, but the paired request has 'time'
   // So it should be cached under 'time'
   const timeEntries = cache['GK04TEST01'] && cache['GK04TEST01']['time']
-      ? cache['GK04TEST01']['time']['recreated']
+      ? cache['GK04TEST01']['time']['TANOCLO']
       : (cache['IB04TEST00'] && cache['IB04TEST00']['time']
-          ? cache['IB04TEST00']['time']['recreated']
+          ? cache['IB04TEST00']['time']['TANOCLO']
           : null);
   
   test('cacheMessage: entry exists', timeEntries !== null && timeEntries.length > 0);
@@ -209,11 +209,11 @@ test('legacy test suite runs successfully', async () => {
           mid: 0x1000 + i,
           fieldA: 4,
       });
-      messageCache.cacheMessage('GK04LIMIT1', frame, 'real');
+      messageCache.cacheMessage('GK04LIMIT1', frame, 'TADO');
   }
   
   const limitCache = messageCache.getCache();
-  const limitEntries = limitCache['GK04LIMIT1']?.['h/99/d/GK04LIMIT1/sen']?.['real'];
+  const limitEntries = limitCache['GK04LIMIT1']?.['h/99/d/GK04LIMIT1/sen']?.['TADO'];
   test('limit: entries exist', !!limitEntries);
   test('limit: max 10 entries', limitEntries && limitEntries.length === 10, `got ${limitEntries ? limitEntries.length : 0}`);
   
@@ -257,7 +257,7 @@ test('legacy test suite runs successfully', async () => {
           mid: 0x9999,
           fieldA: 4,
       });
-      messageCache.cacheMessage('IB04BRIDGE0', specificFrame, 'recreated');
+      messageCache.cacheMessage('IB04BRIDGE0', specificFrame, 'TANOCLO');
   
       const cache2 = messageCache.getCache();
       test('device resolution: keyed by path device not bridge',

@@ -47,11 +47,7 @@ let commandApi;
 let metrics;
 let TADO_ROOT_CA;
 let extractShortSerial;
-
-// MID tracking
 let serverMid = 0;
-
-
 
 function init(opts) {
     if (opts.log !== undefined) log = opts.log;
@@ -91,10 +87,10 @@ async function captureUplinkPutRequest(coapMsg, displayPath, activeDeviceId, pat
             if (decoded.ok) {
                 const shortSerial = extractShortSerial(activeDeviceId);
                 const snapHomeId = await db.getHomeForDevice(shortSerial);
-                
+
                 let canonicalPath = displayPath;
                 let zoneId = pathInfo ? pathInfo.zoneId : null;
-                
+
                 if (displayPath.endsWith('z/s') || displayPath === 'z/s' || displayPath.match(/\/z\/\d+\/s$/) || displayPath.match(/^z\/\d+\/s$/)) {
                     if (!zoneId) {
                         const { zoneId: parsedZoneId } = parseResourceIds(displayPath, snapHomeId);
@@ -108,7 +104,7 @@ async function captureUplinkPutRequest(coapMsg, displayPath, activeDeviceId, pat
                 }
 
                 log('info', `PROXY: Captured uplink config/state PUT request for ${canonicalPath} (${activeDeviceId})`);
-                
+
                 const captureEtag = coap.optionFirst(coapMsg, coap.OPT_ETAG);
                 await configCapture.capture({
                     deviceId: activeDeviceId,

@@ -22,10 +22,27 @@ const { getLogger } = require('./logger');
 
 const defaultLogger = getLogger('proxy-mgr');
 const proxyConnections = new Map();
+const MAX_PROXY_MID_CACHE = 10000;
 const proxyMidCache = new Map();
+const _origProxyMidCacheSet = proxyMidCache.set.bind(proxyMidCache);
+proxyMidCache.set = function (key, value) {
+    if (this.size >= MAX_PROXY_MID_CACHE) {
+        const oldest = this.keys().next().value;
+        this.delete(oldest);
+    }
+    return _origProxyMidCacheSet(key, value);
+};
+
+function sweepProxyMidCache() {
+    const cutoff = Date.now() - 5 * 60 * 1000;
+    for (const [mid, entry] of proxyMidCache) {
+        if (!entry || entry.ts < cutoff) proxyMidCache.delete(mid);
+    }
+}
+let proxyMidCacheSweepInterval = setInterval(sweepProxyMidCache, 5 * 60 * 1000);
+proxyMidCacheSweepInterval.unref();
 
 let log = defaultLogger, db, clients, TADO_ROOT_CA, extractShortSerial, config, handleMessage;
-let proxyMidCacheSweepInterval = null;
 
 let defaultTlsServer = null;
 let ipTlsServers = {};
@@ -40,15 +57,11 @@ function init(deps) {
     config = deps.config;
     handleMessage = deps.handleMessage;
 
-    // Periodic sweep: evict proxyMidCache entries older than 5 minutes
-    if (proxyMidCacheSweepInterval) clearInterval(proxyMidCacheSweepInterval);
-    proxyMidCacheSweepInterval = setInterval(() => {
-        const cutoff = Date.now() - 5 * 60 * 1000;
-        for (const [mid, entry] of proxyMidCache) {
-            if (entry.ts < cutoff) proxyMidCache.delete(mid);
-        }
-    }, 5 * 60 * 1000);
-    proxyMidCacheSweepInterval.unref();
+    // Periodic sweep: ensure sweep timer is active
+    if (!proxyMidCacheSweepInterval) {
+        proxyMidCacheSweepInterval = setInterval(sweepProxyMidCache, 5 * 60 * 1000);
+        proxyMidCacheSweepInterval.unref();
+    }
 }
 
 function startProxyServer(opts) {

@@ -11,13 +11,12 @@
 import { lazy, Suspense, useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router';
 import { useAuth } from './hooks/useAuth';
-import Spinner from './components/common/Spinner';
+import FullPageSpinner from './components/common/FullPageSpinner';
 import { Capacitor } from '@capacitor/core';
 import { App as CapApp } from '@capacitor/app';
 import { useHome } from './context/HomeContext';
 import { useTranslation } from 'react-i18next';
 import { apiFetch } from './api/client';
-import DeviceRegistrationPage from './pages/DeviceRegistrationPage';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import RouteErrorBoundary from './components/common/RouteErrorBoundary';
 import SelfUpdater from './components/common/SelfUpdater';
@@ -29,6 +28,7 @@ const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const AccountPage = lazy(() => import('./pages/AccountPage'));
 const ZonePage = lazy(() => import('./pages/ZonePage'));
 const ClimateQualityPage = lazy(() => import('./pages/ClimateQualityPage'));
+const DeviceRegistrationPage = lazy(() => import('./pages/DeviceRegistrationPage'));
 
 import { useGeolocation } from './hooks/useGeolocation';
 import { useBatteryNotifier } from './hooks/useBatteryNotifier';
@@ -117,7 +117,7 @@ function AuthenticatedShell({ mobileDeviceId, setMobileDeviceId }) {
           logger.error('[App] Failed to sync device metadata:', err);
         }
       };
-      
+
       syncDeviceMetadata();
     }
   }, [isAuthenticated, activeHomeId, mobileDeviceId, i18n.language]);
@@ -138,7 +138,7 @@ function AuthenticatedShell({ mobileDeviceId, setMobileDeviceId }) {
 export default function App() {
   const { isAuthenticated, isLoading } = useAuth();
   const { activeHomeId, isLoading: isHomeLoading } = useHome();
-  
+
   // Local storage mobile device registration pointer
   const [mobileDeviceId, setMobileDeviceId] = useState(() => localStorage.getItem('tanoclo_mobile_device_id'));
 
@@ -153,37 +153,19 @@ export default function App() {
 
   // Show loading spinner during session boot
   if (isLoading) {
-    return (
-      <div style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        backgroundColor: 'var(--bg-app)'
-      }}>
-        <Spinner size={32} />
-      </div>
-    );
+    return <FullPageSpinner />;
   }
 
   // Intercept on native platforms if device registration has not been performed
   if (isAuthenticated && isNative && !mobileDeviceId) {
     if (isHomeLoading || !activeHomeId) {
-      return (
-        <div style={{
-          minHeight: '100vh',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: 'var(--bg-app)'
-        }}>
-          <Spinner size={32} />
-        </div>
-      );
+      return <FullPageSpinner />;
     }
     return (
       <ErrorBoundary>
-        <DeviceRegistrationPage onRegister={(id) => setMobileDeviceId(id)} />
+        <Suspense fallback={<FullPageSpinner />}>
+          <DeviceRegistrationPage onRegister={(id) => setMobileDeviceId(id)} />
+        </Suspense>
       </ErrorBoundary>
     );
   }
@@ -192,17 +174,7 @@ export default function App() {
     <BrowserRouter>
       <SelfUpdater />
       <BackButtonHandler />
-      <Suspense fallback={
-        <div style={{
-          minHeight: '100vh',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          backgroundColor: 'var(--bg-app)'
-        }}>
-          <Spinner size={32} />
-        </div>
-      }>
+      <Suspense fallback={<FullPageSpinner />}>
         <Routes>
           {!isAuthenticated ? (
             <>

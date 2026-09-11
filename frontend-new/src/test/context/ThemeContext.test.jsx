@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { renderToString } from 'react-dom/server';
 import { createElement } from 'react';
 import { ThemeProvider, ThemeContext } from '../../context/ThemeContext';

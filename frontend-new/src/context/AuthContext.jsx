@@ -11,6 +11,7 @@ import { createContext, useState, useEffect, useCallback, useRef } from 'react';
 import { STORAGE_KEYS, getApiBase } from '../utils/constants';
 import { initiateLoginFlow, exchangeCodeForTokens } from '../api/auth';
 import { apiFetch } from '../api/client';
+import { setRefreshToken, removeRefreshToken } from '../utils/secureStorage';
 import { Capacitor } from '@capacitor/core';
 import i18n from '../i18n';
 import logger from '../utils/logger';
@@ -48,11 +49,11 @@ export function AuthProvider({ children }) {
       logger.error('Failed to fetch user profiles:', err);
       // Clean up token only if fetching user info fails due to authentication issues, not network drops
       const isAuthError = err.message === 'Unauthorized' ||
-                          err.message.toLowerCase().includes('token') ||
-                          err.message.toLowerCase().includes('unauthorized') ||
-                          err.message.toLowerCase().includes('invalid');
+        err.message.toLowerCase().includes('token') ||
+        err.message.toLowerCase().includes('unauthorized') ||
+        err.message.toLowerCase().includes('invalid');
       if (isAuthError) {
-         if (logoutRef.current) logoutRef.current();
+        if (logoutRef.current) logoutRef.current();
       }
     } finally {
       setIsLoading(false);
@@ -99,13 +100,13 @@ export function AuthProvider({ children }) {
 
       const data = await response.json();
       localStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, data.access_token);
-      if (isNative) {
-        localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, data.refresh_token);
+      if (isNative && data.refresh_token) {
+        await setRefreshToken(data.refresh_token);
       }
-      
+
       // Fetch user profile using the token immediately (before updating state to prevent concurrent trigger)
       const userData = await apiFetch('/api/v2/me');
-      
+
       // Update all states together at the very end
       setToken(data.access_token);
       setUser(userData);
@@ -127,10 +128,13 @@ export function AuthProvider({ children }) {
 
     localStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
     if (isNative) {
-      localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN);
+      await removeRefreshToken();
     }
     localStorage.removeItem('tanoclo_mobile_device_id');
     localStorage.removeItem('tanoclo_notified_battery_states');
+    sessionStorage.removeItem('pkce_code_verifier');
+    sessionStorage.removeItem('pkce_redirect_uri');
+    sessionStorage.removeItem('pkce_state');
     localStorage.removeItem('pkce_code_verifier');
     localStorage.removeItem('pkce_redirect_uri');
     localStorage.removeItem('pkce_state');
@@ -139,7 +143,7 @@ export function AuthProvider({ children }) {
     setUser(null);
     setIsAuthenticated(false);
     setIsLoading(false);
-    
+
     // Call backend logout endpoint if authenticated
     if (currentToken) {
       try {
@@ -167,13 +171,13 @@ export function AuthProvider({ children }) {
     try {
       const data = await exchangeCodeForTokens(code);
       localStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, data.access_token);
-      if (isNative) {
-        localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, data.refresh_token);
+      if (isNative && data.refresh_token) {
+        await setRefreshToken(data.refresh_token);
       }
-      
+
       // Fetch user profile using the token immediately
       const userData = await apiFetch('/api/v2/me');
-      
+
       // Update all states together
       setToken(data.access_token);
       setUser(userData);
@@ -193,9 +197,12 @@ export function AuthProvider({ children }) {
 
     if (code) {
       // Validate PKCE state parameter to prevent CSRF
-      const savedState = localStorage.getItem('pkce_state');
-      if (state && savedState && state !== savedState) {
-        logger.error('[Auth] OAuth state mismatch — possible CSRF attack. Aborting.');
+      const savedState = sessionStorage.getItem('pkce_state') || localStorage.getItem('pkce_state');
+      if (!savedState || !state || state !== savedState) {
+        logger.error('[Auth] OAuth state mismatch or missing state — possible CSRF attack. Aborting.');
+        sessionStorage.removeItem('pkce_code_verifier');
+        sessionStorage.removeItem('pkce_redirect_uri');
+        sessionStorage.removeItem('pkce_state');
         localStorage.removeItem('pkce_code_verifier');
         localStorage.removeItem('pkce_redirect_uri');
         localStorage.removeItem('pkce_state');

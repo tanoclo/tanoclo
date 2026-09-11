@@ -173,6 +173,18 @@ describe('TLV decoder & transformers', () => {
         expect(tlvDecoder.calculateValvePositionPct(500, 1000, 500)).toBe(100);
         expect(tlvDecoder.calculateValvePositionPct(750, 1000, 500)).toBe(50);
     });
+
+    it('decodes u16_pairs_role_zone and 0x4060 / 0x6200 correctly', () => {
+        // 0x015e (zone_binding, u16_pairs_role_zone): len 4, role 2 (REMOTE_ZONE), zone 1
+        // 0x4060 (zone_temp): len 2, 22.50°C = 2250 = 0x08CA
+        // 0x6200 (target_temp): len 2, 21.00°C = 2100 = 0x0834
+        const payload = Buffer.from('015e040002000140600208ca6200020834', 'hex');
+        const decoded = tlvDecoder.decode(payload);
+        expect(decoded.ok).toBe(true);
+        expect(decoded.fields['0x015e']).toEqual({ role: 2, roleName: 'REMOTE_ZONE', zoneId: 1 });
+        expect(decoded.fields['0x4060']).toBe(22.50);
+        expect(decoded.fields['0x6200']).toBe(21.00);
+    });
 });
 
 describe('Device Registry & Message Processor', () => {
@@ -208,6 +220,48 @@ describe('Device Registry & Message Processor', () => {
         });
 
         expect(dev.isEmulated).toBe(true);
+    });
+
+    it('processes telemetry from 0x4060, 0x6200, 0x0290, and 0x0160', () => {
+        const fakePacket = {
+            coap: {
+                type: coapParser.TYPE_CON,
+                code: coapParser.CODE_POST,
+                mid: 0x9999,
+                token: Buffer.from('cc', 'hex'),
+                options: [
+                    { num: coapParser.OPT_URI_PATH, value: Buffer.from('z') },
+                    { num: coapParser.OPT_URI_PATH, value: Buffer.from('p') }
+                ],
+                payload: Buffer.from('00', 'hex')
+            },
+            macInfo: {
+                srcMac: '00:1B:C5:07:31:56:99:88',
+                dstMac: '00:1B:C5:07:31:55:00:00',
+                srcClean: '001BC50731569988',
+                isSrcIb: false
+            },
+            tlv: {
+                fields: {
+                    '0x0001': 'RU0000000099',
+                    '0x4060': 23.45,
+                    '0x6200': 20.00,
+                    '0x0290': 1,
+                    '0x0160': 1
+                }
+            }
+        };
+
+        const res = messageProcessor.processCoapPacket(fakePacket, 'unfragmented', { rssi: -65 });
+        expect(res.isDuplicate).toBe(false);
+
+        const dev = res.deviceRecord;
+        expect(dev).not.toBeNull();
+        expect(dev.serial).toBe('RU0000000099');
+        expect(dev.state.temperature).toBe(23.45);
+        expect(dev.state.target_temperature).toBe(20.00);
+        expect(dev.state.child_lock).toBe(true);
+        expect(dev.state.reset_reason).toBe('PIN');
     });
 });
 
@@ -284,13 +338,25 @@ describe('CSL & MAC Coordination module', () => {
     });
 
     it('identifies and parses Extended MAC Coordination Frame (0xEE42)', () => {
-        const frame = Buffer.from('42ee0193fa010203040506010203040506070800', 'hex');
+        // FCF (0x42 0xEE), Seq (1), Dst MAC LE (8B), Src MAC LE (8B)
+        const frame = Buffer.from('42ee0101020304050607081112131415161718040d', 'hex');
         expect(csl.isMACCoordinationFrame(frame)).toBe(true);
         const parsed = csl.parseMACCoordinationFrame(frame);
         expect(parsed).not.toBeNull();
         expect(parsed.fcf).toBe(0xEE42);
         expect(parsed.seq).toBe(1);
+        expect(parsed.dstMac).toBe('08:07:06:05:04:03:02:01');
+        expect(parsed.srcMac).toBe('18:17:16:15:14:13:12:11');
+    });
+
+    it('identifies and parses CSL beacon with 0x0C length prefix', () => {
+        const beacon = Buffer.from('0c254293fa341200000500803f', 'hex');
+        expect(csl.isCSLBeacon(beacon)).toBe(true);
+        const parsed = csl.parseCSLBeacon(beacon);
+        expect(parsed).not.toBeNull();
         expect(parsed.panId).toBe(0xFA93);
+        expect(parsed.dstShort).toBe('0x1234');
+        expect(parsed.countdown).toBe(5);
     });
 });
 
@@ -321,6 +387,15 @@ describe('ICMPv6 deterministic RFC 6282 parser', () => {
         expect(reply[1]).toBe(0);   // Code 0
         expect(reply.readUInt16BE(4)).toBe(0x0042); // ID
         expect(reply.readUInt16BE(6)).toBe(0x0001); // Seq
+    });
+
+    it('computes RFC 4443 IPv6 pseudo-header checksum when IPs provided', () => {
+        const srcIp = Buffer.from('fe80000000000000001bc50731550000', 'hex');
+        const dstIp = Buffer.from('fe80000000000000001bc50731561234', 'hex');
+        const reply = icmpv6.buildEchoReply(0x0042, 0x0001, Buffer.alloc(0), srcIp, dstIp);
+        expect(reply[0]).toBe(129);
+        const csum = reply.readUInt16BE(2);
+        expect(csum).not.toBe(0);
     });
 });
 

@@ -132,14 +132,14 @@ function sendWrappedCoAP(ws, coapBytes, peerInfo, directionU16) {
         fieldC: isDownlink ? 5 : peerInfo.fieldC,
     });
 
-    // Cache recreated downlink messages even when proxied
+    // Cache TANOCLO downlink messages even when proxied
     if (directionU16 === wsBridge.DIR_SERVER_TO_CLIENT) {
         let deviceId = null;
         for (const [id, info] of clients.entries()) {
             if (info.ws === ws) { deviceId = id; break; }
         }
         if (deviceId) {
-            messageCache.cacheMessage(deviceId, wsFrame, 'recreated');
+            messageCache.cacheMessage(deviceId, wsFrame, 'TANOCLO');
         }
     }
 

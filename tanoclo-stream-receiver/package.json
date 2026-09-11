@@ -9,10 +9,10 @@
     "sync-labels": "node sync_tlv_labels.js"
   },
   "dependencies": {
-    "mqtt": "^5.0.0"
+    "mqtt": "^5.15.2"
   },
   "optionalDependencies": {
-    "mysql2": "^3.0.0"
+    "mysql2": "^3.24.4"
   },
   "private": true
 }

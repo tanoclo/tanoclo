@@ -6,7 +6,6 @@
  * and handles safe-area padding adjustments to avoid overlapping bottom bars.
  */
 
-
 import BottomNav from './BottomNav';
 import Header from './Header';
 

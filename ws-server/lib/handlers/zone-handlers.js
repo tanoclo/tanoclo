@@ -97,7 +97,7 @@ async function handleZoneOpenWindow(ws, frame, coapMsg, decoded, peerInfo, pathI
             onStateChange(homeId, 'zone-state', { zoneId });
         }
         if (mqttPublisher) {
-            mqttPublisher.publishOpenWindow(zoneId, active).catch(() => { });
+            mqttPublisher.publishOpenWindow(zoneId, active).catch(e => log('debug', `[MQTT] publishOpenWindow failed: ${e.message}`));
         }
     }
 }
@@ -157,7 +157,7 @@ async function handleCircuitActuator(ws, frame, coapMsg, decoded, peerInfo, path
     if (homeId != null && circuitId != null) {
         await db.upsertHeatingCircuit(homeId, parseInt(circuitId, 10), f);
         if (mqttPublisher) {
-            mqttPublisher.publishCircuitTelemetry(homeId, parseInt(circuitId, 10), f).catch(() => { });
+            mqttPublisher.publishCircuitTelemetry(homeId, parseInt(circuitId, 10), f).catch(e => log('debug', `[MQTT] Circuit telemetry failed: ${e.message}`));
         }
     }
 }
@@ -323,9 +323,9 @@ async function handleZoneState(ws, frame, coapMsg, decoded, peerInfo, pathInfo) 
             db.getPool().execute('SELECT * FROM zone_measurements WHERE zone_id = ? AND home_id = ? ORDER BY id DESC LIMIT 1', [zoneId, homeId])
                 .then(([rows]) => {
                     if (rows.length > 0) {
-                        mqttPublisher.publishZoneStateTelemetry(homeId, zoneId, rows[0]).catch(() => { });
+                        mqttPublisher.publishZoneStateTelemetry(homeId, zoneId, rows[0]).catch(e => log('debug', `[MQTT] publishZoneStateTelemetry failed: ${e.message}`));
                     }
-                }).catch(() => { });
+                }).catch(e => log('debug', `[MQTT] Zone measurement query failed: ${e.message}`));
         }
 
         if (typeof onStateChange === 'function') {

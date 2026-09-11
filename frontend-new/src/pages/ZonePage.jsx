@@ -36,18 +36,18 @@ export default function ZonePage() {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const [searchParams] = useSearchParams();
-  
+
   const { activeHomeId, zones, zoneStates, mutateZoneStates } = useHome();
-  
+
   const activeTab = searchParams.get('tab') === 'telemetry' ? 'telemetry' : 'control';
-  
+
   // Get date in YYYY-MM-DD format (local timezone)
   const getTodayStr = () => new Date().toLocaleDateString('sv'); // 'sv' locale outputs YYYY-MM-DD
   const [date, setDate] = useState(getTodayStr());
-  
+
   const zone = zones?.find(z => z.id === zoneId);
   const state = zoneStates?.zoneStates?.[zoneId];
-  
+
   const [targetTemp, setTargetTemp] = useState(20.0);
   const lastServerTempRef = useRef(null);
 
@@ -70,10 +70,10 @@ export default function ZonePage() {
   }, [state, zone]);
 
   // Fetch Day Report via SWR
-  const { 
-    data: dayReport, 
-    error: dayReportError, 
-    isLoading: isDayReportLoading 
+  const {
+    data: dayReport,
+    error: dayReportError,
+    isLoading: isDayReportLoading
   } = useSWR(
     activeHomeId && (zoneId !== null && zoneId !== undefined) && activeTab === 'telemetry' && date
       ? SWR_KEYS.standardDayReport(activeHomeId, zoneId, date)
@@ -141,22 +141,22 @@ export default function ZonePage() {
   return (
     <AppShell title={zone.name}>
       <div className="page-container" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-        
+
         {/* Navigation Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <Button 
-            variant="secondary" 
-            onClick={() => navigate('/')} 
+          <Button
+            variant="secondary"
+            onClick={() => navigate('/')}
             aria-label={t('common.back')}
             style={{ padding: '0.5rem', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           >
             <ArrowLeft size={18} />
           </Button>
           <div>
-            <span style={{ 
-              fontSize: '0.875rem', 
-              color: isOffline ? 'var(--danger)' : 'var(--success)', 
-              fontWeight: 600 
+            <span style={{
+              fontSize: '0.875rem',
+              color: isOffline ? 'var(--danger)' : 'var(--success)',
+              fontWeight: 600
             }}>
               {isOffline ? t('common.disconnected') : t('common.connected')}
             </span>
@@ -212,15 +212,15 @@ export default function ZonePage() {
 
         {/* Tab Content */}
         {activeTab === 'control' ? (
-          <div style={{ 
-            display: 'grid', 
-            gridTemplateColumns: '1fr', 
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr',
             gap: '1.5rem',
             maxWidth: '600px',
             width: '100%',
-            alignSelf: 'center' 
+            alignSelf: 'center'
           }}>
-            
+
             {/* Open Window Warning */}
             {openWindowDetected && (
               <div style={{
@@ -242,7 +242,7 @@ export default function ZonePage() {
                       {t('zone_detail.open_window_desc')}
                     </p>
                   </div>
-                  <button 
+                  <button
                     onClick={handleDismissOpenWindow}
                     style={{
                       backgroundColor: 'transparent',
@@ -263,17 +263,17 @@ export default function ZonePage() {
             )}
 
             {/* Readings Summary Card */}
-            <Card style={{ 
-              display: 'flex', 
-              justifyContent: 'space-around', 
-              padding: '1.5rem' 
+            <Card style={{
+              display: 'flex',
+              justifyContent: 'space-around',
+              padding: '1.5rem'
             }}>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                 <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 500 }}>
                   {t('zone.current_temp')}
                 </span>
                 <span style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--primary)' }}>
-                  {state.sensorDataPoints?.insideTemperature?.celsius != null 
+                  {state.sensorDataPoints?.insideTemperature?.celsius != null
                     ? `${state.sensorDataPoints.insideTemperature.celsius.toFixed(1)}°C`
                     : '--'
                   }
@@ -285,7 +285,7 @@ export default function ZonePage() {
                   {t('common.humidity')}
                 </span>
                 <span style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--secondary)' }}>
-                  {state.sensorDataPoints?.humidity?.percentage != null 
+                  {state.sensorDataPoints?.humidity?.percentage != null
                     ? `${state.sensorDataPoints.humidity.percentage.toFixed(0)}%`
                     : '--'
                   }
@@ -296,9 +296,9 @@ export default function ZonePage() {
             {/* Dial Settings Card */}
             {!isOffline && (
               <Card style={{ padding: '2rem', display: 'flex', justifyContent: 'center' }}>
-                <TemperatureDial 
-                  value={targetTemp} 
-                  onChange={setTargetTemp} 
+                <TemperatureDial
+                  value={targetTemp}
+                  onChange={setTargetTemp}
                   disabled={isOffline}
                   min={isDhw ? TEMP_MIN_DHW : TEMP_MIN_HEATING}
                   max={isDhw ? TEMP_MAX_DHW : TEMP_MAX_HEATING}
@@ -309,7 +309,7 @@ export default function ZonePage() {
 
             {/* Override Controls Card */}
             <Card style={{ padding: '1.5rem' }}>
-              <OverlayControl 
+              <OverlayControl
                 zone={zone}
                 state={state}
                 onApply={handleApplyOverlay}
@@ -321,11 +321,11 @@ export default function ZonePage() {
         ) : (
           /* Telemetry View */
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-            
+
             {/* Date Selector Banner */}
-            <Card style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
+            <Card style={{
+              display: 'flex',
+              alignItems: 'center',
               justifyContent: 'space-between',
               gap: '1rem',
               padding: '1rem 1.25rem',
@@ -335,7 +335,7 @@ export default function ZonePage() {
                 <Calendar size={18} style={{ color: 'var(--primary)' }} />
                 <span style={{ fontSize: '0.95rem', fontWeight: 600 }}>{t('zone.select_diagnostic_date')}</span>
               </div>
-              <input 
+              <input
                 type="date"
                 value={date}
                 max={getTodayStr()}
@@ -367,15 +367,15 @@ export default function ZonePage() {
                 </p>
               </Card>
             ) : (
-              <div style={{ 
-                display: 'grid', 
-                gridTemplateColumns: '1fr', 
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr',
                 gap: '1.5rem',
                 width: '100%',
                 maxWidth: '1000px',
                 alignSelf: 'center'
               }}>
-                
+
                 {/* Combined Telemetry Chart */}
                 <Card style={{ padding: '1.25rem' }}>
                   <h4 style={{ margin: '0 0 1rem', fontSize: '0.95rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>

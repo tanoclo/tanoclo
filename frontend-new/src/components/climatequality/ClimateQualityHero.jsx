@@ -6,7 +6,6 @@
  * and current outdoor weather state/temperature configurations.
  */
 
-
 import { useTranslation } from 'react-i18next';
 import Card from '../common/Card';
 import { Wind, Smile, CheckCircle } from 'lucide-react';
@@ -105,13 +104,13 @@ export default function ClimateQualityHero({ freshness, weather }) {
         </p>
 
         {weather && (
-          <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '0.5rem', 
-            fontSize: '0.8rem', 
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            fontSize: '0.8rem',
             color: 'var(--text-muted)',
-            marginTop: '0.25rem' 
+            marginTop: '0.25rem'
           }}>
             <CheckCircle size={14} style={{ color: 'var(--success)' }} />
             <span>

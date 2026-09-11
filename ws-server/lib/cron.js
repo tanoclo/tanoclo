@@ -93,7 +93,7 @@ function start({ broadcastTime, broadcastRfKey, pushZoneOverlayDelete, pushSched
                 const pool = db.getPool();
                 const [homes] = await pool.execute('SELECT id FROM homes');
                 for (const home of homes) {
-                    await _mqttPublisher.publishHomeTelemetry(home.id).catch(() => { });
+                    await _mqttPublisher.publishHomeTelemetry(home.id).catch(e => log('debug', `[cron] Telemetry publish failed for home ${home.id}: ${e.message}`));
                 }
             } catch (err) {
                 log('error', `Failed to publish home telemetry after weather update: ${err.message}`);
@@ -108,7 +108,7 @@ function start({ broadcastTime, broadcastRfKey, pushZoneOverlayDelete, pushSched
     _intervals.push(setInterval(() => {
         if (_mqttHaDiscovery) {
             log('debug', 'Periodic HA Discovery republishing...');
-            _mqttHaDiscovery.publishAllDiscovery().catch(() => { });
+            _mqttHaDiscovery.publishAllDiscovery().catch(e => log('debug', `[cron] Discovery publish failed: ${e.message}`));
         }
     }, 24 * 60 * 60 * 1000));
 
@@ -130,7 +130,7 @@ function start({ broadcastTime, broadcastRfKey, pushZoneOverlayDelete, pushSched
                 const pool = db.getPool();
                 const [homes] = await pool.execute('SELECT id FROM homes');
                 for (const home of homes) {
-                    await _mqttPublisher.publishHomeTelemetry(home.id).catch(() => { });
+                    await _mqttPublisher.publishHomeTelemetry(home.id).catch(e => log('debug', `[cron] Initial telemetry publish failed for home ${home.id}: ${e.message}`));
                 }
             } catch (e) {
                 log('error', `Initial weather telemetry publish failed: ${e.message}`);
@@ -169,7 +169,7 @@ async function checkInactiveDevices() {
 
             if (_mqttPublisher) {
                 for (const dev of inactiveDevices) {
-                    _mqttPublisher.publishDeviceAvailability(dev.serial_no, false).catch(() => { });
+                    _mqttPublisher.publishDeviceAvailability(dev.serial_no, false).catch(e => log('debug', `[cron] Publish offline failed for ${dev.serial_no}: ${e.message}`));
                 }
             }
         }
@@ -535,7 +535,7 @@ async function evaluateAllHomesPresence() {
         // Lazy require: presence-helper depends on db → cron (circular). Must be deferred.
         const presenceHelper = require('./presence-helper');
         for (const home of homes) {
-            await presenceHelper.evaluateHomePresence(home.id).catch(() => { });
+            await presenceHelper.evaluateHomePresence(home.id).catch(e => log('debug', `[cron] Evaluate presence failed for home ${home.id}: ${e.message}`));
         }
     } catch (err) {
         log('error', `evaluateAllHomesPresence error: ${err.message}`);

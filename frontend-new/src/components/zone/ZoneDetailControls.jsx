@@ -3,7 +3,6 @@
  * @brief Renders the timeline overlays controls panel inside ZoneDetail.
  */
 
-
 import { RotateCcw, Clock } from 'lucide-react';
 
 /**
@@ -58,7 +57,7 @@ export default function ZoneDetailControls({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%' }}>
       {/* Resume Schedule Button */}
-      <button 
+      <button
         onClick={handleResumeSchedule}
         style={{
           backgroundColor: '#ffffff',
@@ -155,7 +154,7 @@ export default function ZoneDetailControls({
           >
             {[15, 30, 45, 60, 90, 120, 180, 240, 300, 360, 480, 720].map(m => (
               <option key={m} value={m}>
-                {m < 60 ? `${m}m` : `${m/60}h`}
+                {m < 60 ? `${m}m` : `${m / 60}h`}
               </option>
             ))}
           </select>

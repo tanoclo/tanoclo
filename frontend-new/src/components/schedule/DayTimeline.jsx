@@ -6,7 +6,6 @@
  * to individual TimeBlock elements. Renders static hourly markers (0:00 to 24:00) underneath.
  */
 
-
 import { useTranslation } from 'react-i18next';
 import TimeBlock from './TimeBlock';
 
@@ -17,11 +16,11 @@ import TimeBlock from './TimeBlock';
  * @param {function} props.onBlockClick - Time block selection/editing callback handler.
  * @param {boolean} props.isDhw - Whether the target zone is DHW (Domestic Hot Water).
  */
-export default function DayTimeline({ 
-  _dayType, 
-  blocks = [], 
-  onBlockClick, 
-  isDhw = false 
+export default function DayTimeline({
+  _dayType,
+  blocks = [],
+  onBlockClick,
+  isDhw = false
 }) {
   const { t } = useTranslation();
   // Sort blocks by start time to display them sequentially
@@ -41,7 +40,7 @@ export default function DayTimeline({
         boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.2)'
       }}>
         {sortedBlocks.map((block, idx) => (
-          <TimeBlock 
+          <TimeBlock
             key={`${block.start}-${idx}`}
             block={block}
             isDhw={isDhw}

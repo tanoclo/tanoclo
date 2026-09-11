@@ -1,9 +1,7 @@
 /**
  * @file api/routes/bridges.js
- * @brief REST routes invoked by Internet Bridges to obtain configuration parameters.
+ * @brief REST routes to obtain configuration parameters for Internet Bridges.
  * 
- * Implements endpoints queried by hardware devices to read/write boiler configuration metrics,
- * check installation steps completion status, and manage maximum boiler water flow temperatures.
  */
 
 const express = require('express');
@@ -47,7 +45,6 @@ router.get('/:bridgeId', checkAuthKey, async (req, res) => {
 });
 
 // GET /api/v2/bridges/{bridgeId}/boiler/info
-// GET /api/v2/homeByBridge/{bridgeId}/boilerInfo
 router.get(['/:bridgeId/boiler/info', '/:bridgeId/boilerInfo'], checkAuthKey, async (req, res) => {
     try {
         const bridgeId = req.params.bridgeId;
@@ -130,7 +127,6 @@ router.get('/:bridgeId/boilerWiringInstallationState', checkAuthKey, async (req,
 });
 
 // PUT /api/v2/bridges/{bridgeId}/boilerMaxOutputTemperature
-// PUT /api/v2/homeByBridge/{bridgeId}/boilerMaxOutputTemperature
 router.put('/:bridgeId/boilerMaxOutputTemperature', checkAuthKey, async (req, res) => {
     try {
         const bridgeId = req.params.bridgeId;

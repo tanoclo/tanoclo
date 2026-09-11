@@ -1,16 +1,9 @@
 /**
  * @file api/routes/auth/oauth-flows.js
+ * @brief OAuth2 authorization code grant, PKCE, and authorization endpoints.
  */
 
 'use strict';
-
-/**
- * @file api/routes/auth.js
- * @brief OAuth2 / SSO authentication routes.
- * 
- * Implements authorization code grant flows, PKCE challenges, password grant exchanges,
- * access and refresh token revocations, and SSO cookies generation.
- */
 
 const express = require('express');
 const crypto = require('crypto');
@@ -58,10 +51,6 @@ function setSSOCookies(res, userId, token, req) {
     };
 
     res.cookie('tanoclo_session', token, { ...cookieOptions, signed: true });
-
-    res.cookie('fusionauth.sso', token, cookieOptions);
-    res.cookie('fusionauth.li', 'true', cookieOptions);
-    res.cookie('fusionauth.remember-device', 'true', cookieOptions);
 }
 
 /**
@@ -73,11 +62,7 @@ router.get(['/oauth2/authorize', '/oauth/authorize'], async (req, res) => {
     const { client_id, response_type, redirect_uri, scope, state, code_challenge, code_challenge_method } = req.query;
 
     let userId = null;
-    let sessionToken = req.signedCookies ? req.signedCookies.tanoclo_session : null;
-
-    if (!sessionToken && req.cookies && req.cookies['fusionauth.sso']) {
-        sessionToken = req.cookies['fusionauth.sso'];
-    }
+    const sessionToken = req.signedCookies ? req.signedCookies.tanoclo_session : null;
 
     if (sessionToken) {
         const session = await db.getOauthSession(sessionToken);

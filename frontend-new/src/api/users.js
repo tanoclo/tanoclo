@@ -73,4 +73,3 @@ export function updateUserPassword(userId, password, currentPassword) {
     body: { password, currentPassword }
   });
 }
-

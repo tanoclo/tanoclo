@@ -548,9 +548,9 @@ async function start() {
                         if (coord) {
                             statsMacCoordination++;
                             if (isWhitelisted) {
-                                logToFile(`MAC_COORD: PAN=0x${coord.panId.toString(16)} From=${coord.srcMac} To=${coord.dstMac} RSSI=${rssi}`);
+                                logToFile(`MAC_COORD: From=${coord.srcMac} To=${coord.dstMac} RSSI=${rssi}`);
                                 if (config.consoleLogging) {
-                                    console.log(`[MAC COORD] 🔄 PAN=0x${coord.panId.toString(16).toUpperCase()} From=${coord.srcMac} To=${coord.dstMac} RSSI=${rssi} dBm`);
+                                    console.log(`[MAC COORD] 🔄 From=${coord.srcMac} To=${coord.dstMac} RSSI=${rssi} dBm`);
                                 }
                             }
                             return;
@@ -600,8 +600,7 @@ async function start() {
             }
 
             if (result.type === 'unfragmented') {
-                const tado_payload = decrypted.subarray(innerProto === 0x04 ? 5 : 0);
-                processDecryptedPayload(tado_payload, macInfo, innerProto, seq, 'unfragmented', {
+                processDecryptedPayload(decrypted, macInfo, innerProto, seq, 'unfragmented', {
                     rssi,
                     keyName,
                     rawHex: data.hex,

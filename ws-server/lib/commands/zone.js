@@ -411,7 +411,7 @@ async function pushZoneDazzleMode(homeId, zoneId, enabled) {
     if (!homeId) throw new Error('homeId is required for pushZoneDazzleMode');
     const { isReadOnly, devBypass } = await api.checkZoneConfigReadonly(homeId);
     if (isReadOnly && !devBypass) throw new Error('Zone config modifications are disabled (readonly)');
-    
+
     const [devices] = await api._db.getPool().execute('SELECT serial_no FROM devices WHERE zone_id = ? AND home_id = ?', [zoneId, homeId]);
     const serials = devices.map(d => d.serial_no);
 
@@ -429,7 +429,7 @@ async function pushZoneOWD(homeId, zoneId, active) {
     const { isReadOnly, devBypass } = await api.checkZoneConfigReadonly(homeId);
     if (isReadOnly && !devBypass) throw new Error('Zone config modifications are disabled (readonly)');
     await api._db.updateZoneOpenWindow(homeId, zoneId, active);
-    
+
     const [devRows] = await api._db.getPool().execute('SELECT serial_no FROM devices WHERE zone_id = ? AND home_id = ?', [zoneId, homeId]);
     const serials = devRows.map(d => d.serial_no);
 

@@ -1,11 +1,11 @@
-# ESPHome Tado RF Toolkit: Key Sniffer & Packet Analyzer
+# ESPHome Tado RF Toolkit: Wireless Sensor Emulator, Key Sniffer & Packet Analyzer
 
 This directory contains the custom ESPHome-based RF components designed to interface with the proprietary Tado RF protocol using a **TTGO LoRa32 V1** development board (ESP32 + Semtech SX1276 FSK/LoRa transceiver).
 
 The toolkit is split into three dedicated ESPHome components:
 1. **`tado_pairing`**: An active, reset-VA mimicry agent used to quickly extract the operational RF network key from the Internet Bridge without completing or registering pairing.
 2. **`tado_sniffer`**: A passive packet capturing and TCP streaming component used to sniff operational packets and stream them in real-time to a host.
-3. **`tado_emulator`**: An active multi-device emulator enabling an ESP32 to act as multiple Room Units (RU) and Wireless Temperature Sensors on your network with full REST API and Setup Dashboard integration.
+3. **`tado_emulator`**: An active multi-device emulator enabling an ESP32 to act as multiple Wireless Temperature Sensors on your network with full REST API and Setup Dashboard integration.
 
 ---
 
@@ -101,13 +101,16 @@ If you use Home Assistant refer to [tanoclo-stream-receiver/DOCS.md](../tanoclo-
 `stream_receiver.js` is a Node.js-based daemon that runs on the host to process the TCP packet stream sent by the `tado_sniffer` hardware.
 
 ### 5.1 Features
-- **Real-Time Decryption**: Automatically decrypts captured data packets using the network's operational key via AES-128-CCM.
-- **6LoWPAN Reassembly**: Handles unfragmented and fragmented (`FRAG1`/`FRAGN`) packets, dynamically calculating compression expansion and reassembling split payloads.
-- **CoAP & TLV Decoding**: Decodes CoAP structures and parses binary TLVs, using static label definitions mapped from the database.
+- **Real-Time Decryption**: Automatically decrypts captured data packets using the network's operational key and factory pairing key via AES-128-CCM.
+- **6LoWPAN Reassembly**: Handles unfragmented and multi-fragmented (`FRAG1`/`FRAGN`) packets, dynamically calculating compression expansion and reassembling split payloads.
+- **CoAP & TLV Decoding**: Decodes RFC 7252 CoAP messages and parses binary TLVs, using static label definitions mapped from the database.
+- **CSL & ICMPv6 Processing**: Analyzes IEEE 802.15.4 CSL (Coordinated Sampled Listening) IE timing information and ICMPv6 Echo/NUD frames.
 - **Standalone Execution**: Run the receiver daemon with zero runtime database connections; maps TLV metadata from a local static [tlv_labels.json](../tanoclo-stream-receiver/tlv_labels.json) file.
-- **MQTT State Publishing**: Publishes successfully decoded unique CoAP packets to `tado/sniffer/{SENDER MAC}/{COAP PATH}`. The JSON payload maps field values to both raw hex IDs and friendly, human-readable names.
-- **Configurable File Logging**: Option to toggle live packet logging to `live_decrypted.log` on/off via configuration.
-- **Statistical Tracking**: Divides packets into a mutually exclusive partitioning of status categories (duplicate raw, CRC failures, decryption errors, valid CoAP, etc.).
+- **Passive Home Assistant Auto-Discovery**: Automatically discovers and maps sniffed devices (`VA...`, `RU...`, `IB...`) to read-only Home Assistant entities under a segregated `tanoclo_sniffer_*` namespace.
+- **MQTT State Publishing**: Publishes discrete decoded sensor states to `tado/sniffer/d/{serial}/...` (or fallback `tado/sniffer/m/{mac}/...`).
+- **Configurable File Logging**: Live packet logging to file with configurable max file size, log rotation (`max_rotated_logs`), and console output controls.
+- **Automatic PAN Exclusion**: Automatically identifies and ignores foreign/unrelated PAN IDs after sustained decryption failure.
+- **Statistical Tracking**: Tracks packet counters (total received, bad CRC, decryption errors, valid CoAP, active PANs) exposed via receiver status entities.
 
 ### 5.2 Database Synchronization
 To extract friendly TLV labels from the MariaDB server into the standalone JSON mapping, run:
@@ -126,7 +129,12 @@ You can create a `config.json` in the `tanoclo-stream-receiver/` directory (base
 ```json
 {
   "tcpPort": 9999,
-  "fileLogging": false,
+  "tcpHost": "0.0.0.0",
+  "fileLogging": true,
+  "maxLogSizeMb": 5,
+  "maxRotatedLogs": 1,
+  "consoleLogging": true,
+  "autoExclusion": true,
   "keys": {
     "IB1234567890": "aabbccddeeff00112233445566778899",
     "PAIRING": "7461646f2070616972696e67206b6579"
@@ -156,18 +164,28 @@ node tanoclo-stream-receiver/stream_receiver.js [--stats]
 #### Command Line Flags
 - `--stats`: Periodically prints detailed packet status statistics.
 - `--port <port>`: Overrides the TCP listening port (default: `9999`).
+- `--host <ip>`: Overrides the TCP listening bind address (default: `0.0.0.0`).
 - `--keys <name=hex,name2=hex...>`: Provides comma-separated name-key pairs for AES decryption.
 - `--panids <id1,id2...>`: Provides comma-separated whitelisted PAN IDs.
 - `--mqtt-host <url>`: Configures/enables MQTT connection (e.g., `mqtt://192.168.1.100`).
 - `--mqtt-topic <topic>`: Configures base MQTT topic.
 - `--mqtt-user <username>`: Configures MQTT username.
 - `--mqtt-pass <password>`: Configures MQTT password.
-- `--file-logging` / `--no-file-logging`: Toggles writing packet data to `live_decrypted.log`.
+- `--file-logging` / `--no-file-logging`: Toggles writing packet data to file.
+- `--max-log-size <mb>`: Maximum log size before rotation (default: `5`).
+- `--max-rotated-logs <count>`: Number of rotated log backups to retain (default: `1`).
+- `--auto-exclusion` / `--no-auto-exclusion`: Toggle auto-ignoring PANs that fail decryption.
+- `--console-logging` / `--no-console-logging`: Toggle terminal packet logs.
 
 #### Environment Variables
 You can also set the following environment variables:
 * `TCP_PORT`: Port number (also accepts legacy `UDP_PORT`).
+* `TCP_HOST` / `BIND_ADDRESS`: Bind IP address.
 * `FILE_LOGGING`: Toggle logging to file (`true`/`false`).
+* `MAX_LOG_SIZE_MB`: Max log size before rotation.
+* `MAX_ROTATED_LOGS`: Number of rotated logs to keep.
+* `CONSOLE_LOGGING`: Toggle console output (`true`/`false`).
+* `AUTO_EXCLUSION`: Toggle foreign PAN auto-exclusion (`true`/`false`).
 * `TADO_KEYS`: Comma-separated `name=hex` keys.
 * `TADO_PAN_IDS`: Comma-separated whitelisted PAN IDs.
 * `MQTT_ENABLED`: Enable MQTT pushes (`true`/`false`).
@@ -179,25 +197,57 @@ You can also set the following environment variables:
 
 ## 6. Multi-Device Hardware Emulation: `tado_emulator`
 
-The `tado_emulator` component allows a single ESP32 development board (TTGO LoRa32) to emulate multiple virtual Tado Room Units (RU) as Wireless Temperature Sensors simultaneously.
+The `tado_emulator` component allows a single ESP32 development board (TTGO LoRa32) to emulate multiple virtual Tado Room Units (`RU02`) as Wireless Temperature Sensors simultaneously on the 868.3 MHz FSK network.
 
 ### 6.1 Features
-- **Multi-Device Support**: Emulate multiple room units (RUs) as Wireless Temperature Sensors on a single physical radio.
-- **Full CoAP & 6LoWPAN Stack**: Implements AES-128-CCM encryption, ICMPv6 Echo, and CSL receiver handling.
-- **REST API Integration**: Direct HMAC-authenticated HTTP control between the TaNoClo server and the ESP32 node.
-- **NVRAM Persistence**: Operational keys, session tokens, and telemetry setpoints persist across power cycles.
+- **Multi-Device Virtualization**: Emulate multiple independent Room Units (`RU02`, fw 13762 / `215.2`, hw rev 4) on a single physical SX1276 transceiver.
+- **Full Ecosystem Integration**:
+  - **Setup Portal**: One-click pairing, dynamic temperature/humidity sliders, immediate telemetry push, unpairing.
+  - **Home Assistant MQTT**: Auto-discovery of dynamic `number` sliders for temperature/humidity and push buttons.
 
-### 6.2 Flashing the Emulator Firmware
+### 6.2 Hardware Pinout Configuration
+
+| SX1276 Pin | ESP32 GPIO | Role | Configuration in YAML |
+| :--- | :--- | :--- | :--- |
+| **SCK** | GPIO 5 | SPI Clock | `spi.clk_pin: 5` |
+| **MISO** | GPIO 19 | SPI Master-In Slave-Out | `spi.miso_pin: 19` |
+| **MOSI** | GPIO 27 | SPI Master-Out Slave-In | `spi.mosi_pin: 27` |
+| **NSS / CS** | GPIO 18 | SPI Chip Select | `tado_emulator.cs_pin: 18` |
+| **DIO0** | GPIO 26 | TX/RX Done Interrupt | `tado_emulator.dio0_pin: 26` |
+| **RST** | GPIO 23 (or 14) | Transceiver Reset | `tado_emulator.rst_pin: 23` |
+
+### 6.3 Configuration Options (`tado_emulator.yaml`)
+
+```yaml
+tado_emulator:
+  id: tado_rf_emulator
+  cs_pin: 18
+  rst_pin: 23
+  dio0_pin: 26
+  channel: 26
+  server_url: "http://192.168.0.10:3111"
+  auto_mac_ack: true
+  api_key: "YOUR_OPTIONAL_API_KEY"
+  fast_fifo_drain: true
+```
+
+* `server_url`: Address of your TaNoClo `ws-server`.
+* `api_key`: Optional API key matching the node's entry in the Setup Portal.
+* `fast_fifo_drain`: Enables low-latency FIFO packet draining (default `true`).
+* `auto_mac_ack`: Automatically sends IEEE 802.15.4 MAC ACKs (default `true`).
+
+### 6.4 Flashing the Emulator Firmware
 Compile and flash the emulator component:
 ```bash
 esphome run tado_emulator/tado_emulator.yaml
 ```
 
-### 6.3 Registering & Controlling via Setup Portal
+### 6.5 Registering & Controlling via Setup Portal
 1. Open the **TaNoClo Setup Portal** (`https://setup.tanoclo.YOUR_DOMAIN.com`).
-2. Navigate to **Emulated Devices & ESP32 Nodes**.
-3. Add the ESP32 node IP.
-4. Click **Create & Auto-Pair** to automatically create a new emulated RU and pair the emulated RU with your Internet Bridge.
-5. Control ambient temperature and humidity dynamically via Setup Dashboard sliders or Home Assistant MQTT topics (`tado/tanoclo/emulated/<serial>/set/temp`).
+2. Navigate to the **Emulated Devices** tab.
+3. In **Add Hardware Node**, enter the ESP32 node name, IP address, port, and API key.
+4. Under **Add Emulated Device**, create a new emulated RU assigned to the node.
+5. Click **Pair** to trigger automated RF pairing with your Internet Bridge.
+6. Control temperature and humidity dynamically via the dashboard sliders or Home Assistant MQTT topics (`tado/tanoclo/emulated/<serial>/set/temp`).
 
-For comprehensive architectural details and protocol specifications, see [docs/emulated_devices.md](../docs/emulated_devices.md).
+For full architectural details and protocol specifications, see [docs/emulated_devices.md](../docs/emulated_devices.md).

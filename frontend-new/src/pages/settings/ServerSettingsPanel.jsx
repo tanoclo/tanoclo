@@ -151,10 +151,10 @@ export default function ServerSettingsPanel({
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
                   <span>{d.friendlyName ? `${d.friendlyName} (${d.serialNo})` : d.serialNo}</span>
                   {hasError && (
-                    <AlertTriangle 
-                      size={15} 
-                      style={{ color: 'var(--error)', flexShrink: 0 }} 
-                      title={d.friendlyErrorFlags} 
+                    <AlertTriangle
+                      size={15}
+                      style={{ color: 'var(--error)', flexShrink: 0 }}
+                      title={d.friendlyErrorFlags}
                     />
                   )}
                 </span>
@@ -170,17 +170,17 @@ export default function ServerSettingsPanel({
                 const isMed = batteryPercent !== null && batteryPercent !== undefined && batteryPercent <= 50;
                 const BatteryIcon = isLow ? BatteryLow : (isMed ? BatteryMedium : Battery);
                 const badgeColor = isLow ? 'var(--danger)' : 'var(--text-secondary)';
-                const percentText = batteryPercent !== null && batteryPercent !== undefined 
-                  ? `${batteryPercent}%` 
-                  : (batteryState && batteryState !== 'NORMAL' 
-                      ? (batteryState === 'LOW' ? t('common.low') : (batteryState === 'CRITICAL' ? t('common.critical') : (batteryState === 'DEPLETED' ? t('common.depleted') : batteryState))) 
-                      : t('common.na'));
+                const percentText = batteryPercent !== null && batteryPercent !== undefined
+                  ? `${batteryPercent}%`
+                  : (batteryState && batteryState !== 'NORMAL'
+                    ? (batteryState === 'LOW' ? t('common.low') : (batteryState === 'CRITICAL' ? t('common.critical') : (batteryState === 'DEPLETED' ? t('common.depleted') : batteryState)))
+                    : t('common.na'));
 
                 batteryDisplay = (
-                  <span style={{ 
-                    display: 'inline-flex', 
-                    alignItems: 'center', 
-                    gap: '0.25rem', 
+                  <span style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.25rem',
                     fontSize: '0.85rem',
                     fontWeight: 600,
                     color: badgeColor

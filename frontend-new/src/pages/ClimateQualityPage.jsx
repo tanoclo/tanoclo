@@ -45,7 +45,7 @@ export default function ClimateQualityPage() {
   return (
     <AppShell title={t('air_comfort.title')} showBack={true} onBack={() => navigate('/')}>
       <div className="page-container" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-        
+
         {/* Title */}
         <div>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', margin: 0 }}>
@@ -83,7 +83,7 @@ export default function ClimateQualityPage() {
                   .map((zone) => {
                     const comfortItem = climateQuality?.comfort?.find(c => c.roomId === zone.id);
                     return (
-                      <ZoneClimateCard 
+                      <ZoneClimateCard
                         key={zone.id}
                         name={zone.name}
                         comfort={comfortItem}

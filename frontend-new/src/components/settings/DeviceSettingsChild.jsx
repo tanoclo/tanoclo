@@ -3,9 +3,7 @@
  * @brief Renders hardware child lock and orientation configurations for VA02/RU02 valves.
  */
 
-
 import Card from '../common/Card';
-
 import Toggle from '../common/Toggle';
 
 /**

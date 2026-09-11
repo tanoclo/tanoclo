@@ -6,7 +6,6 @@
  * based on user administrator privilege flags to prevent raw endpoint adjustments by guest accounts.
  */
 
-
 import { useLocation, Link } from 'react-router';
 import { Home, Sliders } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -50,8 +49,8 @@ export default function BottomNav() {
       boxShadow: '0 -4px 16px rgba(0,0,0,0.15)'
     }}>
       {navItems.map((item) => {
-        const isActive = item.path === '/' 
-          ? location.pathname === '/' 
+        const isActive = item.path === '/'
+          ? location.pathname === '/'
           : location.pathname.startsWith(item.path);
 
         return (

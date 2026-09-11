@@ -376,5 +376,3 @@ export function updateTaNoCloOwdSettings(homeId, zoneId, enabled, source) {
     body: { enabled, source }
   });
 }
-
-

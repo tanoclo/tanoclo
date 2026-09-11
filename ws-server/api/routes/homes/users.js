@@ -19,7 +19,6 @@ const { buildHomeDetails, checkZoneConfigReadonly } = require('./helpers');
 const router = express.Router();
 const _log = getLogger('homes-api');
 
-// --- lines 694 to 739 ---
 router.get('/:homeId/invitations', async (req, res) => {
     try {
         const homeId = req.params.homeId;
@@ -66,9 +65,6 @@ router.get('/:homeId/invitations', async (req, res) => {
 });
 
 // POST /api/v2/homes/{homeId}/invitations
-
-
-// --- lines 740 to 785 ---
 router.post('/:homeId/invitations', async (req, res) => {
     try {
         const homeId = req.params.homeId;
@@ -115,9 +111,6 @@ router.post('/:homeId/invitations', async (req, res) => {
 });
 
 // DELETE /api/v2/homes/{homeId}/invitations/{token}
-
-
-// --- lines 786 to 805 ---
 router.delete('/:homeId/invitations/:token', async (req, res) => {
     try {
         const { homeId, token } = req.params;
@@ -138,9 +131,6 @@ router.delete('/:homeId/invitations/:token', async (req, res) => {
 });
 
 // POST /api/v2/homes/{homeId}/invitations/{token}/resend
-
-
-// --- lines 806 to 818 ---
 router.post('/:homeId/invitations/:token/resend', async (req, res) => {
     try {
         const { homeId, token } = req.params;
@@ -153,10 +143,7 @@ router.post('/:homeId/invitations/:token/resend', async (req, res) => {
     }
 });
 
-// PUT /api/v2/homes/{homeId}/zoneOrder
-
-
-// --- lines 848 to 860 ---
+// GET /api/v2/homes/{homeId}/emailNotificationSettings
 router.get('/:homeId/emailNotificationSettings', async (req, res) => {
     try {
         const homeId = req.params.homeId;
@@ -170,9 +157,6 @@ router.get('/:homeId/emailNotificationSettings', async (req, res) => {
 });
 
 // PATCH /api/v2/homes/{homeId}/emailNotificationSettings
-
-
-// --- lines 861 to 875 ---
 router.patch('/:homeId/emailNotificationSettings', async (req, res) => {
     try {
         const homeId = req.params.homeId;
@@ -188,9 +172,6 @@ router.patch('/:homeId/emailNotificationSettings', async (req, res) => {
 });
 
 // GET /api/v2/homes/{homeId}/state
-
-
-// --- lines 982 to 1107 ---
 router.get('/:homeId/users', async (req, res) => {
     try {
         const homeId = req.params.homeId;
@@ -274,7 +255,7 @@ router.get('/:homeId/users', async (req, res) => {
                     if (md.push_notifications_json) {
                         try {
                             settings.pushNotifications = JSON.parse(md.push_notifications_json);
-                        } catch (e) {}
+                        } catch (e) { }
                     }
 
                     const deviceObj = {
@@ -315,8 +296,5 @@ router.get('/:homeId/users', async (req, res) => {
         res.status(500).json({ error: 'internal_error' });
     }
 });
-
-// GET /api/homes/{homeId}/skills
-
 
 module.exports = router;

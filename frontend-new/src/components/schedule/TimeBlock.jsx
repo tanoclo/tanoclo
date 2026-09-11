@@ -6,7 +6,6 @@
  * and sets background color gradients dynamically mapped to target temperatures.
  */
 
-
 import { formatTemperature } from '../../utils/temperature';
 
 /**
@@ -16,11 +15,11 @@ import { formatTemperature } from '../../utils/temperature';
  * @param {number} props.totalMinutes - Total scale minutes (standard 1440 for 24h).
  * @param {boolean} props.isDhw - Whether the target zone is DHW (Domestic Hot Water).
  */
-export default function TimeBlock({ 
-  block, 
-  onClick, 
+export default function TimeBlock({
+  block,
+  onClick,
   totalMinutes = 1440, // 24 hours
-  isDhw = false 
+  isDhw = false
 }) {
   const { start, end, setting } = block;
 
@@ -33,7 +32,7 @@ export default function TimeBlock({
 
   const startMin = timeToMinutes(start);
   let endMin = timeToMinutes(end);
-  
+
   // Handing midnight wraparound or 24:00 (which might be stored as 00:00 or 24:00)
   if (endMin <= startMin) {
     endMin = 1440; // Assume end of day if end <= start (e.g. 00:00 to 00:00 seed block)
@@ -63,18 +62,18 @@ export default function TimeBlock({
     const maxTemp = 25.0;
     const ratio = Math.min(1, Math.max(0, (temp - minTemp) / (maxTemp - minTemp)));
     const hue = 200 - ratio * 175; // 200 (blue) down to 25 (orange/red)
-    
+
     return `linear-gradient(to bottom, hsl(${hue}, 75%, 22%), hsl(${hue}, 80%, 13%))`;
   };
 
-  const _label = isDhw 
-    ? (setting?.power === 'ON' 
-        ? (setting?.temperature?.celsius ? formatTemperature(setting.temperature.celsius) : 'ON')
-        : 'OFF')
+  const _label = isDhw
+    ? (setting?.power === 'ON'
+      ? (setting?.temperature?.celsius ? formatTemperature(setting.temperature.celsius) : 'ON')
+      : 'OFF')
     : formatTemperature(setting?.temperature?.celsius);
 
   return (
-    <div 
+    <div
       onClick={onClick}
       style={{
         width: `${widthPercent}%`,

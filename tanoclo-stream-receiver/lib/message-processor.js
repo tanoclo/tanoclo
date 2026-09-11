@@ -120,8 +120,9 @@ function processCoapPacket(packet, type, meta = {}) {
         const f = tlv.fields;
 
         // Device identity FIDs
-        if (f['0x0188'] && typeof f['0x0188'] === 'string') {
-            detectedSerial = f['0x0188'].trim().toUpperCase();
+        const serialCandidate = f['0x0001'] ?? f['0x0188'] ?? f['0x0260'] ?? f.device_serial_number_0001 ?? f.device_serial_number;
+        if (serialCandidate && typeof serialCandidate === 'string' && serialCandidate.trim().length > 0) {
+            detectedSerial = serialCandidate.trim().toUpperCase();
         }
         if (f['0x0180'] !== undefined) {
             detectedHwRev = Number(f['0x0180']);
@@ -129,8 +130,9 @@ function processCoapPacket(packet, type, meta = {}) {
                 detectedDeviceType = 'RU02';
             }
         }
-        if (f['0x0190'] !== undefined) {
-            detectedFwVersion = String(f['0x0190']);
+        const fwCandidate = f['0x003a'] ?? f['0x0035'] ?? f['0x0190'] ?? f.firmware_version ?? f.fw_version;
+        if (fwCandidate !== undefined) {
+            detectedFwVersion = String(fwCandidate);
             updates.firmware_version = detectedFwVersion;
         }
         if (f['0x0210'] && typeof f['0x0210'] === 'string') {
@@ -142,18 +144,22 @@ function processCoapPacket(packet, type, meta = {}) {
         }
 
         // Environmental metrics
-        const temp = f['0x012d'] !== undefined ? f['0x012d'] : f.temperature_ambient;
-        const auxTemp = f['0x012e'] !== undefined ? f['0x012e'] : f.aux_temperature_1;
-        const hum = f['0x0135'] !== undefined ? f['0x0135'] : f.humidity_percent;
-        const light = f['0x0136'] !== undefined ? f['0x0136'] : f.ambient_light_level;
+        const temp = f['0x012d'] ?? f['0x4060'] ?? f.temperature_ambient ?? f.zone_temperature_4060;
+        const auxTemp = f['0x012e'] ?? f.aux_temperature_1;
+        const hum = f['0x0135'] ?? f.humidity_percent;
+        const light = f['0x0136'] ?? f.ambient_light_level;
+        const targetTemp = f['0x6200'] ?? f['0x012c'] ?? f.schedule_target_temp ?? f.temperature_setpoint;
+        const tempOffset = f['0x0140'] ?? f.temp_offset;
 
         if (temp !== undefined) updates.temperature = temp;
         if (auxTemp !== undefined) updates.aux_temperature = auxTemp;
         if (hum !== undefined) updates.humidity = hum;
         if (light !== undefined) updates.light_level = light;
+        if (targetTemp !== undefined) updates.target_temperature = targetTemp;
+        if (tempOffset !== undefined) updates.temperature_offset = tempOffset;
 
         // Battery fields
-        const batMv = f['0x021c'] !== undefined ? f['0x021c'] : (f['0x021b'] !== undefined ? f['0x021b'] : f.battery_mv);
+        const batMv = f['0x0162'] ?? f['0x021c'] ?? f['0x021b'] ?? f.battery_mv;
         if (batMv !== undefined && typeof batMv === 'number') {
             updates.battery_mv = batMv;
             updates.battery_percent = Math.max(0, Math.min(100, Math.round((batMv - 2000) / 10)));
@@ -161,25 +167,25 @@ function processCoapPacket(packet, type, meta = {}) {
         }
 
         // Reset Reason & Error Flags
-        const resetCode = f['0x01a0'] !== undefined ? f['0x01a0'] : f.reset_reason;
+        const resetCode = f['0x0160'] ?? f.device_reset_reason ?? f.reset_reason ?? f['0x01a0'];
         if (resetCode !== undefined) {
             updates.reset_reason = tlvDecoder.decodeResetReason(resetCode);
         }
-        const errCode = f['0x01a3'] !== undefined ? f['0x01a3'] : f.error_flags;
+        const errCode = f['0x01a3'] ?? f.error_flags;
         if (errCode !== undefined) {
             updates.error_flags = tlvDecoder.decodeErrorFlags(errCode);
         }
 
         // Valve Actuator parameters
-        const valvePos = f['0x0265'] !== undefined ? f['0x0265'] : f.va_act_position_steps;
-        const actActive = f['0x028c'] !== undefined ? f['0x028c'] : f.actuator_active;
-        const mountState = f['0x016a'] !== undefined ? f['0x016a'] : f.va_mount_state;
-        const actDev = f['0x0283'] !== undefined ? f['0x0283'] : f.va_act_deviation;
-        const childLock = f['0x0140'] !== undefined ? f['0x0140'] : f.child_lock;
-        const orientation = f['0x0149'] !== undefined ? f['0x0149'] : f.display_orientation;
-        const actLow = f['0x0273'] !== undefined ? f['0x0273'] : f.actuator_limit_low;
-        const actHigh = f['0x027c'] !== undefined ? f['0x027c'] : f.actuator_limit_high;
-        const actDrive = f['0x0280'] !== undefined ? f['0x0280'] : f.actuator_drive_constant;
+        const valvePos = f['0x0265'] ?? f.va_act_position_steps;
+        const actActive = f['0x028c'] ?? f.actuator_active;
+        const mountState = f['0x016a'] ?? f.va_mount_state;
+        const actDev = f['0x0283'] ?? f.va_act_deviation;
+        const childLock = f['0x0290'] ?? f.va_child_lock_enabled ?? f.child_lock;
+        const orientation = f['0x0149'] ?? f.display_orientation;
+        const actLow = f['0x0273'] ?? f.actuator_limit_low;
+        const actHigh = f['0x027c'] ?? f.actuator_limit_high;
+        const actDrive = f['0x0280'] ?? f.actuator_drive_constant;
 
         if (valvePos !== undefined) updates.valve_position = valvePos;
         if (actActive !== undefined) updates.actuator_active = Number(actActive) === 1;
@@ -270,12 +276,12 @@ function processCoapPacket(packet, type, meta = {}) {
 
     const payloadData = {
         coap: {
-            type: ['CON', 'NON', 'ACK', 'RST'][coap.type],
+            type: ['CON', 'NON', 'ACK', 'RST'][coap.type] || 'UNKNOWN',
             code: coapParser.codeStr(coap.code),
             mid: coap.mid,
-            token: coap.token.toString('hex'),
-            options: coap.options.map(o => ({ num: o.num, name: o.name, hex: o.value.toString('hex') })),
-            payload: coap.payload.toString('hex')
+            token: coap.token ? coap.token.toString('hex') : '',
+            options: (coap.options || []).map(o => ({ num: o.num, name: o.name, hex: o.value ? o.value.toString('hex') : '' })),
+            payload: coap.payload ? coap.payload.toString('hex') : ''
         },
         tlv: tlvFriendly,
         tlvRaw: tlv ? tlv.fields : {},

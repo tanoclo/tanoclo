@@ -117,8 +117,8 @@ export default class ErrorBoundary extends Component {
               </pre>
             )}
 
-            <Button 
-              variant="primary" 
+            <Button
+              variant="primary"
               onClick={this.handleReload}
               style={{ width: '100%', padding: '0.875rem' }}
             >

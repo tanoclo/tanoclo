@@ -53,8 +53,8 @@ graph TD
 |------|:--------:|-------|
 | **ST-Link V2** programmer | ✅ | Or compatible clone. Connects to your PC via USB. |
 | **10-pin clip-on pogo programmer** | For solderless | 5×2 layout, 1.27mm pitch. Clips onto the board test points. |
-| **Opening tools** | ✅ | Phone repair pry tools or a small knife. |
 | **Soldering iron + thin wire** | For solder method | If you prefer a permanent connection or don't want to buy a pogo clip. |
+| **Opening tools** | ✅ | Phone repair pry tools or a small knife. |
 
 ### Where to Buy
 
@@ -324,7 +324,7 @@ arm-none-eabi-nm -n spi_stub.elf | awk ' \
 ## 9. Other Devices (Development Only)
 
 > [!WARNING]
-> Reading and flashing the **VA (Smart Radiator Thermostat)** and **RU (Room Unit)** is **completely optional** and provided for **development purposes only**. The scripts and information below are not required for normal TaNoClo operation.
+> Reading and flashing the **VA (Smart Radiator Thermostat)** and **RU (Room Unit)** is **completely optional** and provided for **development purposes only**. The scripts and information below are not required for normal TaNoClo operation. Note that when running TaNoClo WebSocket server it is also possible to dump VA/RU firmware over RF. This process is very slow but does not require opening the devices.
 
 ### 9.1 VA — Smart Radiator Thermostat (V2 / V3 / V3+)
 

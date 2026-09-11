@@ -149,63 +149,62 @@ function findCoapOffset(payload) {
         return 0;
     }
 
+    const parseNhc = (buf, nhcOff) => {
+        if (nhcOff < 0 || nhcOff >= buf.length) return -1;
+        const nhc = buf[nhcOff];
+        if ((nhc & 0xF8) !== 0xF0) return -1;
+        const portsCode = nhc & 0x03;
+        let portLen = 4;
+        if (portsCode === 1 || portsCode === 2) portLen = 3;
+        else if (portsCode === 3) portLen = 1;
+        const chkLen = (nhc & 0x04) === 0 ? 2 : 0;
+        const coapOff = nhcOff + 1 + portLen + chkLen;
+        return coapOff <= buf.length - 4 ? coapOff : -1;
+    };
+
+    // Case 0: Full decrypted frame with Tado prefix (payload[3] === 0x04)
+    if (payload.length >= 17 && payload[3] === 0x04) {
+        const disp = payload[8];
+        if (disp === 0x7E || disp === 0x7A || disp === 0x7B) {
+            if (payload[9] === 0x33) {
+                const off = parseNhc(payload, 10);
+                if (off !== -1) return off;
+            } else if (payload[9] === 0xF7 || payload[9] === 0xF3) {
+                const off = parseNhc(payload, 11);
+                if (off !== -1) return off;
+            }
+        } else if (disp === 0x7C && payload[9] === 0x00 && payload[10] === 0xD7) {
+            return 12;
+        } else if ((disp & 0xF8) === 0xC0 && payload.length >= 21) {
+            const sub = findCoapOffset(payload.subarray(12));
+            if (sub !== -1) return 12 + sub;
+        }
+    }
+
     // Case 1: Tado standard unicast framing payload (starts with pt[3]=0x04)
-    // payload[0] = 0x04, payload[1] = seq, payload[2..5] = Tado Dispatch [short_lo, short_hi, 0, mode]
+    // payload[0] = 0x04, payload[1..4] = Frame Counter, payload[5] = Tado Dispatch mode
     if (payload[0] === 0x04 && payload.length >= 14) {
         const mode = payload[5];
-
-        // Unfragmented operational CoAP (0x7E / 0x7C)
-        if (mode === 0x7E || mode === 0x7C) {
+        if (mode === 0x7E || mode === 0x7A || mode === 0x7B || mode === 0x7C) {
             const iphc = payload[6];
             let nhcOffset = -1;
+            if (iphc === 0x33) nhcOffset = 7;
+            else if (iphc === 0xF7 || iphc === 0xF3) nhcOffset = 8;
+            else if (iphc === 0xF5) nhcOffset = 16;
+            else if (mode === 0x7C && iphc === 0xD7) nhcOffset = 17;
 
-            if (iphc === 0x33) {
-                nhcOffset = 7;
-            } else if (iphc === 0xF7 || iphc === 0xF3) {
-                nhcOffset = 8;
-            } else if (iphc === 0xF5) {
-                nhcOffset = 16;
-            } else if (mode === 0x7C && iphc === 0xD7) {
-                // 1B IPHC + 2B context/hop (00 3f) + 8B IID = 11 bytes offset from payload[6] -> payload[17]
-                nhcOffset = 17;
-            }
-
-            if (nhcOffset !== -1 && nhcOffset < payload.length) {
-                const nhc = payload[nhcOffset];
-                if ((nhc & 0xF8) === 0xF0) {
-                    const portsCode = nhc & 0x03;
-                    let portLen = 4;
-                    if (portsCode === 1 || portsCode === 2) portLen = 3;
-                    else if (portsCode === 3) portLen = 1;
-                    const chkLen = (nhc & 0x04) === 0 ? 2 : 0;
-                    const coapOffset = nhcOffset + 1 + portLen + chkLen;
-                    if (coapOffset <= payload.length - 4) {
-                        return coapOffset;
-                    }
-                }
-            }
-        }
-        // Fragmented FRAG1 packet (mode byte has 0xC0)
-        else if ((mode & 0xF8) === 0xC0 && payload.length >= 22) {
-            const nhc = payload[11];
-            if ((nhc & 0xF8) === 0xF0) {
-                const portsCode = nhc & 0x03;
-                let portLen = 4;
-                if (portsCode === 1 || portsCode === 2) portLen = 3;
-                else if (portsCode === 3) portLen = 1;
-                const chkLen = (nhc & 0x04) === 0 ? 2 : 0;
-                const coapOffset = 11 + 1 + portLen + chkLen;
-                if (coapOffset <= payload.length - 4) {
-                    return coapOffset;
-                }
-            }
+            const off = parseNhc(payload, nhcOffset);
+            if (off !== -1) return off;
+        } else if ((mode & 0xF8) === 0xC0 && payload.length >= 22) {
+            const off = parseNhc(payload, 11);
+            if (off !== -1) return off;
         }
     }
 
     // Case 2: Reassembled datagram or tado_payload starting with 4-byte Tado Dispatch + NHC-UDP
     if (payload.length >= 12) {
         const mode = payload[3];
-        if (mode === 0x7E || mode === 0x7C) {
+        if (mode === 0x7E || mode === 0x7A || mode === 0x7B || mode === 0x7C) {
             const iphc = payload[4];
             let nhcOffset = -1;
             if (iphc === 0x33) nhcOffset = 5;
@@ -213,33 +212,11 @@ function findCoapOffset(payload) {
             else if (iphc === 0xF5) nhcOffset = 14;
             else if (mode === 0x7C && iphc === 0xD7) nhcOffset = 15;
 
-            if (nhcOffset !== -1 && nhcOffset < payload.length) {
-                const nhc = payload[nhcOffset];
-                if ((nhc & 0xF8) === 0xF0) {
-                    const portsCode = nhc & 0x03;
-                    let portLen = 4;
-                    if (portsCode === 1 || portsCode === 2) portLen = 3;
-                    else if (portsCode === 3) portLen = 1;
-                    const chkLen = (nhc & 0x04) === 0 ? 2 : 0;
-                    const coapOffset = nhcOffset + 1 + portLen + chkLen;
-                    if (coapOffset <= payload.length - 4) {
-                        return coapOffset;
-                    }
-                }
-            }
+            const off = parseNhc(payload, nhcOffset);
+            if (off !== -1) return off;
         } else {
-            const nhc = payload[4];
-            if ((nhc & 0xF8) === 0xF0) {
-                const portsCode = nhc & 0x03;
-                let portLen = 4;
-                if (portsCode === 1 || portsCode === 2) portLen = 3;
-                else if (portsCode === 3) portLen = 1;
-                const chkLen = (nhc & 0x04) === 0 ? 2 : 0;
-                const coapOffset = 4 + 1 + portLen + chkLen;
-                if (coapOffset <= payload.length - 4) {
-                    return coapOffset;
-                }
-            }
+            const off = parseNhc(payload, 4);
+            if (off !== -1) return off;
         }
     }
 
@@ -275,9 +252,11 @@ function parseInternal(data) {
 
     const options = [];
     let currentOptNum = 0;
+    let hasPayloadMarker = false;
 
     while (offset < data.length) {
         if (data[offset] === 0xFF) {
+            hasPayloadMarker = true;
             offset++; // skip payload marker
             break;
         }
@@ -290,6 +269,7 @@ function parseInternal(data) {
         if (delta === 15 || length === 15) {
             const markerIdx = data.indexOf(0xFF, offset);
             if (markerIdx !== -1) {
+                hasPayloadMarker = true;
                 offset = markerIdx + 1;
             } else {
                 offset = data.length;
@@ -328,7 +308,8 @@ function parseInternal(data) {
         offset += length;
     }
 
-    const payload = offset < data.length ? data.subarray(offset) : Buffer.alloc(0);
+    // RFC 7252: Payload exists only if explicit 0xFF marker was present
+    const payload = (hasPayloadMarker && offset < data.length) ? data.subarray(offset) : Buffer.alloc(0);
 
     return {
         ok: true,

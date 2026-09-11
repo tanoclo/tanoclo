@@ -96,7 +96,7 @@ function getFriendlyErrorFlags(flags) {
     if (val & 0x4000) parts.push('Mount/Contact Fault');
     if (val & 0x100000) parts.push('Low Battery');
     if (val & 0x200000) parts.push('Hardware Reset');
-    
+
     const remaining = val & ~(0x2 | 0x4 | 0x8 | 0x80 | 0x800 | 0x1000 | 0x2000 | 0x4000 | 0x100000 | 0x200000);
     if (remaining > 0) {
         parts.push(`RAW_0x${remaining.toString(16).toUpperCase()}`);
@@ -176,7 +176,7 @@ async function publishFullState() {
         for (const zone of zones) {
             const lastMeas = measurementsMap.get(zone.id) || {};
             const overlay = overlaysMap.get(zone.id);
-            
+
             // Publish static info
             _pub(`${BASE_TOPIC}/h/${zone.home_id}/z/${zone.id}/name`, zone.name);
             _pub(`${BASE_TOPIC}/h/${zone.home_id}/z/${zone.id}/type`, zone.type);
@@ -337,7 +337,7 @@ async function publishZoneTelemetry(homeId, zoneId, fields) {
     if (power !== undefined) {
         const mode = fields.field_6240 !== undefined ? fields.field_6240 : fields['0x6240'];
         const enabled = fields.field_61e0 !== undefined ? fields.field_61e0 : fields['0x61e0'];
-        
+
         let action = 'idle';
         if (enabled === 0) {
             action = 'off';
@@ -372,7 +372,7 @@ async function publishZoneStateTelemetry(homeId, zoneId, fields, zoneRow = null)
 
     _pub(`${BASE_TOPIC}/h/${homeId}/z/${zoneId}/target_temperature`, target);
     _pub(`${BASE_TOPIC}/h/${homeId}/z/${zoneId}/tado_mode`, tadoMode);
-    
+
     if (presenceVal !== undefined) {
         _pub(`${BASE_TOPIC}/h/${homeId}/z/${zoneId}/home_away`, Number(presenceVal) === 1 ? 'HOME' : 'AWAY');
         let presetMode = Number(presenceVal) === 1 ? 'home' : 'away';
@@ -397,7 +397,7 @@ async function publishZoneStateTelemetry(homeId, zoneId, fields, zoneRow = null)
     if (overlayVal !== undefined) {
         const overlayActive = Number(overlayVal) > 0;
         _pub(`${BASE_TOPIC}/h/${homeId}/z/${zoneId}/overlay_active`, overlayActive ? 'ON' : 'OFF');
-        
+
         // Clear overlay temperature if inactive
         _pub(`${BASE_TOPIC}/h/${homeId}/z/${zoneId}/overlay_temperature`, overlayActive ? overlayTemp : '');
 
@@ -517,19 +517,19 @@ async function publishDeviceTelemetry(shortSerial, homeId, zoneId, sensorFields,
         _pub(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/temperature`, temp);
         _pub(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/aux_temperature`, auxTemp);
         _pub(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/humidity`, hum);
-        
+
         // Only VA, RU, and SU have battery (not IB, BP, BR, WR)
         const isIBOrReceiver = dev && dev.device_type && (dev.device_type.startsWith('IB') || dev.device_type.startsWith('BP') || dev.device_type.startsWith('BR') || dev.device_type.startsWith('WR'));
         const isEmulated = Boolean(dev && (dev.is_emulated || dev.emulated_mode));
         if (!isIBOrReceiver && !isEmulated) {
             _pub(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/battery_voltage`, volt);
             _pubDebug(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/field_0162`, volt);
-            
+
             if (volt !== undefined && volt !== null) {
                 const voltInV = (Number(volt) / 1000).toFixed(3);
                 _pub(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/battery_mv`, voltInV);
             }
-            
+
             if (volt !== undefined && dev) {
                 const calcPct = battery.getBatteryPercent(Number(volt), dev.serial_no, dev.battery_type);
                 if (calcPct !== null) {
@@ -537,7 +537,7 @@ async function publishDeviceTelemetry(shortSerial, homeId, zoneId, sensorFields,
                 }
             }
         }
-        
+
         _pub(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/light_level`, light);
 
         if (otVolt !== undefined && otVolt !== null) {
@@ -577,8 +577,8 @@ async function publishDeviceTelemetry(shortSerial, homeId, zoneId, sensorFields,
             _pub(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/child_lock`, dev.child_lock_enabled === 1 ? 'ON' : 'OFF');
         }
 
-        // Battery fields from devices table (VA and RU only)
-        if (!isIB) {
+        // Battery fields from devices table (VA and RU only, exclude emulated)
+        if (!isIB && !dev.is_emulated && !dev.emulated_mode) {
             if (dev.battery_percent !== null) {
                 _pub(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/battery_percent`, dev.battery_percent);
             }

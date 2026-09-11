@@ -1,9 +1,9 @@
 # patch.ps1
 # Orchestrates the firmware patching process
 param(
-    [Parameter(Mandatory=$true, Position=0)]
+    [Parameter(Mandatory = $true, Position = 0)]
     [int]$spiSlot,
-    [Parameter(Mandatory=$true, Position=1)]
+    [Parameter(Mandatory = $true, Position = 1)]
     [int]$endpointType,
     [switch]$ReuseCerts
 )
@@ -43,9 +43,11 @@ if (-not (Test-Path $moddedInternalCaEndpoint)) {
 
 if ($endpointType -eq 1) {
     Write-Host "Patch - Endpoint set to ws://ingress.tado.com:988"
-} elseif ($endpointType -eq 2) {
+}
+elseif ($endpointType -eq 2) {
     Write-Host "Patch - Endpoint set to ws://tanoclo.tado.lan:988"
-} else {
+}
+else {
     Write-Host "Patch - Endpoint set to ws://ingress.tado.com:443"
 }
 
@@ -76,16 +78,19 @@ if ($spiSlot -ne 0) {
 
     if ($spiSlot -eq 1) {
         [System.Array]::Copy($internalBytes, $offset128k, $spiBytes, $offset128k, $count384k)
-    } elseif ($spiSlot -eq 2) {
+    }
+    elseif ($spiSlot -eq 2) {
         [System.Array]::Copy($internalBytes, $offset128k, $spiBytes, $offset512k, $count384k)
-    } elseif ($spiSlot -eq 3) {
+    }
+    elseif ($spiSlot -eq 3) {
         [System.Array]::Copy($internalBytes, $offset128k, $spiBytes, $offset128k, $count384k)
         [System.Array]::Copy($internalBytes, $offset128k, $spiBytes, $offset512k, $count384k)
     }
 
     [System.IO.File]::WriteAllBytes($moddedSpiCaEndpoint, $spiBytes)
     Write-Host "Patch - Done patching external SPI flash"
-} else {
+}
+else {
     Write-Host "Patch - Skipping patch of external SPI flash"
 }
 

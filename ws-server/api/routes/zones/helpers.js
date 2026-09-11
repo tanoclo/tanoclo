@@ -23,8 +23,6 @@ async function checkZoneConfigReadonly(homeId) {
     return { isReadOnly, devBypass };
 }
 
-// mapDevice is imported from lib/mappers.js
-
 function formatDate(dateStr) {
     if (!dateStr) return new Date().toISOString();
     return parseUtcDate(dateStr).toISOString();
@@ -43,7 +41,6 @@ function normalizeSetting(setting) {
     return setting;
 }
 
-// Delegate to canonical implementation in db.js
 async function getHomeTimezone(homeId, zoneId) {
     if (arguments.length === 1 || zoneId === undefined) {
         zoneId = homeId;
@@ -158,45 +155,45 @@ function blockMatchesDay(blockDayType, targetDayName) {
 
 function getInMemoryCurrentScheduleBlock(activeTT, blocksForTT, tzName) {
     if (!activeTT || !blocksForTT || blocksForTT.length === 0) return null;
-    
+
     const dateObj = (process.env.TEST_PARITY_TIME) ?
         new Date(process.env.TEST_PARITY_TIME) :
         new Date();
     const local = getLocalParts(dateObj, tzName);
     const dayName = local.dayName;
-    const timeStr = local.timeStr.slice(0, 5); // HH:mm
+    const timeStr = local.timeStr.slice(0, 5);
     const isoDateStr = local.dateStr;
-    
+
     const dayNames = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
     const prevDayName = dayNames[(dayNames.indexOf(dayName) + 6) % 7];
-    
+
     let todayBlocks = blocksForTT.filter(b => blockMatchesDay(b.day_type, dayName) && b.start_time <= timeStr);
-    
+
     const sortBlocksDesc = (arr, targetDay) => {
         return arr.sort((a, b) => {
             const aIsExact = a.day_type === targetDay ? 1 : 0;
             const bIsExact = b.day_type === targetDay ? 1 : 0;
             if (aIsExact !== bIsExact) return bIsExact - aIsExact;
-            
+
             const aIsMts = a.day_type === 'MONDAY_TO_SUNDAY' ? 1 : 0;
             const bIsMts = b.day_type === 'MONDAY_TO_SUNDAY' ? 1 : 0;
             if (aIsMts !== bIsMts) return aIsMts - bIsMts;
-            
+
             return b.start_time.localeCompare(a.start_time);
         });
     };
-    
+
     sortBlocksDesc(todayBlocks, dayName);
     let block = todayBlocks.length > 0 ? todayBlocks[0] : null;
-    
+
     if (!block) {
         let yesterdayBlocks = blocksForTT.filter(b => blockMatchesDay(b.day_type, prevDayName));
         sortBlocksDesc(yesterdayBlocks, prevDayName);
         block = yesterdayBlocks.length > 0 ? yesterdayBlocks[0] : null;
     }
-    
+
     if (!block) return null;
-    
+
     const setting = {
         type: block.setting_type || 'HEATING',
         power: block.setting_power || 'ON',
@@ -205,9 +202,9 @@ function getInMemoryCurrentScheduleBlock(activeTT, blocksForTT, tzName) {
             fahrenheit: (block.setting_temp_fahrenheit !== null) ? parseFloat(block.setting_temp_fahrenheit) : null
         } : null
     };
-    
+
     const startDateTimeLocal = new Date(`${isoDateStr}T${block.start_time}:00`);
-    
+
     return {
         timetableId: activeTT.id,
         blockId: block.id,
@@ -327,7 +324,6 @@ function mapZoneOverlay(overlay) {
     if (termType === 'TIMER' || termType === 'NEXT_TIME_BLOCK') {
         let expiryRaw = overlay.termination_expiry || (overlay.termination && overlay.termination.expiry);
         if (expiryRaw) {
-            // expiryRaw in DB is now a UTC ISO string.
             const expiryTs = new Date(expiryRaw).getTime();
             const nowTs = Date.now();
             const remaining = Math.max(0, Math.floor((expiryTs - nowTs) / 1000));
@@ -365,7 +361,7 @@ function resolveAwaySetting(zone, awayConfig) {
             };
         }
     }
-    // Default fallback if no awayConfig row exists
+
     if (isDhw) {
         return { type: 'HOT_WATER', power: 'OFF', temperature: null };
     }

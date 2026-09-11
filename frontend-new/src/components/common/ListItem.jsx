@@ -6,7 +6,6 @@
  * and optional directional chevrons.
  */
 
-
 import { ChevronRight } from 'lucide-react';
 
 /**
@@ -19,20 +18,20 @@ import { ChevronRight } from 'lucide-react';
  * @param {boolean} props.showChevron - Whether to show the right ChevronRight indicator.
  * @param {object} props.style - Inline styling parameter overrides.
  */
-export default function ListItem({ 
-  icon, 
-  title, 
-  subtitle = '', 
-  value = '', 
-  onClick, 
+export default function ListItem({
+  icon,
+  title,
+  subtitle = '',
+  value = '',
+  onClick,
   showChevron = true,
   style = {},
-  ...props 
+  ...props
 }) {
   const isClickable = !!onClick;
 
   return (
-    <div 
+    <div
       onClick={onClick}
       style={{
         display: 'flex',

@@ -8,19 +8,34 @@
 let _labels = {};
 
 const BUILTIN_LABELS = {
+    '0x0001': { name: 'device_serial_number_0001', type: 'string_ascii' },
+    '0x0012': { name: 'pairing_raw_op_key', type: 'bytes' },
+    '0x0033': { name: 'time_utc', type: 'u32be' },
+    '0x0035': { name: 'fw_other_slot', type: 'u16be' },
+    '0x0036': { name: 'dev_type_code', type: 'u8' },
+    '0x003a': { name: 'fw_version', type: 'u16be' },
+    '0x013f': { name: 'dev_hw_flags_013f', type: 'u8' },
     '0x015e': { name: 'zone_role_and_id', type: 'role_zone' },
-    '0x8400': { name: 'zone_peer_uri_p', type: 'string_ascii' },
-    '0x8200': { name: 'zone_peer_uri_c', type: 'string_ascii' },
-    '0x8000': { name: 'zone_peer_uri_s', type: 'string_ascii' },
-    '0x63a0': { name: 'zone_peer_uri_alt', type: 'string_ascii' },
-    '0x6040': { name: 'zone_peer_uri_cpe', type: 'string_ascii' },
+    '0x0160': { name: 'device_reset_reason', type: 'u8' },
+    '0x0162': { name: 'battery_mv', type: 'u16be' },
+    '0x0180': { name: 'slot_num', type: 'u8' },
     '0x01d4': { name: 'zone_peer_uri_1d4', type: 'string_ascii' },
     '0x01d5': { name: 'zone_peer_uri_1d5', type: 'string_ascii' },
+    '0x01f5': { name: 'dev_hw_flags_01f5', type: 'u8' },
+    '0x01f6': { name: 'dev_hw_flags_01f6', type: 'u8' },
+    '0x01f7': { name: 'dev_hw_flags_01f7', type: 'u8' },
+    '0x01f8': { name: 'dev_hw_flags_01f8', type: 'u8' },
+    '0x01f9': { name: 'dev_capabilities_01f9', type: 'u16be' },
     '0x0210': { name: 'fw_build_id', type: 'string_ascii' },
-    '0x003a': { name: 'fw_version', type: 'u16be' },
-    '0x0035': { name: 'fw_other_slot', type: 'u16be' },
-    '0x0180': { name: 'slot_num', type: 'u8' },
-    '0x0036': { name: 'dev_type_code', type: 'u8' }
+    '0x0290': { name: 'va_child_lock_enabled', type: 'bool' },
+    '0x4060': { name: 'zone_temperature_4060', type: 's16be', scale: 0.01 },
+    '0x6040': { name: 'zone_peer_uri_cpe', type: 'string_ascii' },
+    '0x6160': { name: 'zone_mode_6160', type: 'u8' },
+    '0x6200': { name: 'schedule_target_temp', type: 's16be', scale: 0.01 },
+    '0x63a0': { name: 'zone_peer_uri_alt', type: 'string_ascii' },
+    '0x8000': { name: 'zone_peer_uri_s', type: 'string_ascii' },
+    '0x8200': { name: 'zone_peer_uri_c', type: 'string_ascii' },
+    '0x8400': { name: 'zone_peer_uri_p', type: 'string_ascii' }
 };
 
 /**
@@ -170,11 +185,20 @@ function interpretValue(valueBuf, label) {
             value = valueBuf.toString('utf-8');
             break;
         case 'role_zone':
-            value = valueBuf.length >= 2 ? {
-                role: valueBuf[0],
-                zoneId: valueBuf[1],
-                roleName: decodeZoneRole(valueBuf[0])
-            } : valueBuf.toString('hex');
+        case 'u16_pairs_role_zone':
+            if (valueBuf.length >= 4) {
+                const r = valueBuf.readUInt16BE(0);
+                const z = valueBuf.readUInt16BE(2);
+                value = { role: r, zoneId: z, roleName: decodeZoneRole(r) };
+            } else if (valueBuf.length >= 2) {
+                value = {
+                    role: valueBuf[0],
+                    zoneId: valueBuf[1],
+                    roleName: decodeZoneRole(valueBuf[0])
+                };
+            } else {
+                value = valueBuf.toString('hex');
+            }
             break;
         case 'bool':
         case 'flag':

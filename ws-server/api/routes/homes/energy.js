@@ -3,7 +3,7 @@
  * @brief Energy consumption estimation and tracking routes.
  * 
  * Computes energy usage metrics (hours of boiler activity, equivalent gas usage estimators)
- * for custom daily and monthly date ranges to emulate Tado energy saving dashboards.
+ * for custom daily and monthly date ranges
  */
 
 const express = require('express');
@@ -20,7 +20,6 @@ const { buildHomeDetails, checkZoneConfigReadonly } = require('./helpers');
 const router = express.Router();
 const _log = getLogger('homes-api');
 
-// --- lines 1203 to 1219 ---
 router.get('/:homeId/energy', async (req, res) => {
     try {
         const homeId = parseInt(req.params.homeId, 10);
@@ -38,9 +37,6 @@ router.get('/:homeId/energy', async (req, res) => {
 });
 
 // GET /api/v2/homes/{homeId}/energy/daily — daily energy summary
-
-
-// --- lines 1220 to 1234 ---
 router.get('/:homeId/energy/daily', async (req, res) => {
     try {
         const homeId = parseInt(req.params.homeId, 10);
@@ -56,9 +52,6 @@ router.get('/:homeId/energy/daily', async (req, res) => {
 });
 
 // GET /api/v2/homes/{homeId}/zones/{zoneId}/energy — zone-specific energy usage
-
-
-// --- lines 1235 to 1252 ---
 router.get('/:homeId/zones/:zoneId/energy', async (req, res) => {
     try {
         const { homeId, zoneId } = req.params;
@@ -74,9 +67,5 @@ router.get('/:homeId/zones/:zoneId/energy', async (req, res) => {
         res.status(500).json({ error: 'internal_error' });
     }
 });
-
-module.exports = router;
-
-
 
 module.exports = router;

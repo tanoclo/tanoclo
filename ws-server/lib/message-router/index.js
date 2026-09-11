@@ -47,10 +47,7 @@ let commandApi;
 let metrics;
 let TADO_ROOT_CA;
 let extractShortSerial;
-
-// MID tracking
 let serverMid = 0;
-
 
 const downlink = require('./downlink');
 const uplink = require('./uplink');
@@ -62,6 +59,7 @@ const captureDownlinkSubpaths = downlink.captureDownlinkSubpaths;
 const captureUplinkPutRequest = uplink.captureUplinkPutRequest;
 
 let _cleanupBlockSessionsTimer;
+let _cleanupBlockReassemblyTimer;
 let _refreshIpv6ToDeviceTimer;
 
 function nextMid() {
@@ -106,6 +104,9 @@ function stop() {
     if (_cleanupBlockSessionsTimer) {
         clearInterval(_cleanupBlockSessionsTimer);
     }
+    if (_cleanupBlockReassemblyTimer) {
+        clearInterval(_cleanupBlockReassemblyTimer);
+    }
     if (_refreshIpv6ToDeviceTimer) {
         clearInterval(_refreshIpv6ToDeviceTimer);
     }
@@ -117,8 +118,8 @@ async function handleMessage(ws, message, isBinary, isDownlink = false) {
         const bridgeId = wsToBridgeId.get(ws);
         if (isBridgeBlocked(bridgeId)) {
             log('info', `[PAIRING_BLOCK] Dropping incoming message & terminating socket for isolated Bridge (${bridgeId || 'unknown'})`);
-            try { ws.close(); } catch(e) {}
-            try { ws.end(); } catch(e) {}
+            try { ws.close(); } catch (e) { }
+            try { ws.end(); } catch (e) { }
             return;
         }
         if (bridgeId) {
@@ -156,7 +157,7 @@ async function handleMessage(ws, message, isBinary, isDownlink = false) {
     // CRITICAL: DO NOT change this to Buffer.from(message).
     // The `message` parameter is an ArrayBuffer pointing directly to uWebSockets.js internal memory.
     // uWS reuses this buffer once the synchronous callback returns.
-    // We MUST force a deep memory copy using Buffer.from(Buffer.from(message)) (or slicing)
+    // Force a deep memory copy using Buffer.from(Buffer.from(message)) (or slicing)
     // so that the buffer remains valid during async operations (e.g. proxying).
     const data = Buffer.from(Buffer.from(message));
     const proxyWs = proxyConnections.get(ws);
@@ -281,11 +282,11 @@ async function handleMessage(ws, message, isBinary, isDownlink = false) {
                     const newCoapBytes = coap.serialize({
                         type: coapMsg.type, code: coapMsg.code, mid: coapMsg.mid,
                         token: coapMsg.token, options: newOptions, payload: coapMsg.payload
-                     });
-                     modifiedData = wsBridge.build({
-                         ...frame,
-                         coapBytes: newCoapBytes
-                     });
+                    });
+                    modifiedData = wsBridge.build({
+                        ...frame,
+                        coapBytes: newCoapBytes
+                    });
                 }
             }
         }
@@ -312,7 +313,7 @@ async function handleMessage(ws, message, isBinary, isDownlink = false) {
     let activeDeviceId = (pathInfo && pathInfo.deviceId) ? pathInfo.deviceId : deviceIdByIPv6;
 
     if (isDownlink && activeDeviceId) {
-        messageCache.cacheMessage(activeDeviceId, data, 'real');
+        messageCache.cacheMessage(activeDeviceId, data, 'TADO');
         await captureDownlinkEtags(coapMsg, displayPath, activeDeviceId, pathInfo);
 
         if ((coapMsg.code === coap.CODE_CONTENT || coap.isRequest(coapMsg.code)) && coapMsg.payload.length > 0) {
@@ -365,15 +366,15 @@ async function handleMessage(ws, message, isBinary, isDownlink = false) {
                     }
                     const shortSerial = extractShortSerial(tokenBridgeId);
                     if (shortSerial) {
-                        db.updateDeviceConnectionState(shortSerial, true).catch(() => {});
-                        db.updateDeviceIPv6(tokenBridgeId, frame.ipv6).catch(() => {});
+                        db.updateDeviceConnectionState(shortSerial, true).catch(e => log('debug', `[router] updateDeviceConnectionState failed for ${shortSerial}: ${e.message}`));
+                        db.updateDeviceIPv6(tokenBridgeId, frame.ipv6).catch(e => log('debug', `[router] updateDeviceIPv6 failed for ${tokenBridgeId}: ${e.message}`));
                     }
                 } else {
                     wsToBridgeId.set(ws, tokenBridgeId);
                     const shortSerial = extractShortSerial(tokenBridgeId);
                     if (shortSerial) {
-                        db.updateDeviceConnectionState(shortSerial, true).catch(() => {});
-                        db.updateDeviceIPv6(tokenBridgeId, frame.ipv6).catch(() => {});
+                        db.updateDeviceConnectionState(shortSerial, true).catch(e => log('debug', `[router] updateDeviceConnectionState failed for ${shortSerial}: ${e.message}`));
+                        db.updateDeviceIPv6(tokenBridgeId, frame.ipv6).catch(e => log('debug', `[router] updateDeviceIPv6 failed for ${tokenBridgeId}: ${e.message}`));
                     }
                 }
             }
@@ -569,10 +570,11 @@ async function handleMessage(ws, message, isBinary, isDownlink = false) {
 
                 let entry = blockReassembly.get(reassemblyKey);
                 if (!entry) {
-                    entry = { blocks: [], expectedNext: 0, timer: null };
+                    entry = { blocks: [], expectedNext: 0, timer: null, updatedAt: Date.now() };
                     blockReassembly.set(reassemblyKey, entry);
                 }
 
+                entry.updatedAt = Date.now();
                 if (block1.num === entry.expectedNext) {
                     entry.blocks.push(coapMsg.payload);
                     entry.expectedNext = block1.num + 1;
@@ -751,6 +753,19 @@ _cleanupBlockSessionsTimer = setInterval(() => {
 }, 30000);
 
 _cleanupBlockSessionsTimer.unref();
+
+_cleanupBlockReassemblyTimer = setInterval(() => {
+    const now = Date.now();
+    for (const [key, entry] of blockReassembly.entries()) {
+        if (entry.updatedAt && (now - entry.updatedAt > 30000)) {
+            if (entry.timer) clearTimeout(entry.timer);
+            blockReassembly.delete(key);
+            if (log) log('debug', `Cleared stale block1 reassembly entry: ${key}`);
+        }
+    }
+}, 60000);
+
+_cleanupBlockReassemblyTimer.unref();
 
 _refreshIpv6ToDeviceTimer = setInterval(async () => {
     try {

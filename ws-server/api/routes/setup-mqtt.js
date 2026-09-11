@@ -16,7 +16,6 @@ const adminAuth = require('../middleware/admin-auth');
 const mqttHaDiscovery = require('../../lib/mqtt-ha-discovery');
 
 // --- MQTT Settings API ---
-
 router.get('/mqtt', adminAuth, async (req, res) => {
     try {
         const pool = db.getPool();
@@ -62,7 +61,6 @@ router.post('/mqtt', adminAuth, async (req, res) => {
             );
         }
 
-        // Hot-reload config
         await config.reloadFromDb();
         _log('info', `[setup] MQTT settings updated`);
 
@@ -83,7 +81,7 @@ router.post('/mqtt/test', adminAuth, async (req, res) => {
             username: user || undefined,
             password: password || undefined,
             connectTimeout: 5000,
-            reconnectPeriod: 0, // Don't auto-reconnect for test
+            reconnectPeriod: 0,
         });
 
         const timeout = setTimeout(() => {
@@ -127,7 +125,7 @@ router.post('/homes/:id/reset', adminAuth, async (req, res) => {
         for (const md of devicesToUnpublish) {
             mqttHaDiscovery.unpublishMobileDevice(md.id);
             const mqttPublisher = require('../../lib/mqtt-publisher');
-            mqttPublisher.publishMobileDeviceTelemetry(homeId, md.id, false, null, null, null, false).catch(() => {});
+            mqttPublisher.publishMobileDeviceTelemetry(homeId, md.id, false, null, null, null, false).catch(() => { });
         }
         mqttHaDiscovery.publishAllDiscovery().catch(() => { });
         res.json({ success: true });
@@ -159,7 +157,7 @@ router.post('/homes/:id/delete', adminAuth, async (req, res) => {
         for (const md of devicesToUnpublish) {
             mqttHaDiscovery.unpublishMobileDevice(md.id);
             const mqttPublisher = require('../../lib/mqtt-publisher');
-            mqttPublisher.publishMobileDeviceTelemetry(homeId, md.id, false, null, null, null, false).catch(() => {});
+            mqttPublisher.publishMobileDeviceTelemetry(homeId, md.id, false, null, null, null, false).catch(() => { });
         }
         mqttHaDiscovery.publishAllDiscovery().catch(() => { });
         res.json({ success: true });

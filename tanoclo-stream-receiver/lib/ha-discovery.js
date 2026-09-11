@@ -193,6 +193,16 @@ function publishDeviceDiscovery(deviceRecord) {
             icon: 'mdi:brightness-5',
             state_class: 'measurement'
         });
+        registerSensor('target_temperature', 'sensor', 'Target Temperature', {
+            device_class: 'temperature',
+            unit_of_measurement: '°C',
+            state_class: 'measurement'
+        });
+        registerSensor('temperature_offset', 'sensor', 'Temperature Offset', {
+            device_class: 'temperature',
+            unit_of_measurement: '°C',
+            state_class: 'measurement'
+        });
 
         // Battery Sensors (suppressed only if explicitly emulated)
         if (!deviceRecord.isEmulated) {

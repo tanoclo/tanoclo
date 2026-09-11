@@ -461,7 +461,7 @@ async function getZoneBindingsForDevice(deviceId) {
 
     // Check if home has boiler/circuit controller (ignoring wireless sensors)
     const [boilerRows] = await p.execute(
-        "SELECT serial_no FROM devices WHERE home_id = ? AND ((device_type LIKE 'RU%' AND (field_015d IS NULL OR field_015d != 200)) OR device_type LIKE 'BU%') LIMIT 1", 
+        "SELECT serial_no FROM devices WHERE home_id = ? AND ((device_type LIKE 'RU%' AND (field_015d IS NULL OR field_015d != 200)) OR device_type LIKE 'BU%') LIMIT 1",
         [dbDev.home_id]
     );
     const homeHasBoiler = boilerRows.length > 0;

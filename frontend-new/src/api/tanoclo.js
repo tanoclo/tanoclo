@@ -91,4 +91,3 @@ export function updateHomeTimezone(homeId, dateTimeZone) {
     body: { dateTimeZone }
   });
 }
-

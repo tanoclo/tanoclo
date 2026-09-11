@@ -625,13 +625,20 @@ std::vector<uint8_t> build_echo_reply(uint16_t id, uint16_t seq, const uint8_t *
   icmp.push_back(0);                     // Code 0
   icmp.push_back(0);                     // Checksum placeholder MSB
   icmp.push_back(0);                     // Checksum placeholder LSB
+  icmp.push_back((id >> 8) & 0xFF);
+  icmp.push_back(id & 0xFF);
+  icmp.push_back((seq >> 8) & 0xFF);
+  icmp.push_back(seq & 0xFF);
+  if (body_data && body_len > 0) {
+    icmp.insert(icmp.end(), body_data, body_data + body_len);
+  }
 
-  // Checksum over pseudo-header + 4-byte ICMPv6 body
+  // Checksum over pseudo-header + full ICMPv6 body (header + id/seq + data)
   uint16_t csum = compute_ipv6_checksum(src_mac, dst_mac, 58, icmp.data(), icmp.size());
   icmp[2] = (csum >> 8) & 0xFF;
   icmp[3] = csum & 0xFF;
 
-  // Wrap in Tado 6LoWPAN IPHC Mode 0x7A (operational 17-byte echo reply)
+  // Wrap in Tado 6LoWPAN IPHC Mode 0x7A (operational unicast reply with default TTL=64, HLIM=10)
   std::vector<uint8_t> pt;
   pt.push_back(src_mac[5]); pt.push_back(src_mac[6]); pt.push_back(src_mac[7]);
   pt.push_back(0x04);
@@ -639,7 +646,7 @@ std::vector<uint8_t> build_echo_reply(uint16_t id, uint16_t seq, const uint8_t *
   pt.push_back((uint8_t)((frame_counter >> 8) & 0xFF));
   pt.push_back((uint8_t)((frame_counter >> 16) & 0xFF));
   pt.push_back((uint8_t)((frame_counter >> 24) & 0xFF));
-  pt.push_back(0x7A); // Dispatch 0x7A
+  pt.push_back(0x7A); // Dispatch 0x7A (HLIM=10 -> 64, compared to 0x7B HLIM=11 -> 255)
   pt.push_back(0x33);
   pt.push_back(0x3A); // Next Header = 58 (0x3A)
   pt.insert(pt.end(), icmp.begin(), icmp.end());
@@ -852,7 +859,8 @@ std::vector<uint8_t> serialize_coap(uint8_t type, uint8_t code, uint16_t mid,
 
   uint16_t last_opt = 0;
 
-  // Option 11: Uri-Path
+  // Option 11: Uri-Path (RFC 7252: first segment has delta=11; subsequent repeat segments have delta=0)
+  // All Tado paths (e.g. "d/info", "auth/token") have seg len <= 12 and delta <= 11, fitting in 4-bit nibbles.
   if (!uri_path.empty()) {
     size_t start = 0;
     while (start < uri_path.length()) {
@@ -970,15 +978,17 @@ void append_tlv_u32(std::vector<uint8_t> &out, uint16_t tag, uint32_t val) {
 void append_tlv_string(std::vector<uint8_t> &out, uint16_t tag, const std::string &str) {
   out.push_back((tag >> 8) & 0xFF);
   out.push_back(tag & 0xFF);
-  out.push_back((uint8_t)str.length());
-  for (char c : str) out.push_back((uint8_t)c);
+  size_t len = str.length() > 255 ? 255 : str.length();
+  out.push_back((uint8_t)len);
+  for (size_t i = 0; i < len; i++) out.push_back((uint8_t)str[i]);
 }
 
 void append_tlv_bytes(std::vector<uint8_t> &out, uint16_t tag, const uint8_t *data, size_t len) {
   out.push_back((tag >> 8) & 0xFF);
   out.push_back(tag & 0xFF);
-  out.push_back((uint8_t)len);
-  for (size_t i = 0; i < len; i++) out.push_back(data[i]);
+  size_t clamped_len = len > 255 ? 255 : len;
+  out.push_back((uint8_t)clamped_len);
+  for (size_t i = 0; i < clamped_len; i++) out.push_back(data[i]);
 }
 
 std::vector<TLVEntry> parse_tlvs_1byte(const uint8_t *data, size_t len) {
@@ -1101,7 +1111,8 @@ std::vector<uint8_t> build_d_fw_state_tlv(uint16_t fw_version, uint16_t other_sl
   std::vector<uint8_t> tlv;
   append_tlv_u8(tlv, TLV_FW_STATE_1A0, 8);
   append_tlv_u16(tlv, TLV_FW_VERSION_ACTIVE, fw_version);
-  // ponytail: 0x003B is dual-purpose — timezone offset (s16be) in /time, but boot slot info (u8) in fw/state.
+  // 0x003B is dual-purpose: timezone offset (s16be) in /time, but boot slot info (u8 value 14) in fw/state.
+  // Verified in VA / IB firmware (FUN_08020cec / fw_state_put).
   append_tlv_u8(tlv, TLV_TIME_TZ_OFFSET, 14);
   append_tlv_u16(tlv, TLV_FW_OTHER_SLOT, other_slot);
   append_tlv_u16(tlv, TLV_FW_TARGET_OR_REPORTED, fw_version);
@@ -1114,7 +1125,8 @@ std::vector<uint8_t> build_d_fw_state_tlv(uint16_t fw_version, uint16_t other_sl
 std::vector<uint8_t> build_d_info_tlv(const std::string &serial_no, uint16_t fw_version) {
   std::vector<uint8_t> tlv;
   append_tlv_u16(tlv, TLV_DEV_CAPABILITIES_01F9, 0x0001);
-  append_tlv_u16(tlv, TLV_FW_OTHER_SLOT, fw_version);
+  // Tag 0x0035 in /d/info encodes device build/version ID (e.g. 13762 / 0x35C2 from real RU captures).
+  append_tlv_u16(tlv, TLV_D_INFO_BUILD_VERSION, fw_version);
   append_tlv_string(tlv, TLV_DEV_SERIAL_0001, serial_no);
   append_tlv_u8(tlv, TLV_DEV_HW_FLAGS_01F5, 0x01);
   if (serial_no.rfind("RU", 0) == 0) {

@@ -118,7 +118,7 @@ async function evaluate(homeId, zoneId, latestMeasurement) {
 
             // Publish MQTT
             if (mqttPublisher) {
-                await mqttPublisher.publishOpenWindow(zoneId, true).catch(() => {});
+                await mqttPublisher.publishOpenWindow(zoneId, true).catch(e => log('debug', `[OWD] publishOpenWindow failed: ${e.message}`));
             }
         }
     } catch (err) {

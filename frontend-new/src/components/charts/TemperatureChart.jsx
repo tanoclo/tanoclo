@@ -6,7 +6,6 @@
  * and external outside weather temperature readings concurrently.
  */
 
-
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -42,7 +41,7 @@ export default function TemperatureChart({ dayReportData }) {
 
   const { measuredData, settings, weather } = dayReportData;
   const insideTempPoints = measuredData?.insideTemperature?.dataPoints || [];
-  
+
   if (insideTempPoints.length === 0) {
     return (
       <div style={{
@@ -152,7 +151,7 @@ export default function TemperatureChart({ dayReportData }) {
         titleFont: { family: 'Inter, sans-serif' },
         bodyFont: { family: 'Inter, sans-serif' },
         callbacks: {
-          label: function(context) {
+          label: function (context) {
             let label = context.dataset.label || '';
             if (label) {
               label += ': ';
@@ -189,7 +188,7 @@ export default function TemperatureChart({ dayReportData }) {
             family: 'Inter, sans-serif',
             size: 10
           },
-          callback: function(value) {
+          callback: function (value) {
             return value + '°';
           }
         }

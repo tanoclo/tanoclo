@@ -125,7 +125,7 @@ async function handleCommand(topic, payload) {
                 'ha_discovery_enabled': 'UPDATE homes SET ha_discovery_enabled = ? WHERE id = ?'
             };
             await pool.execute(HOME_COLUMN_MAP[command], [enabled, homeId]);
-            
+
             if (command === 'is_proxied') {
                 const proxyManager = require('./proxy-manager');
                 if (proxyManager && proxyManager.clearProxyConnectionsForHome) {
@@ -140,9 +140,9 @@ async function handleCommand(topic, payload) {
 
             if (command === 'ha_discovery_enabled') {
                 const mqttHaDiscovery = require('./mqtt-ha-discovery');
-                await mqttHaDiscovery.publishAllDiscovery().catch(() => {});
+                await mqttHaDiscovery.publishAllDiscovery().catch(() => { });
             }
-            
+
             await mqttPublisher.publishHomeTelemetry(homeId);
         }
     }
@@ -372,284 +372,284 @@ async function handleCommand(topic, payload) {
 
                 await commandApi.pushZoneOverlayDelete(homeId, zoneId).catch(err => {
                     if (log) log('warn', `[mqtt-commands] Delete overlay push failed: ${err.message}`);
-                  });
-  
-                  const [rows] = await pool.execute('SELECT * FROM zone_measurements WHERE zone_id = ? AND home_id = ? ORDER BY id DESC LIMIT 1', [zoneId, homeId]);
-                  if (rows.length > 0) {
-                      await mqttPublisher.publishZoneStateTelemetry(homeId, zoneId, rows[0]);
-                  }
+                });
 
-              } else if (command === 'overlay_mode' || command === 'preset_mode') {
-                  const rawMode = String(payload).trim().toUpperCase();
-                  if (rawMode === 'SCHEDULE' || rawMode === 'AUTO') {
-                      await pool.execute('DELETE FROM zone_overlays WHERE zone_id = ? AND home_id = ?', [zoneId, homeId]);
+                const [rows] = await pool.execute('SELECT * FROM zone_measurements WHERE zone_id = ? AND home_id = ? ORDER BY id DESC LIMIT 1', [zoneId, homeId]);
+                if (rows.length > 0) {
+                    await mqttPublisher.publishZoneStateTelemetry(homeId, zoneId, rows[0]);
+                }
 
-                      const currentBlock = await db.getCurrentScheduleBlock(homeId, zoneId);
-                      const targetTemp = currentBlock?.setting?.temperature?.celsius || 19.0;
+            } else if (command === 'overlay_mode' || command === 'preset_mode') {
+                const rawMode = String(payload).trim().toUpperCase();
+                if (rawMode === 'SCHEDULE' || rawMode === 'AUTO') {
+                    await pool.execute('DELETE FROM zone_overlays WHERE zone_id = ? AND home_id = ?', [zoneId, homeId]);
 
-                      await db.insertMergedZoneMeasurement(homeId, zoneId, {
-                          '0x6240': 0,
-                          '0x6280': null,
-                          '0x6260': 0,
-                          '0x6200': targetTemp,
-                          '0x6440': 0,
-                          '0x61e0': 1
-                      });
+                    const currentBlock = await db.getCurrentScheduleBlock(homeId, zoneId);
+                    const targetTemp = currentBlock?.setting?.temperature?.celsius || 19.0;
 
-                      await commandApi.pushZoneOverlayDelete(homeId, zoneId).catch(err => {
-                          if (log) log('warn', `[mqtt-commands] Delete overlay push failed: ${err.message}`);
-                      });
+                    await db.insertMergedZoneMeasurement(homeId, zoneId, {
+                        '0x6240': 0,
+                        '0x6280': null,
+                        '0x6260': 0,
+                        '0x6200': targetTemp,
+                        '0x6440': 0,
+                        '0x61e0': 1
+                    });
 
-                      _pub(`tado/tanoclo/h/${homeId}/z/${zoneId}/target_temperature`, targetTemp);
+                    await commandApi.pushZoneOverlayDelete(homeId, zoneId).catch(err => {
+                        if (log) log('warn', `[mqtt-commands] Delete overlay push failed: ${err.message}`);
+                    });
 
-                  } else {
-                      const mappedType = (rawMode === 'NEXT_BLOCK' || rawMode === 'NEXT_TIME_BLOCK' || rawMode === 'TADO_MODE') ? 'TADO_MODE' : (rawMode === 'TIMER' ? 'TIMER' : 'MANUAL');
+                    _pub(`tado/tanoclo/h/${homeId}/z/${zoneId}/target_temperature`, targetTemp);
 
-                      const [ovr] = await pool.execute('SELECT * FROM zone_overlays WHERE zone_id = ? AND home_id = ?', [zoneId, homeId]);
-                      const [zRows] = await pool.execute('SELECT default_overlay_duration FROM zones WHERE id = ? AND home_id = ?', [zoneId, homeId]);
-                      const duration = (ovr.length > 0 && ovr[0].termination_duration_seconds) ? ovr[0].termination_duration_seconds : (zRows[0]?.default_overlay_duration || 3600);
+                } else {
+                    const mappedType = (rawMode === 'NEXT_BLOCK' || rawMode === 'NEXT_TIME_BLOCK' || rawMode === 'TADO_MODE') ? 'TADO_MODE' : (rawMode === 'TIMER' ? 'TIMER' : 'MANUAL');
 
-                      let currentTemp = 20.0;
-                      if (ovr.length > 0 && ovr[0].setting_temp_celsius !== null && ovr[0].setting_temp_celsius !== undefined) {
-                          currentTemp = parseFloat(ovr[0].setting_temp_celsius);
-                      } else {
-                          const currentBlock = await db.getCurrentScheduleBlock(homeId, zoneId);
-                          currentTemp = currentBlock?.setting?.temperature?.celsius || 20.0;
-                      }
+                    const [ovr] = await pool.execute('SELECT * FROM zone_overlays WHERE zone_id = ? AND home_id = ?', [zoneId, homeId]);
+                    const [zRows] = await pool.execute('SELECT default_overlay_duration FROM zones WHERE id = ? AND home_id = ?', [zoneId, homeId]);
+                    const duration = (ovr.length > 0 && ovr[0].termination_duration_seconds) ? ovr[0].termination_duration_seconds : (zRows[0]?.default_overlay_duration || 3600);
 
-                      const setting = {
-                          type: (ovr.length > 0 && ovr[0].setting_type) ? ovr[0].setting_type : zoneType,
-                          power: (ovr.length > 0 && ovr[0].setting_power) ? ovr[0].setting_power : 'ON',
-                          temperature: { celsius: currentTemp }
-                      };
-                      const termination = {
-                          type: mappedType,
-                          durationInSeconds: duration
-                      };
+                    let currentTemp = 20.0;
+                    if (ovr.length > 0 && ovr[0].setting_temp_celsius !== null && ovr[0].setting_temp_celsius !== undefined) {
+                        currentTemp = parseFloat(ovr[0].setting_temp_celsius);
+                    } else {
+                        const currentBlock = await db.getCurrentScheduleBlock(homeId, zoneId);
+                        currentTemp = currentBlock?.setting?.temperature?.celsius || 20.0;
+                    }
 
-                      await applyOverlayMqtt(homeId, zoneId, zoneType, setting, termination);
+                    const setting = {
+                        type: (ovr.length > 0 && ovr[0].setting_type) ? ovr[0].setting_type : zoneType,
+                        power: (ovr.length > 0 && ovr[0].setting_power) ? ovr[0].setting_power : 'ON',
+                        temperature: { celsius: currentTemp }
+                    };
+                    const termination = {
+                        type: mappedType,
+                        durationInSeconds: duration
+                    };
 
-                      const overlayModeMap = { 'TIMER': 1, 'TADO_MODE': 2, 'NEXT_BLOCK': 2, 'MANUAL': 3 };
-                      const overlayModeInt = overlayModeMap[mappedType] || 3;
+                    await applyOverlayMqtt(homeId, zoneId, zoneType, setting, termination);
 
-                      await db.insertMergedZoneMeasurement(homeId, zoneId, {
-                          '0x6240': overlayModeInt,
-                          '0x6280': currentTemp,
-                          '0x6200': currentTemp,
-                          '0x6260': 1,
-                          '0x61e0': 1
-                      });
-                  }
+                    const overlayModeMap = { 'TIMER': 1, 'TADO_MODE': 2, 'NEXT_BLOCK': 2, 'MANUAL': 3 };
+                    const overlayModeInt = overlayModeMap[mappedType] || 3;
 
-                  const [rows] = await pool.execute('SELECT * FROM zone_measurements WHERE zone_id = ? AND home_id = ? ORDER BY id DESC LIMIT 1', [zoneId, homeId]);
-                  if (rows.length > 0) {
-                      await mqttPublisher.publishZoneStateTelemetry(homeId, zoneId, rows[0]);
-                      await mqttPublisher.publishZoneTelemetry(homeId, zoneId, rows[0]);
-                  }
+                    await db.insertMergedZoneMeasurement(homeId, zoneId, {
+                        '0x6240': overlayModeInt,
+                        '0x6280': currentTemp,
+                        '0x6200': currentTemp,
+                        '0x6260': 1,
+                        '0x61e0': 1
+                    });
+                }
 
-              } else if (command === 'default_overlay_type') {
-                  const rawType = String(payload).trim().toUpperCase();
-                  const mappedType = (rawType === 'NEXT_BLOCK' || rawType === 'NEXT_TIME_BLOCK' || rawType === 'TADO_MODE') ? 'TADO_MODE' : (rawType === 'TIMER' ? 'TIMER' : 'MANUAL');
-                  await pool.execute('UPDATE zones SET default_overlay_type = ? WHERE id = ? AND home_id = ?', [mappedType, zoneId, homeId]);
+                const [rows] = await pool.execute('SELECT * FROM zone_measurements WHERE zone_id = ? AND home_id = ? ORDER BY id DESC LIMIT 1', [zoneId, homeId]);
+                if (rows.length > 0) {
+                    await mqttPublisher.publishZoneStateTelemetry(homeId, zoneId, rows[0]);
+                    await mqttPublisher.publishZoneTelemetry(homeId, zoneId, rows[0]);
+                }
 
-              } else if (command === 'default_overlay_duration') {
-                  const durationMin = parseFloat(payload);
-                  if (!isNaN(durationMin) && durationMin > 0) {
-                      const durationSec = Math.round(durationMin * 60);
+            } else if (command === 'default_overlay_type') {
+                const rawType = String(payload).trim().toUpperCase();
+                const mappedType = (rawType === 'NEXT_BLOCK' || rawType === 'NEXT_TIME_BLOCK' || rawType === 'TADO_MODE') ? 'TADO_MODE' : (rawType === 'TIMER' ? 'TIMER' : 'MANUAL');
+                await pool.execute('UPDATE zones SET default_overlay_type = ? WHERE id = ? AND home_id = ?', [mappedType, zoneId, homeId]);
 
-                      await pool.execute('UPDATE zones SET default_overlay_duration = ? WHERE id = ? AND home_id = ?', [durationSec, zoneId, homeId]);
+            } else if (command === 'default_overlay_duration') {
+                const durationMin = parseFloat(payload);
+                if (!isNaN(durationMin) && durationMin > 0) {
+                    const durationSec = Math.round(durationMin * 60);
 
-                      const [ovr] = await pool.execute('SELECT * FROM zone_overlays WHERE zone_id = ? AND home_id = ?', [zoneId, homeId]);
-                      if (ovr.length > 0 && ovr[0].termination_type === 'TIMER') {
-                          const currentOvr = ovr[0];
-                          const setting = {
-                              type: currentOvr.setting_type || zoneType,
-                              power: currentOvr.setting_power || 'ON',
-                              temperature: currentOvr.setting_temp_celsius ? { celsius: currentOvr.setting_temp_celsius } : null
-                          };
-                          const termination = {
-                              type: 'TIMER',
-                              durationInSeconds: durationSec
-                          };
-                          await applyOverlayMqtt(homeId, zoneId, zoneType, setting, termination);
-                      }
+                    await pool.execute('UPDATE zones SET default_overlay_duration = ? WHERE id = ? AND home_id = ?', [durationSec, zoneId, homeId]);
 
-                      _pub(`tado/tanoclo/h/${homeId}/z/${zoneId}/default_overlay_duration`, Math.round(durationMin));
+                    const [ovr] = await pool.execute('SELECT * FROM zone_overlays WHERE zone_id = ? AND home_id = ?', [zoneId, homeId]);
+                    if (ovr.length > 0 && ovr[0].termination_type === 'TIMER') {
+                        const currentOvr = ovr[0];
+                        const setting = {
+                            type: currentOvr.setting_type || zoneType,
+                            power: currentOvr.setting_power || 'ON',
+                            temperature: currentOvr.setting_temp_celsius ? { celsius: currentOvr.setting_temp_celsius } : null
+                        };
+                        const termination = {
+                            type: 'TIMER',
+                            durationInSeconds: durationSec
+                        };
+                        await applyOverlayMqtt(homeId, zoneId, zoneType, setting, termination);
+                    }
 
-                      const [rows] = await pool.execute('SELECT * FROM zone_measurements WHERE zone_id = ? AND home_id = ? ORDER BY id DESC LIMIT 1', [zoneId, homeId]);
-                      if (rows.length > 0) {
-                          await mqttPublisher.publishZoneStateTelemetry(homeId, zoneId, rows[0]);
-                          await mqttPublisher.publishZoneTelemetry(homeId, zoneId, rows[0]);
-                      }
-                  }
-  
-              } else if (command === 'early_start') {
-                  const enabled = String(payload).toUpperCase() === 'ON';
-                  await pool.execute('UPDATE zones SET early_start_enabled = ? WHERE id = ? AND home_id = ?', [enabled ? 1 : 0, zoneId, homeId]);
-  
-                  // Query devices in zone to push config refresh (ETags change)
-                  const [devs] = await pool.execute('SELECT serial_no FROM devices WHERE zone_id = ? AND home_id = ?', [zoneId, homeId]);
-                  for (const d of devs) {
-                      await commandApi.pushConfigRefresh(d.serial_no).catch(() => {});
-                  }
-  
-                  // Republish zone details
-                  _pub(`tado/tanoclo/h/${homeId}/z/${zoneId}/early_start`, enabled ? 'ON' : 'OFF');
-              } else if (command === 'offline_schedule_enabled') {
-                  const enabled = String(payload).toUpperCase() === 'ON';
-                  await commandApi.pushOfflineScheduleEnable(homeId, zoneId, enabled).catch(err => {
-                      if (log) log('warn', `[mqtt-commands] Offline schedule enable push failed: ${err.message}`);
-                  });
-                  const [rows] = await pool.execute('SELECT * FROM zone_measurements WHERE zone_id = ? AND home_id = ? ORDER BY id DESC LIMIT 1', [zoneId, homeId]);
-                  const [zoneRows] = await pool.execute('SELECT * FROM zones WHERE id = ? AND home_id = ?', [zoneId, homeId]);
-                  if (rows.length > 0) {
-                      await mqttPublisher.publishZoneStateTelemetry(homeId, zoneId, rows[0], zoneRows[0]);
-                  }
-              } else if (command === 'offline_schedule_sync') {
-                  await commandApi.pushOfflineScheduleSync(homeId, zoneId).catch(err => {
-                      if (log) log('warn', `[mqtt-commands] Offline schedule sync push failed: ${err.message}`);
-                  });
-              } else if (command === 'open_window') {
-                  const active = String(payload).toUpperCase() === 'ON';
-                  if (active) {
-                      const [zoneRows] = await pool.execute(
-                          'SELECT open_window_timeout FROM zones WHERE id = ? AND home_id = ?', [zoneId, homeId]
-                      );
-                      const timeout = zoneRows[0]?.open_window_timeout || 900;
-                      const expiry = new Date(Date.now() + timeout * 1000);
-                      await pool.execute(
-                          'UPDATE zones SET open_window_active = 1, open_window_expiry = ? WHERE id = ? AND home_id = ?',
-                          [expiry, zoneId, homeId]
-                      );
-                      await commandApi.pushOpenWindowActivate(homeId, zoneId).catch(err => {
-                          if (log) log('warn', `[mqtt-commands] OWD activate push failed: ${err.message}`);
-                      });
-                  } else {
-                      await db.updateZoneOpenWindow(homeId, zoneId, false);
-                      await pool.execute('UPDATE zones SET open_window_expiry = NULL WHERE id = ? AND home_id = ?', [zoneId, homeId]);
-                      await commandApi.pushOpenWindowCancel(homeId, zoneId).catch(err => {
-                          if (log) log('warn', `[mqtt-commands] OWD cancel push failed: ${err.message}`);
-                      });
-                  }
-                  if (mqttPublisher) {
-                      await mqttPublisher.publishOpenWindow(zoneId, active).catch(() => {});
-                  }
-              } else if (command === 'open_window_detection') {
-                  const enabled = String(payload).toUpperCase() === 'ON';
-                  await pool.execute('UPDATE zones SET open_window_enabled = ? WHERE id = ? AND home_id = ?', [enabled ? 1 : 0, zoneId, homeId]);
-                  const [devs] = await pool.execute('SELECT serial_no FROM devices WHERE zone_id = ? AND home_id = ?', [zoneId, homeId]);
-                  for (const d of devs) {
-                      await commandApi.pushConfigRefresh(d.serial_no).catch(() => {});
-                  }
-                  _pub(`tado/tanoclo/h/${homeId}/z/${zoneId}/open_window_detection`, enabled ? 'ON' : 'OFF');
-              } else if (command === 'open_window_source') {
-                  const source = String(payload).toLowerCase();
-                  if (['device', 'server', 'both', 'external'].includes(source)) {
-                      await pool.execute('UPDATE zones SET tanoclo_owd_source = ? WHERE id = ? AND home_id = ?', [source, zoneId, homeId]);
-                      _pub(`tado/tanoclo/h/${homeId}/z/${zoneId}/open_window_source`, source);
-                  }
-              }
-  
-          } else if (type === 'd') {
-              const shortSerial = id;
-              const [devs] = await pool.execute('SELECT serial_no, home_id, zone_id, device_type, cap_identify FROM devices WHERE serial_no = ?', [shortSerial]);
-              if (devs.length === 0) {
-                  if (log) log('warn', `[mqtt-commands] Device ${shortSerial} not found`);
-                  return;
-              }
-              const dev = devs[0];
-              const isVA = dev.device_type && dev.device_type.startsWith('VA');
-   
-              if (command === 'identify') {
-                  if (dev.cap_identify !== 0) {
-                      await commandApi.pushDeviceIdentify(dev.serial_no).catch(err => {
-                          if (log) log('warn', `[mqtt-commands] Device identify push failed: ${err.message}`);
-                      });
-                  }
-              } else if (command === 'orientation' && isVA) {
-                  const rawOrient = String(payload).toUpperCase();
-                  const orientation = db.mapOrientation(rawOrient);
-                  await pool.execute('UPDATE devices SET field_0149 = ? WHERE serial_no = ?', [orientation, dev.serial_no]);
-                  await commandApi.pushConfigRefresh(dev.serial_no).catch(err => {
-                      if (log) log('warn', `[mqtt-commands] Orientation config refresh push failed: ${err.message}`);
-                  });
-                  await mqttPublisher.publishOrientation(shortSerial, orientation);
-              } else if (command === 'child_lock' && isVA) {
-                  const enabled = String(payload).toUpperCase() === 'ON';
-                  await db.updateDeviceLock(dev.serial_no, enabled);
-                  await commandApi.pushDeviceLock(dev.serial_no, enabled).catch(err => {
-                      if (log) log('warn', `[mqtt-commands] Device lock push failed: ${err.message}`);
-                  });
-  
-                  await mqttPublisher.publishChildLock(shortSerial, enabled);
-              } else if (['actuator_limit_low', 'actuator_limit_high', 'actuator_drive_constant'].includes(command) && isVA) {
-                  const val = parseInt(payload, 10);
-                  if (isNaN(val)) return;
+                    _pub(`tado/tanoclo/h/${homeId}/z/${zoneId}/default_overlay_duration`, Math.round(durationMin));
 
-                  // Use explicit SQL per field to prevent any SQL injection via topic segments
-                  const ACTUATOR_SQL_MAP = {
-                      'actuator_limit_low': 'UPDATE devices SET field_0273 = ? WHERE serial_no = ?',
-                      'actuator_limit_high': 'UPDATE devices SET field_027c = ? WHERE serial_no = ?',
-                      'actuator_drive_constant': 'UPDATE devices SET field_0280 = ? WHERE serial_no = ?'
-                  };
-                  await pool.execute(ACTUATOR_SQL_MAP[command], [val, dev.serial_no]);
+                    const [rows] = await pool.execute('SELECT * FROM zone_measurements WHERE zone_id = ? AND home_id = ? ORDER BY id DESC LIMIT 1', [zoneId, homeId]);
+                    if (rows.length > 0) {
+                        await mqttPublisher.publishZoneStateTelemetry(homeId, zoneId, rows[0]);
+                        await mqttPublisher.publishZoneTelemetry(homeId, zoneId, rows[0]);
+                    }
+                }
 
-                  // Query updated device row to get all limits
-                  const [updatedDevs] = await pool.execute('SELECT * FROM devices WHERE serial_no = ?', [dev.serial_no]);
-                  const updatedDev = updatedDevs[0];
+            } else if (command === 'early_start') {
+                const enabled = String(payload).toUpperCase() === 'ON';
+                await pool.execute('UPDATE zones SET early_start_enabled = ? WHERE id = ? AND home_id = ?', [enabled ? 1 : 0, zoneId, homeId]);
 
-                  await mqttPublisher.publishDeviceTelemetry(shortSerial, dev.home_id, dev.zone_id, null, updatedDev);
-              } else if (command === 'actuator_limits_apply' && isVA) {
-                  // Fetch the actuator limits from the database and push to physical device
-                  const [updatedDevs] = await pool.execute('SELECT * FROM devices WHERE serial_no = ?', [dev.serial_no]);
-                  if (updatedDevs.length > 0) {
-                      const updatedDev = updatedDevs[0];
-                      const lowSteps = updatedDev.field_0273;
-                      const highSteps = updatedDev.field_027c;
-                      const driveConstant = updatedDev.field_0280;
+                // Query devices in zone to push config refresh (ETags change)
+                const [devs] = await pool.execute('SELECT serial_no FROM devices WHERE zone_id = ? AND home_id = ?', [zoneId, homeId]);
+                for (const d of devs) {
+                    await commandApi.pushConfigRefresh(d.serial_no).catch(() => { });
+                }
 
-                      await commandApi.pushActuatorLimits(dev.serial_no, { lowSteps, highSteps, driveConstant }).catch(err => {
-                          if (log) log('warn', `[mqtt-commands] Actuator limits push failed: ${err.message}`);
-                      });
-                  }
-              }
-          }
-      }
-  }
-  
-  async function applyOverlayMqtt(homeId, zoneId, zoneType, setting, termination) {
-      const pool = db.getPool();
-      const settingType = setting.type || 'HEATING';
-      const settingPower = setting.power || 'ON';
-      const settingTempC = setting.temperature?.celsius ?? null;
-      const settingTempF = (settingTempC !== null) ? parseFloat((settingTempC * 1.8 + 32).toFixed(2)) : null;
+                // Republish zone details
+                _pub(`tado/tanoclo/h/${homeId}/z/${zoneId}/early_start`, enabled ? 'ON' : 'OFF');
+            } else if (command === 'offline_schedule_enabled') {
+                const enabled = String(payload).toUpperCase() === 'ON';
+                await commandApi.pushOfflineScheduleEnable(homeId, zoneId, enabled).catch(err => {
+                    if (log) log('warn', `[mqtt-commands] Offline schedule enable push failed: ${err.message}`);
+                });
+                const [rows] = await pool.execute('SELECT * FROM zone_measurements WHERE zone_id = ? AND home_id = ? ORDER BY id DESC LIMIT 1', [zoneId, homeId]);
+                const [zoneRows] = await pool.execute('SELECT * FROM zones WHERE id = ? AND home_id = ?', [zoneId, homeId]);
+                if (rows.length > 0) {
+                    await mqttPublisher.publishZoneStateTelemetry(homeId, zoneId, rows[0], zoneRows[0]);
+                }
+            } else if (command === 'offline_schedule_sync') {
+                await commandApi.pushOfflineScheduleSync(homeId, zoneId).catch(err => {
+                    if (log) log('warn', `[mqtt-commands] Offline schedule sync push failed: ${err.message}`);
+                });
+            } else if (command === 'open_window') {
+                const active = String(payload).toUpperCase() === 'ON';
+                if (active) {
+                    const [zoneRows] = await pool.execute(
+                        'SELECT open_window_timeout FROM zones WHERE id = ? AND home_id = ?', [zoneId, homeId]
+                    );
+                    const timeout = zoneRows[0]?.open_window_timeout || 900;
+                    const expiry = new Date(Date.now() + timeout * 1000);
+                    await pool.execute(
+                        'UPDATE zones SET open_window_active = 1, open_window_expiry = ? WHERE id = ? AND home_id = ?',
+                        [expiry, zoneId, homeId]
+                    );
+                    await commandApi.pushOpenWindowActivate(homeId, zoneId).catch(err => {
+                        if (log) log('warn', `[mqtt-commands] OWD activate push failed: ${err.message}`);
+                    });
+                } else {
+                    await db.updateZoneOpenWindow(homeId, zoneId, false);
+                    await pool.execute('UPDATE zones SET open_window_expiry = NULL WHERE id = ? AND home_id = ?', [zoneId, homeId]);
+                    await commandApi.pushOpenWindowCancel(homeId, zoneId).catch(err => {
+                        if (log) log('warn', `[mqtt-commands] OWD cancel push failed: ${err.message}`);
+                    });
+                }
+                if (mqttPublisher) {
+                    await mqttPublisher.publishOpenWindow(zoneId, active).catch(() => { });
+                }
+            } else if (command === 'open_window_detection') {
+                const enabled = String(payload).toUpperCase() === 'ON';
+                await pool.execute('UPDATE zones SET open_window_enabled = ? WHERE id = ? AND home_id = ?', [enabled ? 1 : 0, zoneId, homeId]);
+                const [devs] = await pool.execute('SELECT serial_no FROM devices WHERE zone_id = ? AND home_id = ?', [zoneId, homeId]);
+                for (const d of devs) {
+                    await commandApi.pushConfigRefresh(d.serial_no).catch(() => { });
+                }
+                _pub(`tado/tanoclo/h/${homeId}/z/${zoneId}/open_window_detection`, enabled ? 'ON' : 'OFF');
+            } else if (command === 'open_window_source') {
+                const source = String(payload).toLowerCase();
+                if (['device', 'server', 'both', 'external'].includes(source)) {
+                    await pool.execute('UPDATE zones SET tanoclo_owd_source = ? WHERE id = ? AND home_id = ?', [source, zoneId, homeId]);
+                    _pub(`tado/tanoclo/h/${homeId}/z/${zoneId}/open_window_source`, source);
+                }
+            }
 
-      const termType = termination?.type || 'MANUAL';
-      let termDuration = null;
-      let termExpiry = null;
-  
-      if (termType === 'TIMER') {
-          termDuration = termination?.durationInSeconds || 3600;
-          termExpiry = new Date(Date.now() + termDuration * 1000).toISOString();
-      } else if (termType === 'NEXT_TIME_BLOCK') {
-          const nextBlock = await db.getNextScheduleBlock(homeId, zoneId);
-          if (nextBlock && nextBlock.startTime) {
-              const tzName = await db.getHomeTimezone(homeId, zoneId);
-              const now = new Date();
-              const { dateStr } = getLocalParts(now, tzName);
-              const nextStartLocal = parseLocalTimeInTimezone(`${dateStr} ${nextBlock.startTime}`, tzName);
-              
-              let finalStart = nextStartLocal;
-              if (finalStart.getTime() <= now.getTime()) {
-                  finalStart = new Date(finalStart.getTime() + 24 * 60 * 60 * 1000);
-              }
-              termExpiry = finalStart.toISOString();
-              termDuration = Math.max(0, Math.round((finalStart.getTime() - now.getTime()) / 1000));
-          }
-      }
-  
-      await pool.execute(
-          `INSERT INTO zone_overlays (zone_id, home_id, setting_type, setting_power, setting_temp_celsius, setting_temp_fahrenheit, termination_type, termination_duration_seconds, termination_expiry)
+        } else if (type === 'd') {
+            const shortSerial = id;
+            const [devs] = await pool.execute('SELECT serial_no, home_id, zone_id, device_type, cap_identify FROM devices WHERE serial_no = ?', [shortSerial]);
+            if (devs.length === 0) {
+                if (log) log('warn', `[mqtt-commands] Device ${shortSerial} not found`);
+                return;
+            }
+            const dev = devs[0];
+            const isVA = dev.device_type && dev.device_type.startsWith('VA');
+
+            if (command === 'identify') {
+                if (dev.cap_identify !== 0) {
+                    await commandApi.pushDeviceIdentify(dev.serial_no).catch(err => {
+                        if (log) log('warn', `[mqtt-commands] Device identify push failed: ${err.message}`);
+                    });
+                }
+            } else if (command === 'orientation' && isVA) {
+                const rawOrient = String(payload).toUpperCase();
+                const orientation = db.mapOrientation(rawOrient);
+                await pool.execute('UPDATE devices SET field_0149 = ? WHERE serial_no = ?', [orientation, dev.serial_no]);
+                await commandApi.pushConfigRefresh(dev.serial_no).catch(err => {
+                    if (log) log('warn', `[mqtt-commands] Orientation config refresh push failed: ${err.message}`);
+                });
+                await mqttPublisher.publishOrientation(shortSerial, orientation);
+            } else if (command === 'child_lock' && isVA) {
+                const enabled = String(payload).toUpperCase() === 'ON';
+                await db.updateDeviceLock(dev.serial_no, enabled);
+                await commandApi.pushDeviceLock(dev.serial_no, enabled).catch(err => {
+                    if (log) log('warn', `[mqtt-commands] Device lock push failed: ${err.message}`);
+                });
+
+                await mqttPublisher.publishChildLock(shortSerial, enabled);
+            } else if (['actuator_limit_low', 'actuator_limit_high', 'actuator_drive_constant'].includes(command) && isVA) {
+                const val = parseInt(payload, 10);
+                if (isNaN(val)) return;
+
+                // Use explicit SQL per field to prevent any SQL injection via topic segments
+                const ACTUATOR_SQL_MAP = {
+                    'actuator_limit_low': 'UPDATE devices SET field_0273 = ? WHERE serial_no = ?',
+                    'actuator_limit_high': 'UPDATE devices SET field_027c = ? WHERE serial_no = ?',
+                    'actuator_drive_constant': 'UPDATE devices SET field_0280 = ? WHERE serial_no = ?'
+                };
+                await pool.execute(ACTUATOR_SQL_MAP[command], [val, dev.serial_no]);
+
+                // Query updated device row to get all limits
+                const [updatedDevs] = await pool.execute('SELECT * FROM devices WHERE serial_no = ?', [dev.serial_no]);
+                const updatedDev = updatedDevs[0];
+
+                await mqttPublisher.publishDeviceTelemetry(shortSerial, dev.home_id, dev.zone_id, null, updatedDev);
+            } else if (command === 'actuator_limits_apply' && isVA) {
+                // Fetch the actuator limits from the database and push to physical device
+                const [updatedDevs] = await pool.execute('SELECT * FROM devices WHERE serial_no = ?', [dev.serial_no]);
+                if (updatedDevs.length > 0) {
+                    const updatedDev = updatedDevs[0];
+                    const lowSteps = updatedDev.field_0273;
+                    const highSteps = updatedDev.field_027c;
+                    const driveConstant = updatedDev.field_0280;
+
+                    await commandApi.pushActuatorLimits(dev.serial_no, { lowSteps, highSteps, driveConstant }).catch(err => {
+                        if (log) log('warn', `[mqtt-commands] Actuator limits push failed: ${err.message}`);
+                    });
+                }
+            }
+        }
+    }
+}
+
+async function applyOverlayMqtt(homeId, zoneId, zoneType, setting, termination) {
+    const pool = db.getPool();
+    const settingType = setting.type || 'HEATING';
+    const settingPower = setting.power || 'ON';
+    const settingTempC = setting.temperature?.celsius ?? null;
+    const settingTempF = (settingTempC !== null) ? parseFloat((settingTempC * 1.8 + 32).toFixed(2)) : null;
+
+    const termType = termination?.type || 'MANUAL';
+    let termDuration = null;
+    let termExpiry = null;
+
+    if (termType === 'TIMER') {
+        termDuration = termination?.durationInSeconds || 3600;
+        termExpiry = new Date(Date.now() + termDuration * 1000).toISOString();
+    } else if (termType === 'NEXT_TIME_BLOCK') {
+        const nextBlock = await db.getNextScheduleBlock(homeId, zoneId);
+        if (nextBlock && nextBlock.startTime) {
+            const tzName = await db.getHomeTimezone(homeId, zoneId);
+            const now = new Date();
+            const { dateStr } = getLocalParts(now, tzName);
+            const nextStartLocal = parseLocalTimeInTimezone(`${dateStr} ${nextBlock.startTime}`, tzName);
+
+            let finalStart = nextStartLocal;
+            if (finalStart.getTime() <= now.getTime()) {
+                finalStart = new Date(finalStart.getTime() + 24 * 60 * 60 * 1000);
+            }
+            termExpiry = finalStart.toISOString();
+            termDuration = Math.max(0, Math.round((finalStart.getTime() - now.getTime()) / 1000));
+        }
+    }
+
+    await pool.execute(
+        `INSERT INTO zone_overlays (zone_id, home_id, setting_type, setting_power, setting_temp_celsius, setting_temp_fahrenheit, termination_type, termination_duration_seconds, termination_expiry)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON DUPLICATE KEY UPDATE 
               setting_type = VALUES(setting_type), 
@@ -659,17 +659,17 @@ async function handleCommand(topic, payload) {
               termination_type = VALUES(termination_type),
               termination_duration_seconds = VALUES(termination_duration_seconds),
               termination_expiry = VALUES(termination_expiry)`,
-          [zoneId, homeId, settingType, settingPower, settingTempC, settingTempF, termType, termDuration, termExpiry]
-      );
-  
-      await commandApi.pushZoneOverlay(homeId, zoneId, setting, { type: termType, durationInSeconds: termDuration }).catch(err => {
-          if (log) log('warn', `[mqtt-commands] Overlay push failed: ${err.message}`);
-      });
+        [zoneId, homeId, settingType, settingPower, settingTempC, settingTempF, termType, termDuration, termExpiry]
+    );
 
-      if (typeof onStateChange === 'function') {
-          onStateChange(homeId, 'zone-state', { zoneId });
-      }
-  }
+    await commandApi.pushZoneOverlay(homeId, zoneId, setting, { type: termType, durationInSeconds: termDuration }).catch(err => {
+        if (log) log('warn', `[mqtt-commands] Overlay push failed: ${err.message}`);
+    });
+
+    if (typeof onStateChange === 'function') {
+        onStateChange(homeId, 'zone-state', { zoneId });
+    }
+}
 
 async function handleEmulatedCommand(topic, payloadStr) {
     const segs = topic.split('/');
@@ -763,9 +763,10 @@ function dispatchEsp32Telemetry(dev, serial, state, attempt = 0) {
             'X-Timestamp': timestamp
         };
 
-        if (dev.api_key) {
-            headers['X-ESP-API-Key'] = dev.api_key;
-            headers['X-Signature'] = crypto.createHmac('sha256', dev.api_key).update(`${timestamp}.${bodyData}`).digest('hex');
+        const apiKey = dev.esp32_api_key || dev.api_key || null;
+        if (apiKey) {
+            headers['X-ESP-API-Key'] = apiKey;
+            headers['X-Signature'] = crypto.createHmac('sha256', apiKey).update(`${timestamp}.${bodyData}`).digest('hex');
         }
 
         let handled = false;
@@ -787,10 +788,11 @@ function dispatchEsp32Telemetry(dev, serial, state, attempt = 0) {
             }
         };
 
+        const cmdPath = apiKey ? `/api/cmd?key=${encodeURIComponent(apiKey)}` : '/api/cmd';
         const req = http.request({
             hostname: dev.esp32_ip,
             port: dev.esp32_port || 80,
-            path: '/api/cmd',
+            path: cmdPath,
             method: 'POST',
             headers,
             timeout: 5000

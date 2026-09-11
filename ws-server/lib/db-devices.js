@@ -323,10 +323,10 @@ async function getDeviceEtags(serial) {
 async function storeRealEtag(serial, resource, etag) {
     let col;
     switch (resource) {
-        case 'lock':   col = 'lock_etag_real'; break;
+        case 'lock': col = 'lock_etag_real'; break;
         case 'config': col = 'config_etag_real'; break;
-        case 'sen':    col = 'sen_etag_real'; break;
-        case 'act':    col = 'act_etag_real'; break;
+        case 'sen': col = 'sen_etag_real'; break;
+        case 'act': col = 'act_etag_real'; break;
         default: throw new Error(`Invalid ETag resource: ${resource}`);
     }
     const p = getPool();
@@ -358,7 +358,7 @@ async function getZoneForDevice(shortSerial) {
         // If measuringSerial points to a device that is no longer in this zone, self-heal to this device
         if (measuringSerial && !rows[0].leader_valid) {
             measuringSerial = rows[0].serial_no || shortSerial;
-            p.execute('UPDATE zones SET measuring_device_serial = ? WHERE id = ? AND home_id = ?', [measuringSerial, rows[0].zone_id, rows[0].home_id]).catch(() => {});
+            p.execute('UPDATE zones SET measuring_device_serial = ? WHERE id = ? AND home_id = ?', [measuringSerial, rows[0].zone_id, rows[0].home_id]).catch(() => { });
         }
         return {
             zoneId: rows[0].zone_id,
@@ -392,7 +392,7 @@ async function getAllDevices() {
 async function getLatestBatteryVoltages() {
     const p = getPool();
     const query = `
-        SELECT dm.device_serial, dm.field_0162 
+        SELECT dm.device_serial, dm.field_0162, d.battery_state, d.battery_percent, d.battery_type
         FROM device_measurements dm
         INNER JOIN (
             SELECT MAX(id) AS max_id 
@@ -400,6 +400,7 @@ async function getLatestBatteryVoltages() {
             WHERE field_0162 IS NOT NULL AND field_0162 > 0 
             GROUP BY device_serial
         ) latest ON dm.id = latest.max_id
+        LEFT JOIN devices d ON (d.serial_no = dm.device_serial OR d.serial_no = CONCAT('RU', dm.device_serial) OR d.serial_no = CONCAT('VA', dm.device_serial))
     `;
     const [rows] = await p.execute(query);
     return rows;
@@ -445,10 +446,15 @@ async function deleteEsp32Node(id) {
     await p.execute('DELETE FROM esp32_nodes WHERE id = ?', [id]);
 }
 
+async function updateEsp32NodeApiKey(id, apiKey) {
+    const p = getPool();
+    await p.execute('UPDATE esp32_nodes SET api_key = ? WHERE id = ?', [apiKey, id]);
+}
+
 async function getAllEmulatedDevices() {
     const p = getPool();
     const [rows] = await p.execute(`
-        SELECT ed.*, en.name AS esp32_name, en.ip_address AS esp32_ip, en.api_port AS esp32_port
+        SELECT ed.*, en.name AS esp32_name, en.ip_address AS esp32_ip, en.api_port AS esp32_port, en.api_key AS esp32_api_key
         FROM emulated_devices ed
         JOIN esp32_nodes en ON ed.esp32_node_id = en.id
         ORDER BY ed.created_at DESC
@@ -551,6 +557,7 @@ module.exports = {
     getEsp32NodeById,
     createEsp32Node,
     updateEsp32NodeStatus,
+    updateEsp32NodeApiKey,
     deleteEsp32Node,
     getAllEmulatedDevices,
     createEmulatedDevice,

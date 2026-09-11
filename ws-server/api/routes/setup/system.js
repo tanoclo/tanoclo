@@ -71,7 +71,6 @@ const TOTP = {
     }
 };
 
-
 router.post('/devices/:serial/battery', adminAuth, async (req, res) => {
     try {
         const pool = db.getPool();
@@ -86,9 +85,8 @@ router.post('/devices/:serial/battery', adminAuth, async (req, res) => {
         if (meas.length > 0 && meas[0].field_0162) {
             const batteryPercent = battery.getBatteryPercent(meas[0].field_0162, serial, batteryType);
             if (batteryPercent != null) {
-                let batteryState = 'NORMAL';
-                if (batteryPercent <= 5) batteryState = 'DEPLETED';
-                else if (batteryPercent <= 30) batteryState = 'LOW';
+                const batteryState = battery.classifyBatteryState(batteryPercent);
+                battery.resetBatteryGuardState(serial);
 
                 await pool.execute(
                     'UPDATE devices SET battery_percent = ?, battery_state = ? WHERE serial_no = ?',
@@ -105,9 +103,7 @@ router.post('/devices/:serial/battery', adminAuth, async (req, res) => {
     }
 });
 
-
 // --- Zone / Offline Schedule API Routes ---
-
 router.get('/zones/list', adminAuth, async (req, res) => {
     try {
         const pool = db.getPool();
@@ -155,7 +151,6 @@ router.post('/zones/:id/offline-schedule/sync', adminAuth, async (req, res) => {
 });
 
 // --- Tuning API Routes ---
-
 router.get('/tuning/list', adminAuth, async (req, res) => {
     try {
         const pool = db.getPool();
@@ -177,7 +172,6 @@ router.get('/tuning/list', adminAuth, async (req, res) => {
         res.status(500).json({ error: 'internal_error' });
     }
 });
-
 
 router.post('/devices/:serial/actuator-limits', adminAuth, async (req, res) => {
     try {
@@ -209,7 +203,6 @@ router.post('/devices/:serial/actuator-limits', adminAuth, async (req, res) => {
 });
 
 // --- Whitelist API Routes ---
-
 router.post('/whitelist', adminAuth, async (req, res) => {
     try {
         const { type, value } = req.body;
@@ -234,6 +227,52 @@ router.delete('/whitelist/:id', adminAuth, async (req, res) => {
 });
 
 // --- User API Routes ---
+router.post('/users', adminAuth, async (req, res) => {
+    const pool = db.getPool();
+    let conn;
+    try {
+        const { name, email, password, home_id, is_primary_admin, is_tanoclo_admin } = req.body;
+        if (!name || !email || !password || !home_id) {
+            return res.status(400).json({ error: 'Name, email, password, and home are required' });
+        }
+
+        const [existing] = await pool.execute('SELECT id FROM users WHERE email = ?', [email.trim()]);
+        if (existing.length > 0) {
+            return res.status(400).json({ error: 'User with this email already exists' });
+        }
+
+        const [homeRows] = await pool.execute('SELECT id, language FROM homes WHERE id = ?', [home_id]);
+        if (homeRows.length === 0) {
+            return res.status(404).json({ error: 'Target home not found' });
+        }
+
+        const userId = crypto.randomUUID();
+        const hashed = await bcrypt.hash(password, 10);
+        const locale = homeRows[0].language || 'en';
+        const tanocloAdminVal = is_tanoclo_admin ? 1 : 0;
+
+        conn = await pool.getConnection();
+        await conn.beginTransaction();
+
+        await conn.execute(
+            'INSERT INTO users (id, name, email, username, password, locale, home_id, is_tanoclo_admin) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            [userId, name.trim(), email.trim(), email.trim(), hashed, locale, home_id, tanocloAdminVal]
+        );
+
+        if (is_primary_admin) {
+            await conn.execute('UPDATE homes SET admin_user_id = ? WHERE id = ?', [userId, home_id]);
+        }
+
+        await conn.commit();
+        res.status(201).json({ success: true, id: userId });
+    } catch (err) {
+        if (conn) await conn.rollback();
+        _log('error', `User create error: ${err.message}`);
+        res.status(500).json({ error: 'internal_error' });
+    } finally {
+        if (conn) conn.release();
+    }
+});
 
 router.delete('/users/:id', adminAuth, async (req, res) => {
     const pool = db.getPool();
@@ -282,15 +321,21 @@ router.post('/users/:id/email', adminAuth, async (req, res) => {
 });
 
 // --- Admin Security API ---
-
 router.post('/admin/password', adminAuth, async (req, res) => {
     try {
-        const { password, totp } = req.body;
+        const { current_password, password, totp } = req.body;
         if (!password) return res.status(400).json({ error: 'Password required' });
+        if (!current_password) return res.status(400).json({ error: 'Current password required' });
 
         const pool = db.getPool();
         const [rows] = await pool.execute('SELECT * FROM admin_users WHERE id = ?', [req.admin.id]);
         const admin = rows[0];
+        if (!admin) return res.status(404).json({ error: 'Admin user not found' });
+
+        const validPassword = await bcrypt.compare(current_password, admin.password_hash);
+        if (!validPassword) {
+            return res.status(401).json({ error: 'Incorrect current password' });
+        }
 
         if (admin.totp_secret) {
             if (!totp || !TOTP.verify(admin.totp_secret, totp)) {
@@ -310,19 +355,39 @@ router.post('/admin/password', adminAuth, async (req, res) => {
 
 router.post('/admin/totp', adminAuth, async (req, res) => {
     try {
-        const { secret, totp } = req.body;
+        const { current_password, secret, totp, current_totp } = req.body;
+        if (!current_password) return res.status(400).json({ error: 'Current password required' });
+
         const pool = db.getPool();
         const [rows] = await pool.execute('SELECT * FROM admin_users WHERE id = ?', [req.admin.id]);
         const admin = rows[0];
+        if (!admin) return res.status(404).json({ error: 'Admin user not found' });
+
+        const validPassword = await bcrypt.compare(current_password, admin.password_hash);
+        if (!validPassword) {
+            return res.status(401).json({ error: 'Incorrect current password' });
+        }
 
         if (secret) {
+            // Updating / setting new 2FA secret
+            if (admin.totp_secret) {
+                // If 2FA already active, require current 2FA code
+                const codeToCheck = current_totp || totp;
+                if (!codeToCheck || !TOTP.verify(admin.totp_secret, codeToCheck)) {
+                    return res.status(401).json({ error: 'Invalid current 2FA code' });
+                }
+            }
+
+            // Verify the new secret with the new totp code
             if (!totp || !TOTP.verify(secret, totp)) {
                 return res.status(401).json({ error: 'Invalid 2FA code from NEW secret' });
             }
         } else {
+            // Disabling 2FA
             if (admin.totp_secret) {
-                if (!totp || !TOTP.verify(admin.totp_secret, totp)) {
-                    return res.status(401).json({ error: 'Invalid 2FA code' });
+                const codeToCheck = current_totp || totp;
+                if (!codeToCheck || !TOTP.verify(admin.totp_secret, codeToCheck)) {
+                    return res.status(401).json({ error: 'Invalid current 2FA code' });
                 }
             }
         }
@@ -337,8 +402,6 @@ router.post('/admin/totp', adminAuth, async (req, res) => {
 });
 
 // --- Seeding Logic ---
-
-// H5 fix: seedingSessions with TTL cleanup to prevent memory leaks
 let seedingSessions = {};
 const SEEDING_SESSION_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
@@ -789,7 +852,7 @@ async function performSeeding(accessToken) {
             for (const oldId of oldDeviceIds) {
                 if (!newDeviceIds.has(oldId)) {
                     mqttHaDiscovery.unpublishMobileDevice(oldId);
-                    mqttPublisher.publishMobileDeviceTelemetry(homeId, oldId, false, null, null, null, false).catch(() => {});
+                    mqttPublisher.publishMobileDeviceTelemetry(homeId, oldId, false, null, null, null, false).catch(() => { });
                 }
             }
         } catch (unpubErr) {

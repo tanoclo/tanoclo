@@ -27,7 +27,7 @@ import logger from '../utils/logger';
 export function useGeolocation(mobileDeviceId, setMobileDeviceId) {
   const { isAuthenticated, user } = useAuth();
   const { activeHomeId, homeInfo } = useHome();
-  
+
   // Keep handles to background listeners so we can unregister them on cleanup
   const listenerRef = useRef(null);
   const errorListenerRef = useRef(null);
@@ -139,7 +139,7 @@ export function useGeolocation(mobileDeviceId, setMobileDeviceId) {
 
           const isAndroid = Capacitor.getPlatform() === 'android';
           let currentLocGranted = permissions.location === 'granted';
-          
+
           if (!currentLocGranted) {
             logger.debug('[useGeolocation] Requesting foreground location permission...');
             const reqStatus = await BackgroundGeolocation.requestPermissions({
@@ -150,20 +150,20 @@ export function useGeolocation(mobileDeviceId, setMobileDeviceId) {
 
           if (currentLocGranted) {
             const updatedPermissions = await BackgroundGeolocation.checkPermissions();
-            let bgGranted = isAndroid 
+            let bgGranted = isAndroid
               ? updatedPermissions.backgroundLocation === 'granted'
               : (updatedPermissions.backgroundLocation === 'always' || updatedPermissions.backgroundLocation === 'granted');
-              
+
             if (!bgGranted) {
               logger.debug('[useGeolocation] Requesting background location & notifications permission...');
               const bgStatus = await BackgroundGeolocation.requestPermissions({
                 permissions: ['backgroundLocation', 'notification']
               });
-              bgGranted = isAndroid 
+              bgGranted = isAndroid
                 ? bgStatus.backgroundLocation === 'granted'
                 : (bgStatus.backgroundLocation === 'always' || bgStatus.backgroundLocation === 'granted');
             }
-            
+
             if (!bgGranted) {
               logger.warn('[useGeolocation] Background location permission denied.');
             }

@@ -6,7 +6,6 @@
  * relative room humidity percent metrics, and redirects hot water types to render DHWCard instead.
  */
 
-
 import { Flame, Droplets, ShieldAlert, Thermometer } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import DHWCard from './DHWCard';
@@ -42,19 +41,19 @@ export default function ZoneCard({ zone, state, onClick }) {
     }
     const t = Math.max(5, Math.min(25, temp));
     const stops = [
-      { t: 5, h: 210, s: 80, l: 45 },    // Blueish
-      { t: 15, h: 145, s: 70, l: 40 },   // Greenish-teal
-      { t: 18, h: 100, s: 70, l: 40 },   // Green
-      { t: 19, h: 50, s: 95, l: 45 },    // Yellow
-      { t: 21, h: 35, s: 95, l: 45 },    // Yellow-orange
-      { t: 25, h: 15, s: 100, l: 40 }    // Dark Orange
+      { t: 5, h: 210, s: 80, l: 45 },
+      { t: 15, h: 145, s: 70, l: 40 },
+      { t: 18, h: 100, s: 70, l: 40 },
+      { t: 19, h: 50, s: 95, l: 45 },
+      { t: 21, h: 35, s: 95, l: 45 },
+      { t: 25, h: 15, s: 100, l: 40 }
     ];
     let lower = stops[0];
     let upper = stops[stops.length - 1];
     for (let i = 0; i < stops.length - 1; i++) {
-      if (t >= stops[i].t && t <= stops[i+1].t) {
+      if (t >= stops[i].t && t <= stops[i + 1].t) {
         lower = stops[i];
-        upper = stops[i+1];
+        upper = stops[i + 1];
         break;
       }
     }
@@ -105,7 +104,7 @@ export default function ZoneCard({ zone, state, onClick }) {
   const { integer, decimal } = formatDecimalTemp(currentTemp);
 
   return (
-    <div 
+    <div
       onClick={onClick}
       style={getCardStyle()}
       onMouseEnter={(e) => {
@@ -120,12 +119,12 @@ export default function ZoneCard({ zone, state, onClick }) {
       {/* Top Header Row: Humidity & Heating State */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', zIndex: 1 }}>
         {humidity != null ? (
-          <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '4px', 
-            backgroundColor: 'rgba(128, 128, 128, 0.15)', 
-            padding: '2px 8px', 
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            backgroundColor: 'rgba(128, 128, 128, 0.15)',
+            padding: '2px 8px',
             borderRadius: '12px',
             fontSize: '0.75rem',
             fontWeight: 600,
@@ -139,14 +138,14 @@ export default function ZoneCard({ zone, state, onClick }) {
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
           {isOffline && <ShieldAlert size={16} />}
           {isHeating && !isOffline && (
-            <Flame 
-              size={18} 
-              style={{ 
+            <Flame
+              size={18}
+              style={{
                 color: '#ff7a00',
                 fill: '#ff5d00',
                 filter: 'drop-shadow(0 0 6px rgba(255, 93, 0, 0.8))',
-                animation: 'pulse-soft 1.5s infinite' 
-              }} 
+                animation: 'pulse-soft 1.5s infinite'
+              }}
             />
           )}
         </div>

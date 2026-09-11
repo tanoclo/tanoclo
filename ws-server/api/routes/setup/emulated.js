@@ -33,14 +33,14 @@ function deriveMacFromIpv6(ipv6Str) {
     let clean = ipv6Str.toLowerCase().trim();
     if (clean.startsWith('coap://[')) clean = clean.substring(8, clean.indexOf(']'));
     else if (clean.startsWith('[')) clean = clean.substring(1, clean.indexOf(']'));
-    
+
     const parts = clean.split('::');
     let left = parts[0] ? parts[0].split(':') : [];
     let right = (parts.length > 1 && parts[1]) ? parts[1].split(':') : [];
     const missing = 8 - (left.length + right.length);
     const middle = missing > 0 ? Array(missing).fill('0') : [];
     const full16Hex = [...left, ...middle, ...right].map(p => parseInt(p || '0', 16));
-    
+
     if (full16Hex.length !== 8) return null;
     const buf = Buffer.alloc(16);
     for (let i = 0; i < 8; i++) {
@@ -88,10 +88,12 @@ function sendEsp32Command(ip, port, apiKey, commandPayload) {
             headers['X-Signature'] = signature;
         }
 
+        const cmdPath = apiKey ? `/api/cmd?key=${encodeURIComponent(apiKey)}` : '/api/cmd';
+
         const req = http.request({
             hostname: ip,
             port: port || 80,
-            path: '/api/cmd',
+            path: cmdPath,
             method: 'POST',
             headers,
             timeout: 5000
@@ -122,18 +124,25 @@ function sendEsp32Command(ip, port, apiKey, commandPayload) {
     });
 }
 
-async function probeNodeStatus(ip, port) {
+async function probeNodeStatus(ip, port, apiKey = null) {
     return new Promise((resolve) => {
+        const statusPath = apiKey ? `/api/status?key=${encodeURIComponent(apiKey)}` : '/api/status';
+        const headers = {};
+        if (apiKey) {
+            headers['X-ESP-API-Key'] = apiKey;
+        }
+
         const req = http.get({
             hostname: ip,
             port: port || 80,
-            path: '/api/status',
+            path: statusPath,
+            headers,
             timeout: 2000
         }, (res) => {
             let data = '';
             res.on('data', chunk => { data += chunk; });
             res.on('end', () => {
-                resolve(res.statusCode === 200 ? 'ONLINE' : 'ERROR');
+                resolve(res.statusCode === 200 ? 'ONLINE' : (res.statusCode === 401 ? 'UNAUTHORIZED' : 'ERROR'));
             });
         });
         req.on('error', () => resolve('OFFLINE'));
@@ -144,20 +153,19 @@ async function probeNodeStatus(ip, port) {
 // ---------------------------------------------------------------------------
 // ESP32 Hardware Node Management
 // ---------------------------------------------------------------------------
-
 router.get('/nodes', async (req, res) => {
     try {
         const nodes = await dbDevices.getAllEsp32Nodes();
         // Concurrently probe all nodes to refresh live status
         await Promise.all(nodes.map(async (node) => {
-            const liveStatus = await probeNodeStatus(node.ip_address, node.api_port);
+            const liveStatus = await probeNodeStatus(node.ip_address, node.api_port, node.api_key);
             node.status = liveStatus;
             if (liveStatus === 'ONLINE') {
                 const now = new Date().toISOString();
                 node.last_seen = now;
-                await dbDevices.updateEsp32NodeStatus(node.id, 'ONLINE', now).catch(() => {});
+                await dbDevices.updateEsp32NodeStatus(node.id, 'ONLINE', now).catch(() => { });
             } else if (node.status !== liveStatus) {
-                await dbDevices.updateEsp32NodeStatus(node.id, liveStatus).catch(() => {});
+                await dbDevices.updateEsp32NodeStatus(node.id, liveStatus).catch(() => { });
             }
         }));
         res.json({ success: true, nodes });
@@ -172,15 +180,30 @@ router.post('/nodes', async (req, res) => {
         if (!name || !ip_address) {
             return res.status(400).json({ success: false, error: 'Name and IP address are required' });
         }
-        // Auto-generate 256-bit API key if not provided
-        const nodeApiKey = api_key || crypto.randomBytes(32).toString('hex');
-        const initialStatus = await probeNodeStatus(ip_address, api_port);
+        const nodeApiKey = (typeof api_key === 'string' ? api_key.trim() : '') || null;
+        const initialStatus = await probeNodeStatus(ip_address, api_port, nodeApiKey);
         const node = await dbDevices.createEsp32Node({ name, ip_address, api_port, api_key: nodeApiKey, status: initialStatus });
         res.json({
             success: true,
             node,
             warning: initialStatus !== 'ONLINE' ? `Node registered in DB, but failed to connect to ${ip_address}:${api_port} (${initialStatus})` : null
         });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+router.post('/nodes/:id/api-key', async (req, res) => {
+    try {
+        const id = req.params.id;
+        const { api_key } = req.body;
+        const node = await dbDevices.getEsp32NodeById(id);
+        if (!node) return res.status(404).json({ success: false, error: 'ESP32 node not found' });
+        const newKey = (typeof api_key === 'string' ? api_key.trim() : '') || null;
+        await dbDevices.updateEsp32NodeApiKey(id, newKey);
+        const liveStatus = await probeNodeStatus(node.ip_address, node.api_port, newKey);
+        await dbDevices.updateEsp32NodeStatus(id, liveStatus).catch(() => { });
+        res.json({ success: true, api_key: newKey, status: liveStatus });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });
     }
@@ -234,7 +257,6 @@ router.post('/nodes/:id/clear-and-reboot', async (req, res) => {
 // ---------------------------------------------------------------------------
 // Emulated Device Management & Automated Pairing / Unassociation
 // ---------------------------------------------------------------------------
-
 router.get('/devices', async (req, res) => {
     try {
         const devices = await dbDevices.getAllEmulatedDevices();
@@ -244,7 +266,7 @@ router.get('/devices', async (req, res) => {
                 if (dev.pairing_state !== 'PAIRED') {
                     const [dRows] = await pool.execute('SELECT connection_state, current_fw_version FROM devices WHERE serial_no = ?', [dev.serial_no]);
                     if (dRows.length > 0 && (dRows[0].connection_state === 1 || dRows[0].current_fw_version)) {
-                        await dbDevices.updateEmulatedDevicePairingState(dev.serial_no, 'PAIRED').catch(() => {});
+                        await dbDevices.updateEmulatedDevicePairingState(dev.serial_no, 'PAIRED').catch(() => { });
                         dev.pairing_state = 'PAIRED';
                     }
                 }
@@ -311,7 +333,7 @@ router.post('/devices', async (req, res) => {
             if (bridgeId) {
                 const pool = db.getPool();
                 if (pool) {
-                    await pool.execute('UPDATE devices SET in_pairing_mode = 1 WHERE serial_no = ?', [bridgeId]).catch(() => {});
+                    await pool.execute('UPDATE devices SET in_pairing_mode = 1 WHERE serial_no = ?', [bridgeId]).catch(() => { });
                 }
                 await commandApi.pushDevicePair(bridgeId, true).catch(err => {
                     console.warn(`[Emulated] Warning pushing pairing to bridge: ${err.message}`);
@@ -381,7 +403,7 @@ router.delete('/devices/:serialNo', async (req, res) => {
         const emDev = emulatedList.find(d => d.serial_no === serialNo);
         const dbDev = await dbDevices.getDeviceByFullSerial(serialNo) || await dbDevices.getDeviceBySerial(serialNo);
         const homeId = (emDev && emDev.home_id) || (dbDev && dbDev.home_id);
-        
+
         let unassociateTriggered = false;
         if (homeId) {
             try {
@@ -485,14 +507,15 @@ router.post('/devices/:serialNo/telemetry', async (req, res) => {
     try {
         const serialNo = req.params.serialNo;
         const { temp_celsius = 20.5, humidity_percent = 50.0, battery_mv = 3000 } = req.body;
-        
+
         const emulatedList = await dbDevices.getAllEmulatedDevices();
         const dev = emulatedList.find(d => d.serial_no === serialNo);
         if (!dev) {
             return res.status(404).json({ success: false, error: 'Emulated device not found' });
         }
 
-        const espRes = await sendEsp32Command(dev.esp32_ip, dev.esp32_port, dev.api_key, {
+        const apiKey = dev.esp32_api_key || dev.api_key || null;
+        const espRes = await sendEsp32Command(dev.esp32_ip, dev.esp32_port, apiKey, {
             cmd: 'send_telemetry',
             serial: serialNo,
             params: { temp_celsius, humidity_percent, battery_mv }
@@ -511,7 +534,7 @@ router.get('/devices/:serialNo/state', async (req, res) => {
         const mqttCommands = require('../../../lib/mqtt-commands');
         let tempC = 21.5;
         let humidity = 50.0;
-        let batteryMv = 4500;
+        let batteryMv = serialNo.startsWith('RU') ? 4500 : 3000;
         let foundMeasurement = false;
 
         // 1. Check latest historical measurement from device_measurements table
@@ -525,7 +548,10 @@ router.get('/devices/:serialNo/state', async (req, res) => {
                     const m = measRows[0];
                     if (m.field_012d != null) { tempC = parseFloat(m.field_012d); foundMeasurement = true; }
                     if (m.field_0135 != null) { humidity = parseFloat(m.field_0135); foundMeasurement = true; }
-                    if (m.field_0162 != null && m.field_0162 > 0) batteryMv = parseInt(m.field_0162, 10);
+                    if (m.field_0162 != null && m.field_0162 > 0) {
+                        const rawBat = parseInt(m.field_0162, 10);
+                        batteryMv = (serialNo.startsWith('RU') && rawBat < 3600) ? 4500 : rawBat;
+                    }
                 }
             }
         } catch (dbErr) {
@@ -655,7 +681,7 @@ router.post('/devices/:serialNo/sync', async (req, res) => {
         const emulatedList = await dbDevices.getAllEmulatedDevices();
         const emDev = emulatedList.find(d => d.serial_no === serialNo);
         const dbDev = await dbDevices.getDeviceByFullSerial(serialNo) || await dbDevices.getDeviceBySerial(serialNo);
-        
+
         if (!emDev || !emDev.esp32_ip) {
             return res.status(404).json({ success: false, error: 'Emulated device or assigned ESP32 node not found' });
         }
@@ -686,9 +712,10 @@ router.post('/devices/:serialNo/sync', async (req, res) => {
             isMeasuringLeader = (zoneRows.length > 0 && zoneRows[0].measuring_device_serial === serialNo);
         }
 
+        const apiKey = emDev.esp32_api_key || emDev.api_key || null;
         const syncPayload = {
             cmd: 'sync',
-            api_key: emDev.api_key,
+            api_key: apiKey,
             serial: serialNo,
             mac: devMac ? devMac.toString('hex') : null,
             ipv6: devIpv6,
@@ -702,7 +729,7 @@ router.post('/devices/:serialNo/sync', async (req, res) => {
             is_measuring_leader: isMeasuringLeader
         };
 
-        const espRes = await sendEsp32Command(emDev.esp32_ip, emDev.esp32_port, emDev.api_key, syncPayload);
+        const espRes = await sendEsp32Command(emDev.esp32_ip, emDev.esp32_port, apiKey, syncPayload);
         res.json({ success: true, message: 'Sync command dispatched to ESP32', esp32Response: espRes });
     } catch (err) {
         res.status(500).json({ success: false, error: err.message });

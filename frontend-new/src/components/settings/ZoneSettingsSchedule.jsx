@@ -6,7 +6,6 @@
  * into the physical device's non-volatile memory via custom local websocket server messages.
  */
 
-
 import Card from '../common/Card';
 import Button from '../common/Button';
 import Toggle from '../common/Toggle';
@@ -62,9 +61,9 @@ export default function ZoneSettingsSchedule({
             {t('schedule.last_synced', 'Last Synced')}: {zone?.offlineScheduleSyncedAt ? new Date(zone.offlineScheduleSyncedAt).toLocaleString() : t('common.never', 'Never')}
           </span>
         </div>
-        <Button 
-          type="button" 
-          variant="secondary" 
+        <Button
+          type="button"
+          variant="secondary"
           disabled={isSaving || !offlineScheduleEnabled || isReadOnly}
           onClick={async () => {
             try {

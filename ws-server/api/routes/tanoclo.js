@@ -39,7 +39,7 @@ async function checkZoneConfigReadonly(homeId) {
     return { isReadOnly, devBypass };
 }
 
-// 1. GET /:homeId/tanoclo/boiler/raw
+// GET /:homeId/tanoclo/boiler/raw
 router.get('/:homeId/tanoclo/boiler/raw', async (req, res) => {
     try {
         const pool = db.getPool();
@@ -52,10 +52,15 @@ router.get('/:homeId/tanoclo/boiler/raw', async (req, res) => {
 
         const row = rows[0];
         if (row.last_config_json) {
-            try {
-                row.last_config_decoded = JSON.parse(row.last_config_json);
-            } catch (e) {
-                row.last_config_decoded = null;
+            if (typeof row.last_config_json === 'object' && !Buffer.isBuffer(row.last_config_json)) {
+                row.last_config_decoded = row.last_config_json;
+                row.last_config_json = JSON.stringify(row.last_config_json);
+            } else {
+                try {
+                    row.last_config_decoded = JSON.parse(row.last_config_json);
+                } catch (e) {
+                    row.last_config_decoded = null;
+                }
             }
         }
         res.json(row);
@@ -65,16 +70,22 @@ router.get('/:homeId/tanoclo/boiler/raw', async (req, res) => {
     }
 });
 
-// 2. GET /:homeId/tanoclo/devices/battery
+// GET /:homeId/tanoclo/devices/battery
 router.get('/:homeId/tanoclo/devices/battery', async (req, res) => {
     try {
         const pool = db.getPool();
         const homeId = req.params.homeId;
         const [rows] = await pool.execute(
-            `SELECT serial_no as short_serial_no, serial_no, device_type, zone_id, current_fw_version, 
-             connection_state, battery_state, battery_percent, battery_type, last_contact, ipv6_address,
-             friendly_name
-             FROM devices WHERE home_id = ?`,
+            `SELECT d.serial_no as short_serial_no, d.serial_no, d.device_type, d.zone_id, d.current_fw_version, 
+             d.connection_state, 
+             (CASE WHEN ed.serial_no IS NOT NULL THEN 'NORMAL' ELSE d.battery_state END) as battery_state,
+             (CASE WHEN ed.serial_no IS NOT NULL THEN 100 ELSE d.battery_percent END) as battery_percent,
+             d.battery_type, d.last_contact, d.ipv6_address,
+             d.friendly_name,
+             (CASE WHEN ed.serial_no IS NOT NULL THEN 1 ELSE 0 END) AS is_emulated
+             FROM devices d
+             LEFT JOIN emulated_devices ed ON d.serial_no = ed.serial_no
+             WHERE d.home_id = ?`,
             [homeId]
         );
         res.json(rows);
@@ -84,7 +95,7 @@ router.get('/:homeId/tanoclo/devices/battery', async (req, res) => {
     }
 });
 
-// 3. GET /:homeId/tanoclo/devices/:id/raw
+// GET /:homeId/tanoclo/devices/:id/raw
 router.get('/:homeId/tanoclo/devices/:id/raw', async (req, res) => {
     try {
         const pool = db.getPool();
@@ -101,10 +112,15 @@ router.get('/:homeId/tanoclo/devices/:id/raw', async (req, res) => {
 
         const device = deviceRows[0];
         if (device.last_config_json) {
-            try {
-                device.last_config_decoded = JSON.parse(device.last_config_json);
-            } catch (e) {
-                device.last_config_decoded = null;
+            if (typeof device.last_config_json === 'object' && !Buffer.isBuffer(device.last_config_json)) {
+                device.last_config_decoded = device.last_config_json;
+                device.last_config_json = JSON.stringify(device.last_config_json);
+            } else {
+                try {
+                    device.last_config_decoded = JSON.parse(device.last_config_json);
+                } catch (e) {
+                    device.last_config_decoded = null;
+                }
             }
         }
 
@@ -120,7 +136,7 @@ router.get('/:homeId/tanoclo/devices/:id/raw', async (req, res) => {
     }
 });
 
-// 4. GET /:homeId/tanoclo/zones/:id/raw
+// GET /:homeId/tanoclo/zones/:id/raw
 router.get('/:homeId/tanoclo/zones/:id/raw', async (req, res) => {
     try {
         const pool = db.getPool();
@@ -137,10 +153,15 @@ router.get('/:homeId/tanoclo/zones/:id/raw', async (req, res) => {
 
         const zone = zoneRows[0];
         if (zone.last_config_json) {
-            try {
-                zone.last_config_decoded = JSON.parse(zone.last_config_json);
-            } catch (e) {
-                zone.last_config_decoded = null;
+            if (typeof zone.last_config_json === 'object' && !Buffer.isBuffer(zone.last_config_json)) {
+                zone.last_config_decoded = zone.last_config_json;
+                zone.last_config_json = JSON.stringify(zone.last_config_json);
+            } else {
+                try {
+                    zone.last_config_decoded = JSON.parse(zone.last_config_json);
+                } catch (e) {
+                    zone.last_config_decoded = null;
+                }
             }
         }
 
@@ -156,7 +177,7 @@ router.get('/:homeId/tanoclo/zones/:id/raw', async (req, res) => {
     }
 });
 
-// 5. GET /:homeId/tanoclo/circuits
+// GET /:homeId/tanoclo/circuits
 router.get('/:homeId/tanoclo/circuits', async (req, res) => {
     try {
         const pool = db.getPool();
@@ -172,7 +193,7 @@ router.get('/:homeId/tanoclo/circuits', async (req, res) => {
     }
 });
 
-// 6. GET /:homeId/tanoclo/bridge
+// GET /:homeId/tanoclo/bridge
 router.get('/:homeId/tanoclo/bridge', async (req, res) => {
     try {
         const pool = db.getPool();
@@ -202,9 +223,7 @@ router.get('/:homeId/tanoclo/bridge', async (req, res) => {
     }
 });
 
-
-
-// 10. PUT /:homeId/tanoclo/devices/:serial/battery
+// PUT /:homeId/tanoclo/devices/:serial/battery
 router.put('/:homeId/tanoclo/devices/:serial/battery', async (req, res) => {
     try {
         const pool = db.getPool();
@@ -230,9 +249,8 @@ router.put('/:homeId/tanoclo/devices/:serial/battery', async (req, res) => {
         if (meas.length > 0 && meas[0].field_0162) {
             batteryPercent = battery.getBatteryPercent(meas[0].field_0162, serial, batteryType);
             if (batteryPercent != null) {
-                if (batteryPercent > 30) batteryState = 'NORMAL';
-                else if (batteryPercent > 5) batteryState = 'LOW';
-                else batteryState = 'DEPLETED';
+                batteryState = battery.classifyBatteryState(batteryPercent);
+                battery.resetBatteryGuardState(serial);
 
                 await pool.execute(
                     'UPDATE devices SET battery_percent = ?, battery_state = ? WHERE home_id = ? AND serial_no = ?',
@@ -248,7 +266,7 @@ router.put('/:homeId/tanoclo/devices/:serial/battery', async (req, res) => {
     }
 });
 
-// 11. GET /:homeId/tanoclo/zones/:zoneId/dayReport
+// GET /:homeId/tanoclo/zones/:zoneId/dayReport
 router.get('/:homeId/tanoclo/zones/:zoneId/dayReport', async (req, res) => {
     try {
         const { homeId, zoneId } = req.params;
@@ -742,8 +760,7 @@ async function formatWeatherDayReport(rows, from, to, tzName) {
     };
 }
 
-
-// 30. GET /:homeId/tanoclo/timezone
+// GET /:homeId/tanoclo/timezone
 router.get('/:homeId/tanoclo/timezone', async (req, res) => {
     try {
         const pool = db.getPool();
@@ -776,7 +793,7 @@ router.put('/:homeId/tanoclo/timezone', async (req, res) => {
     }
 });
 
-// 32. PUT /:homeId/tanoclo/users/:userId/admin
+// PUT /:homeId/tanoclo/users/:userId/admin
 router.put('/:homeId/tanoclo/users/:userId/admin', async (req, res) => {
     try {
         const { homeId, userId } = req.params;

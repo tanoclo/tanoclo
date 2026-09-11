@@ -3,7 +3,6 @@
  * @brief Renders the map and radius controls picker for home geofence configuration settings.
  */
 
-
 import Card from '../common/Card';
 import Button from '../common/Button';
 import { Navigation, Save } from 'lucide-react';
@@ -37,9 +36,9 @@ export default function HomeSettingsGeofencing({
       <Card style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h3 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0 }}>{t('settings.map_coordinates')}</h3>
-          <Button 
-            type="button" 
-            variant="secondary" 
+          <Button
+            type="button"
+            variant="secondary"
             onClick={handleUseMyLocation}
             style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}
           >
@@ -48,16 +47,16 @@ export default function HomeSettingsGeofencing({
           </Button>
         </div>
 
-        <div 
-          ref={mapRef} 
-          style={{ 
-            height: '240px', 
-            width: '100%', 
-            borderRadius: 'var(--radius-md)', 
+        <div
+          ref={mapRef}
+          style={{
+            height: '240px',
+            width: '100%',
+            borderRadius: 'var(--radius-md)',
             border: '1px solid var(--border-color)',
             overflow: 'hidden',
             zIndex: 1
-          }} 
+          }}
         />
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
@@ -71,7 +70,7 @@ export default function HomeSettingsGeofencing({
             <span style={{ color: 'var(--text-secondary)' }}>{t('geofencing.radius') || 'Geofence Radius'}</span>
             <span style={{ color: 'var(--primary)' }}>{t('geofencing.meters_count', { count: radius }) || `${radius}m`}</span>
           </div>
-          <input 
+          <input
             type="range"
             min="100"
             max="1500"
@@ -92,11 +91,11 @@ export default function HomeSettingsGeofencing({
             <span style={{ position: 'absolute', left: '0', color: 'var(--text-muted)' }}>
               {t('geofencing.meters_count', { count: 100 }) || '100m'}
             </span>
-            <span style={{ 
-              position: 'absolute', 
-              left: '14.2857%', 
-              transform: 'translateX(-50%)', 
-              whiteSpace: 'nowrap', 
+            <span style={{
+              position: 'absolute',
+              left: '14.2857%',
+              transform: 'translateX(-50%)',
+              whiteSpace: 'nowrap',
               color: 'var(--primary)',
               fontWeight: 600,
               display: 'flex',
@@ -113,9 +112,9 @@ export default function HomeSettingsGeofencing({
           </div>
         </div>
 
-        <Button 
-          type="submit" 
-          variant="primary" 
+        <Button
+          type="submit"
+          variant="primary"
           disabled={isSavingLocation}
           style={{ alignSelf: 'flex-end', marginTop: '0.5rem' }}
         >

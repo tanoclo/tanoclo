@@ -13,14 +13,14 @@ export const SWR_KEYS = {
   weather: (homeId) => `/homes/${homeId}/weather`,
   climateQuality: (homeId) => `/homes/${homeId}/climateQuality`,
   timezone: (homeId) => `/homes/${homeId}/tanoclo/timezone`,
-  
+
   // Zones & states
   zones: (homeId) => `/homes/${homeId}/zones`,
   zoneStates: (homeId) => `/homes/${homeId}/zoneStates`,
   zoneState: (homeId, zoneId) => `/homes/${homeId}/zones/${zoneId}/state`,
   defaultOverlay: (homeId, zoneId) => `/homes/${homeId}/zones/${zoneId}/defaultOverlay`,
   zoneControl: (homeId, zoneId) => `/homes/${homeId}/zones/${zoneId}/control`,
-  
+
   // Schedules
   activeTimetable: (homeId, zoneId) => `/homes/${homeId}/zones/${zoneId}/schedule/activeTimetable`,
   timetableBlocks: (homeId, zoneId, timetableId) => `/homes/${homeId}/zones/${zoneId}/schedule/timetables/${timetableId}/blocks`,
@@ -32,7 +32,7 @@ export const SWR_KEYS = {
   batteryDevices: (homeId) => `/homes/${homeId}/batteryDevices`,
   batteryDevicesRaw: (homeId) => `/homes/${homeId}/tanoclo/devices/battery`,
   bridge: (homeId) => `/homes/${homeId}/tanoclo/bridge`,
-  
+
   // Users & Mobile
   users: (homeId) => `/homes/${homeId}/users`,
   mobileDevice: (homeId, deviceId) => `/homes/${homeId}/mobileDevices/${deviceId}`,

@@ -6,7 +6,6 @@
  * over the report timeframe with gridline bounds.
  */
 
-
 import { Line } from 'react-chartjs-2';
 import { useTranslation } from 'react-i18next';
 
@@ -75,7 +74,7 @@ export default function HumidityChart({ dayReportData }) {
         titleFont: { family: 'Inter, sans-serif' },
         bodyFont: { family: 'Inter, sans-serif' },
         callbacks: {
-          label: function(context) {
+          label: function (context) {
             return `${t('common.humidity')}: ${context.parsed.y.toFixed(0)}%`;
           }
         }
@@ -107,7 +106,7 @@ export default function HumidityChart({ dayReportData }) {
             family: 'Inter, sans-serif',
             size: 10
           },
-          callback: function(value) {
+          callback: function (value) {
             return value + '%';
           }
         }

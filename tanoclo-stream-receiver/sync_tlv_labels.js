@@ -40,7 +40,7 @@ async function sync() {
             database: DB_NAME,
             connectTimeout: 5000
         });
-        console.log('Connected! Fetching TLV labels...');
+        console.log('Connected. Fetching TLV labels...');
 
         const [rows] = await connection.execute('SELECT * FROM tlv_labels');
         console.log(`Fetched ${rows.length} rows. Mapping fields...`);

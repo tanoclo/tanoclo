@@ -170,12 +170,12 @@ function calculateVADeviceETag(fields) {
     return hash;
 }
 
-
 /**
  * Safely parse a JSON string or buffer from MySQL, handling 'longtext' edge cases.
  */
 function safeJsonParse(data) {
     if (data === null || data === undefined) return {};
+    if (typeof data === 'object' && !Buffer.isBuffer(data)) return data;
     try {
         const str = Buffer.isBuffer(data) ? data.toString('utf-8') : String(data);
         if (str === 'null' || !str) return {};
@@ -239,7 +239,7 @@ function getPool() {
                 charset: 'utf8mb4',
                 timezone: 'Z',
                 waitForConnections: true,
-                connectionLimit: parseInt(process.env.DB_CONNECTION_LIMIT || (process.env.IS_CHILD_PROCESS === 'true' ? '15' : '25'), 10),
+                connectionLimit: parseInt(process.env.DB_CONNECTION_LIMIT || (process.env.IS_CHILD_PROCESS === 'true' ? '20' : '10'), 10),
                 maxIdle: 10,
                 idleTimeout: 60000,
                 queueLimit: 50,

@@ -209,20 +209,20 @@ export default function BoilerCircuitsSettings() {
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
         <div style={{ position: 'relative', width: size, height: size }}>
           <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
-            <circle 
-              cx={size / 2} 
-              cy={size / 2} 
-              r={radius} 
-              fill="transparent" 
-              stroke="var(--border-color)" 
-              strokeWidth={strokeWidth} 
+            <circle
+              cx={size / 2}
+              cy={size / 2}
+              r={radius}
+              fill="transparent"
+              stroke="var(--border-color)"
+              strokeWidth={strokeWidth}
             />
-            <circle 
-              cx={size / 2} 
-              cy={size / 2} 
-              r={radius} 
-              fill="transparent" 
-              stroke={colorClass} 
+            <circle
+              cx={size / 2}
+              cy={size / 2}
+              r={radius}
+              fill="transparent"
+              stroke={colorClass}
               strokeWidth={strokeWidth}
               strokeDasharray={circumference}
               strokeDashoffset={strokeDashoffset}
@@ -272,7 +272,7 @@ export default function BoilerCircuitsSettings() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', width: '100%', maxWidth: '800px' }}>
-      
+
       {/* Title */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: '42px' }}>
         <div>
@@ -288,17 +288,17 @@ export default function BoilerCircuitsSettings() {
       </div>
 
       {/* Boiler & Underfloor Configuration */}
-      <Card style={{ 
-        display: 'flex', 
+      <Card style={{
+        display: 'flex',
         flexDirection: 'column',
         gap: '1.25rem',
-        padding: '1.25rem' 
+        padding: '1.25rem'
       }}>
         <h3 style={{ margin: 0, fontSize: '1.0rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <Settings size={18} style={{ color: 'var(--primary)' }} />
           {t('heating_activity.boiler_configuration')}
         </h3>
-        
+
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem' }}>
           {/* Boiler Switch */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -310,7 +310,7 @@ export default function BoilerCircuitsSettings() {
                 {t('heating_activity.opentherm_desc', 'Configure OpenTherm boiler integration.')}
               </span>
             </div>
-            
+
             <label className="switch" style={{
               position: 'relative',
               display: 'inline-block',
@@ -318,11 +318,11 @@ export default function BoilerCircuitsSettings() {
               height: '24px',
               cursor: 'pointer'
             }}>
-              <input 
-                type="checkbox" 
+              <input
+                type="checkbox"
                 checked={Boolean(heatingSystem?.boiler?.present)}
                 onChange={handleToggleBoiler}
-                style={{ opacity: 0, width: 0, height: 0 }} 
+                style={{ opacity: 0, width: 0, height: 0 }}
               />
               <span style={{
                 position: 'absolute',
@@ -358,7 +358,7 @@ export default function BoilerCircuitsSettings() {
                 {t('heating_activity.underfloor_desc', 'Enable underfloor heating pump control.')}
               </span>
             </div>
-            
+
             <label className="switch" style={{
               position: 'relative',
               display: 'inline-block',
@@ -366,11 +366,11 @@ export default function BoilerCircuitsSettings() {
               height: '24px',
               cursor: 'pointer'
             }}>
-              <input 
-                type="checkbox" 
+              <input
+                type="checkbox"
                 checked={Boolean(heatingSystem?.underfloorHeating?.present)}
                 onChange={handleToggleUnderfloor}
-                style={{ opacity: 0, width: 0, height: 0 }} 
+                style={{ opacity: 0, width: 0, height: 0 }}
               />
               <span style={{
                 position: 'absolute',
@@ -399,11 +399,11 @@ export default function BoilerCircuitsSettings() {
 
         {/* Change Boiler Option */}
         {Boolean(heatingSystem?.boiler?.present) && (
-          <div style={{ 
-            display: 'flex', 
-            justifyContent: 'space-between', 
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
             alignItems: 'center',
-            borderTop: '1px solid var(--border-color)', 
+            borderTop: '1px solid var(--border-color)',
             paddingTop: '1rem',
             flexWrap: 'wrap',
             gap: '0.75rem'
@@ -416,8 +416,8 @@ export default function BoilerCircuitsSettings() {
                 {manufacturerName} • {modelName}
               </span>
             </div>
-            <Button 
-              variant="secondary" 
+            <Button
+              variant="secondary"
               onClick={() => setIsModalOpen(true)}
               style={{ padding: '0.4rem 0.85rem', fontSize: '0.85rem' }}
             >
@@ -430,9 +430,9 @@ export default function BoilerCircuitsSettings() {
       {/* Boiler Status Card */}
       {Boolean(heatingSystem?.boiler?.present) && (
         hasFault ? (
-          <Card style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
+          <Card style={{
+            display: 'flex',
+            alignItems: 'center',
             justifyContent: 'space-between',
             gap: '1.25rem',
             padding: '1.25rem',
@@ -466,12 +466,12 @@ export default function BoilerCircuitsSettings() {
             </div>
           </Card>
         ) : (
-          <Card style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
+          <Card style={{
+            display: 'flex',
+            alignItems: 'center',
             justifyContent: 'space-between',
             gap: '1.25rem',
-            padding: '1.25rem' 
+            padding: '1.25rem'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flex: 1 }}>
               <div style={{
@@ -578,7 +578,7 @@ export default function BoilerCircuitsSettings() {
           <Card style={{ padding: '1.25rem', display: 'flex', justifyContent: 'center' }}>
             {renderCircularGauge(
               boilerRaw.field_0460 ? (boilerRaw.field_0460 & 0xffff) / 1000.0 : null,
-              0, 4, t('tanoclo_ex.water_pressure'), ' bar', 
+              0, 4, t('tanoclo_ex.water_pressure'), ' bar',
               (boilerRaw.field_0460 & 0xffff) / 1000.0 < 1.0 ? 'var(--danger)' : 'var(--secondary)'
             )}
           </Card>
@@ -695,20 +695,20 @@ export default function BoilerCircuitsSettings() {
       </div>
 
       {/* Boiler Selection Modal */}
-      <Modal 
-        isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)} 
+      <Modal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
         title={t('heating_activity.change_boiler')}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-          
+
           {/* Step 1: Select Manufacturer */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
               {t('heating_activity.select_manufacturer')}
             </label>
-            
-            <input 
+
+            <input
               type="text"
               placeholder={t('heating_activity.search_manufacturer')}
               value={manuSearchText}
@@ -724,7 +724,7 @@ export default function BoilerCircuitsSettings() {
                 marginBottom: '0.5rem'
               }}
             />
-            
+
             <select
               value={selectedManuId}
               onChange={(e) => {
@@ -758,8 +758,8 @@ export default function BoilerCircuitsSettings() {
               <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
                 {t('heating_activity.select_model')}
               </label>
-              
-              <input 
+
+              <input
                 type="text"
                 placeholder={t('heating_activity.search_model')}
                 value={modelSearchText}
@@ -806,9 +806,9 @@ export default function BoilerCircuitsSettings() {
             <Button type="button" variant="secondary" onClick={() => setIsModalOpen(false)}>
               {t('common.cancel')}
             </Button>
-            <Button 
-              type="button" 
-              variant="primary" 
+            <Button
+              type="button"
+              variant="primary"
               onClick={handleSaveBoilerModel}
               disabled={isSavingModel || !selectedModelId}
             >

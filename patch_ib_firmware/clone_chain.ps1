@@ -13,7 +13,8 @@ if ($args.Count -ne 1) {
 $endpointType = $args[0]
 if ($endpointType -ne 2) {
     $endpoint = "ingress.tado.com"
-} else {
+}
+else {
     $endpoint = "tanoclo.tado.lan"
 }
 
@@ -50,9 +51,9 @@ preserve = yes
     [System.IO.File]::WriteAllText($intermediateCnf, $cnfContent)
 
     $null = openssl req -new `
-      -key ingress-intermediate.key `
-      -out ingress-intermediate.csr `
-      -config $intermediateCnf 2>$null
+        -key ingress-intermediate.key `
+        -out ingress-intermediate.csr `
+        -config $intermediateCnf 2>$null
 
     $intermediateExt = Join-Path $work "intermediate_ext.cnf"
     $extContent = @"
@@ -64,14 +65,14 @@ authorityKeyIdentifier = keyid
     [System.IO.File]::WriteAllText($intermediateExt, $extContent)
 
     $null = openssl x509 -req `
-      -in ingress-intermediate.csr `
-      -CA $rootCaDer `
-      -CAkey $rootCaKey `
-      -CAcreateserial `
-      -days 7300 `
-      -sha256 `
-      -extfile $intermediateExt `
-      -out ingress-intermediate.pem 2>$null
+        -in ingress-intermediate.csr `
+        -CA $rootCaDer `
+        -CAkey $rootCaKey `
+        -CAcreateserial `
+        -days 7300 `
+        -sha256 `
+        -extfile $intermediateExt `
+        -out ingress-intermediate.pem 2>$null
 
     Write-Host "Clone chain - Intermediate subject:"
     $intSubj = openssl x509 -in ingress-intermediate.pem -noout -subject -nameopt compat
@@ -101,9 +102,9 @@ DNS.1 = $endpoint
     [System.IO.File]::WriteAllText($leafCnf, $leafCnfContent)
 
     $null = openssl req -new `
-      -key ingress.key `
-      -out ingress.csr `
-      -config $leafCnf 2>$null
+        -key ingress.key `
+        -out ingress.csr `
+        -config $leafCnf 2>$null
 
     $leafExt = Join-Path $work "leaf_ext.cnf"
     $leafExtContent = @"
@@ -117,23 +118,24 @@ subjectAltName         = DNS:$endpoint
     [System.IO.File]::WriteAllText($leafExt, $leafExtContent)
 
     $null = openssl x509 -req `
-      -in ingress.csr `
-      -CA ingress-intermediate.pem `
-      -CAkey ingress-intermediate.key `
-      -CAcreateserial `
-      -days 7300 `
-      -sha256 `
-      -extfile $leafExt `
-      -out ingress.pem 2>$null
+        -in ingress.csr `
+        -CA ingress-intermediate.pem `
+        -CAkey ingress-intermediate.key `
+        -CAcreateserial `
+        -days 7300 `
+        -sha256 `
+        -extfile $leafExt `
+        -out ingress.pem 2>$null
 
     Write-Host "Clone chain - Leaf subject:"
     $leafSubj = openssl x509 -in ingress.pem -noout -subject -nameopt compat
     Write-Host $leafSubj
 
     Write-Host "Clone chain - Leaf SAN:"
-    $leafSan = openssl x509 -in ingress.pem -noout -text | Select-String -Pattern "Subject Alternative Name" -Context 0,1
+    $leafSan = openssl x509 -in ingress.pem -noout -text | Select-String -Pattern "Subject Alternative Name" -Context 0, 1
     Write-Host $leafSan
 
-} finally {
+}
+finally {
     Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
 }

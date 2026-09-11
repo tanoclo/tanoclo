@@ -46,7 +46,8 @@ for ($i = $crcStart; $i -lt $end; $i++) {
     for ($k = 0; $k -lt 8; $k++) {
         if (($crc -band 0x8000) -ne 0) {
             $crc = (($crc -shl 1) -bxor $poly -bxor 1) -band 0xFFFF
-        } else {
+        }
+        else {
             $crc = ($crc -shl 1) -band 0xFFFF
         }
     }

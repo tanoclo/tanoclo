@@ -3,8 +3,7 @@
  * @brief Express.js server configuring the HTTP API routes.
  * 
  * Sets up security headers (Helmet), CORS, JSON/cookie parsers, logging, DB fallback handling,
- * and mounts the API routes (auth, setup, zones, homes, etc.) to expose the reconstituted
- * Tado REST endpoints.
+ * and mounts the API routes (auth, setup, zones, homes, etc.) to expose the API REST endpoints.
  */
 
 const express = require('express');
@@ -93,7 +92,7 @@ app.use(cors({
             origin === 'https://localhost' ||
             origin === 'capacitor://localhost' ||
             origin === 'ionic://localhost' ||
-            /^https?:\/\/localhost(:\d+)?$/.test(origin)
+            new RegExp(`^https?:\\/\\/(localhost|127\\.0\\.0\\.1)(:(3000|5173|8080|8081|4173|80|443|${config.httpApiPort}))?$`).test(origin)
         );
         if (allowed) {
             callback(null, true);
@@ -104,8 +103,6 @@ app.use(cors({
     },
     credentials: true
 }));
-
-
 
 // Derive a separate cookie-signing key from the JWT secret to limit blast radius if either is compromised
 function getCookieSigningKey() {
@@ -167,55 +164,6 @@ app.use(express.static(frontendPath, {
     }
 }));
 
-app.use((req, res, next) => {
-    const host = req.hostname || '';
-    const urlPath = req.path || '';
-
-    // susi.* or promotions/notifications path
-    if (host.includes('susi') || urlPath.includes('/promotions') || urlPath.includes('/notifications')) {
-        if (req.url.includes('skills')) return next();
-        return res.json({ notifications: [], promotions: [] });
-    }
-
-    // minder.* or incidents path
-    if (host.includes('minder') || urlPath.includes('/incidents')) {
-        if (req.url.includes('runningTimes')) return next();
-        return res.json({ incidents: [] });
-    }
-
-    // energy-insights.* or related paths
-    if (host.includes('energy-insights') || urlPath.includes('/energy-insights') || urlPath.includes('/meterReadings') || urlPath.includes('/savingsAdvice')) {
-        if (req.url.includes('banners')) return res.json({ bannersToShow: [] });
-        if (req.url.includes('savingsAdvice')) return res.json({ owd: null, showBanner: false });
-        if (req.url.includes('meterReadings')) return res.json({ readings: [] });
-        if (req.url.includes('settings')) return res.json({ meterType: 'GAS', meterReadingUnit: 'M3', isMeterReadingUnitChangeAllowed: true });
-    }
-
-    // tariff-experience.* (Features)
-    if (host.includes('tariff-experience') || urlPath.includes('/tariff-experience')) {
-        return res.json({
-            canAccessEnergyPrices: false,
-            canAccessEnergyReadings: false,
-            canAccessPushNotificationSettings: false,
-            isAccountOwner: false,
-            isAccountLinkedToHome: false,
-            canAccessConsumption: false
-        });
-    }
-
-    // hops.* (Tado X - Rooms and Devices)
-    if (host.includes('hops')) {
-        return next();
-    }
-
-    // users.*
-    if (host.includes('users')) {
-        return next();
-    }
-
-    next();
-});
-
 // Force application/json for requests that appear to have a body but miss the header
 app.use((req, res, next) => {
     if (['POST', 'PUT', 'PATCH'].includes(req.method) && !req.headers['content-type'] && req.get('content-length') > 0) {
@@ -240,12 +188,26 @@ app.param('zoneId', (req, res, next, value) => {
 // CSRF Protection: validate Origin/Referer for state-mutating requests
 app.use((req, res, next) => {
     if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+
+    // Reject explicit cross-site requests identified by modern Sec-Fetch metadata
+    if (req.headers['sec-fetch-site'] === 'cross-site') {
+        _log('warn', `[CSRF] Blocked cross-site ${req.method} ${req.url} (sec-fetch-site: cross-site)`);
+        return res.status(403).json({ error: 'forbidden', error_description: 'Cross-origin request blocked' });
+    }
+
     const origin = req.headers.origin;
 
     // Fall back to Referer verification if origin is missing or is the string "null"
     if (!origin || origin === 'null') {
         const referer = req.headers.referer;
-        if (!referer) return next(); // Allow requests with neither (non-browser clients, API calls)
+        if (!referer) {
+            // If browser request with cookie auth lacks Origin/Referer, reject it
+            if (req.cookies && req.cookies.setup_token && (req.headers['sec-fetch-mode'] || req.is('application/x-www-form-urlencoded'))) {
+                _log('warn', `[CSRF] Blocked browser ${req.method} ${req.url} with cookie auth missing Origin/Referer`);
+                return res.status(403).json({ error: 'forbidden', error_description: 'Origin or Referer required for cookie-authenticated requests' });
+            }
+            return next(); // Allow requests with neither (non-browser clients, API calls)
+        }
         try {
             const refUrl = new URL(referer);
             if (refUrl.hostname === 'localhost' ||
@@ -280,54 +242,13 @@ app.use((req, res, next) => {
 app.use((req, res, next) => {
     if (commandLog.isEnabled() && ['POST', 'PUT', 'DELETE'].includes(req.method)) {
         // Skip noisy/irrelevant endpoints
-        const skip = req.url.includes('/installations') ||
-            req.url.includes('/events/track') ||
-            req.url.includes('/health') ||
-            req.url.includes('/dev/null');
+        const skip = req.url.includes('/health');
         if (!skip) {
             commandLog.logApiRequest(req.method, req.originalUrl || req.url, req.body, req.params);
         }
     }
     next();
 });
-
-// --- Mock Analytics & Bootstrap Endpoints ---
-// Satisfy app initialization without sending data to 3rd parties
-
-// Iterable Installations
-app.post(['/projects/:project/installations', '/:any/projects/:project/installations'], (req, res) => {
-    _log('info', `[MOCK] Iterable installation registered: ${req.url}`);
-    res.json({ deviceId: 'mock-iterable-device-id-' + Date.now() });
-});
-
-// Iterable Events
-app.post(['/v1/events/track', '/:any/v1/events/track'], (req, res) => {
-    res.json({ status: 'Success' });
-});
-
-// Firebase Installations
-app.post(['/v1/projects/:project/installations', '/:any/v1/projects/:project/installations'], (req, res) => {
-    _log('info', `[MOCK] Firebase installation registered: ${req.url}`);
-    res.json({
-        fid: 'f' + crypto.randomBytes(10).toString('hex'),
-        refreshToken: 'mock-refresh-token-' + Date.now(),
-        authToken: {
-            token: 'mock-auth-token-' + Date.now(),
-            expiresIn: '3600s'
-        }
-    });
-});
-
-app.use((req, res, next) => {
-    if (req.url.startsWith('/dev/null')) return res.json({});
-    if (req.url.startsWith('/index.php/')) {
-        req.url = req.url.replace('/index.php/', '/');
-    } else if (req.url === '/index.php') {
-        req.url = '/';
-    }
-    next();
-});
-
 
 // Health
 app.get('/api/public/health', (req, res) => {
@@ -369,7 +290,6 @@ app.get('/api/health', authMiddleware, async (req, res) => {
 
     res.status(healthy ? 200 : 503).json(checks);
 });
-// Skills route is handled by homes.js (canonical handler with richer response)
 
 const commandRouter = express.Router();
 function setupCommandRoutes(opts) {
@@ -497,10 +417,7 @@ app.use('/setup', setupRouter.router);
 app.use('/', require('./routes/auth'));
 app.use('/api/v1/homes/:homeId/runningTimes', authMiddleware, heating.getRunningTimes);
 app.use('/v1/homes/:homeId/runningTimes', authMiddleware, heating.getRunningTimes);
-// mobileDevices MUST come first: its geofenceWebhook route is registered before
-// router.use(authMiddleware), but homes/zones/devices/heating apply auth to ALL
-// incoming requests. If homes.js is mounted first, its blanket auth rejects the
-// webhook (no Authorization header) before mobileDevices ever sees it.
+
 app.use(HOME_PREFIXES, require('./routes/mobileDevices').router);
 app.use(HOME_PREFIXES, require('./routes/homes'));
 app.use(HOME_PREFIXES, require('./routes/zones'));
@@ -508,21 +425,16 @@ app.use(HOME_PREFIXES, require('./routes/devices'));
 app.use(HOME_PREFIXES, heating.router);
 app.use(HOME_PREFIXES, require('./routes/tanoclo'));
 
-app.use('/api/logs', (req, res, next) => {
-    req.url = '/logs' + req.url;
-    next();
-}, require('./routes/homes'));
 
 app.use(['/', '/api/v2'], require('./routes/users'));
 
 app.use('/api/v2/devices', require('./routes/devices'));
 app.use('/api/v2/ota', require('./routes/ota'));
-app.use(['/api/v2/bridges', '/api/v2/homeByBridge'], require('./routes/bridges'));
+app.use('/api/v2/bridges', require('./routes/bridges'));
 app.use('/api/v2/users', require('./routes/users'));
 app.use('/api/v2/graphql', require('./routes/graphql'));
 app.use('/apps/graphql', require('./routes/graphql'));
 app.use('/graphql', require('./routes/graphql'));
-app.use('/', require('./routes/misc'));
 
 // Fallback for non-app root
 app.get('/', (req, res) => {
@@ -743,9 +655,11 @@ if ((require.main === module || process.send || process.env.IS_CHILD_PROCESS ===
                     if (commandApi.handleAckReceived) {
                         commandApi.handleAckReceived(msg.mid, { deviceId: msg.deviceId, coapMsg: msg.coapMsg });
                     }
-                    if (msg.coapMsg && (msg.coapMsg.payload || msg.coapMsg.code)) {
-                        const raw = msg.coapMsg.payload;
-                        const payloadBuf = Buffer.isBuffer(raw) ? raw : (raw?.data ? Buffer.from(raw.data) : Buffer.alloc(0));
+                    const raw = msg.coapMsg?.payload;
+                    const payloadBuf = Buffer.isBuffer(raw) ? raw : (raw?.data ? Buffer.from(raw.data) : Buffer.alloc(0));
+                    const isDebug = commandApi.isDebugMid && commandApi.isDebugMid(msg.mid);
+
+                    if (isDebug && payloadBuf.length > 0) {
                         let parsedVal = null;
                         if (payloadBuf.length === 1) parsedVal = payloadBuf.readUInt8(0);
                         else if (payloadBuf.length === 2) parsedVal = payloadBuf.readUInt16BE(0);
@@ -769,7 +683,7 @@ if ((require.main === module || process.send || process.env.IS_CHILD_PROCESS ===
                                     bytes: Array.from(payloadBuf),
                                     hex: payloadBuf.toString('hex'),
                                     val: parsedVal,
-                                    code: msg.coapMsg.code
+                                    code: msg.coapMsg?.code
                                 });
                             } else {
                                 _log('debug', `[SSE] Could not resolve home for ${devId}, skipping SSE debug broadcast`);

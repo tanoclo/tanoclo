@@ -46,11 +46,11 @@ self.addEventListener('activate', (event) => {
 // Intercepts network requests to serve assets from cache or cache on-the-fly
 self.addEventListener('fetch', (event) => {
   // Only intercept GET requests, ignoring API/OAuth/GraphQL/Setup endpoints
-  if (event.request.method !== 'GET' || 
-      event.request.url.includes('/api/') || 
-      event.request.url.includes('/oauth2/') || 
-      event.request.url.includes('/graphql') ||
-      event.request.url.includes('/setup')) {
+  if (event.request.method !== 'GET' ||
+    event.request.url.includes('/api/') ||
+    event.request.url.includes('/oauth2/') ||
+    event.request.url.includes('/graphql') ||
+    event.request.url.includes('/setup')) {
     return;
   }
 
@@ -74,14 +74,14 @@ self.addEventListener('fetch', (event) => {
     );
     return;
   }
-  
+
   // Cache-First strategy for static assets, with automatic cache purge on 404 asset failures
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse) {
         return cachedResponse;
       }
-      
+
       return fetch(event.request).then((response) => {
         if (response && response.status === 200 && response.type === 'basic') {
           const responseToCache = response.clone();

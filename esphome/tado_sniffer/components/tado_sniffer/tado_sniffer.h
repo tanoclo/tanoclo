@@ -92,7 +92,10 @@ class TadoSniffer : public Component, public spi::SPIDevice<spi::BIT_ORDER_MSB_F
   TaskHandle_t radio_task_handle_{nullptr};
   TaskHandle_t processing_task_handle_{nullptr};
   uint32_t dropped_packets_count_{0};
+  uint32_t crc_errors_count_{0};
+  uint32_t total_packets_count_{0};
   uint32_t last_fifo_check_{0};
+  uint32_t last_tcp_connect_attempt_{0};
 
   void lock_spi() {
     if (this->spi_mutex_ != nullptr) {
@@ -105,6 +108,16 @@ class TadoSniffer : public Component, public spi::SPIDevice<spi::BIT_ORDER_MSB_F
         xSemaphoreGiveRecursive(this->spi_mutex_);
     }
   }
+
+  void flush_fifo_fast() {
+    int flush_count = 0;
+    while (!(read_reg_fast(REG_IRQ_FLAGS_2) & 0x40) && flush_count < 64) {
+      read_reg_fast(REG_FIFO);
+      flush_count++;
+    }
+    write_reg_fast(REG_IRQ_FLAGS_2, 0x10);
+    write_reg_fast(REG_RX_CONFIG, 0x5E);
+  }
   
   std::string tcp_host_{""};
   int tcp_port_{9999};
@@ -116,7 +129,12 @@ class TadoSniffer : public Component, public spi::SPIDevice<spi::BIT_ORDER_MSB_F
   void set_dio0_pin(InternalGPIOPin *pin) { dio0_pin_ = pin; }
   void set_dio2_pin(InternalGPIOPin *pin) { dio2_pin_ = pin; }
   void set_rst_pin(InternalGPIOPin *pin) { rst_pin_ = pin; }
-  void set_channel(int channel) { channel_ = channel; }
+  void set_channel(int channel) {
+    this->channel_ = channel;
+    if (this->initialized_) {
+      this->set_tado_channel((uint8_t)channel);
+    }
+  }
   void set_tcp_host(const std::string &host) { this->tcp_host_ = host; }
   void set_tcp_port(int port) { this->tcp_port_ = port; }
   void set_ignore_beacons(bool ignore) { this->ignore_beacons_ = ignore; }
@@ -132,6 +150,7 @@ class TadoSniffer : public Component, public spi::SPIDevice<spi::BIT_ORDER_MSB_F
 
   void set_tado_channel(uint8_t channel) {
     if (channel > 49) return;
+    this->channel_ = channel;
     
     // Read current mode and put in SLEEP to write frequency
     uint8_t current_mode = read_reg(REG_OP_MODE);
@@ -166,9 +185,15 @@ class TadoSniffer : public Component, public spi::SPIDevice<spi::BIT_ORDER_MSB_F
     this->rst_pin_->digital_write(false); delay(10);
     this->rst_pin_->digital_write(true); delay(10);
 
-    if (read_reg_fast(REG_VERSION) != 0x12) {
+    uint8_t version = read_reg_fast(REG_VERSION);
+    ESP_LOGI(TAG, "SX1276 Silicon Version: 0x%02X", version);
+    if (version == 0x00 || version == 0xFF) {
+        ESP_LOGE(TAG, "SX1276 transceiver not responding on SPI bus!");
         unlock_spi();
         return;
+    }
+    if (version != 0x12 && version != 0x22) {
+        ESP_LOGW(TAG, "Unexpected SX1276 silicon version: 0x%02X (expected 0x12 or 0x22)", version);
     }
 
     write_reg_fast(REG_OP_MODE, 0x00); // SLEEP
@@ -238,6 +263,52 @@ class TadoSniffer : public Component, public spi::SPIDevice<spi::BIT_ORDER_MSB_F
     return res;
   }
 
+  std::string describe_packet(const uint8_t* buf, size_t len, bool crc_ok) {
+    if (len < 2) return "Short Frame";
+    if (!crc_ok) return "Corrupted Frame (CRC Error)";
+
+    // Check for CSL Strobe / Beacon (FCF = 0x0025: LE 0x25, 0x00)
+    if (buf[0] == 0x25 && buf[1] == 0x00 && len >= 9) {
+      uint8_t seq = buf[2];
+      uint16_t pan = (uint16_t)buf[3] | ((uint16_t)buf[4] << 8);
+      uint16_t dst = (uint16_t)buf[5] | ((uint16_t)buf[6] << 8);
+      uint16_t raw_cd = (uint16_t)buf[7] | ((uint16_t)buf[8] << 8);
+      uint16_t cd_ms = (uint16_t)(((uint32_t)raw_cd * 1000) / 32768);
+      char b[80];
+      snprintf(b, sizeof(b), "CSL Strobe seq=%u PAN=0x%04X dst=0x%04X cd=%ums", seq, pan, dst, cd_ms);
+      return std::string(b);
+    }
+
+    uint8_t f_type = buf[0] & 0x07;
+    uint8_t seq = (len >= 3) ? buf[2] : 0;
+    char b[96];
+
+    if (f_type == 0x02) { // MAC ACK
+      snprintf(b, sizeof(b), "MAC ACK seq=%u", seq);
+      return std::string(b);
+    }
+
+    if (f_type == 0x00) { // Standard Beacon
+      snprintf(b, sizeof(b), "Beacon seq=%u", seq);
+      return std::string(b);
+    }
+
+    if (f_type == 0x01 && len >= 5) { // Data frame
+      uint16_t pan = (uint16_t)buf[3] | ((uint16_t)buf[4] << 8);
+      bool sec = (buf[0] & 0x08) != 0;
+      snprintf(b, sizeof(b), "Data seq=%u PAN=0x%04X%s", seq, pan, sec ? " [SEC]" : "");
+      return std::string(b);
+    }
+
+    if (f_type == 0x03) { // MAC Command
+      snprintf(b, sizeof(b), "MAC Command seq=%u", seq);
+      return std::string(b);
+    }
+
+    snprintf(b, sizeof(b), "Frame Type=%u seq=%u", f_type, seq);
+    return std::string(b);
+  }
+
   void queue_log(const char *format, ...) {
     if (this->log_queue_ == nullptr) return;
     LogMessage msg;
@@ -274,7 +345,7 @@ class TadoSniffer : public Component, public spi::SPIDevice<spi::BIT_ORDER_MSB_F
         "tado_radio_task",
         4096,
         this,
-        3, // High priority
+        5, // High priority (matches tado_emulator)
         &this->radio_task_handle_,
         0 // Pinned to Core 0 (isolated from ESPHome loop task on Core 1)
     );
@@ -351,10 +422,9 @@ class TadoSniffer : public Component, public spi::SPIDevice<spi::BIT_ORDER_MSB_F
         uint8_t irq2 = read_reg_fast(REG_IRQ_FLAGS_2);
         
         if (irq2 & 0x10) {
-            this->queue_log("FIFO Overrun detected in task! Clearing FIFO.");
+            this->queue_log("FIFO Overrun detected in task! Flushing FIFO.");
             this->last_rx_time_ = millis();
-            write_reg_fast(REG_IRQ_FLAGS_2, 0x10);
-            write_reg_fast(REG_RX_CONFIG, 0x5E);
+            this->flush_fifo_fast();
             last_was_active = false;
             unlock_spi();
             continue;
@@ -383,6 +453,9 @@ class TadoSniffer : public Component, public spi::SPIDevice<spi::BIT_ORDER_MSB_F
 
             if (this->dropped_packets_count_ > 0) {
                 this->queue_log("Queue overflow! Dropped %u packets since boot.", this->dropped_packets_count_);
+            }
+            if (this->crc_errors_count_ > 0) {
+                this->queue_log("CRC Errors: %u detected since boot.", this->crc_errors_count_);
             }
         }
     }
@@ -414,9 +487,8 @@ class TadoSniffer : public Component, public spi::SPIDevice<spi::BIT_ORDER_MSB_F
     uint8_t rssi_raw = read_reg_fast(REG_RSSIVALUE);
 
     if (len == 0 || len > 127) {
-        this->queue_log("Invalid packet length byte: %d. Dropping and resetting FIFO.", len);
-        write_reg_fast(REG_IRQ_FLAGS_2, 0x10);
-        write_reg_fast(REG_RX_CONFIG, 0x5E);
+        this->queue_log("Invalid packet length byte: %d. Flushing FIFO.", len);
+        this->flush_fifo_fast();
         return;
     }
 
@@ -430,16 +502,14 @@ class TadoSniffer : public Component, public spi::SPIDevice<spi::BIT_ORDER_MSB_F
     while (bytes_read < target_read_len) {
         if (millis() - start_time > 30) {
             this->queue_log("Timeout reading packet on the fly! Read %d of %d bytes", bytes_read, len);
-            write_reg_fast(REG_IRQ_FLAGS_2, 0x10);
-            write_reg_fast(REG_RX_CONFIG, 0x5E);
+            this->flush_fifo_fast();
             return;
         }
 
         uint8_t irq2 = read_reg_fast(REG_IRQ_FLAGS_2);
         if (irq2 & 0x10) {
             this->queue_log("FIFO Overrun during on-the-fly read! Read %d of %d bytes", bytes_read, len);
-            write_reg_fast(REG_IRQ_FLAGS_2, 0x10);
-            write_reg_fast(REG_RX_CONFIG, 0x5E);
+            this->flush_fifo_fast();
             return;
         }
 
@@ -487,14 +557,14 @@ class TadoSniffer : public Component, public spi::SPIDevice<spi::BIT_ORDER_MSB_F
     }
     
     if (!packet.crc_ok) {
+        this->crc_errors_count_++;
         write_reg_fast(REG_IRQ_FLAGS_2, 0x10);
         write_reg_fast(REG_RX_CONFIG, 0x5E);
-        return;
     }
 
     packet.rssi = -(int)rssi_raw / 2;
 
-    if (len >= 2) {
+    if (len >= 2 && packet.crc_ok) {
         uint8_t f_type = packet.buffer[0] & 0x07;
         if (this->ignore_beacons_ && (f_type == 0x00 || f_type == 0x05)) {
             write_reg_fast(REG_IRQ_FLAGS_2, 0x10);
@@ -511,9 +581,12 @@ class TadoSniffer : public Component, public spi::SPIDevice<spi::BIT_ORDER_MSB_F
   void process_queued_packet(const QueuedPacket &packet) {
     uint8_t len = packet.len;
     int rssi = packet.rssi;
+    this->total_packets_count_++;
 
-    ESP_LOGD(TAG, "RAW PACKET [len=%d, RSSI=%d]: %s", 
-        len, rssi, format_hex(packet.buffer, len).c_str());
+    std::string summary = describe_packet(packet.buffer, len, packet.crc_ok);
+    ESP_LOGI(TAG, "[RX CH%d RSSI=%ddBm%s] %s (len=%d)", 
+             this->channel_, rssi, packet.crc_ok ? "" : " CRC_ERR", summary.c_str(), len);
+    ESP_LOGD(TAG, "RAW PACKET: %s", format_hex(packet.buffer, len).c_str());
 
     if (this->tcp_port_ > 0 && !this->tcp_host_.empty()) {
         uint32_t station_ip = 0;
@@ -538,6 +611,13 @@ class TadoSniffer : public Component, public spi::SPIDevice<spi::BIT_ORDER_MSB_F
         }
 
         if (this->tcp_sock_ < 0) {
+            uint32_t now = millis();
+            if (now - this->last_tcp_connect_attempt_ < 5000) {
+                // Rate-limit connect attempts to avoid thread stalling and queue overflow
+                return;
+            }
+            this->last_tcp_connect_attempt_ = now;
+
             this->tcp_sock_ = lwip_socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
             if (this->tcp_sock_ >= 0) {
                 struct sockaddr_in dest_addr;
@@ -577,28 +657,27 @@ class TadoSniffer : public Component, public spi::SPIDevice<spi::BIT_ORDER_MSB_F
                     this->queue_log("TCP connect to %s:%d failed: errno=%d", this->tcp_host_.c_str(), this->tcp_port_, errno);
                     close(this->tcp_sock_);
                     this->tcp_sock_ = -1;
+                    return;
                 } else {
                     this->queue_log("TCP socket connected to %s:%d (fd=%d)", this->tcp_host_.c_str(), this->tcp_port_, this->tcp_sock_);
                 }
             } else {
                 this->queue_log("Failed to create TCP socket: errno=%d", errno);
+                return;
             }
         }
 
         if (this->tcp_sock_ >= 0) {
-            std::vector<uint8_t> tcp_payload;
+            uint8_t tcp_payload[135];
             size_t payload_len = 3 + len;
-            tcp_payload.reserve(2 + payload_len);
-            tcp_payload.push_back(0x5A); // Sync byte
-            tcp_payload.push_back((uint8_t)payload_len); // Length of payload that follows
-            tcp_payload.push_back((uint8_t)rssi);
-            tcp_payload.push_back(packet.crc_ok ? 1 : 0);
-            tcp_payload.push_back(len);
-            for (size_t i = 0; i < len; i++) {
-                tcp_payload.push_back(packet.buffer[i]);
-            }
+            tcp_payload[0] = 0x5A; // Sync byte
+            tcp_payload[1] = (uint8_t)payload_len; // Length of payload that follows
+            tcp_payload[2] = (uint8_t)rssi;
+            tcp_payload[3] = packet.crc_ok ? 1 : 0;
+            tcp_payload[4] = len;
+            memcpy(&tcp_payload[5], packet.buffer, len);
             
-            int sent = lwip_write(this->tcp_sock_, tcp_payload.data(), tcp_payload.size());
+            int sent = lwip_write(this->tcp_sock_, tcp_payload, 2 + payload_len);
             if (sent < 0) {
                 this->queue_log("TCP write failed: errno=%d. Closing socket.", errno);
                 close(this->tcp_sock_);
@@ -612,12 +691,7 @@ class TadoSniffer : public Component, public spi::SPIDevice<spi::BIT_ORDER_MSB_F
     lock_spi();
     write_reg(REG_OP_MODE, 0x01); // STDBY
     delayMicroseconds(100);
-    int flush_count = 0;
-    while (!(read_reg_fast(REG_IRQ_FLAGS_2) & 0x40) && flush_count < 64) {
-        read_reg_fast(REG_FIFO);
-        flush_count++;
-    }
-    write_reg(REG_IRQ_FLAGS_2, 0x10);
+    this->flush_fifo_fast();
     write_reg(REG_OP_MODE, 0x05); // RX
     unlock_spi();
   }

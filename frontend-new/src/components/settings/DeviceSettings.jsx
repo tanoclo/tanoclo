@@ -17,24 +17,24 @@ import Spinner from '../common/Spinner';
 import Toggle from '../common/Toggle';
 import Modal from '../common/Modal';
 import ConfirmModal from '../common/ConfirmModal';
-import { 
-  getDevice, getDevices, identifyDevice, updateChildLock, 
-  updateOrientation, deleteDevice, 
+import {
+  getDevice, getDevices, identifyDevice, updateChildLock,
+  updateOrientation, deleteDevice,
   startPairing, stopPairing, updateActuatorLimits,
   updateFriendlyName, updateDisplaySettings,
   rebootDevice, refreshRfKey, refreshDeviceConfig,
   updateDeviceRole
 } from '../../api/devices';
-import { 
-  addDeviceToZone, removeDeviceFromZone, createZone 
+import {
+  addDeviceToZone, removeDeviceFromZone, createZone
 } from '../../api/zones';
-import { 
+import {
   getDeviceBatteryData, getBridge, updateDeviceBatteryType, getCircuits
 } from '../../api/tanoclo';
 import { useHome } from '../../context/HomeContext';
-import { 
-  ArrowLeft, Eye, EyeOff, ShieldAlert, 
-  Trash2, Radio 
+import {
+  ArrowLeft, Eye, EyeOff, ShieldAlert,
+  Trash2, Radio
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import logger from '../../utils/logger';
@@ -103,7 +103,7 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
   const [orientation, setOrientation] = useState('VERTICAL');
   const [isIdentifying, setIsIdentifying] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  
+
   const [lowSteps, setLowSteps] = useState(0);
   const [highSteps, setHighSteps] = useState(0);
   const [driveConstant, setDriveConstant] = useState(0);
@@ -224,9 +224,9 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
         );
         const zoneDevices = (allDevices || currentZone?.devices || []).filter(
           d => String(d.zoneId) === String(device.zoneId) &&
-               !d.deviceType?.startsWith('IB') &&
-               !d.deviceType?.startsWith('GW') &&
-               d.deviceType !== 'BRIDGE'
+            !d.deviceType?.startsWith('IB') &&
+            !d.deviceType?.startsWith('GW') &&
+            d.deviceType !== 'BRIDGE'
         );
         const isOnlyDeviceInZone = zoneDevices.length <= 1;
 
@@ -513,7 +513,7 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem', width: '100%', maxWidth: '800px' }}>
-      
+
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minHeight: '42px' }}>
         <Button
@@ -539,7 +539,7 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
 
       {/* Read-Only Notice */}
       {isReadOnly && (
-        <div 
+        <div
           role="status"
           style={{
             backgroundColor: 'rgba(234, 179, 8, 0.1)',
@@ -562,7 +562,7 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
       )}
 
       {isAdvanced ? (
-        <DeviceAdvancedSettings 
+        <DeviceAdvancedSettings
           homeId={homeId}
           deviceId={deviceId}
           isValve={isValve}
@@ -588,9 +588,9 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
         />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          
+
           {/* Friendly Name, Metadata, Zone Assignment */}
-          <DeviceSettingsGeneral 
+          <DeviceSettingsGeneral
             device={device}
             friendlyNameInput={friendlyNameInput}
             setFriendlyNameInput={setFriendlyNameInput}
@@ -615,7 +615,7 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
           {isBridge && bridge && (
             <Card style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
               <h3 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0 }}>{t('settings.rf_config')}</h3>
-              
+
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', fontSize: '0.85rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ color: 'var(--text-secondary)' }}>{t('settings.rf_encryption_key')}</span>
@@ -623,14 +623,14 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
                     <strong style={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
                       {showRfKey ? (bridge.field_0155 || 'None') : '••••••••••••••••'}
                     </strong>
-                    <button 
+                    <button
                       onClick={() => setShowRfKey(!showRfKey)}
                       style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', padding: 0 }}
                     >
                       {showRfKey ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
-                    <Button 
-                      variant="secondary" 
+                    <Button
+                      variant="secondary"
                       onClick={async () => {
                         try {
                           await refreshRfKey(homeId, device.serialNo);
@@ -654,15 +654,15 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
                     {t('settings.allow_new_devices_desc')}
                   </p>
                 </div>
-                <Toggle 
-                  checked={Boolean(bridge.in_pairing_mode)} 
-                  onChange={handleTogglePairing} 
+                <Toggle
+                  checked={Boolean(bridge.in_pairing_mode)}
+                  onChange={handleTogglePairing}
                   disabled={isTogglingPairing}
                 />
               </div>
-              
-              <div style={{ 
-                fontSize: '0.75rem', 
+
+              <div style={{
+                fontSize: '0.75rem',
                 color: bridge.in_pairing_mode ? 'var(--warning)' : 'var(--text-muted)',
                 backgroundColor: bridge.in_pairing_mode ? 'var(--warning-glow)' : 'var(--bg-input)',
                 padding: '0.65rem 0.75rem',
@@ -676,7 +676,7 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <Radio size={14} className={bridge.in_pairing_mode ? 'pulse-icon' : ''} />
                   <span>
-                    {bridge.in_pairing_mode 
+                    {bridge.in_pairing_mode
                       ? t('tanoclo_ex.pairing_broadcasting')
                       : t('tanoclo_ex.pairing_locked')}
                   </span>
@@ -752,8 +752,8 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
                     {t('settings.reboot_device_desc', { name: device.friendlyName || device.serialNo })}
                   </p>
                 </div>
-                <Button 
-                  variant="secondary" 
+                <Button
+                  variant="secondary"
                   onClick={async () => {
                     try {
                       await rebootDevice(homeId, device.serialNo);
@@ -775,8 +775,8 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
                     {t('settings.force_config_sync_desc')}
                   </p>
                 </div>
-                <Button 
-                  variant="secondary" 
+                <Button
+                  variant="secondary"
                   onClick={async () => {
                     try {
                       await refreshDeviceConfig(homeId, device.serialNo);
@@ -794,7 +794,7 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
 
 
           {/* Child Lock, Orientation */}
-          <DeviceSettingsChild 
+          <DeviceSettingsChild
             hasChildLock={hasChildLock}
             childLock={childLock}
             handleChildLockToggle={handleChildLockToggle}
@@ -808,16 +808,16 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
 
           {/* Advanced Settings Click-through */}
           {!device?.isEmulated && (
-            <Card 
+            <Card
               onClick={() => {
                 const nextParams = new URLSearchParams(searchParams);
                 nextParams.set('advanced', 'true');
                 setSearchParams(nextParams);
-              }} 
-              style={{ 
-                padding: '1.25rem', 
-                display: 'flex', 
-                justifyContent: 'space-between', 
+              }}
+              style={{
+                padding: '1.25rem',
+                display: 'flex',
+                justifyContent: 'space-between',
                 alignItems: 'center',
                 cursor: 'pointer',
                 border: '1px solid var(--border-color)',
@@ -872,7 +872,7 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{t('settings.zone_name')}</label>
-            <input 
+            <input
               type="text"
               placeholder={t('settings.zone_name_placeholder')}
               value={newZoneName}
@@ -904,7 +904,7 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
       </Modal>
 
       {/* Confirm Delete Modal */}
-      <ConfirmModal 
+      <ConfirmModal
         isOpen={isConfirmDeleteOpen}
         onClose={() => setIsConfirmDeleteOpen(false)}
         onConfirm={handleConfirmDelete}

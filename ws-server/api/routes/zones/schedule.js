@@ -377,8 +377,6 @@ router.put('/:homeId/zones/:zoneId/schedule/timetables/:timetableId/blocks/:dayT
     }
 });
 
-// GET /api/v2/homes/{homeId}/zones/{zoneId}/openWindowDetection
-
 router.post('/:homeId/zones/:zoneId/schedule/copy', async (req, res) => {
     try {
         const { homeId, zoneId } = req.params;
@@ -564,8 +562,6 @@ router.put(['/:homeId/zones/:zoneId/awayConfiguration', '/:homeId/zones/:zoneId/
         res.status(500).json({ error: 'internal_error' });
     }
 });
-
-// GET /api/v2/homes/{homeId}/zones/{zoneId}/measuringDevice
 
 router.put('/:homeId/zones/:zoneId/offline-schedule', async (req, res) => {
     try {

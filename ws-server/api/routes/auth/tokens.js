@@ -1,16 +1,9 @@
 /**
  * @file api/routes/auth/tokens.js
+ * @brief Token exchange, validation, and refresh endpoints.
  */
 
 'use strict';
-
-/**
- * @file api/routes/auth.js
- * @brief OAuth2 / SSO authentication routes.
- * 
- * Implements authorization code grant flows, PKCE challenges, password grant exchanges,
- * access and refresh token revocations, and SSO cookies generation.
- */
 
 const express = require('express');
 const crypto = require('crypto');
@@ -59,17 +52,11 @@ function setSSOCookies(res, userId, token, req) {
     };
 
     res.cookie('tanoclo_session', token, { ...cookieOptions, signed: true });
-
-    res.cookie('fusionauth.sso', token, cookieOptions);
-    res.cookie('fusionauth.li', 'true', cookieOptions);
-    res.cookie('fusionauth.remember-device', 'true', cookieOptions);
 }
 
 /**
  * Handle browser-based OAuth2 authorization (GET)
  */
-
-
 async function generateTokens(res, user, clientId, scope, grantType) {
     const pool = db.getPool();
 
@@ -113,8 +100,6 @@ async function generateTokens(res, user, clientId, scope, grantType) {
     let accessToken = jwt.sign(payload, config.jwtSecret, {
         algorithm: 'HS256'
     });
-
-
 
     const userAgent = (res.req && res.req.headers['user-agent']) || '';
     const isMobileUA = /mobile|android|iphone|ipad|ipod|cordova|capacitor|tado|okhttp|cfnetwork/i.test(userAgent);

@@ -18,13 +18,13 @@ import { X } from 'lucide-react';
  * @param {string} props.title - Optional dialog header text.
  * @param {object} props.style - Inline styling parameter overrides.
  */
-export default function Modal({ 
-  children, 
-  isOpen, 
-  onClose, 
-  title = '', 
+export default function Modal({
+  children,
+  isOpen,
+  onClose,
+  title = '',
   style = {},
-  ...props 
+  ...props
 }) {
   // Prevent background scrolling when modal is open
   useEffect(() => {
@@ -41,7 +41,7 @@ export default function Modal({
   if (!isOpen) return null;
 
   return createPortal(
-    <div 
+    <div
       className="animate-fade-in"
       style={{
         position: 'fixed',
@@ -59,7 +59,7 @@ export default function Modal({
       }}
       onClick={onClose}
     >
-      <div 
+      <div
         className="glass-panel animate-scale-in"
         role="dialog"
         aria-modal="true"
@@ -89,7 +89,7 @@ export default function Modal({
           <h2 id="modal-title" style={{ fontSize: '1.25rem', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
             {title}
           </h2>
-          <button 
+          <button
             onClick={onClose}
             style={{
               background: 'transparent',

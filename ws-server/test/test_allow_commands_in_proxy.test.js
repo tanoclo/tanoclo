@@ -37,8 +37,8 @@ test('legacy test suite runs successfully', async () => {
           throw new Error(`Device ${deviceId} not connected`);
       }
   
-      // Cache recreated downlink messages even when proxied
-      messageCache.cacheMessage(deviceId, wsMessage, 'recreated');
+      // Cache TANOCLO downlink messages even when proxied
+      messageCache.cacheMessage(deviceId, wsMessage, 'TANOCLO');
   
       if (proxyConnections.has(clientInfo.ws)) {
           db.getHome(clientInfo.homeId).then(async (home) => {

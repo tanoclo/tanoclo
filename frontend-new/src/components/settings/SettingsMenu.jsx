@@ -6,7 +6,6 @@
  * and descriptive headers matching local translation indexes.
  */
 
-
 import { useTranslation } from 'react-i18next';
 import {
   Settings, Home, Users, Shield, Thermometer, Calendar, Flame
@@ -146,4 +145,3 @@ export default function SettingsMenu({ activeSection, onSelect }) {
     </aside>
   );
 }
-

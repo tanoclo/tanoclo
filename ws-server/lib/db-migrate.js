@@ -51,7 +51,7 @@ async function runPending(pool, log = console.log) {
         const connection = await pool.getConnection();
         try {
             await connection.beginTransaction();
-            
+
             // Execute the migration
             await migration.up(connection);
 

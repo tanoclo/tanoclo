@@ -8,7 +8,7 @@ info:
     This specification builds upon the community-managed Tado OpenAPI v2
     specification by kritsel (available at
     https://github.com/kritsel/tado-openapispec-v2).
-  version: 2026.08.29.1
+  version: 2026.09.11.1
 servers:
   - url: /api/v2
     description: TaNoClo API v2 base
@@ -590,8 +590,7 @@ paths:
         /homes/{homeId}` response.
 
 
-        This operation might be the equivalent of `PUT
-        /homeByBridge/{bridgeId}/boilerMaxOutputTemperature`
+        This operation manages boiler flow temperature constraints and targets.
       operationId: setFlowTemperatureOptimization
       tags:
         - home
@@ -921,6 +920,35 @@ paths:
           $ref: "#/components/responses/NotFound404"
         "422":
           $ref: "#/components/responses/InputError422"
+    get:
+      summary: Get dazzle mode status of this zone
+      operationId: getDazzle
+      tags:
+        - zone
+      parameters:
+        - in: path
+          name: homeId
+          schema:
+            $ref: "#/components/schemas/HomeId"
+          required: true
+        - in: path
+          name: zoneId
+          schema:
+            $ref: "#/components/schemas/ZoneId"
+          required: true
+      responses:
+        "200":
+          description: successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DazzleInput"
+        "401":
+          $ref: "#/components/responses/Unauthorized401"
+        "403":
+          $ref: "#/components/responses/AccessDenied403"
+        "404":
+          $ref: "#/components/responses/NotFound404"
   /homes/{homeId}/zones/{zoneId}/details:
     put:
       summary: Change the name of the zone
@@ -961,6 +989,37 @@ paths:
           $ref: "#/components/responses/NotFound404"
         "422":
           $ref: "#/components/responses/InputError422"
+    get:
+      summary: Get details of the zone
+      operationId: getZoneDetails
+      tags:
+        - zone
+      parameters:
+        - in: path
+          name: homeId
+          schema:
+            $ref: "#/components/schemas/HomeId"
+          required: true
+          description: unique ID of a home
+        - in: path
+          name: zoneId
+          schema:
+            $ref: "#/components/schemas/ZoneId"
+          required: true
+          description: ID of a zone
+      responses:
+        "200":
+          description: successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Zone"
+        "401":
+          $ref: "#/components/responses/Unauthorized401"
+        "403":
+          $ref: "#/components/responses/AccessDenied403"
+        "404":
+          $ref: "#/components/responses/NotFound404"
   /homes/{homeId}/zones/{zoneId}/openWindowDetection:
     put:
       summary: Set the open window detection settings for this zone
@@ -997,6 +1056,45 @@ paths:
           $ref: "#/components/responses/NotFound404"
         "422":
           $ref: "#/components/responses/InputError422"
+    get:
+      summary: Get open window detection settings for this zone
+      operationId: getOpenWindowDetection
+      tags:
+        - zone
+      parameters:
+        - in: path
+          name: homeId
+          schema:
+            $ref: "#/components/schemas/HomeId"
+          required: true
+        - in: path
+          name: zoneId
+          schema:
+            $ref: "#/components/schemas/ZoneId"
+          required: true
+      responses:
+        "200":
+          description: successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  supported:
+                    type: boolean
+                    example: true
+                  enabled:
+                    type: boolean
+                    example: false
+                  timeoutInSeconds:
+                    type: integer
+                    example: 900
+        "401":
+          $ref: "#/components/responses/Unauthorized401"
+        "403":
+          $ref: "#/components/responses/AccessDenied403"
+        "404":
+          $ref: "#/components/responses/NotFound404"
   /homes/{homeId}/zones/{zoneId}/state/openWindow/activate:
     post:
       summary: To be determined what this operation exactly does.
@@ -1122,6 +1220,24 @@ paths:
           $ref: "#/components/responses/AccessDenied403"
         "404":
           $ref: "#/components/responses/NotFound404"
+    delete:
+      summary: Reset manual overlays across all zones in the home
+      operationId: resetAllZoneStates
+      tags:
+        - zone control
+      parameters:
+        - in: path
+          name: homeId
+          schema:
+            $ref: "#/components/schemas/HomeId"
+          required: true
+      responses:
+        "204":
+          description: All zone states reset successfully
+        "401":
+          $ref: "#/components/responses/Unauthorized401"
+        "403":
+          $ref: "#/components/responses/AccessDenied403"
   /homes/{homeId}/overlay:
     post:
       summary: Configure the zone overlay (manual override of the configured schedule)
@@ -1986,6 +2102,32 @@ paths:
           $ref: "#/components/responses/Unauthorized401"
         "403":
           $ref: "#/components/responses/AccessDenied403"
+    delete:
+      summary: Unpair and remove physical device from home
+      operationId: deleteDevice
+      tags:
+        - device
+      parameters:
+        - in: path
+          name: deviceId
+          schema:
+            $ref: "#/components/schemas/DeviceId"
+          required: true
+      responses:
+        "200":
+          description: Device unassigned/unpaired successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        "401":
+          $ref: "#/components/responses/Unauthorized401"
+        "403":
+          $ref: "#/components/responses/AccessDenied403"
   /devices/{deviceId}/childLock:
     put:
       summary: Enable or disable the child lock for this device.
@@ -2007,6 +2149,28 @@ paths:
       responses:
         "204":
           description: successful response
+        "401":
+          $ref: "#/components/responses/Unauthorized401"
+        "403":
+          $ref: "#/components/responses/AccessDenied403"
+    get:
+      summary: Get child lock status for this device
+      operationId: getChildLock
+      tags:
+        - device
+      parameters:
+        - in: path
+          name: deviceId
+          schema:
+            $ref: "#/components/schemas/DeviceId"
+          required: true
+      responses:
+        "200":
+          description: successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChildLock"
         "401":
           $ref: "#/components/responses/Unauthorized401"
         "403":
@@ -2663,6 +2827,8 @@ paths:
                   status:
                     type: string
                     example: ok
+      tags:
+        - system
   /api/health:
     get:
       summary: Health check endpoint
@@ -2710,6 +2876,8 @@ paths:
                         example: 25
         "503":
           description: Service degraded (database offline).
+      tags:
+        - system
   /oauth/token:
     post:
       summary: Request OAuth token
@@ -2762,6 +2930,8 @@ paths:
                   expires_in:
                     type: integer
                     example: 86400
+      tags:
+        - auth
   /homes/{homeId}/tanoclo/boiler/raw:
     get:
       summary: Get raw boiler data
@@ -2790,11 +2960,15 @@ paths:
                   is_modulating:
                     type: boolean
                   last_config_json:
-                    type: string
+                    oneOf:
+                      - type: string
+                      - type: object
                     nullable: true
                   last_config_decoded:
                     type: object
                     nullable: true
+      tags:
+        - tanoclo
   /homes/{homeId}/tanoclo/devices/battery:
     get:
       summary: Get battery status of all home devices
@@ -2847,6 +3021,8 @@ paths:
                     friendly_name:
                       type: string
                       nullable: true
+      tags:
+        - tanoclo
   /homes/{homeId}/tanoclo/devices/{deviceId}/raw:
     get:
       summary: Get raw device data
@@ -2883,7 +3059,9 @@ paths:
                       current_fw_version:
                         type: string
                       last_config_json:
-                        type: string
+                        oneOf:
+                          - type: string
+                          - type: object
                         nullable: true
                       last_config_decoded:
                         type: object
@@ -2903,6 +3081,8 @@ paths:
                         field_0135:
                           type: number
                           nullable: true
+      tags:
+        - tanoclo
   /homes/{homeId}/tanoclo/zones/{zoneId}/raw:
     get:
       summary: Get raw zone data
@@ -2939,7 +3119,9 @@ paths:
                       type:
                         type: string
                       last_config_json:
-                        type: string
+                        oneOf:
+                          - type: string
+                          - type: object
                         nullable: true
                       last_config_decoded:
                         type: object
@@ -2957,6 +3139,8 @@ paths:
                           type: string
                         tado_mode:
                           type: string
+      tags:
+        - tanoclo
   /homes/{homeId}/tanoclo/circuits:
     get:
       summary: Get configured heating circuits
@@ -2986,6 +3170,8 @@ paths:
                     driver_serial_no:
                       type: string
                       nullable: true
+      tags:
+        - tanoclo
   /homes/{homeId}/tanoclo/bridge:
     get:
       summary: Get bridge configuration and firmware status
@@ -3017,6 +3203,8 @@ paths:
                   last_config_decoded:
                     type: object
                     nullable: true
+      tags:
+        - tanoclo
   /homes/{homeId}/tanoclo/devices/{serial}/battery:
     put:
       summary: Update device battery status manually
@@ -3059,6 +3247,8 @@ paths:
                   batteryType:
                     type: string
                     example: AAA
+      tags:
+        - tanoclo
   /homes/{homeId}/tanoclo/zones/{zoneId}/dayReport:
     get:
       summary: Get custom day report data
@@ -3219,6 +3409,8 @@ paths:
                           type: object
                   weather:
                     type: object
+      tags:
+        - tanoclo
   /homes/{homeId}/tanoclo/timezone:
     get:
       summary: Get home timezone
@@ -3240,6 +3432,8 @@ paths:
                   dateTimeZone:
                     type: string
                     example: Europe/Berlin
+      tags:
+        - tanoclo
     put:
       summary: Update home timezone
       description: Update the default timezone parameter for a home.
@@ -3272,6 +3466,8 @@ paths:
                   dateTimeZone:
                     type: string
                     example: Europe/Berlin
+      tags:
+        - tanoclo
   /homes/{homeId}/tanoclo/users/{userId}/admin:
     put:
       summary: Toggle user admin status
@@ -3303,6 +3499,8 @@ paths:
       responses:
         "204":
           description: Successfully updated admin rights.
+      tags:
+        - tanoclo
   /ota/manifest:
     get:
       summary: Get OTA version manifest for Web dist, Android APK, and Server.
@@ -3674,33 +3872,7 @@ paths:
                     example: true
         "403":
           $ref: "#/components/responses/AccessDenied403"
-  /homes/{homeId}/skills:
-    get:
-      summary: Retrieve enabled Tado skills for the home.
-      operationId: getHomeSkills
-      tags:
-        - home
-      parameters:
-        - *a1
-      responses:
-        "200":
-          description: List of enabled home skills and capabilities
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  skills:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        title:
-                          type: string
-                          example: AUTO_ASSIST
-                        enabled:
-                          type: boolean
-                          example: true
+
   /homes/{homeId}/climateQuality:
     get:
       summary: Retrieve indoor air quality (IAQ) and climate score.
@@ -4392,6 +4564,559 @@ paths:
                   awayRadius:
                     type: number
                     example: 800
+  /homes/{homeId}/zones/{zoneId}/schedule/copy:
+    post:
+      summary: Copy timetable schedule between zones or timetable types
+      operationId: copyZoneSchedule
+      tags:
+        - zone control
+      parameters:
+        - in: path
+          name: homeId
+          schema:
+            $ref: "#/components/schemas/HomeId"
+          required: true
+        - in: path
+          name: zoneId
+          schema:
+            $ref: "#/components/schemas/ZoneId"
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fromZoneId:
+                  type: integer
+                  example: 1
+                fromTimetableId:
+                  type: integer
+                  example: 0
+                toTimetableId:
+                  type: integer
+                  example: 1
+      responses:
+        "200":
+          description: Schedule copied successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        "401":
+          $ref: "#/components/responses/Unauthorized401"
+        "403":
+          $ref: "#/components/responses/AccessDenied403"
+  /homes/{homeId}/zones/{zoneId}/schedule/timetables/{timetableTypeId}/blocks/copy:
+    post:
+      summary: Copy schedule blocks between day types within a timetable
+      operationId: copyTimetableBlocks
+      tags:
+        - zone control
+      parameters:
+        - in: path
+          name: homeId
+          schema:
+            $ref: "#/components/schemas/HomeId"
+          required: true
+        - in: path
+          name: zoneId
+          schema:
+            $ref: "#/components/schemas/ZoneId"
+          required: true
+        - in: path
+          name: timetableTypeId
+          schema:
+            $ref: "#/components/schemas/TimetableTypeId"
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - fromDayType
+                - toDayTypes
+              properties:
+                fromDayType:
+                  $ref: "#/components/schemas/DayType"
+                toDayTypes:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/DayType"
+      responses:
+        "200":
+          description: Schedule blocks copied successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        "401":
+          $ref: "#/components/responses/Unauthorized401"
+        "403":
+          $ref: "#/components/responses/AccessDenied403"
+  /homes/{homeId}/roomsAndDevices/rooms/{zoneId}/zoneControllers:
+    get:
+      summary: Retrieve devices controlling temperature or state for a given room
+      operationId: getZoneControllers
+      tags:
+        - zone
+      parameters:
+        - in: path
+          name: homeId
+          schema:
+            $ref: "#/components/schemas/HomeId"
+          required: true
+        - in: path
+          name: zoneId
+          schema:
+            $ref: "#/components/schemas/ZoneId"
+          required: true
+      responses:
+        "200":
+          description: List of zone controller devices
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  controllers:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Device"
+        "401":
+          $ref: "#/components/responses/Unauthorized401"
+        "403":
+          $ref: "#/components/responses/AccessDenied403"
+  /homes/{homeId}/mobileDevices/{mobileDeviceId}/metadata:
+    put:
+      summary: Update client app version and device hardware metadata
+      operationId: updateMobileDeviceMetadata
+      tags:
+        - mobile device
+      parameters:
+        - in: path
+          name: homeId
+          schema:
+            $ref: "#/components/schemas/HomeId"
+          required: true
+        - in: path
+          name: mobileDeviceId
+          schema:
+            $ref: "#/components/schemas/MobileDeviceId"
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                platform:
+                  type: string
+                  example: Android
+                osVersion:
+                  type: string
+                  example: "14"
+                model:
+                  type: string
+                  example: Pixel 8
+                locale:
+                  type: string
+                  example: en
+      responses:
+        "200":
+          description: Metadata updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        "401":
+          $ref: "#/components/responses/Unauthorized401"
+        "403":
+          $ref: "#/components/responses/AccessDenied403"
+  /homes/{homeId}/mobileDevices/{mobileDeviceId}/geolocationFix:
+    put:
+      summary: Update device geolocation coordinates manually or via foreground fix
+      operationId: updateMobileDeviceGeolocationFix
+      tags:
+        - mobile device
+      parameters:
+        - in: path
+          name: homeId
+          schema:
+            $ref: "#/components/schemas/HomeId"
+          required: true
+        - in: path
+          name: mobileDeviceId
+          schema:
+            $ref: "#/components/schemas/MobileDeviceId"
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                latitude:
+                  type: number
+                  example: 52.52
+                longitude:
+                  type: number
+                  example: 13.405
+      responses:
+        "200":
+          description: Location fixed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        "401":
+          $ref: "#/components/responses/Unauthorized401"
+        "403":
+          $ref: "#/components/responses/AccessDenied403"
+  /homes/{homeId}/mobileDevices/{mobileDeviceId}/token:
+    post:
+      summary: Register push notification token (FCM/APNS) for mobile device
+      operationId: registerMobileDeviceToken
+      tags:
+        - mobile device
+      parameters:
+        - in: path
+          name: homeId
+          schema:
+            $ref: "#/components/schemas/HomeId"
+          required: true
+        - in: path
+          name: mobileDeviceId
+          schema:
+            $ref: "#/components/schemas/MobileDeviceId"
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - token
+              properties:
+                token:
+                  type: string
+                  example: fcm_token_sample_abc123
+      responses:
+        "200":
+          description: Token registered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        "401":
+          $ref: "#/components/responses/Unauthorized401"
+        "403":
+          $ref: "#/components/responses/AccessDenied403"
+  /homes/{homeId}/events/ticket:
+    post:
+      summary: Request authorization ticket for Server-Sent Events stream
+      operationId: getEventStreamTicket
+      tags:
+        - events
+      parameters:
+        - in: path
+          name: homeId
+          schema:
+            $ref: "#/components/schemas/HomeId"
+          required: true
+      responses:
+        "200":
+          description: SSE stream ticket generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ticket:
+                    type: string
+                    example: ticket_uuid_abc123
+        "401":
+          $ref: "#/components/responses/Unauthorized401"
+        "403":
+          $ref: "#/components/responses/AccessDenied403"
+  /homes/{homeId}/events:
+    get:
+      summary: Subscribe to real-time Server-Sent Events (SSE) state stream
+      operationId: subscribeEventStream
+      tags:
+        - events
+      parameters:
+        - in: path
+          name: homeId
+          schema:
+            $ref: "#/components/schemas/HomeId"
+          required: true
+        - in: query
+          name: ticket
+          schema:
+            type: string
+          required: false
+      responses:
+        "200":
+          description: Event stream connection established
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized401"
+        "403":
+          $ref: "#/components/responses/AccessDenied403"
+  /graphql:
+    post:
+      summary: Execute GraphQL query against Tado boiler and catalog schemas
+      operationId: executeGraphQLQuery
+      tags:
+        - catalog
+      servers:
+        - url: /
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - query
+              properties:
+                query:
+                  type: string
+                  example: "{ boilerCatalog { id name } }"
+                variables:
+                  type: object
+      responses:
+        "200":
+          description: GraphQL query response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                  errors:
+                    type: array
+                    items:
+                      type: object
+  /api/v2/users/{userId}/email:
+    put:
+      summary: Update email address of specific user
+      operationId: updateUserEmail
+      tags:
+        - user
+      servers:
+        - url: /
+      parameters:
+        - in: path
+          name: userId
+          schema:
+            type: string
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: newuser@example.com
+      responses:
+        "200":
+          description: Email updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        "401":
+          $ref: "#/components/responses/Unauthorized401"
+        "403":
+          $ref: "#/components/responses/AccessDenied403"
+  /api/v2/users/{userId}/password:
+    put:
+      summary: Update password of specific user
+      operationId: updateUserPassword
+      tags:
+        - user
+      servers:
+        - url: /
+      parameters:
+        - in: path
+          name: userId
+          schema:
+            type: string
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - password
+              properties:
+                password:
+                  type: string
+                  example: newSecretPassword123
+      responses:
+        "200":
+          description: Password updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        "401":
+          $ref: "#/components/responses/Unauthorized401"
+        "403":
+          $ref: "#/components/responses/AccessDenied403"
+  /api/user/changeEmail:
+    post:
+      summary: Self-service account email update
+      operationId: changeAccountEmail
+      tags:
+        - user
+      servers:
+        - url: /
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: user@example.com
+                password:
+                  type: string
+                  example: currentPassword123
+      responses:
+        "200":
+          description: Email updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        "401":
+          $ref: "#/components/responses/Unauthorized401"
+  /api/user/changePassword:
+    post:
+      summary: Self-service account password update
+      operationId: changeAccountPassword
+      tags:
+        - user
+      servers:
+        - url: /
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - currentPassword
+                - newPassword
+              properties:
+                currentPassword:
+                  type: string
+                  example: oldPassword123
+                newPassword:
+                  type: string
+                  example: newPassword123
+      responses:
+        "200":
+          description: Password changed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        "401":
+          $ref: "#/components/responses/Unauthorized401"
+  /api/user:
+    patch:
+      summary: Update current user profile attributes (name, locale)
+      operationId: patchAccountProfile
+      tags:
+        - user
+      servers:
+        - url: /
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: Admin User
+                locale:
+                  type: string
+                  example: en
+      responses:
+        "200":
+          description: User profile updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized401"
 components:
   securitySchemes:
     oauth2:
@@ -4587,78 +5312,6 @@ components:
         found:
           type: boolean
           example: true
-    Boiler2:
-      type: object
-      description: Response of GET /homeByBridge/{bridgeId}/boilerInfo
-      properties:
-        boilerPresent:
-          type: boolean
-          example: true
-        boilerId:
-          type: integer
-          example: 2699
-          description: >
-            Tado specific id of the type of boiler you have, it gets set when
-            you select a boiler via the app     
-    BoilerMaxOutputTemperature:
-      type: object
-      description: Used in GET/POST /homeByBridge/{bridgeId}/boilerMaxOutputTemperature
-      properties:
-        boilerMaxOutputTemperatureInCelsius:
-          type: number
-          format: float
-          example: 55
-    BoilerWiringInstallationState:
-      type: object
-      description: response of GET /homeByBridge/{bridgeId}/boilerWiringInstallationState
-      properties:
-        state:
-          type: string
-          example: INSTALLATION_COMPLETED
-        deviceWiredToBoiler:
-          type: object
-          properties:
-            type:
-              type: string
-              example: BR02
-            serialNo:
-              type: string
-              example: BR123456789
-            thermInterfaceType:
-              type: string
-              example: UBA_BUS
-              description: |
-                known values:
-
-                * OPENTHERM
-                * UBA_BUS
-            connected:
-              type: boolean
-              example: true
-            lastRequestTimestamp:
-              type: string
-              format: date-time
-              example: 2024-12-30T11:10:24.433Z
-        bridgeConnected:
-          type: boolean
-          example: true
-        hotWaterZonePresent:
-          type: boolean
-          example: true
-        boiler:
-          type: object
-          properties:
-            outputTemperature:
-              type: object
-              properties:
-                celsius:
-                  type: number
-                  format: float
-                  example: "56.0"
-                timestamp:
-                  type: string
-                  format: date-time
-                  example: 2024-12-30T10:58:44.000Z
     BooleanDataInterval:
       type: object
       description: Element of DayReport and ZoneState. Used to express

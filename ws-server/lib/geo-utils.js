@@ -6,12 +6,6 @@
 'use strict';
 
 /**
- * lib/geo-utils.js
- * 
- * Shared geolocation utilities for TaNoClo.
- */
-
-/**
  * Calculate the Haversine distance between two points in meters.
  */
 function haversineDistance(lat1, lon1, lat2, lon2) {
@@ -36,7 +30,7 @@ function calculateBearing(lat1, lon1, lat2, lon2) {
     const y = Math.sin(dLon) * Math.cos(lat2Rad);
     const x = Math.cos(lat1Rad) * Math.sin(lat2Rad) -
         Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLon);
-    
+
     return Math.atan2(y, x);
 }
 

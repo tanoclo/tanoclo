@@ -3,8 +3,6 @@
  * @brief Renders a standard range slider input element with headers.
  */
 
-
-
 /**
  * @brief Slider input component.
  * @param {number} props.value - Active selection value.
@@ -16,16 +14,16 @@
  * @param {string} props.unit - Optional value unit parameter (e.g. °C, %).
  * @param {boolean} props.disabled - Whether input selection is disabled.
  */
-export default function Slider({ 
-  value, 
-  onChange, 
-  min = 5, 
-  max = 25, 
-  step = 0.5, 
-  label = '', 
-  unit = '', 
+export default function Slider({
+  value,
+  onChange,
+  min = 5,
+  max = 25,
+  step = 0.5,
+  label = '',
+  unit = '',
   disabled = false,
-  ...props 
+  ...props
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', width: '100%' }}>
@@ -43,7 +41,7 @@ export default function Slider({
           )}
         </div>
       )}
-      <input 
+      <input
         type="range"
         min={min}
         max={max}

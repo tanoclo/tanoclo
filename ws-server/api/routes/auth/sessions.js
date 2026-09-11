@@ -1,16 +1,9 @@
 /**
  * @file api/routes/auth/sessions.js
+ * @brief OAuth2 login, signup check, and SSO session management routes.
  */
 
 'use strict';
-
-/**
- * @file api/routes/auth.js
- * @brief OAuth2 / SSO authentication routes.
- * 
- * Implements authorization code grant flows, PKCE challenges, password grant exchanges,
- * access and refresh token revocations, and SSO cookies generation.
- */
 
 const express = require('express');
 const crypto = require('crypto');
@@ -59,17 +52,11 @@ function setSSOCookies(res, userId, token, req) {
     };
 
     res.cookie('tanoclo_session', token, { ...cookieOptions, signed: true });
-
-    res.cookie('fusionauth.sso', token, cookieOptions);
-    res.cookie('fusionauth.li', 'true', cookieOptions);
-    res.cookie('fusionauth.remember-device', 'true', cookieOptions);
 }
 
 /**
  * Handle browser-based OAuth2 authorization (GET)
  */
-
-
 router.get('/login', (req, res, next) => {
     const { client_id, redirect_to } = req.query;
     if (!client_id && !redirect_to) {
@@ -383,7 +370,7 @@ router.post('/oauth2/device', async (req, res) => {
             <style>body{font-family:'Outfit',sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;background:#0f172a;color:white;text-align:center;}</style>
             </head><body>
                 <div style="background:#1e293b;padding:2.5rem;border-radius:1.5rem;max-width:400px;border:1px solid rgba(255,255,255,0.1);">
-                    <h2 style="color:#00d1b2;">Device Approved!</h2>
+                    <h2 style="color:#00d1b2;">Device Approved.</h2>
                     <p>You can now return to your application or device.</p>
                 </div>
             </body></html>
@@ -394,7 +381,7 @@ router.post('/oauth2/device', async (req, res) => {
     }
 });
 
-router.get('/api/v2/me', authMiddleware, async (req, res) => {
+router.get(['/api/v2/me', '/v2/me', '/me'], authMiddleware, async (req, res) => {
     res.set({
         'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
         'Pragma': 'no-cache',
@@ -521,8 +508,7 @@ router.post('/api/logout', async (req, res) => {
             .catch(err => _log('error', `Cookie token revoke error: ${err.message}`));
     }
 
-    let sessionToken = req.signedCookies ? req.signedCookies.tanoclo_session : null;
-    if (!sessionToken && req.cookies) sessionToken = req.cookies['fusionauth.sso'];
+    const sessionToken = req.signedCookies ? req.signedCookies.tanoclo_session : null;
 
     if (sessionToken) {
         await db.deleteOauthSession(sessionToken).catch(e => { });
@@ -537,9 +523,6 @@ router.post('/api/logout', async (req, res) => {
 
     res.clearCookie('tanoclo_session', clearOpts);
     res.clearCookie('tanoclo_rt', clearOpts);
-    res.clearCookie('fusionauth.sso', clearOpts);
-    res.clearCookie('fusionauth.li', clearOpts);
-    res.clearCookie('fusionauth.remember-device', clearOpts);
     res.clearCookie('tado_locale', clearOptsPln);
     res.status(200).end();
 });
@@ -566,8 +549,7 @@ router.post('/signupCheck', async (req, res) => {
 router.get('/oauth2/logout', (req, res) => {
     const postLogoutRedirectUri = req.query.post_logout_redirect_uri;
 
-    let sessionToken = req.signedCookies ? req.signedCookies.tanoclo_session : null;
-    if (!sessionToken && req.cookies) sessionToken = req.cookies['fusionauth.sso'];
+    const sessionToken = req.signedCookies ? req.signedCookies.tanoclo_session : null;
 
     if (sessionToken) {
         db.deleteOauthSession(sessionToken).catch(e => { });
@@ -581,9 +563,6 @@ router.get('/oauth2/logout', (req, res) => {
     const clearOptsPln = { domain, path: '/', secure: cookieSecure, sameSite: 'lax' };
 
     res.clearCookie('tanoclo_session', clearOpts);
-    res.clearCookie('fusionauth.sso', clearOpts);
-    res.clearCookie('fusionauth.li', clearOpts);
-    res.clearCookie('fusionauth.remember-device', clearOpts);
     res.clearCookie('tado_locale', clearOptsPln);
 
     if (postLogoutRedirectUri) {

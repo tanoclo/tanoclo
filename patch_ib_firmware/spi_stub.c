@@ -349,4 +349,3 @@ void stub_entry(void) {
     "b   .               \n"
   );
 }
-

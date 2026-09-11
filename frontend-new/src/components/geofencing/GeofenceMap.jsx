@@ -102,7 +102,7 @@ export default function GeofenceMap({ homeInfo, devices = [], radius, onRadiusCh
         circleInstance.current = null;
       }
     };
-  }, [homeLat, homeLon, radius]);
+  }, [homeLat, homeLon, radius, homeInfo?.cartoApiKey]);
 
   // Update geofence circle radius when prop changes
   useEffect(() => {
@@ -151,9 +151,9 @@ export default function GeofenceMap({ homeInfo, devices = [], radius, onRadiusCh
 
       const devMarker = L.marker([devLat, devLon], { icon: deviceIcon })
         .addTo(mapInstance.current)
-        .bindTooltip(`${device.name} (${loc.atHome ? 'At Home' : 'Away'})`, { 
-          permanent: false, 
-          direction: 'top' 
+        .bindTooltip(`${device.name} (${loc.atHome ? 'At Home' : 'Away'})`, {
+          permanent: false,
+          direction: 'top'
         });
 
       deviceMarkersRef.current.push(devMarker);
@@ -163,17 +163,17 @@ export default function GeofenceMap({ homeInfo, devices = [], radius, onRadiusCh
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', width: '100%' }}>
       {/* Map wrapper */}
-      <div 
-        ref={mapRef} 
-        style={{ 
-          height: '320px', 
-          width: '100%', 
-          borderRadius: 'var(--radius-md)', 
+      <div
+        ref={mapRef}
+        style={{
+          height: '320px',
+          width: '100%',
+          borderRadius: 'var(--radius-md)',
           border: '1px solid var(--border-color)',
           overflow: 'hidden',
           backgroundColor: '#0f1115',
           zIndex: 1
-        }} 
+        }}
       />
 
       {/* Slider Controls */}
@@ -182,7 +182,7 @@ export default function GeofenceMap({ homeInfo, devices = [], radius, onRadiusCh
           <span style={{ color: 'var(--text-secondary)' }}>{t('geofencing.radius')}</span>
           <span style={{ color: 'var(--primary)' }}>{t('geofencing.meters_count', { count: radius })}</span>
         </div>
-        <input 
+        <input
           type="range"
           min="100"
           max="1500"
@@ -203,11 +203,11 @@ export default function GeofenceMap({ homeInfo, devices = [], radius, onRadiusCh
           <span style={{ position: 'absolute', left: '0', color: 'var(--text-muted)' }}>
             {t('geofencing.meters_count', { count: 100 })}
           </span>
-          <span style={{ 
-            position: 'absolute', 
-            left: '14.2857%', 
-            transform: 'translateX(-50%)', 
-            whiteSpace: 'nowrap', 
+          <span style={{
+            position: 'absolute',
+            left: '14.2857%',
+            transform: 'translateX(-50%)',
+            whiteSpace: 'nowrap',
             color: 'var(--primary)',
             fontWeight: 600,
             display: 'flex',
