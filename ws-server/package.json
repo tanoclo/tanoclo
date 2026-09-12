@@ -1,6 +1,6 @@
 {
   "name": "tanoclo-ws-server",
-  "version": "0.2.12",
+  "version": "0.3.0",
   "description": "TaNoClo server",
   "main": "server.js",
   "engines": {
