@@ -529,10 +529,10 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
         </Button>
         <div>
           <h2 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, lineHeight: 1.2 }}>
-            {isAdvanced ? `Advanced Settings • ${device.friendlyName || device.serialNo}` : (device.friendlyName || device.serialNo)}
+            {isAdvanced ? t('settings.advanced_settings_named', { name: device.friendlyName || device.serialNo, defaultValue: 'Advanced Settings • {{name}}' }) : (device.friendlyName || device.serialNo)}
           </h2>
           <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', display: 'block' }}>
-            {isAdvanced ? "Tuning parameters and display options" : `${getDeviceTypeLabel(device.deviceType)} • ${t('settings.serial_label', { serial: device.serialNo })}`}
+            {isAdvanced ? t('settings.device_advanced.header_desc', 'Tuning parameters and display options') : `${getDeviceTypeLabel(device.deviceType)} • ${t('settings.serial_label', { serial: device.serialNo })}`}
           </span>
         </div>
       </div>

@@ -25,7 +25,8 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key, options) => {
       if (key === 'settings.zone_settings_header') return `Settings • ${options?.name || ''}`;
-      return key;
+      if (key === 'settings.advanced_settings') return typeof options === 'string' ? options : 'Advanced Settings';
+      return typeof options === 'string' ? options : key;
     }
   })
 }));

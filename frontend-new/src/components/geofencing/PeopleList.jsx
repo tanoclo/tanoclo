@@ -116,7 +116,7 @@ export default function PeopleList({
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <strong style={{ fontSize: '1rem', color: 'var(--text-primary)' }}>{user.name}</strong>
                     <Badge variant={userIsTadoAdmin ? 'warning' : (userIsTaNoCloAdmin ? 'warning' : 'secondary')}>
-                      {userIsTadoAdmin ? t('settings.admin_role') : (userIsTaNoCloAdmin ? 'TaNoClo Admin' : t('settings.member_role'))}
+                      {userIsTadoAdmin ? t('settings.admin_role') : (userIsTaNoCloAdmin ? t('settings.tanoclo_admin_role', 'TaNoClo Admin') : t('settings.member_role'))}
                     </Badge>
                   </div>
                   <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{user.email}</span>
@@ -140,7 +140,7 @@ export default function PeopleList({
                       marginRight: '8px'
                     }}
                   >
-                    {userIsTaNoCloAdmin ? 'Revoke Admin' : 'Make Admin'}
+                    {userIsTaNoCloAdmin ? t('settings.revoke_admin', 'Revoke Admin') : t('settings.make_admin', 'Make Admin')}
                   </button>
                 )}
                 {!userIsTadoAdmin && isAdmin && onDeleteUser && (user.id !== currentUser.id) && (

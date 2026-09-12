@@ -342,7 +342,7 @@ export default function DeviceAdvancedSettings({
       await cancelMemoryDump(homeId, targetSerial);
       const res = await getMemoryDumpStatus(homeId, targetSerial);
       if (res && res.status) setServerDumpStatus(res.status);
-      showToast('Dump cancelled');
+      showToast(t('settings.device_advanced.toast_dump_cancelled'));
     } catch (e) {
       showToast(e.message || 'Failed to cancel dump', 'error');
     }
@@ -437,7 +437,7 @@ export default function DeviceAdvancedSettings({
 
   const handleWriteSt = async () => {
     if (stValue === '') {
-      showToast('Please enter a value to inject', 'warning');
+      showToast(t('settings.device_advanced.toast_enter_inject_val'), 'warning');
       return;
     }
     setStLoading(true);
@@ -492,7 +492,7 @@ export default function DeviceAdvancedSettings({
 
   const handleWriteNvm = async () => {
     if (nvmValue === '') {
-      showToast('Please enter a value to store in NVM', 'warning');
+      showToast(t('settings.device_advanced.toast_enter_nvm_val'), 'warning');
       return;
     }
     setNvmLoading(true);
@@ -551,9 +551,9 @@ export default function DeviceAdvancedSettings({
               </span>
             </div>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.4' }}>
-              Controls the active LED matrix light intensity on the physical device screen.
+              {t('settings.device_advanced.display_brightness_desc')}
               <br />
-              • <em>Interpretation</em>: Value range 0 (off) to 255 (max brightness). Lower brightness (e.g. 80-112) is highly recommended to extend battery life. Setting it to 255 makes the screen very clear in bright rooms but drains batteries rapidly.
+              • <em>{t('common.interpretation')}</em>: {t('settings.device_advanced.display_brightness_interp')}
             </p>
             <input
               type="range"
@@ -575,9 +575,9 @@ export default function DeviceAdvancedSettings({
               </span>
             </div>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.4' }}>
-              Adjusts the voltage supply gradient for active LED segments.
+              {t('settings.device_advanced.display_contrast_desc')}
               <br />
-              • <em>Interpretation</em>: Value range 0 to 255. High values sharpen segment edges but can cause ghosting (retained glow after display clears). Setting it too low makes text faint. recommended baseline is 128.
+              • <em>{t('common.interpretation')}</em>: {t('settings.device_advanced.display_contrast_interp')}
             </p>
             <input
               type="range"
@@ -595,11 +595,11 @@ export default function DeviceAdvancedSettings({
             <div style={{ flex: 1 }}>
               <strong>{t('settings.device_advanced.display_off_timeout')}</strong>
               <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '2px 0 0', lineHeight: '1.4' }}>
-                Specifies the active duration (in minutes) the display remains illuminated after a physical scroll or tap before turning off.
+                {t('settings.device_advanced.display_timeout_desc')}
                 <br />
-                • <em>Interpretation</em>: 0 represents default behavior (turns off within 5-10 seconds). Setting to any non-zero value keeps the screen fully illuminated for that duration.
+                • <em>{t('common.interpretation')}</em>: {t('settings.device_advanced.display_timeout_interp')}
                 <br />
-                • <strong>Warning</strong>: Keeping the screen on for long intervals will deplete alkaline batteries in a matter of weeks.
+                • <strong>{t('common.warning')}</strong>: {t('settings.device_advanced.display_timeout_warning')}
               </p>
             </div>
             <input
@@ -639,7 +639,7 @@ export default function DeviceAdvancedSettings({
         <Card style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <h3 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0 }}>{t('settings.device_advanced.actuator_motor_title')}</h3>
           <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.4' }}>
-            Configure custom calibration ranges for low/high steps and motor drive constants on the valve piston drive.
+            {t('settings.device_advanced.stepper_desc')}
           </p>
 
           {/* Multi-step Visual Motor Range Bar & Interactive Sliders */}
@@ -674,10 +674,10 @@ export default function DeviceAdvancedSettings({
               }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                    Linear Stepper Axis (0 → {maxTrack} steps)
+                    {t('settings.device_advanced.stepper_axis', `Linear Stepper Axis (0 → ${maxTrack} steps)`)}
                   </span>
                   <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                    Outward Travel from Gearbox Home
+                    {t('settings.device_advanced.stepper_outward')}
                   </span>
                 </div>
 
@@ -720,7 +720,7 @@ export default function DeviceAdvancedSettings({
                       pointerEvents: 'none'
                     }}>
                       <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#38bdf8', whiteSpace: 'nowrap' }}>
-                        Ref ({numRef})
+                        {t('settings.device_advanced.ref')} ({numRef})
                       </span>
                       <div style={{ width: '2px', height: '40px', backgroundColor: '#38bdf8', opacity: 0.8 }} />
                     </div>
@@ -738,7 +738,7 @@ export default function DeviceAdvancedSettings({
                     pointerEvents: 'none'
                   }}>
                     <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#818cf8', whiteSpace: 'nowrap' }}>
-                      Drive ({numDrive})
+                      {t('settings.device_advanced.drive')} ({numDrive})
                     </span>
                     <div style={{ width: '2px', height: '40px', backgroundColor: '#818cf8', opacity: 0.8 }} />
                   </div>
@@ -756,7 +756,7 @@ export default function DeviceAdvancedSettings({
                       pointerEvents: 'none'
                     }}>
                       <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--success, #22c55e)', whiteSpace: 'nowrap' }}>
-                        Seat ({numSeat})
+                        {t('settings.device_advanced.seat')} ({numSeat})
                       </span>
                       <div style={{ width: '2px', height: '40px', backgroundColor: 'var(--success, #22c55e)', opacity: 0.9 }} />
                     </div>
@@ -783,7 +783,7 @@ export default function DeviceAdvancedSettings({
                         boxShadow: '0 0 8px #ec4899'
                       }} />
                       <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#ec4899', whiteSpace: 'nowrap', marginTop: '2px' }}>
-                        Live: {numPos1}
+                        {t('settings.device_advanced.live')} {numPos1}
                       </span>
                     </div>
                   )}
@@ -800,7 +800,7 @@ export default function DeviceAdvancedSettings({
                     pointerEvents: 'none'
                   }}>
                     <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#f59e0b', whiteSpace: 'nowrap' }}>
-                      High ({numHigh})
+                      {t('settings.device_advanced.high')} ({numHigh})
                     </span>
                     <div style={{ width: '2px', height: '40px', backgroundColor: '#f59e0b', opacity: 0.9 }} />
                   </div>
@@ -817,7 +817,7 @@ export default function DeviceAdvancedSettings({
                     pointerEvents: 'none'
                   }}>
                     <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#ef4444', whiteSpace: 'nowrap' }}>
-                      Low / Closed ({numLow})
+                      {t('settings.device_advanced.low_closed')} ({numLow})
                     </span>
                     <div style={{ width: '2px', height: '40px', backgroundColor: '#ef4444', opacity: 0.9 }} />
                   </div>
@@ -829,7 +829,7 @@ export default function DeviceAdvancedSettings({
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#818cf8' }}>
-                        Drive Constant (Nominal baseline)
+                        {t('settings.device_advanced.drive_constant')}
                       </span>
                       <input
                         type="number"
@@ -866,7 +866,7 @@ export default function DeviceAdvancedSettings({
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#f59e0b' }}>
-                        High Steps (Open Modulation Limit)
+                        {t('settings.device_advanced.high_steps')}
                       </span>
                       <input
                         type="number"
@@ -903,7 +903,7 @@ export default function DeviceAdvancedSettings({
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#ef4444' }}>
-                        Low Steps (Fully Closed Limit)
+                        {t('settings.device_advanced.low_steps')}
                       </span>
                       <input
                         type="number"
@@ -938,14 +938,14 @@ export default function DeviceAdvancedSettings({
                 </div>
 
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', lineHeight: '1.4', backgroundColor: 'var(--bg-card)', padding: '0.75rem', borderRadius: 'var(--radius-sm)' }}>
-                  <h4 style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.25rem', color: 'var(--text-primary)' }}>Understanding the Stepper Coordinate System:</h4>
-                  • Radiator pins are <strong>normally open</strong> (uncompressed = 100% flow). The motor travels outward (higher step numbers) to compress the pin inward.
+                  <h4 style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.25rem', color: 'var(--text-primary)' }}>{t('settings.device_advanced.understanding_stepper')}</h4>
+                  • {t('settings.device_advanced.stepper_rule_1')}
                   <br />
-                  • <strong>Seat Point</strong>: Piston makes contact with the pin. Valve is 100% Open. Idle positions rest here.
+                  • {t('settings.device_advanced.stepper_rule_seat')}
                   <br />
-                  • <strong>High Steps → Low Steps</strong>: Active modulation range where the valve pin is compressed to regulate and shut off water flow.
+                  • {t('settings.device_advanced.stepper_rule_mod')}
                   <br />
-                  • <strong>Low Steps</strong>: Maximum extension where the pin is pressed all the way in (Valve 100% Closed).
+                  • {t('settings.device_advanced.stepper_rule_low')}
                 </div>
 
                 {/* Validation Warnings */}
@@ -963,10 +963,10 @@ export default function DeviceAdvancedSettings({
                     gap: '0.25rem'
                   }}>
                     {numLow < numHigh && (
-                      <span>• Low Steps (closed limit: {numLow}) cannot be lower than High Steps (open modulation limit: {numHigh}).</span>
+                      <span>• {t('settings.device_advanced.stepper_rule_err1', `Low Steps (closed limit: ${numLow}) cannot be lower than High Steps (open modulation limit: ${numHigh}).`)}</span>
                     )}
                     {(numHigh < numDrive || numLow < numDrive) && (
-                      <span>• High/Low steps cannot be lower than Drive Constant baseline ({numDrive}).</span>
+                      <span>• {t('settings.device_advanced.stepper_rule_err2', `High/Low steps cannot be lower than Drive Constant baseline (${numDrive}).`)}</span>
                     )}
                   </div>
                 )}
@@ -983,16 +983,16 @@ export default function DeviceAdvancedSettings({
             flexDirection: 'column',
             gap: '0.75rem'
           }}>
-            <h4 style={{ fontSize: '0.85rem', fontWeight: 600, margin: 0 }}>Actuator Diagnostics & Telemetry</h4>
+            <h4 style={{ fontSize: '0.85rem', fontWeight: 600, margin: 0 }}>{t('settings.device_advanced.actuator_diag_title')}</h4>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem', fontSize: '0.8rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.02)', paddingBottom: '0.25rem' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>Status</span>
+                <span style={{ color: 'var(--text-secondary)' }}>{t('common.status')}</span>
                 <span style={{ fontWeight: 600, color: device?.actuatorLimits?.active ? 'var(--success)' : 'var(--text-muted)' }}>
-                  {device?.actuatorLimits?.active ? 'Active (Calibrated)' : 'Inactive (Uncalibrated)'}
+                  {device?.actuatorLimits?.active ? t('settings.device_advanced.calibrated_active', 'Active (Calibrated)') : t('settings.device_advanced.uncalibrated_inactive', 'Inactive (Uncalibrated)')}
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.02)', paddingBottom: '0.25rem' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>Mounting State</span>
+                <span style={{ color: 'var(--text-secondary)' }}>{t('settings.device_advanced.mounting_state')}</span>
                 <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
                   {device?.actuatorLimits?.mountingState || 'UNKNOWN'}
                 </span>
@@ -1016,7 +1016,7 @@ export default function DeviceAdvancedSettings({
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.02)', paddingBottom: '0.25rem' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>Deviation</span>
+                <span style={{ color: 'var(--text-secondary)' }}>{t('settings.device_advanced.deviation', 'Deviation')}</span>
                 {device?.actuatorLimits?.deviation !== null && device?.actuatorLimits?.deviation !== undefined && device?.actuatorLimits?.deviation !== 32767 ? (
                   <span style={{
                     fontWeight: 700,
@@ -1033,7 +1033,7 @@ export default function DeviceAdvancedSettings({
               </div>
             </div>
             <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', margin: 0 }}>
-              <em>Interpretation of Diagnostics</em>: Mounting state reports structural coupling. Seat point details the physical contact depth. A high positive/negative deviation value (e.g. &gt; 100) indicates valve adaptation binding, stuck pins, or low battery motor slips.
+              <em>{t('settings.device_advanced.diag_interp_title')}</em>: {t('settings.device_advanced.diag_interp_desc')}
             </p>
           </div>
 
@@ -1065,7 +1065,7 @@ export default function DeviceAdvancedSettings({
               onClick={async () => {
                 try {
                   await triggerMountCalibration(homeId, targetSerial, 'start');
-                  showToast('Mount calibration sequence started.');
+                  showToast(t('settings.device_advanced.toast_calibration_started'));
                 } catch (e) {
                   showToast(e.message || 'Failed to start mount calibration.', 'error');
                 }
@@ -1085,7 +1085,7 @@ export default function DeviceAdvancedSettings({
             {t('settings.hardware_selftest', 'Hardware Self-Test')}
           </h3>
           <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.4' }}>
-            Requests the physical device to perform internal self-diagnostics (sensor verification, battery load test, display check).
+            {t('settings.device_advanced.self_test_desc')}
           </p>
           <div>
             <Button
@@ -1093,7 +1093,7 @@ export default function DeviceAdvancedSettings({
               onClick={async () => {
                 try {
                   await triggerSelftest(homeId, targetSerial);
-                  showToast('Hardware self-test request sent.');
+                  showToast(t('settings.device_advanced.toast_self_test_sent'));
                 } catch (e) {
                   showToast(e.message || 'Failed to trigger self-test.', 'error');
                 }
@@ -1114,19 +1114,19 @@ export default function DeviceAdvancedSettings({
               {t('settings.memory_dumper', 'CoAP Memory Dumper (/d/dbg/m)')}
             </h3>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '0.25rem 0 0 0', lineHeight: '1.4' }}>
-              Read direct physical memory from device internal Flash, SRAM, or external SPI Flash over 6LoWPAN.
+              {t('settings.device_advanced.memory_dumper_desc')}
             </p>
           </div>
           {device?.deviceType && (
             <span style={{ fontSize: '0.7rem', padding: '0.2rem 0.5rem', backgroundColor: 'var(--bg-secondary)', borderRadius: '0.25rem', border: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
-              Hardware: <strong>{device.deviceType}</strong> ({isValve ? 'nRF52832' : isStat ? 'STM32L0' : 'STM32F411'})
+              {t('settings.device_advanced.hardware')} <strong>{device.deviceType}</strong> ({isValve ? 'nRF52832' : isStat ? 'STM32L0' : 'STM32F411'})
             </span>
           )}
         </div>
 
         {/* Memory Presets */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-          <label style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Memory Region Presets</label>
+          <label style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{t('settings.device_advanced.memory_presets')}</label>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
             {isValve && (
               <Button
@@ -1134,7 +1134,7 @@ export default function DeviceAdvancedSettings({
                 onClick={() => { setDbgAdr('00000000'); setDbgLen('64'); }}
                 style={{ fontSize: '0.7rem', padding: '0.25rem 0.5rem' }}
               >
-                Internal Flash (0x00000000)
+                {t('settings.device_advanced.internal_flash_0')}
               </Button>
             )}
             {!isValve && (
@@ -1143,7 +1143,7 @@ export default function DeviceAdvancedSettings({
                 onClick={() => { setDbgAdr('08000000'); setDbgLen('64'); }}
                 style={{ fontSize: '0.7rem', padding: '0.25rem 0.5rem' }}
               >
-                Internal Flash (0x08000000)
+                {t('settings.device_advanced.internal_flash_8')}
               </Button>
             )}
             <Button
@@ -1151,7 +1151,7 @@ export default function DeviceAdvancedSettings({
               onClick={() => { setDbgAdr('20000000'); setDbgLen('64'); }}
               style={{ fontSize: '0.7rem', padding: '0.25rem 0.5rem' }}
             >
-              SRAM Live (0x20000000)
+              {t('settings.device_advanced.sram_live')}
             </Button>
             {(isValve || (!isValve && !isStat)) && (
               <Button
@@ -1159,7 +1159,7 @@ export default function DeviceAdvancedSettings({
                 onClick={() => { setDbgAdr('80000000'); setDbgLen('64'); }}
                 style={{ fontSize: '0.7rem', padding: '0.25rem 0.5rem' }}
               >
-                SPI Flash (0x80000000)
+                {t('settings.device_advanced.spi_flash')}
               </Button>
             )}
           </div>
@@ -1168,7 +1168,7 @@ export default function DeviceAdvancedSettings({
         {/* Memory Query Inputs */}
         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'flex-start', backgroundColor: 'var(--bg-secondary)', padding: '0.75rem', borderRadius: '0.5rem' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', flex: 1, minWidth: '140px' }}>
-            <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Address (Hex)</label>
+            <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{t('settings.device_advanced.address_hex')}</label>
             <input
               type="text"
               value={dbgAdr}
@@ -1178,7 +1178,7 @@ export default function DeviceAdvancedSettings({
             />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', width: '100px' }}>
-            <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Length (1-64 B)</label>
+            <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{t('settings.device_advanced.length_b')}</label>
             <input
               type="number"
               min="1"
@@ -1189,7 +1189,7 @@ export default function DeviceAdvancedSettings({
             />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', width: '150px' }}>
-            <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Dump Size</label>
+            <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{t('settings.device_advanced.dump_size')}</label>
             <select
               value={dumpRangeBytes}
               onChange={(e) => setDumpRangeBytes(Number(e.target.value))}
@@ -1240,7 +1240,7 @@ export default function DeviceAdvancedSettings({
             }}
             style={{ fontSize: '0.75rem', padding: '0.35rem 0.65rem' }}
           >
-            Read Single Block ({dbgLen}B)
+            {t('settings.device_advanced.read_single_block', `Read Single Block (${dbgLen}B)`)}
           </Button>
 
           {!serverDumpStatus?.isRunning ? (
@@ -1253,7 +1253,7 @@ export default function DeviceAdvancedSettings({
                     onClick={() => handleStartServerDump(false)}
                     style={{ fontSize: '0.75rem', padding: '0.35rem 0.65rem' }}
                   >
-                    Resume Dump ({serverDumpStatus.partBytes ? `${(serverDumpStatus.partBytes / 1024).toFixed(1)} KB done` : 'Continue'})
+                    {t('settings.device_advanced.resume_dump', 'Resume Dump')} ({serverDumpStatus.partBytes ? `${(serverDumpStatus.partBytes / 1024).toFixed(1)} KB done` : 'Continue'})
                   </Button>
                   <Button
                     variant="secondary"
@@ -1261,7 +1261,7 @@ export default function DeviceAdvancedSettings({
                     onClick={() => handleStartServerDump(true)}
                     style={{ fontSize: '0.75rem', padding: '0.35rem 0.65rem' }}
                   >
-                    Start Over (Discard .part)
+                    {t('settings.device_advanced.start_over')}
                   </Button>
                 </>
               ) : (
@@ -1271,7 +1271,7 @@ export default function DeviceAdvancedSettings({
                   onClick={() => handleStartServerDump(false)}
                   style={{ fontSize: '0.75rem', padding: '0.35rem 0.65rem' }}
                 >
-                  Start Server Dump ({dumpRangeBytes >= 1048576 ? `${dumpRangeBytes / 1048576}MB` : dumpRangeBytes >= 1024 ? `${dumpRangeBytes / 1024}KB` : `${dumpRangeBytes}B`})
+                  {t('settings.device_advanced.start_server_dump', `Start Server Dump (${dumpRangeBytes >= 1048576 ? `${dumpRangeBytes / 1048576}MB` : dumpRangeBytes >= 1024 ? `${dumpRangeBytes / 1024}KB` : `${dumpRangeBytes}B`})`)}
                 </Button>
               )}
             </>
@@ -1281,7 +1281,7 @@ export default function DeviceAdvancedSettings({
               onClick={handleCancelServerDump}
               style={{ fontSize: '0.75rem', padding: '0.35rem 0.65rem' }}
             >
-              Cancel Dump
+              {t('settings.device_advanced.cancel_dump')}
             </Button>
           )}
 
@@ -1290,16 +1290,16 @@ export default function DeviceAdvancedSettings({
               variant="secondary"
               onClick={async () => {
                 try {
-                  showToast('Downloading dump file...');
+                  showToast(t('settings.device_advanced.toast_downloading_dump'), 'info');
                   await downloadMemoryDumpFile(homeId, targetSerial, serverDumpStatus.fileName);
-                  showToast('Download complete');
+                  showToast(t('settings.device_advanced.toast_download_complete'), 'success');
                 } catch (e) {
                   showToast(e.message || 'Failed to download dump file', 'error');
                 }
               }}
               style={{ fontSize: '0.75rem', padding: '0.35rem 0.65rem' }}
             >
-              Download {serverDumpStatus.fileName} ({serverDumpStatus.bytesReceived} B)
+              {t('settings.device_advanced.download')} {serverDumpStatus.fileName} ({serverDumpStatus.bytesReceived} B)
             </Button>
           )}
         </div>
@@ -1309,10 +1309,10 @@ export default function DeviceAdvancedSettings({
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', backgroundColor: 'var(--bg-secondary)', padding: '0.75rem', borderRadius: '0.35rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-secondary)', flexWrap: 'wrap', gap: '0.25rem' }}>
               <span>
-                <strong>Status:</strong> {serverDumpStatus.isRunning ? 'Dumping in background...' : serverDumpStatus.status === 'completed' ? 'Dump Completed!' : serverDumpStatus.status === 'paused' || serverDumpStatus.hasPart ? 'Paused / Resumable' : serverDumpStatus.status}
+                <strong>{t('common.status')}:</strong> {serverDumpStatus.isRunning ? t('settings.device_advanced.dumping_background') : serverDumpStatus.status === 'completed' ? t('settings.device_advanced.dump_completed') : serverDumpStatus.status === 'paused' || serverDumpStatus.hasPart ? t('settings.device_advanced.paused_resumable') : serverDumpStatus.status}
               </span>
               <span>
-                {serverDumpStatus.bytesReceived ? serverDumpStatus.bytesReceived.toLocaleString() : (serverDumpStatus.partBytes || 0).toLocaleString()} {serverDumpStatus.totalBytes ? `/ ${serverDumpStatus.totalBytes.toLocaleString()} Bytes (${serverDumpStatus.percent}%)` : 'Bytes on disk (.part)'}
+                {serverDumpStatus.bytesReceived ? serverDumpStatus.bytesReceived.toLocaleString() : (serverDumpStatus.partBytes || 0).toLocaleString()} {serverDumpStatus.totalBytes ? `/ ${serverDumpStatus.totalBytes.toLocaleString()} Bytes (${serverDumpStatus.percent}%)` : t('settings.device_advanced.bytes_on_disk')}
               </span>
             </div>
 
@@ -1326,7 +1326,7 @@ export default function DeviceAdvancedSettings({
             </div>
             {serverDumpStatus.error && (
               <span style={{ fontSize: '0.7rem', color: 'var(--danger)' }}>
-                Error: {serverDumpStatus.error}
+                {t('common.error')}: {serverDumpStatus.error}
               </span>
             )}
           </div>
@@ -1339,17 +1339,17 @@ export default function DeviceAdvancedSettings({
           <div>
             <h3 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <Sliders size={18} style={{ color: 'var(--primary)' }} />
-              Live Diagnostic & Control State (/d/dbg/st)
+              {t('settings.device_advanced.live_diag_title')}
             </h3>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '0.25rem 0 0 0', lineHeight: '1.4' }}>
-              Query live telemetry variables and inject real-time control overrides directly into device RAM over 6LoWPAN.
+              {t('settings.device_advanced.live_diag_desc')}
             </p>
           </div>
         </div>
 
         {/* Preset Selector */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-          <label style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Diagnostic Parameter Preset</label>
+          <label style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{t('settings.device_advanced.diag_preset')}</label>
           <select
             value={stFid}
             onChange={(e) => {
@@ -1378,7 +1378,7 @@ export default function DeviceAdvancedSettings({
         {/* Inputs */}
         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', backgroundColor: 'var(--bg-secondary)', padding: '0.75rem', borderRadius: '0.5rem' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', flex: 1, minWidth: '100px' }}>
-            <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>FID (Hex/Dec)</label>
+            <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{t('settings.device_advanced.fid_label')}</label>
             <input
               type="text"
               value={stFid}
@@ -1388,7 +1388,7 @@ export default function DeviceAdvancedSettings({
             />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', width: '80px' }}>
-            <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Length (B)</label>
+            <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{t('settings.device_advanced.length_b')}</label>
             <input
               type="number"
               min="1"
@@ -1399,7 +1399,7 @@ export default function DeviceAdvancedSettings({
             />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', flex: 1.5, minWidth: '160px' }}>
-            <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Human-Friendly Format</label>
+            <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{t('settings.device_advanced.human_format')}</label>
             <input
               type="text"
               value={stFriendly}
@@ -1413,7 +1413,7 @@ export default function DeviceAdvancedSettings({
             />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', flex: 1.5, minWidth: '160px' }}>
-            <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Value to Inject (Raw Dec/Hex)</label>
+            <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{t('settings.device_advanced.val_inject_label')}</label>
             <input
               type="text"
               value={stValue}
@@ -1436,7 +1436,7 @@ export default function DeviceAdvancedSettings({
             onClick={handleReadSt}
             style={{ fontSize: '0.75rem', padding: '0.35rem 0.65rem' }}
           >
-            {stLoading ? 'Reading...' : 'Read Parameter (GET)'}
+            {stLoading ? t('settings.device_advanced.reading') : t('settings.device_advanced.read_param_get')}
           </Button>
           <Button
             variant="primary"
@@ -1444,7 +1444,7 @@ export default function DeviceAdvancedSettings({
             onClick={handleWriteSt}
             style={{ fontSize: '0.75rem', padding: '0.35rem 0.65rem' }}
           >
-            {stLoading ? 'Injecting...' : 'Inject into RAM (PUT)'}
+            {stLoading ? t('settings.device_advanced.injecting') : t('settings.device_advanced.inject_ram_put')}
           </Button>
         </div>
 
@@ -1472,17 +1472,17 @@ export default function DeviceAdvancedSettings({
           <div>
             <h3 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <Database size={18} style={{ color: 'var(--primary)' }} />
-              NVM Persistent Storage (/d/dbg2/tlvs)
+              {t('settings.device_advanced.nvm_storage_title')}
             </h3>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '0.25rem 0 0 0', lineHeight: '1.4' }}>
-              Query and overwrite persistent device configuration parameters stored in internal Flash NVM.
+              {t('settings.device_advanced.nvm_storage_desc')}
             </p>
           </div>
         </div>
 
         {/* NVM Preset Selector */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-          <label style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-secondary)' }}>NVM Parameter Slot</label>
+          <label style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{t('settings.device_advanced.nvm_preset')}</label>
           <select
             value={nvmFid}
             onChange={(e) => {
@@ -1511,7 +1511,7 @@ export default function DeviceAdvancedSettings({
         {/* Inputs */}
         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', backgroundColor: 'var(--bg-secondary)', padding: '0.75rem', borderRadius: '0.5rem' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', flex: 1, minWidth: '100px' }}>
-            <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Slot / FID</label>
+            <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{t('settings.device_advanced.slot_fid')}</label>
             <input
               type="text"
               value={nvmFid}
@@ -1546,7 +1546,7 @@ export default function DeviceAdvancedSettings({
             />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', flex: 1.5, minWidth: '160px' }}>
-            <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Value to Store (Raw Hex/Dec)</label>
+            <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{t('settings.device_advanced.val_store_label')}</label>
             <input
               type="text"
               value={nvmValue}
@@ -1569,7 +1569,7 @@ export default function DeviceAdvancedSettings({
             onClick={handleReadNvm}
             style={{ fontSize: '0.75rem', padding: '0.35rem 0.65rem' }}
           >
-            {nvmLoading ? 'Reading...' : 'Read Stored NVM Value'}
+            {nvmLoading ? t('settings.device_advanced.reading') : t('settings.device_advanced.read_stored_nvm')}
           </Button>
           <Button
             variant="primary"
@@ -1577,7 +1577,7 @@ export default function DeviceAdvancedSettings({
             onClick={handleWriteNvm}
             style={{ fontSize: '0.75rem', padding: '0.35rem 0.65rem' }}
           >
-            {nvmLoading ? 'Writing...' : 'Store to NVM (PUT)'}
+            {nvmLoading ? t('settings.device_advanced.writing') : t('settings.device_advanced.store_nvm_put')}
           </Button>
         </div>
 

@@ -104,7 +104,7 @@ export default function EnergySettings({ homeId, zones }) {
                 cursor: 'pointer'
               }}
             />
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>to</span>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{t('common.to', 'to')}</span>
             <input
               type="date"
               value={boilerToDate}

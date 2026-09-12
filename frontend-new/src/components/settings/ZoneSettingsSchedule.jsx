@@ -82,13 +82,13 @@ export default function ZoneSettingsSchedule({
       </div>
 
       <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
-        <h4 style={{ fontSize: '0.85rem', fontWeight: 600, margin: '0 0 0.5rem 0' }}>Offline Schedule Explanation & Interpretation</h4>
+        <h4 style={{ fontSize: '0.85rem', fontWeight: 600, margin: '0 0 0.5rem 0' }}>{t('settings.zone_schedule_offline.title')}</h4>
         <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.4' }}>
-          Offline Schedule stores a simplified daily schedule profile directly into the Smart Radiator Thermostat (SRT) flash memory.
+          {t('settings.zone_schedule_offline.desc')}
           <br />
-          • <em>How to use</em>: Enable the toggle above, then click <strong>Sync Now</strong>. The server compiles your active schedule into a hardware-compatible TLV profile and transmits it via the Bridge to the device.
+          • <em>{t('settings.zone_schedule_offline.how_to_use')}</em>: {t('settings.zone_schedule_offline.how_to_use_desc')}
           <br />
-          • <em>Interpretation</em>: If your internet connection drops, the thermostat will autonomously switch temperatures at the scheduled times rather than remaining frozen at the last setpoint. Note that because of hardware memory limits, complex multi-step rules may be simplified.
+          • <em>{t('common.interpretation')}</em>: {t('settings.zone_schedule_offline.interpretation')}
         </p>
       </div>
     </Card>

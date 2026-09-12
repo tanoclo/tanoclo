@@ -540,10 +540,10 @@ export default function ZoneSettings({ homeId, zoneId, zone, onBack, mutateZones
         </Button>
         <div>
           <h2 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, lineHeight: 1.2 }}>
-            {isAdvanced ? `Advanced Settings • ${zone.name}` : t('settings.zone_settings_header', { name: zone.name })}
+            {isAdvanced ? t('settings.advanced_settings_named', { name: zone.name, defaultValue: 'Advanced Settings • {{name}}' }) : t('settings.zone_settings_header', { name: zone.name })}
           </h2>
           <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', display: 'block' }}>
-            {isAdvanced ? "Tuning parameters and special options" : t('settings.zone_settings_header_desc')}
+            {isAdvanced ? t('settings.zone_advanced.header_desc', 'Tuning parameters and special options') : t('settings.zone_settings_header_desc')}
           </span>
         </div>
       </div>
@@ -726,10 +726,10 @@ export default function ZoneSettings({ homeId, zoneId, zone, onBack, mutateZones
               <div>
                 <strong style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <ShieldAlert size={16} style={{ color: 'var(--warning)' }} />
-                  Advanced Settings
+                  {t('settings.advanced_settings', 'Advanced Settings')}
                 </strong>
                 <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '2px 0 0' }}>
-                  Configure dangerous and untested tuning parameters (frost/baseline temps, advanced OWD limits, offline schedule).
+                  {t('settings.zone_advanced.warning_desc', 'Configure dangerous and untested tuning parameters (frost/baseline temps, advanced OWD limits, offline schedule).')}
                 </p>
               </div>
               <span style={{ fontSize: '1.25rem', color: 'var(--text-muted)' }}>&rarr;</span>
