@@ -29,9 +29,9 @@ COPY package*.json ./
 RUN npm ci --only=production
 
 # Copy source code
-COPY stream_receiver.js addon-entrypoint.js sync_tlv_labels.js config.json.example ./
+COPY stream_receiver.js app-entrypoint.js sync_tlv_labels.js config.json.example ./
 COPY lib/ ./lib/
 COPY tlv_labels.json ./
 
 ENTRYPOINT []
-CMD ["node", "/app/addon-entrypoint.js"]
+CMD ["node", "/app/app-entrypoint.js"]

@@ -29,11 +29,11 @@ COPY ws-server/ ./ws-server/
 WORKDIR /app/ws-server
 RUN npm ci --only=production
 
-# Copy the addon entrypoint
+# Copy the app entrypoint
 WORKDIR /app
-COPY tanoclo-ws-server/addon-entrypoint.js ./tanoclo-ws-server/
+COPY tanoclo-ws-server/app-entrypoint.js ./tanoclo-ws-server/
 
 WORKDIR /app/ws-server
 
 ENTRYPOINT []
-CMD [ "node", "/app/tanoclo-ws-server/addon-entrypoint.js" ]
+CMD [ "node", "/app/tanoclo-ws-server/app-entrypoint.js" ]
