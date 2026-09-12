@@ -56,14 +56,9 @@ router.put('/:userId', authMiddleware, async (req, res) => {
         if (locale) {
             await pool.execute('UPDATE users SET locale = ? WHERE id = ?', [locale, userId]);
 
-            await pool.execute('DELETE FROM oauth_access_tokens WHERE user_id = ?', [userId]);
-            await pool.execute('DELETE FROM oauth_refresh_tokens WHERE user_id = ?', [userId]);
-
             const domainParts = req.hostname.split('.');
             const domain = domainParts.length >= 2 ? '.' + domainParts.slice(-2).join('.') : undefined;
             const cookieSecure = req.secure || req.headers['x-forwarded-proto'] === 'https';
-
-            res.clearCookie('tanoclo_session', { domain, httpOnly: true, secure: cookieSecure, sameSite: 'lax' });
 
             res.cookie('tado_locale', locale, {
                 maxAge: 31536000000,
@@ -72,10 +67,6 @@ router.put('/:userId', authMiddleware, async (req, res) => {
                 secure: cookieSecure,
                 sameSite: 'lax'
             });
-
-            const userData = await getFullUserData(pool, userId);
-            if (!userData) return res.status(404).json({ error: 'not_found' });
-            return res.json(userData);
         }
 
         if (name) {
@@ -351,14 +342,9 @@ router.patch('/api/user', authMiddleware, async (req, res) => {
         if (locale) {
             await pool.execute('UPDATE users SET locale = ? WHERE id = ?', [locale, userId]);
 
-            await pool.execute('DELETE FROM oauth_access_tokens WHERE user_id = ?', [userId]);
-            await pool.execute('DELETE FROM oauth_refresh_tokens WHERE user_id = ?', [userId]);
-
             const domainParts = req.hostname.split('.');
             const domain = domainParts.length >= 2 ? '.' + domainParts.slice(-2).join('.') : undefined;
             const cookieSecure = req.secure || req.headers['x-forwarded-proto'] === 'https';
-
-            res.clearCookie('tanoclo_session', { domain, httpOnly: true, secure: cookieSecure, sameSite: 'lax' });
 
             res.cookie('tado_locale', locale, {
                 maxAge: 31536000000,
@@ -367,10 +353,6 @@ router.patch('/api/user', authMiddleware, async (req, res) => {
                 secure: cookieSecure,
                 sameSite: 'lax'
             });
-
-            const userData = await getFullUserData(pool, userId);
-            if (!userData) return res.status(404).json({ error: 'not_found' });
-            return res.json(userData);
         }
 
         if (name) {
