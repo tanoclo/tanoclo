@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-12
+
+- feat/fix/docs: full audit
+- feat: Improve Tado emulation
+- feat: Improve Tado emulation
+
 ## [0.2.9] - 2026-09-07
 
 - feat: Auto version in Github actions
