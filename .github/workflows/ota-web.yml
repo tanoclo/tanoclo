@@ -27,6 +27,16 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Checkout ota branch
+        uses: actions/checkout@v7
+        continue-on-error: true
+        with:
+          ref: ota
+          path: .ota
+          sparse-checkout: |
+            manifest.json
+            tanoclo.apk
+
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
@@ -36,7 +46,7 @@ jobs:
       - name: Determine Web version
         id: resolve-version
         run: |
-          curl -s -f https://raw.githubusercontent.com/tanoclo/tanoclo/ota/manifest.json -o /tmp/manifest_prev.json || true
+          if [ -f .ota/manifest.json ]; then cp .ota/manifest.json /tmp/manifest_prev.json; fi
 
           node -e "
             const { execSync } = require('child_process');
@@ -125,9 +135,10 @@ jobs:
             echo "EOF_NOTES"
           } >> "$GITHUB_ENV"
 
-          # 3. Try fetching existing manifest.json and tanoclo.apk from ota branch so we preserve APK
-          curl -s -f https://raw.githubusercontent.com/tanoclo/tanoclo/ota/tanoclo.apk -o /tmp/tanoclo.apk || true
-          curl -s -f https://raw.githubusercontent.com/tanoclo/tanoclo/ota/manifest.json -o /tmp/manifest.json || true
+          # 3. Restore existing manifest.json and tanoclo.apk from ota branch checkout so we preserve APK
+          git -C .ota pull origin ota 2>/dev/null || true
+          if [ -f .ota/tanoclo.apk ]; then cp .ota/tanoclo.apk /tmp/tanoclo.apk; fi
+          if [ -f .ota/manifest.json ]; then cp .ota/manifest.json /tmp/manifest.json; fi
 
           # 4. Create fresh orphan branch without commit history
           git checkout --orphan ota_orphan

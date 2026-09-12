@@ -27,6 +27,16 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Checkout ota branch
+        uses: actions/checkout@v7
+        continue-on-error: true
+        with:
+          ref: ota
+          path: .ota
+          sparse-checkout: |
+            manifest.json
+            dist.zip
+
       - name: Setup Java 22
         uses: actions/setup-java@v5
         with:
@@ -42,7 +52,7 @@ jobs:
       - name: Determine Android version
         id: resolve-version
         run: |
-          curl -s -f https://raw.githubusercontent.com/tanoclo/tanoclo/ota/manifest.json -o /tmp/manifest_prev.json || true
+          if [ -f .ota/manifest.json ]; then cp .ota/manifest.json /tmp/manifest_prev.json; fi
 
           node -e "
             const { execSync } = require('child_process');
@@ -138,9 +148,10 @@ jobs:
             echo "EOF_NOTES"
           } >> "$GITHUB_ENV"
 
-          # 3. Try fetching existing manifest.json and dist.zip from ota branch so we preserve web dist
-          curl -s -f https://raw.githubusercontent.com/tanoclo/tanoclo/ota/dist.zip -o /tmp/dist.zip || true
-          curl -s -f https://raw.githubusercontent.com/tanoclo/tanoclo/ota/manifest.json -o /tmp/manifest.json || true
+          # 3. Restore existing manifest.json and dist.zip from ota branch checkout so we preserve web dist
+          git -C .ota pull origin ota 2>/dev/null || true
+          if [ -f .ota/dist.zip ]; then cp .ota/dist.zip /tmp/dist.zip; fi
+          if [ -f .ota/manifest.json ]; then cp .ota/manifest.json /tmp/manifest.json; fi
 
           # 4. Create fresh orphan branch without commit history
           git checkout --orphan ota_orphan

@@ -19,3 +19,4 @@ test_config.json
 *.log.*
 .default.json
 *scratch*
+/.ota/
