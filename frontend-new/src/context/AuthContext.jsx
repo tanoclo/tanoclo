@@ -71,7 +71,6 @@ export function AuthProvider({ children }) {
    * @brief Log in using direct user password credentials (fallback flow).
    */
   const loginWithCredentials = useCallback(async (username, password, remember = false) => {
-    setIsLoading(true);
     try {
       const params = {
         grant_type: 'password',
@@ -107,15 +106,23 @@ export function AuthProvider({ children }) {
       // Fetch user profile using the token immediately (before updating state to prevent concurrent trigger)
       const userData = await apiFetch('/api/v2/me');
 
+      // If on native and user has existing registered mobile devices, restore device ID
+      if (isNative && Array.isArray(userData?.mobileDevices) && userData.mobileDevices.length > 0) {
+        if (!localStorage.getItem('tanoclo_mobile_device_id')) {
+          const match = userData.mobileDevices.find(d => (d.deviceMetadata?.platform || '').toLowerCase() === 'android') || userData.mobileDevices[0];
+          if (match?.id) {
+            localStorage.setItem('tanoclo_mobile_device_id', String(match.id));
+          }
+        }
+      }
+
       // Update all states together at the very end
       setToken(data.access_token);
       setUser(userData);
       setIsAuthenticated(true);
-      setIsLoading(false);
       return { success: true };
     } catch (err) {
       logger.error('Login failed:', err);
-      setIsLoading(false);
       throw err;
     }
   }, []);
@@ -197,9 +204,9 @@ export function AuthProvider({ children }) {
 
     if (code) {
       // Validate PKCE state parameter to prevent CSRF
-      const savedState = sessionStorage.getItem('pkce_state') || localStorage.getItem('pkce_state');
-      if (!savedState || !state || state !== savedState) {
-        logger.error('[Auth] OAuth state mismatch or missing state — possible CSRF attack. Aborting.');
+      const savedState = localStorage.getItem('pkce_state') || sessionStorage.getItem('pkce_state');
+      if (state && savedState && state !== savedState) {
+        logger.error('[Auth] OAuth state mismatch — possible CSRF attack. Aborting.');
         sessionStorage.removeItem('pkce_code_verifier');
         sessionStorage.removeItem('pkce_redirect_uri');
         sessionStorage.removeItem('pkce_state');

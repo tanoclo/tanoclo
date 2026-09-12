@@ -16,6 +16,7 @@
 import { STORAGE_KEYS, getApiBase } from '../utils/constants';
 import { refreshAccessToken } from './auth';
 import { getRefreshToken, setRefreshToken, removeRefreshToken } from '../utils/secureStorage';
+import { Capacitor } from '@capacitor/core';
 
 /**
  * @brief Verifies whether target URL matches the configured internal API origin.
@@ -23,14 +24,29 @@ import { getRefreshToken, setRefreshToken, removeRefreshToken } from '../utils/s
  * @returns {boolean} True if destination is internal API server.
  */
 function isInternalOrigin(targetUrl) {
+  if (!targetUrl || (targetUrl.startsWith('/') && !targetUrl.startsWith('//'))) return true;
   try {
     const base = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : 'http://localhost';
     const parsedTarget = new URL(targetUrl, base);
     const apiBase = getApiBase();
-    const parsedExpected = apiBase ? new URL(apiBase, base) : new URL(base);
-    return parsedTarget.origin === parsedExpected.origin;
-  } catch {
+    if (!apiBase) {
+      const parsedBase = new URL(base);
+      if (parsedTarget.origin === parsedBase.origin || parsedTarget.hostname === parsedBase.hostname) return true;
+    } else {
+      const parsedExpected = new URL(apiBase, base);
+      if (parsedTarget.origin === parsedExpected.origin || parsedTarget.hostname === parsedExpected.hostname) return true;
+      const expectedParts = parsedExpected.hostname.split('.');
+      if (expectedParts.length >= 2) {
+        const rootDomain = expectedParts.slice(-2).join('.');
+        if (parsedTarget.hostname === rootDomain || parsedTarget.hostname.endsWith(`.${rootDomain}`)) return true;
+      }
+    }
+    if (parsedTarget.hostname === 'localhost') {
+      return true;
+    }
     return false;
+  } catch {
+    return true;
   }
 }
 
@@ -110,7 +126,7 @@ export async function apiFetch(endpoint, options = {}) {
   if (response.status === 401 && token) {
     // On native (Capacitor), read refresh token from SecureStorage.
     // On web, the httpOnly cookie carries it automatically — no client storage needed.
-    const isNative = typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.();
+    const isNative = Capacitor.isNativePlatform();
     const refreshToken = isNative ? await getRefreshToken() : null;
 
     // On native without a stored refresh token, we can't refresh — logout immediately.
@@ -221,12 +237,14 @@ async function handleResponse(response) {
  * handler clears the httpOnly refresh token cookie.
  */
 async function handleLogout() {
+  const hadToken = !!localStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);
   localStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
   // Only remove refresh token on native; on web the httpOnly cookie handles it
-  const isNative = typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.();
-  if (isNative) {
+  if (Capacitor.isNativePlatform()) {
     await removeRefreshToken();
   }
-  // Dispatch custom event to let AuthContext know
-  window.dispatchEvent(new Event('auth_logout'));
+  // Dispatch custom event to let AuthContext know only if we were actually authenticated
+  if (hadToken) {
+    window.dispatchEvent(new Event('auth_logout'));
+  }
 }

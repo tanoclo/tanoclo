@@ -20,6 +20,7 @@ import { apiFetch } from './api/client';
 import ErrorBoundary from './components/common/ErrorBoundary';
 import RouteErrorBoundary from './components/common/RouteErrorBoundary';
 import SelfUpdater from './components/common/SelfUpdater';
+import DeviceRegistrationPage from './pages/DeviceRegistrationPage';
 
 // Lazy loaded Pages to optimize chunk size and load speeds
 const LoginPage = lazy(() => import('./pages/LoginPage'));
@@ -28,7 +29,6 @@ const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const AccountPage = lazy(() => import('./pages/AccountPage'));
 const ZonePage = lazy(() => import('./pages/ZonePage'));
 const ClimateQualityPage = lazy(() => import('./pages/ClimateQualityPage'));
-const DeviceRegistrationPage = lazy(() => import('./pages/DeviceRegistrationPage'));
 
 import { useGeolocation } from './hooks/useGeolocation';
 import { useBatteryNotifier } from './hooks/useBatteryNotifier';
@@ -158,14 +158,12 @@ export default function App() {
 
   // Intercept on native platforms if device registration has not been performed
   if (isAuthenticated && isNative && !mobileDeviceId) {
-    if (isHomeLoading || !activeHomeId) {
+    if (!activeHomeId) {
       return <FullPageSpinner />;
     }
     return (
       <ErrorBoundary>
-        <Suspense fallback={<FullPageSpinner />}>
-          <DeviceRegistrationPage onRegister={(id) => setMobileDeviceId(id)} />
-        </Suspense>
+        <DeviceRegistrationPage onRegister={(id) => setMobileDeviceId(id)} />
       </ErrorBoundary>
     );
   }

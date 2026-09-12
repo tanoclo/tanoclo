@@ -15,7 +15,8 @@ export const getApiBase = () => {
     return '';
   }
   // For native platforms (where asset protocol is file://), read custom Server URL from localStorage or configuration
-  return localStorage.getItem('tanoclo_server_url') || import.meta.env.VITE_API_BASE || '';
+  const base = localStorage.getItem('tanoclo_server_url') || import.meta.env.VITE_API_BASE || '';
+  return base.replace(/\/+$/, '');
 };
 
 // Supported application locales

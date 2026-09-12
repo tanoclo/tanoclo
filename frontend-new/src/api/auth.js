@@ -38,6 +38,7 @@ async function generateCodeChallenge(codeVerifier) {
  */
 export async function initiateLoginFlow() {
   const codeVerifier = generateRandomString(64);
+  localStorage.setItem('pkce_code_verifier', codeVerifier);
   sessionStorage.setItem('pkce_code_verifier', codeVerifier);
 
   const codeChallenge = await generateCodeChallenge(codeVerifier);
@@ -45,9 +46,11 @@ export async function initiateLoginFlow() {
   // Save current location to return to it after authentication
   const currentUrl = new URL(window.location.href);
   const redirectUri = `${currentUrl.origin}/`;
+  localStorage.setItem('pkce_redirect_uri', redirectUri);
   sessionStorage.setItem('pkce_redirect_uri', redirectUri);
 
   const state = generateRandomString(16);
+  localStorage.setItem('pkce_state', state);
   sessionStorage.setItem('pkce_state', state);
 
   const params = new URLSearchParams({
@@ -69,8 +72,8 @@ export async function initiateLoginFlow() {
  * @returns {Promise<object>}
  */
 export async function exchangeCodeForTokens(code) {
-  const codeVerifier = sessionStorage.getItem('pkce_code_verifier');
-  const redirectUri = sessionStorage.getItem('pkce_redirect_uri') || `${window.location.origin}/`;
+  const codeVerifier = localStorage.getItem('pkce_code_verifier') || sessionStorage.getItem('pkce_code_verifier');
+  const redirectUri = localStorage.getItem('pkce_redirect_uri') || sessionStorage.getItem('pkce_redirect_uri') || `${window.location.origin}/`;
 
   if (!codeVerifier) {
     throw new Error('No PKCE code verifier found in storage');

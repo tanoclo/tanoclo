@@ -189,13 +189,36 @@ app.param('zoneId', (req, res, next, value) => {
 app.use((req, res, next) => {
     if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
 
+    // Exempt OAuth endpoints and Bearer-token authenticated API calls
+    const requestPath = req.originalUrl || req.url || '';
+    if (requestPath.startsWith('/oauth') || requestPath.startsWith('/oauth2') || (req.headers.authorization && req.headers.authorization.startsWith('Bearer '))) {
+        return next();
+    }
+
+    const origin = req.headers.origin;
+
+    // Allow trusted origins (including mobile Capacitor apps on localhost / capacitor://localhost)
+    if (origin) {
+        try {
+            const url = new URL(origin);
+            if (url.hostname === 'localhost' ||
+                url.hostname === '127.0.0.1' ||
+                url.protocol === 'capacitor:' ||
+                url.protocol === 'ionic:' ||
+                url.hostname === config.domain ||
+                url.hostname.endsWith('.' + config.domain)) {
+                return next();
+            }
+        } catch (e) {
+            // Malformed origin header
+        }
+    }
+
     // Reject explicit cross-site requests identified by modern Sec-Fetch metadata
     if (req.headers['sec-fetch-site'] === 'cross-site') {
         _log('warn', `[CSRF] Blocked cross-site ${req.method} ${req.url} (sec-fetch-site: cross-site)`);
         return res.status(403).json({ error: 'forbidden', error_description: 'Cross-origin request blocked' });
     }
-
-    const origin = req.headers.origin;
 
     // Fall back to Referer verification if origin is missing or is the string "null"
     if (!origin || origin === 'null') {
@@ -223,17 +246,6 @@ app.use((req, res, next) => {
         return res.status(403).json({ error: 'forbidden', error_description: 'Cross-origin request blocked' });
     }
 
-    try {
-        const url = new URL(origin);
-        if (url.hostname === 'localhost' ||
-            url.hostname === '127.0.0.1' ||
-            url.hostname === config.domain ||
-            url.hostname.endsWith('.' + config.domain)) {
-            return next();
-        }
-    } catch (e) {
-        // Malformed origin header
-    }
     _log('warn', `[CSRF] Blocked ${req.method} ${req.url} from origin: ${origin}`);
     return res.status(403).json({ error: 'forbidden', error_description: 'Cross-origin request blocked' });
 });

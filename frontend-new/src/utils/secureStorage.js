@@ -7,9 +7,10 @@
  */
 
 import { SecureStorage } from '@aparajita/capacitor-secure-storage';
+import { Capacitor } from '@capacitor/core';
 import { STORAGE_KEYS } from './constants';
 
-const isNative = () => typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.();
+const isNative = () => Capacitor.isNativePlatform();
 
 /**
  * Retrieves the refresh token. On native, reads from SecureStorage with localStorage fallback.
@@ -32,13 +33,14 @@ export async function getRefreshToken() {
  * @returns {Promise<void>}
  */
 export async function setRefreshToken(token) {
-  if (!isNative() || !token) return;
-  try {
-    await SecureStorage.set(STORAGE_KEYS.REFRESH_TOKEN, token);
-    localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN);
-  } catch {
-    // Fallback to localStorage if SecureStorage is unavailable
-    localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, token);
+  if (!token) return;
+  localStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, token);
+  if (isNative()) {
+    try {
+      await SecureStorage.set(STORAGE_KEYS.REFRESH_TOKEN, token);
+    } catch {
+      // Fallback already persisted in localStorage
+    }
   }
 }
 
@@ -47,11 +49,12 @@ export async function setRefreshToken(token) {
  * @returns {Promise<void>}
  */
 export async function removeRefreshToken() {
-  if (!isNative()) return;
-  try {
-    await SecureStorage.remove(STORAGE_KEYS.REFRESH_TOKEN);
-  } catch {
-    // Ignore error
-  }
   localStorage.removeItem(STORAGE_KEYS.REFRESH_TOKEN);
+  if (isNative()) {
+    try {
+      await SecureStorage.remove(STORAGE_KEYS.REFRESH_TOKEN);
+    } catch {
+      // Ignore error
+    }
+  }
 }
