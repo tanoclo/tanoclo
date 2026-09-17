@@ -39,7 +39,7 @@ async function getFullUserData(pool, userId) {
     const [users] = await pool.execute('SELECT * FROM users WHERE id = ?', [userId]);
     if (users.length === 0) return null;
     const [homes] = await pool.execute(
-        'SELECT h.* FROM homes h JOIN home_users hu ON h.id = hu.home_id WHERE hu.user_id = ?',
+        'SELECT h.* FROM homes h JOIN users u ON h.id = u.home_id WHERE u.id = ?',
         [userId]
     );
     const [mobileDevices] = await pool.execute('SELECT * FROM mobile_devices WHERE user_id = ?', [userId]);
@@ -47,7 +47,7 @@ async function getFullUserData(pool, userId) {
 }
 
 // PUT /api/v2/users/{userId}
-router.put('/:userId', authMiddleware, async (req, res) => {
+router.put('/users/:userId', authMiddleware, async (req, res) => {
     try {
         const userId = req.user.id;
         const { locale, name } = req.body;
@@ -116,7 +116,7 @@ async function changeEmailHandler(req, res) {
 }
 
 // PUT /api/v2/users/{userId}/email
-router.put('/:userId/email', authMiddleware, changeEmailHandler);
+router.put('/users/:userId/email', authMiddleware, changeEmailHandler);
 
 // Shared handler for password change (used by PUT and POST routes)
 async function changePasswordHandler(req, res) {
@@ -144,7 +144,7 @@ async function changePasswordHandler(req, res) {
 }
 
 // PUT /api/v2/users/{userId}/password
-router.put('/:userId/password', authMiddleware, changePasswordHandler);
+router.put('/users/:userId/password', authMiddleware, changePasswordHandler);
 
 // --- Mobile Device Helper ---
 async function registerOrUpdateDevice(pool, username, data) {
@@ -152,9 +152,8 @@ async function registerOrUpdateDevice(pool, username, data) {
     if (users.length === 0) throw new Error('user_not_found');
     const user = users[0];
 
-    const [homeUsers] = await pool.execute('SELECT home_id FROM home_users WHERE user_id = ? LIMIT 1', [user.id]);
-    if (homeUsers.length === 0) throw new Error('no_home_found');
-    const homeId = homeUsers[0].home_id;
+    const homeId = user.home_id;
+    if (!homeId) throw new Error('no_home_found');
 
     const metadata = data.metadata || data || {};
     const deviceMeta = metadata.device || {};
@@ -257,7 +256,7 @@ router.delete('/homes/:homeId/users/:username', authMiddleware, async (req, res)
         const [devicesToUnpublish] = await pool.execute('SELECT id FROM mobile_devices WHERE user_id = ? AND home_id = ?', [targetUserId, homeId]);
 
         await pool.execute('DELETE FROM mobile_devices WHERE user_id = ? AND home_id = ?', [targetUserId, homeId]);
-        await pool.execute('DELETE FROM home_users WHERE home_id = ? AND user_id = ?', [homeId, targetUserId]);
+        await pool.execute('DELETE FROM users WHERE id = ? AND home_id = ?', [targetUserId, homeId]);
 
         // Cleanup MQTT trackers config and telemetry
         const mqttPublisher = require('../../lib/mqtt-publisher');
@@ -267,11 +266,6 @@ router.delete('/homes/:homeId/users/:username', authMiddleware, async (req, res)
             mqttPublisher.publishMobileDeviceTelemetry(homeId, md.id, false, null, null, null, false).catch(() => { });
         }
 
-        const [counts] = await pool.execute('SELECT COUNT(*) as c FROM home_users WHERE user_id = ?', [targetUserId]);
-        if (counts[0].c === 0) {
-            await pool.execute('DELETE FROM users WHERE id = ?', [targetUserId]);
-        }
-
         res.status(204).end();
     } catch (err) {
         res.status(500).json({ error: 'internal_error' });
@@ -279,7 +273,7 @@ router.delete('/homes/:homeId/users/:username', authMiddleware, async (req, res)
 });
 
 // POST /api/v2/users/{username}/mobileDevices
-router.post('/:username/mobileDevices', authMiddleware, async (req, res) => {
+router.post('/users/:username/mobileDevices', authMiddleware, async (req, res) => {
     try {
         const username = decodeURIComponent(req.params.username);
         const result = await registerOrUpdateDevice(db.getPool(), username, req.body);
@@ -306,8 +300,8 @@ router.post('/api/user/changePassword', authMiddleware, async (req, res) => {
     return changePasswordHandler(req, res);
 });
 
-// GET /users/:username/iterable
-router.get('/:username/iterable', async (req, res) => {
+// GET /api/v2/users/{username}/iterable
+router.get('/users/:username/iterable', async (req, res) => {
     try {
         const username = decodeURIComponent(req.params.username);
         const pool = db.getPool();
@@ -369,7 +363,7 @@ router.patch('/api/user', authMiddleware, async (req, res) => {
 });
 
 // POST /api/v2/users/{username}/mobileDeviceClaim
-router.post('/:username/mobileDeviceClaim', authMiddleware, async (req, res) => {
+router.post('/users/:username/mobileDeviceClaim', authMiddleware, async (req, res) => {
     try {
         const username = decodeURIComponent(req.params.username);
         const result = await registerOrUpdateDevice(db.getPool(), username, req.body);

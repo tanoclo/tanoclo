@@ -30,7 +30,7 @@ function extractDeviceId(parts, keyword, fallback) {
 function extractZoneId(parts, queryOptions) {
     const zIdx = parts.indexOf('z');
     if (zIdx < 0 || zIdx + 1 >= parts.length) return null;
-    if (parts[zIdx + 1] === 's' || parts[zIdx + 1] === 'overlay') {
+    if (parts[zIdx + 1] === 's' || parts[zIdx + 1] === 'overlay' || parts[zIdx + 1] === 'p') {
         const idQuery = queryOptions.find(q => q.startsWith('id='));
         return idQuery ? parseInt(idQuery.split('=')[1], 10) : null;
     }
@@ -209,7 +209,16 @@ async function classifyPath(uriPathStr = '', queryOptions = [], activeDeviceId =
                 if (route.extract === 'device') {
                     result = { type: route.type, deviceId: extractDeviceId(parts, route.match, activeDeviceId), homeId };
                 } else if (route.extract === 'zone') {
-                    const zoneId = extractZoneId(parts, queryOptions);
+                    let zoneId = extractZoneId(parts, queryOptions);
+                    if (zoneId == null && activeDeviceId) {
+                        try {
+                            const zt = await db.getZoneForDevice(activeDeviceId);
+                            if (zt) {
+                                zoneId = zt.zoneId;
+                                if (!homeId) homeId = zt.homeId;
+                            }
+                        } catch (e) { /* ignore */ }
+                    }
                     result = { type: route.type, zoneId, homeId, deviceId: activeDeviceId };
                 } else {
                     result = { type: route.type, deviceId: activeDeviceId };

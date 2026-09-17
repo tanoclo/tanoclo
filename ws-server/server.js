@@ -16,6 +16,7 @@ const net = require('net');
 const WebSocket = require('ws');
 
 let apiProcess = null;
+let uwsListenSocket = null;
 
 const { getLogger } = require('./lib/logger');
 const log = getLogger();
@@ -80,7 +81,7 @@ const TADO_ROOT_CA = fs.readFileSync(config.tadoRootCA);
 
 const { clients, deviceSessions, wsToBridgeId, extractShortSerial, isBridgeBlocked, getBridgeBlockStatus } = require('./lib/device-manager');
 const { proxyConnections, proxyMidCache, startProxyServer, stopProxyServer } = require('./lib/proxy-manager');
-const { downlinkBlockSessions, blockReassembly, ipv6ToDevice, nextMid, parseResourceIds, handleMessage, init: initMessageRouter } = require('./lib/message-router');
+const { downlinkBlockSessions, blockReassembly, ipv6ToDevice, nextMid, handleMessage, init: initMessageRouter } = require('./lib/message-router');
 
 /**
  * Periodically cleanup expired OAuth tokens and sessions (Frequency: 1 hour)
@@ -257,7 +258,7 @@ function broadcastRfKey() {
             mid: nextMid(),
             token: crypto.randomBytes(8),
             options: [
-                { num: 7, value: Buffer.from('ffff', 'hex') },     // OPT_URI_PORT: broadcast to all devices (0xFFFF)
+                { num: coap.OPT_URI_PORT, value: Buffer.from('ffff', 'hex') },     // OPT_URI_PORT: broadcast to all devices (0xFFFF)
                 { num: 11, value: Buffer.from('d') },              // OPT_URI_PATH: 'd' (device path segment)
                 { num: 11, value: Buffer.from('rfkey') },          // OPT_URI_PATH: 'rfkey' (RF key resource)
                 { num: 12, value: coap.encOptUint(42) }            // OPT_CONTENT_FORMAT: application/octet-stream (42)
@@ -491,6 +492,7 @@ async function startServer() {
 
     app.listen(INTERNAL_UWS_PORT, (listenSocket) => {
         if (listenSocket) {
+            uwsListenSocket = listenSocket;
             log('debug', `Internal uWS listening on port ${INTERNAL_UWS_PORT}`);
         } else {
             log('error', `Failed to listen on internal port ${INTERNAL_UWS_PORT}`);
@@ -537,6 +539,15 @@ async function handleShutdown() {
     if (isShuttingDown) return;
     isShuttingDown = true;
     log('debug', 'Shutting down...');
+    if (uwsListenSocket) {
+        try {
+            uWS.us_listen_socket_close(uwsListenSocket);
+            uwsListenSocket = null;
+            log('debug', 'Closed uWS listen socket');
+        } catch (e) {
+            log('warn', `Failed to close uWS listen socket: ${e.message}`);
+        }
+    }
     try { const { stop: stopRouter } = require('./lib/message-router'); stopRouter(); } catch (e) { }
     try { stopProxyServer(); } catch (e) { }
 
@@ -600,7 +611,7 @@ function startApiChildProcess() {
     const { fork } = require('child_process');
     log('info', '[STARTUP] Spawning REST API child process...');
     apiProcess = fork(path.join(__dirname, 'api/server.js'), [], {
-        env: { ...process.env, IS_CHILD_PROCESS: 'true' }
+        env: { ...process.env, IS_CHILD_PROCESS: 'true', JWT_SECRET: config.jwtSecret }
     });
 
     apiProcess.on('message', (msg) => {

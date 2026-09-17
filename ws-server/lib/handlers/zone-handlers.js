@@ -334,6 +334,46 @@ async function handleZoneState(ws, frame, coapMsg, decoded, peerInfo, pathInfo) 
     }
 }
 
+async function handleZoneParams(ws, frame, coapMsg, decoded, peerInfo, pathInfo) {
+    coapHelpers.sendCoAPAck(ws, coapMsg, peerInfo, frame.directionU16);
+    if (!decoded || !decoded.fields) return;
+
+    let zoneId = pathInfo.zoneId;
+    let homeId = pathInfo.homeId;
+    const deviceId = pathInfo.deviceId || (ipv6ToDevice ? ipv6ToDevice.get(peerInfo.ipv6) : null);
+
+    if ((zoneId == null || homeId == null) && deviceId) {
+        const shortSerial = extractShortSerial ? extractShortSerial(deviceId) : deviceId;
+        if (shortSerial) {
+            try {
+                const zt = await db.getZoneForDevice(shortSerial);
+                if (zt) {
+                    zoneId = zoneId ?? zt.zoneId;
+                    homeId = homeId ?? zt.homeId;
+                }
+            } catch (e) { /* ignore */ }
+        }
+    }
+
+    log('debug', `ZONE_PARAMS /z/p dev=${deviceId} z=${zoneId} h=${homeId}: ${JSON.stringify(decoded.fields)}`);
+
+    const temp = decoded.fields['0x4060'];
+    const demand = decoded.fields['0x40a0'];
+    const humidity = decoded.fields['0x4080'];
+
+    if (zoneId != null && homeId != null) {
+        if (demand !== undefined && demand !== null) {
+            await db.insertZoneDemand(homeId, zoneId, demand);
+        }
+        if (temp !== undefined && temp !== null) {
+            await db.insertZoneMeasurement(homeId, zoneId, temp, humidity ?? null, demand ?? 0);
+        }
+        if (typeof onStateChange === 'function') {
+            onStateChange(homeId, 'zone-state', { zoneId });
+        }
+    }
+}
+
 module.exports = {
     init,
     handleZoneExtui,
@@ -343,5 +383,6 @@ module.exports = {
     handleZoneConfig,
     handleCircuitActuator,
     handleCircuitConfig,
-    handleZoneState
+    handleZoneState,
+    handleZoneParams
 };

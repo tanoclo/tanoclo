@@ -825,7 +825,7 @@ router.put('/:homeId/tanoclo/users/:userId/admin', async (req, res) => {
             return res.status(403).json({ error: 'forbidden', error_description: 'Cannot change admin rights of the Tado admin' });
         }
 
-        // 5. Update the TaNoClo admin status in home_users table
+        // 5. Update the TaNoClo admin status in users table
         const tanocloAdminVal = isAdmin ? 1 : 0;
         await pool.execute('UPDATE users SET is_tanoclo_admin = ? WHERE id = ?', [tanocloAdminVal, userId]);
 

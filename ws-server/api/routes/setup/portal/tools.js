@@ -98,7 +98,7 @@ router.post('/decode', adminAuth, async (req, res) => {
                             try {
                                 const meta = JSON.parse(row.json_data);
                                 if (meta.scale !== undefined) scale = meta.scale;
-                            } catch (e) { }
+                            } catch (e) { /* Ignore malformed JSON metadata */ }
                         }
 
                         labels[key] = {

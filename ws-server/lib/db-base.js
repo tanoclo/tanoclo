@@ -283,8 +283,10 @@ function getPool() {
             };
 
             rawPool.on('connection', (conn) => {
-                conn.promise().query("SET time_zone = '+00:00'").catch(err => {
-                    _log('error', `Failed to set session time_zone to UTC: ${err.message}`);
+                conn.query("SET time_zone = '+00:00'", (err) => {
+                    if (err) {
+                        _log('error', `Failed to set session time_zone to UTC: ${err.message}`);
+                    }
                 });
             });
             _log('info', `Pool created.`);
@@ -453,6 +455,24 @@ function tlvNameToHex(name) {
     return null;
 }
 
+/**
+ * Assert that all column names in an update string or array of column assignments are in an allowlist.
+ * Prevents SQL injection in dynamic UPDATE/INSERT constructions.
+ * @param {string[]|string} updates - Array of assignments (e.g. ['name = ?', 'col=?']) or column name(s)
+ * @param {Set<string>|string[]} allowlist - Set or array of allowed column names
+ */
+function assertAllowedColumns(updates, allowlist) {
+    const allowed = allowlist instanceof Set ? allowlist : new Set(allowlist);
+    const clauses = Array.isArray(updates) ? updates : [updates];
+    for (const clause of clauses) {
+        if (!clause) continue;
+        const colName = clause.split('=')[0].trim().replace(/[`"']/g, '');
+        if (!allowed.has(colName)) {
+            throw new Error(`Invalid column in dynamic SQL: ${colName}`);
+        }
+    }
+}
+
 function cleanFriendlyConfig(fields) {
     if (!fields || typeof fields !== 'object') return {};
     const tlv = require('./tlv');
@@ -516,6 +536,7 @@ module.exports = {
     mapMountState,
     extractShortSerial: normalizeSerial,
     normalizeSerial,
+    assertAllowedColumns,
     cleanFriendlyConfig,
     tlvNameToHex,
     _log

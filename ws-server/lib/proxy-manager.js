@@ -23,15 +23,20 @@ const { getLogger } = require('./logger');
 const defaultLogger = getLogger('proxy-mgr');
 const proxyConnections = new Map();
 const MAX_PROXY_MID_CACHE = 10000;
-const proxyMidCache = new Map();
-const _origProxyMidCacheSet = proxyMidCache.set.bind(proxyMidCache);
-proxyMidCache.set = function (key, value) {
-    if (this.size >= MAX_PROXY_MID_CACHE) {
-        const oldest = this.keys().next().value;
-        this.delete(oldest);
+class BoundedMap extends Map {
+    constructor(maxSize) {
+        super();
+        this.maxSize = maxSize;
     }
-    return _origProxyMidCacheSet(key, value);
-};
+    set(key, value) {
+        if (this.size >= this.maxSize && !this.has(key)) {
+            const oldest = this.keys().next().value;
+            this.delete(oldest);
+        }
+        return super.set(key, value);
+    }
+}
+const proxyMidCache = new BoundedMap(MAX_PROXY_MID_CACHE);
 
 function sweepProxyMidCache() {
     const cutoff = Date.now() - 5 * 60 * 1000;
@@ -255,7 +260,7 @@ async function ensureProxyConnection(ws, deviceId, rawData) {
                         const closeCode = code || 1011;
                         const closeReason = reason ? reason.toString() : 'Proxy connection closed';
                         ws.end(closeCode, closeReason);
-                    } catch (e) { }
+                    } catch (e) { /* Socket already destroyed or closing */ }
                 }
             });
 

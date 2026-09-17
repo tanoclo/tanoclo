@@ -255,7 +255,7 @@ router.get('/:homeId/users', async (req, res) => {
                     if (md.push_notifications_json) {
                         try {
                             settings.pushNotifications = JSON.parse(md.push_notifications_json);
-                        } catch (e) { }
+                        } catch (e) { /* Ignore malformed push notification JSON */ }
                     }
 
                     const deviceObj = {

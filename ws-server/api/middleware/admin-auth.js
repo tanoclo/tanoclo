@@ -12,8 +12,9 @@ const config = require('../../lib/config');
 
 module.exports = (req, res, next) => {
     const token = req.cookies?.setup_token;
+    const expectsJson = req.xhr || req.headers.accept?.includes('application/json') || req.headers.accept === '*/*';
     if (!token) {
-        if (req.xhr || req.headers.accept?.includes('application/json')) {
+        if (expectsJson) {
             return res.status(401).json({ error: 'unauthorized' });
         }
         return res.redirect('/setup/login');
@@ -24,7 +25,7 @@ module.exports = (req, res, next) => {
         next();
     } catch (e) {
         res.clearCookie('setup_token');
-        if (req.xhr || req.headers.accept?.includes('application/json')) {
+        if (expectsJson) {
             return res.status(401).json({ error: 'unauthorized' });
         }
         res.redirect('/setup/login');

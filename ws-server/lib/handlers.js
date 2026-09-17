@@ -361,6 +361,7 @@ module.exports = {
     handleCircuitActuator: zoneHandlers.handleCircuitActuator,
     handleCircuitConfig: zoneHandlers.handleCircuitConfig,
     handleZoneState: zoneHandlers.handleZoneState,
+    handleZoneParams: zoneHandlers.handleZoneParams,
     sendCoAPAck: coapHelpers.sendCoAPAck,
     sendCoAPWithBlock2: coapHelpers.sendCoAPWithBlock2,
     sendWrappedCoAP: coapHelpers.sendWrappedCoAP,

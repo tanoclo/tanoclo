@@ -9,10 +9,18 @@
  */
 
 'use strict';
-const { getPool, _log, safeJsonParse, generateEtag, cleanFriendlyConfig, tadoHashStep, getFieldVal, calculateVADeviceETag, tlvNameToHex, mapOrientation } = require('../db-base');
+const { getPool, _log, safeJsonParse, generateEtag, cleanFriendlyConfig, tadoHashStep, getFieldVal, calculateVADeviceETag, tlvNameToHex, mapOrientation, assertAllowedColumns } = require('../db-base');
 const { getDeviceByFullSerial, getDeviceBySerial } = require('../db-devices');
 const tlv = require('../tlv');
 const { getLocalParts, parseLocalTimeInTimezone } = require('../utils');
+
+const ALLOWED_ZONE_CONFIG_COLS = new Set(['last_config_json', 'config_etag', 'dazzle_enabled', 'field_60a0', 'field_60c0', 'field_6080', 'field_6340']);
+const ALLOWED_ZONE_DEVICE_CONFIG_COLS = new Set(['last_config_json', 'field_0140', 'field_0149', 'field_0158', 'field_015a', 'config_etag']);
+const ALLOWED_CIRCUIT_STATE_COLS = new Set(['field_4040', 'field_4000', 'field_4080', 'field_2090']);
+const ALLOWED_HEATING_SYSTEM_COLS = new Set([
+    'home_id', 'hvac_updated_at', 'last_config_json', 'hvac_etag',
+    'field_0460', 'field_0461', 'field_0462', 'field_0463', 'field_0466', 'field_0467', 'field_0468', 'field_0464', 'field_0465', 'field_0481'
+]);
 
 // ==========================================
 // 1. Zone ETag and Liveness Checking
@@ -346,6 +354,7 @@ async function updateZoneConfig(homeId, zoneId, fields, fullConfigJson) {
 
     params.push(zoneId);
     params.push(homeId);
+    assertAllowedColumns(sqlUpdates, ALLOWED_ZONE_CONFIG_COLS);
     await p.execute(
         `UPDATE zones SET ${sqlUpdates.join(', ')} WHERE id=? AND home_id=?`,
         params
@@ -402,6 +411,7 @@ async function updateLastConfigJsonFromLive(serial, decodedFields, etag) {
     }
 
     params.push(serial);
+    assertAllowedColumns(updates, ALLOWED_ZONE_DEVICE_CONFIG_COLS);
     await p.execute(`UPDATE devices SET ${updates.join(', ')} WHERE serial_no = ?`, params);
 }
 
@@ -593,6 +603,7 @@ async function upsertHeatingCircuit(homeId, number, fields = {}) {
 
         if (updates.length > 0) {
             params.push(homeId, number);
+            assertAllowedColumns(updates, ALLOWED_CIRCUIT_STATE_COLS);
             await p.execute(`UPDATE heating_circuits SET ${updates.join(', ')} WHERE home_id=? AND number=?`, params);
         }
     }
@@ -711,6 +722,7 @@ async function upsertHeatingSystem(homeId, fields, fullConfigJson = null) {
                 placeholders.push('?');
             }
         }
+        assertAllowedColumns(cols, ALLOWED_HEATING_SYSTEM_COLS);
         await p.execute(`INSERT INTO heating_systems (${cols.join(',')}) VALUES (${placeholders.join(',')})`, vals);
     } else {
         const updates = ['hvac_updated_at=?', 'last_config_json=?', 'hvac_etag=?'];
@@ -732,6 +744,7 @@ async function upsertHeatingSystem(homeId, fields, fullConfigJson = null) {
             }
         }
         params.push(homeId);
+        assertAllowedColumns(updates, ALLOWED_HEATING_SYSTEM_COLS);
         await p.execute(`UPDATE heating_systems SET ${updates.join(', ')} WHERE home_id=?`, params);
     }
 }

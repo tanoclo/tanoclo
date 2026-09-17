@@ -12,7 +12,7 @@ const os = require('os');
 class WorkerPool {
     constructor() {
         this.workerPath = path.join(__dirname, 'packet-worker.js');
-        this.poolSize = Math.max(1, os.cpus().length - 1);
+        this.poolSize = Math.min(8, Math.max(1, os.cpus().length - 1));
         this.workers = [];
         this.activeWorkers = new Set();
         this.taskQueue = [];

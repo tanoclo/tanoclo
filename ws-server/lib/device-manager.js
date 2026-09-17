@@ -11,10 +11,8 @@ const deviceSessions = new Map();
 const wsToBridgeId = new Map();
 const blockedBridges = new Map();
 
-function extractShortSerial(deviceId) {
-    if (!deviceId) return null;
-    return deviceId.trim();
-}
+const { normalizeSerial: extractShortSerial } = require('./db-base');
+
 
 function blockBridge(deviceId, durationMs = 120000, onExpire = null) {
     const cleanId = extractShortSerial(deviceId);
@@ -38,7 +36,7 @@ function blockBridge(deviceId, durationMs = 120000, onExpire = null) {
                 } else if (clientInfo.ws._socket && clientInfo.ws._socket.remoteAddress) {
                     bridgeIp = clientInfo.ws._socket.remoteAddress;
                 }
-            } catch (e) { }
+            } catch (e) { /* Best-effort remote IP extraction */ }
         }
     }
 
@@ -52,17 +50,17 @@ function blockBridge(deviceId, durationMs = 120000, onExpire = null) {
                     } else if (ws._socket && ws._socket.remoteAddress) {
                         bridgeIp = ws._socket.remoteAddress;
                     }
-                } catch (e) { }
+                } catch (e) { /* Best-effort remote IP extraction */ }
             }
             wsToBridgeId.delete(ws);
-            try { ws.close(); } catch (e) { }
-            try { ws.end(); } catch (e) { }
+            try { ws.close(); } catch (e) { /* Socket cleanup */ }
+            try { ws.end(); } catch (e) { /* Socket cleanup */ }
         }
     }
 
     if (clientInfo && clientInfo.ws) {
-        try { clientInfo.ws.close(); } catch (e) { }
-        try { clientInfo.ws.end(); } catch (e) { }
+        try { clientInfo.ws.close(); } catch (e) { /* Socket cleanup */ }
+        try { clientInfo.ws.end(); } catch (e) { /* Socket cleanup */ }
     }
     clients.delete(cleanId);
 
@@ -70,7 +68,7 @@ function blockBridge(deviceId, durationMs = 120000, onExpire = null) {
     const timer = setTimeout(() => {
         blockedBridges.delete(cleanId);
         if (typeof onExpire === 'function') {
-            try { onExpire(cleanId); } catch (e) { }
+            try { onExpire(cleanId); } catch (e) { /* Non-critical unblock callback error */ }
         }
     }, durationMs);
     timer.unref();

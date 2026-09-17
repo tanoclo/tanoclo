@@ -23,6 +23,8 @@ const mqttHaDiscovery = require('../../../lib/mqtt-ha-discovery');
 const battery = require('../../../lib/battery');
 const adminAuth = require('../../middleware/admin-auth');
 
+const ALLOWED_SETUP_DEVICE_COLS = new Set(['field_0273', 'field_027c', 'field_0280']);
+
 const router = express.Router();
 const _log = getLogger('setup-api');
 
@@ -191,6 +193,7 @@ router.post('/devices/:serial/actuator-limits', adminAuth, async (req, res) => {
 
         if (updates.length > 0) {
             params.push(serial); // For serial_no = ?
+            db.assertAllowedColumns(updates, ALLOWED_SETUP_DEVICE_COLS);
             await pool.execute(`UPDATE devices SET ${updates.join(', ')} WHERE serial_no = ?`, params);
         }
         mqttHaDiscovery.publishAllDiscovery().catch(() => { });
@@ -616,7 +619,7 @@ async function performSeeding(accessToken) {
                     push.smartReminders !== false ? 1 : 0
                 ]);
             }
-        } catch (e) { }
+        } catch (e) { /* Optional mobile device settings import failed */ }
 
         let hasDhwZone = false;
         // Zones
@@ -625,11 +628,11 @@ async function performSeeding(accessToken) {
                 hasDhwZone = true;
             }
             let defOverlay = {}, control = {}, state = {}, caps = {}, awayConfig = {};
-            try { defOverlay = await tadoFetch(`/homes/${homeId}/zones/${z.id}/defaultOverlay`); } catch (e) { }
-            try { control = await tadoFetch(`/homes/${homeId}/zones/${z.id}/control`); } catch (e) { }
-            try { state = await tadoFetch(`/homes/${homeId}/zones/${z.id}/state`); } catch (e) { }
-            try { caps = await tadoFetch(`/homes/${homeId}/zones/${z.id}/capabilities`); } catch (e) { }
-            try { awayConfig = await tadoFetch(`/homes/${homeId}/zones/${z.id}/awayConfiguration`); } catch (e) { }
+            try { defOverlay = await tadoFetch(`/homes/${homeId}/zones/${z.id}/defaultOverlay`); } catch (e) { /* Optional default overlay */ }
+            try { control = await tadoFetch(`/homes/${homeId}/zones/${z.id}/control`); } catch (e) { /* Optional zone control */ }
+            try { state = await tadoFetch(`/homes/${homeId}/zones/${z.id}/state`); } catch (e) { /* Optional zone state */ }
+            try { caps = await tadoFetch(`/homes/${homeId}/zones/${z.id}/capabilities`); } catch (e) { /* Optional zone capabilities */ }
+            try { awayConfig = await tadoFetch(`/homes/${homeId}/zones/${z.id}/awayConfiguration`); } catch (e) { /* Optional away configuration */ }
 
             const minTemp = caps.temperatures?.celsius?.min || 5.0;
             const maxTemp = caps.temperatures?.celsius?.max || 25.0;
@@ -749,7 +752,7 @@ async function performSeeding(accessToken) {
                     ]);
                 }
                 await conn.execute('UPDATE zones SET last_schedule_change_at = NOW() WHERE id = ? AND home_id = ?', [z.id, homeId]);
-            } catch (e) { }
+            } catch (e) { /* Non-critical zone schedule import error */ }
         }
 
         // Devices
@@ -808,7 +811,7 @@ async function performSeeding(accessToken) {
             let flow;
             try {
                 flow = await tadoFetch(`/homes/${homeId}/flowTemperatureOptimization`);
-            } catch (e) { }
+            } catch (e) { /* Optional flow temperature optimization feature */ }
 
             if (flow) {
                 await conn.execute(`
@@ -827,7 +830,7 @@ async function performSeeding(accessToken) {
                     ON DUPLICATE KEY UPDATE home_id = home_id
                 `, [homeId]);
             }
-        } catch (e) { }
+        } catch (e) { /* Non-critical flow temp import error */ }
 
         // Heating Circuits
         try {

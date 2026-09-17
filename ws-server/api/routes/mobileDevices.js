@@ -18,6 +18,16 @@ const { mapMobileDevice } = require('../../lib/mappers');
 const router = express.Router();
 const _log = getLogger('mobileDevices-api');
 
+const ALLOWED_MOBILE_SETTINGS_COLS = new Set([
+    'geo_tracking_enabled', 'special_offers_enabled', 'on_demand_log_retrieval_enabled',
+    'smart_reminders_in_app_enabled', 'push_low_battery_reminder', 'push_away_mode_reminder',
+    'push_home_mode_reminder', 'push_open_window_reminder', 'push_energy_savings_report_reminder',
+    'push_incident_detection', 'push_energy_iq_reminder', 'push_tariff_high_price_alert',
+    'push_tariff_low_price_alert', 'push_smart_reminders'
+]);
+
+const ALLOWED_MOBILE_METADATA_COLS = new Set(['platform', 'os_version', 'model', 'locale']);
+
 async function ensureGeofencingAuth(req, res, next) {
     const authHeader = req.headers.authorization;
     if (!authHeader) {
@@ -313,6 +323,7 @@ router.put('/:homeId/mobileDevices/:deviceId/settings', async (req, res) => {
 
         if (updates.length > 0) {
             params.push(deviceId, homeId);
+            db.assertAllowedColumns(updates, ALLOWED_MOBILE_SETTINGS_COLS);
             await pool.execute(`UPDATE mobile_devices SET ${updates.join(', ')} WHERE id = ? AND home_id = ?`, params);
         }
 
@@ -343,6 +354,7 @@ router.put('/:homeId/mobileDevices/:deviceId/metadata', async (req, res) => {
 
             if (updates.length > 0) {
                 params.push(deviceId, homeId);
+                db.assertAllowedColumns(updates, ALLOWED_MOBILE_METADATA_COLS);
                 await pool.execute(`UPDATE mobile_devices SET ${updates.join(', ')} WHERE id = ? AND home_id = ?`, params);
             }
         }

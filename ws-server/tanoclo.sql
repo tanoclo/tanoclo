@@ -23145,6 +23145,7 @@ CREATE TABLE `heating_systems` (
   `field_0481` varchar(60) DEFAULT NULL,
   `hvac_updated_at` varchar(64) DEFAULT NULL,
   `last_config_json` text DEFAULT NULL,
+  `boiler_capacity_kw` decimal(5,2) DEFAULT NULL,
   `hvac_etag` varbinary(16) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

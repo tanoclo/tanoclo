@@ -196,6 +196,9 @@ router.get('/login', (req, res, next) => {
 
 router.post('/login', async (req, res) => {
     const { loginId, password } = req.body || {};
+    if (!loginId || !password || typeof loginId !== 'string' || typeof password !== 'string') {
+        return res.redirect(`/login?${new URLSearchParams(req.query).toString()}&error=1`);
+    }
     const pool = db.getPool();
 
     try {

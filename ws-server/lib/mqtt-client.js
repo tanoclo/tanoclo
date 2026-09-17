@@ -14,6 +14,7 @@ let connected = false;
 let manuallyClosed = false;
 let reconnectDelay = 1000;
 let reconnectTimer = null;
+let reconnectAttempts = 0;
 const throttles = new Map();
 const subscriptions = [];
 const onConnectCallbacks = [];
@@ -63,6 +64,7 @@ function _connect() {
     client.on('connect', () => {
         connected = true;
         reconnectDelay = 1000;
+        reconnectAttempts = 0;
         if (reconnectTimer) {
             clearTimeout(reconnectTimer);
             reconnectTimer = null;
@@ -127,10 +129,17 @@ function _handleDisconnect() {
         if (log) log('info', `[mqtt] Will attempt reconnect in ${reconnectDelay}ms`);
         reconnectTimer = setTimeout(() => {
             reconnectTimer = null;
-            if (client) {
-                if (log) log('info', '[mqtt] Reconnecting...');
+            reconnectAttempts++;
+            if (client && reconnectAttempts < 5) {
+                if (log) log('info', `[mqtt] Reconnecting (attempt ${reconnectAttempts})...`);
                 client.reconnect();
             } else {
+                if (log) log('info', `[mqtt] Recreating client after ${reconnectAttempts} failed reconnects...`);
+                if (client) {
+                    try { client.end(true); } catch (e) { /* ignore */ }
+                    client = null;
+                }
+                reconnectAttempts = 0;
                 _connect();
             }
             reconnectDelay = Math.min(reconnectDelay * 2, 30000);

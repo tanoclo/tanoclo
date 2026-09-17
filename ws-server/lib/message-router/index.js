@@ -62,6 +62,17 @@ let _cleanupBlockSessionsTimer;
 let _cleanupBlockReassemblyTimer;
 let _refreshIpv6ToDeviceTimer;
 
+/**
+ * Allocate the next CoAP Message ID (MID) for server-initiated downlink requests.
+ * 
+ * Firmware Reverse Engineering / MID Range Rationale:
+ * Tado endpoint devices (VA, RU, IB) run Contiki OS with er-coap. Devices generate
+ * client-initiated requests using sequential MIDs starting from low numbers (0x0001 - 0x6FFF).
+ * The device firmware maintains an in-memory transaction and deduplication cache keyed by MID.
+ * To avoid MID collisions between server-originated requests (e.g. GET /d/time, PUT /z/.../overlay)
+ * and device-originated uplinks in the device transaction tables, the server range is strictly
+ * segregated to the upper half: 0x7000 - 0xFFFF (36,864 unique values).
+ */
 function nextMid() {
     const mid = 0x7000 + (serverMid % 0x9000);
     serverMid = (serverMid + 1) % 0x9000;
@@ -691,8 +702,12 @@ async function handleMessage(ws, message, isBinary, isDownlink = false) {
                 case 'device_fallback':
                     await handlers.handleDeviceFallback(ws, frame, coapMsg, decoded, peerInfo, pathInfo);
                     break;
+                case 'zone_open_window':
                 case 'open_window':
                     await handlers.handleZoneOpenWindow(ws, frame, coapMsg, decoded, peerInfo, pathInfo);
+                    break;
+                case 'zone_params':
+                    await handlers.handleZoneParams(ws, frame, coapMsg, decoded, peerInfo, pathInfo);
                     break;
                 case 'zone_config':
                     await handlers.handleZoneConfig(ws, frame, coapMsg, decoded, peerInfo, pathInfo);

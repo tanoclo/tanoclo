@@ -18,6 +18,11 @@ const { mapDevice } = require('../../lib/mappers');
 const router = express.Router();
 const _log = getLogger('devices-api');
 
+const ALLOWED_DEVICE_ROUTE_COLS = new Set([
+    'field_0273', 'field_027c', 'field_0280',
+    'field_019e', 'field_019d', 'field_0149', 'field_02b2'
+]);
+
 router.use(authMiddleware);
 router.use(homeAccessMiddleware);
 
@@ -551,6 +556,7 @@ async function setActuatorLimits(req, res) {
         if (updates.length > 0) {
             params.push(deviceId);
             params.push(homeId);
+            db.assertAllowedColumns(updates, ALLOWED_DEVICE_ROUTE_COLS);
             await pool.execute(`UPDATE devices SET ${updates.join(', ')} WHERE serial_no = ? AND home_id = ?`, params);
         }
 
@@ -605,6 +611,7 @@ async function setDisplaySettings(req, res) {
         if (updates.length > 0) {
             params.push(deviceId);
             params.push(homeId);
+            db.assertAllowedColumns(updates, ALLOWED_DEVICE_ROUTE_COLS);
             await pool.execute(`UPDATE devices SET ${updates.join(', ')} WHERE serial_no = ? AND home_id = ?`, params);
 
             // Merge into config

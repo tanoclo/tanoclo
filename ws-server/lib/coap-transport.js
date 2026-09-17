@@ -27,7 +27,12 @@ const RETRY_INTERVALS = [6000, 13000, 26000, 50000, 90000];
 const QUERY_TIMEOUT_MS = 5000;
 const MAX_QUERY_RETRIES = 2;
 
-let _serverMid = 0xB000;
+/**
+ * Server-originated MID range: 0x7000 - 0xFFFF (36,864 unique values).
+ * Avoids collision with device-side MIDs (0x0000 - 0x6FFF) per Contiki er-coap.
+ * See message-router/index.js for the same constraint.
+ */
+let _serverMid = Math.floor(Math.random() * 0x9000);
 
 let _tanocloMidsSweepInterval = null;
 
@@ -57,7 +62,9 @@ function getProxyMidCache() {
 }
 
 function getNextMid() {
-    return (_serverMid++) & 0xFFFF;
+    const mid = 0x7000 + (_serverMid % 0x9000);
+    _serverMid = (_serverMid + 1) % 0x9000;
+    return mid;
 }
 
 function isTaNoCloOriginatedMid(mid) {

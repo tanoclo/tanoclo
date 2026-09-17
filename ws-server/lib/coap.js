@@ -41,7 +41,8 @@ const OPT_IF_MATCH = 1;
 const OPT_MAX_AGE = 2;
 const OPT_URI_HOST = 3;
 const OPT_ETAG = 4;
-const OPT_LOCATION_PATH = 7;
+const OPT_URI_PORT = 7;
+const OPT_LOCATION_PATH = 8;
 const OPT_URI_PATH = 11;
 const OPT_CONTENT_FORMAT = 12;
 const OPT_URI_QUERY = 15;
@@ -485,6 +486,17 @@ function decodeTimeProtobuf(payload) {
 
 /**
  * Encode a Unix timestamp as a protobuf time payload (for /time endpoint).
+ *
+ * Protocol constraint note (Year 2038 / 64-bit verification):
+ * The Tado bridge firmware specifically expects a 5-byte protobuf message with tag 0x0D:
+ * Tag 0x0D = (field_number 1 << 3) | wire_type 5 (fixed32 = 4 bytes little-endian).
+ * Switching to 64-bit encoding (wire_type 1, tag 0x09, 8-byte value) is NOT supported
+ * by Tado bridge firmware and causes packet decode failures.
+ *
+ * Because writeUInt32LE writes an unsigned 32-bit integer, the timestamp is valid up to
+ * 0xFFFFFFFF (4,294,967,295 seconds = February 7, 2106 06:28:15 UTC), avoiding the signed
+ * 32-bit Year 2038 (2^31 - 1) overflow ceiling.
+ *
  * @param {number} unixSeconds - Unix timestamp in seconds
  * @returns {Buffer} 5-byte protobuf payload
  */
@@ -505,7 +517,7 @@ module.exports = {
     TYPE_CON, TYPE_NON, TYPE_ACK, TYPE_RST,
     CODE_GET, CODE_POST, CODE_PUT, CODE_DELETE,
     CODE_CREATED, CODE_DELETED, CODE_VALID, CODE_CHANGED, CODE_CONTENT, CODE_CONTINUE, CODE_GATEWAY_TIMEOUT,
-    OPT_IF_MATCH, OPT_MAX_AGE, OPT_URI_HOST, OPT_LOCATION_PATH,
+    OPT_IF_MATCH, OPT_MAX_AGE, OPT_URI_HOST, OPT_URI_PORT, OPT_LOCATION_PATH,
     OPT_URI_PATH, OPT_CONTENT_FORMAT, OPT_URI_QUERY, OPT_ACCEPT,
     OPT_BLOCK1, OPT_BLOCK2, OPT_ETAG, OPT_VENDOR_2048,
 };

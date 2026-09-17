@@ -24,6 +24,7 @@ let _onStateChangeFn = null;
 
 const _retryQueue = [];
 const _intervals = [];
+const _timeouts = [];
 
 async function processRetryQueue() {
     if (db.isOffline()) return;
@@ -433,7 +434,7 @@ function scheduleDailyRfKeySync() {
     }, msUntilNext);
 
     if (timer.unref) timer.unref();
-    _intervals.push(timer);
+    _timeouts.push(timer);
 }
 
 /**
@@ -544,7 +545,9 @@ async function evaluateAllHomesPresence() {
 
 function stop() {
     for (const id of _intervals) clearInterval(id);
+    for (const id of _timeouts) clearTimeout(id);
     _intervals.length = 0;
+    _timeouts.length = 0;
     log('info', 'Cron service stopped');
 }
 

@@ -20,6 +20,11 @@ const { buildHomeDetails, checkZoneConfigReadonly } = require('./helpers');
 const router = express.Router();
 const _log = getLogger('homes-api');
 
+const ALLOWED_HOME_BASE_COLS = new Set([
+    'address_line1', 'address_line2', 'address_zip_code', 'address_city', 'address_state', 'address_country',
+    'contact_name', 'contact_email', 'contact_phone', 'name'
+]);
+
 router.get('/:homeId', async (req, res) => {
     try {
         const homeId = req.params.homeId;
@@ -120,6 +125,7 @@ router.put('/:homeId/details', async (req, res) => {
 
         if (updates.length > 0) {
             params.push(homeId);
+            db.assertAllowedColumns(updates, ALLOWED_HOME_BASE_COLS);
             await pool.execute(`UPDATE homes SET ${updates.join(', ')} WHERE id = ?`, params);
         }
 

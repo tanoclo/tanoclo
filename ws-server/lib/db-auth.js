@@ -51,9 +51,12 @@ async function checkWhitelist(type, value) {
     return rows.length > 0;
 }
 
+const OAUTH_SESSION_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90 days (reduced from 365)
+const OAUTH_SESSION_SLIDE_THRESHOLD_MS = 45 * 24 * 60 * 60 * 1000; // Slide if remaining < 45 days (50% TTL)
+
 async function createOauthSession(userId, token, userAgent, ipAddress) {
     const p = getPool();
-    const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000); // 1 year
+    const expiresAt = new Date(Date.now() + OAUTH_SESSION_TTL_MS);
     await p.execute(
         'INSERT INTO oauth_sessions (user_id, session_token, user_agent, ip_address, expires_at) VALUES (?, ?, ?, ?, ?)',
         [userId, hashToken(token), userAgent, ipAddress, expiresAt]
@@ -62,11 +65,28 @@ async function createOauthSession(userId, token, userAgent, ipAddress) {
 
 async function getOauthSession(token) {
     const p = getPool();
+    const hashed = hashToken(token);
     const [rows] = await p.execute(
         'SELECT * FROM oauth_sessions WHERE session_token=? AND expires_at>CURRENT_TIMESTAMP LIMIT 1',
-        [hashToken(token)]
+        [hashed]
     );
-    return rows.length > 0 ? rows[0] : null;
+    if (rows.length === 0) return null;
+    const session = rows[0];
+
+    // Sliding expiry: if less than half TTL remains, slide expiration back out to 90 days
+    const remainingMs = new Date(session.expires_at).getTime() - Date.now();
+    if (remainingMs < OAUTH_SESSION_SLIDE_THRESHOLD_MS) {
+        const newExpiresAt = new Date(Date.now() + OAUTH_SESSION_TTL_MS);
+        p.execute(
+            'UPDATE oauth_sessions SET expires_at=? WHERE id=?',
+            [newExpiresAt, session.id]
+        ).catch(err => {
+            _log('warn', `Failed to slide oauth session expiry: ${err.message}`);
+        });
+        session.expires_at = newExpiresAt;
+    }
+
+    return session;
 }
 
 async function deleteOauthSession(token) {

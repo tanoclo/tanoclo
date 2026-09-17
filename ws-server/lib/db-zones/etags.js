@@ -16,10 +16,12 @@
  * Zone-related DB operations.
  * Handles zone configurations, states, timetable schedules, overlays, and circuit configurations.
  */
-const { getPool, _log, safeJsonParse, generateEtag, cleanFriendlyConfig, tadoHashStep, getFieldVal, calculateVADeviceETag, tlvNameToHex, mapOrientation } = require('../db-base');
+const { getPool, _log, safeJsonParse, generateEtag, cleanFriendlyConfig, tadoHashStep, getFieldVal, calculateVADeviceETag, tlvNameToHex, mapOrientation, assertAllowedColumns } = require('../db-base');
 const { getDeviceByFullSerial, getDeviceBySerial } = require('../db-devices');
 const tlv = require('../tlv');
 const { getLocalParts, parseLocalTimeInTimezone } = require('../utils');
+
+const ALLOWED_ZONE_REAL_ETAG_COLS = new Set(['state_etag_real', 'config_etag_real']);
 
 // ==========================================
 // 1. Zone ETag and Liveness Checking
@@ -50,6 +52,7 @@ async function storeRealZoneEtag(homeId, zoneId, resource, etag) {
     if (!homeId) throw new Error('homeId is required for storeRealZoneEtag');
     const p = getPool();
     const col = `${resource}_etag_real`;
+    assertAllowedColumns(col, ALLOWED_ZONE_REAL_ETAG_COLS);
     await p.execute(`UPDATE zones SET ${col}=? WHERE id=? AND home_id=?`, [etag, zoneId, homeId]);
 }
 

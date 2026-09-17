@@ -172,8 +172,11 @@ app.use((req, res, next) => {
     next();
 });
 
-app.use(express.json({ limit: '256kb' }));
-app.use(express.urlencoded({ extended: true, limit: '256kb' }));
+// Route-specific body size limits: 256kb for setup routes, 16kb for general API
+app.use('/setup', express.json({ limit: '256kb' }));
+app.use('/setup', express.urlencoded({ extended: true, limit: '256kb' }));
+app.use(express.json({ limit: '16kb' }));
+app.use(express.urlencoded({ extended: true, limit: '16kb' }));
 
 // Validate numeric route params early to return clear 400 errors
 app.param('homeId', (req, res, next, value) => {
@@ -262,12 +265,22 @@ app.use((req, res, next) => {
     next();
 });
 
+// Health rate limiter (60 requests / minute)
+const healthLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 60,
+    standardHeaders: true,
+    legacyHeaders: false,
+    validate: { trustProxy: false },
+    message: { status: 'error', error: 'too_many_requests' }
+});
+
 // Health
-app.get('/api/public/health', (req, res) => {
+app.get('/api/public/health', healthLimiter, (req, res) => {
     res.json({ status: 'ok' });
 });
 
-app.get('/api/health', authMiddleware, async (req, res) => {
+app.get('/api/health', healthLimiter, authMiddleware, async (req, res) => {
     const checks = { db: 'unknown', uptime: process.uptime() };
     let healthy = true;
 
@@ -443,7 +456,6 @@ app.use(['/', '/api/v2'], require('./routes/users'));
 app.use('/api/v2/devices', require('./routes/devices'));
 app.use('/api/v2/ota', require('./routes/ota'));
 app.use('/api/v2/bridges', require('./routes/bridges'));
-app.use('/api/v2/users', require('./routes/users'));
 app.use('/api/v2/graphql', require('./routes/graphql'));
 app.use('/apps/graphql', require('./routes/graphql'));
 app.use('/graphql', require('./routes/graphql'));

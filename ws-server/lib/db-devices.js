@@ -10,7 +10,17 @@
  * Device-related DB operations.
  * Handles device status, firmware updates, display/mounting settings, config merging, and ETag storage.
  */
-const { getPool, _log, safeJsonParse, extractShortSerial, mapOrientation, unmapOrientation, mapMountState, generateEtag, tlvNameToHex, cleanFriendlyConfig } = require('./db-base');
+const { getPool, _log, safeJsonParse, extractShortSerial, mapOrientation, unmapOrientation, mapMountState, generateEtag, tlvNameToHex, cleanFriendlyConfig, assertAllowedColumns } = require('./db-base');
+
+const ALLOWED_DEVICE_ACT_COLS = new Set(['in_pairing_mode', 'act_etag']);
+const ALLOWED_DEVICE_SEN_COLS = new Set(['field_003b', 'field_0180', 'field_014c', 'field_0036', 'field_003c']);
+const ALLOWED_DEVICE_MOUNT_COLS = new Set(['field_016a', 'field_01fa', 'field_01fb', 'field_01b5', 'field_01b6']);
+const ALLOWED_DEVICE_CONFIG_COLS = new Set([
+    'last_config_json', 'field_0143', 'field_0140', 'field_015d', 'field_015c', 'field_02b3', 'field_021a',
+    'field_0149', 'field_015e', 'field_0158', 'field_015a', 'field_019e', 'field_019d',
+    'field_02b2', 'config_etag'
+]);
+const ALLOWED_DEVICE_REAL_ETAG_COLS = new Set(['lock_etag_real', 'config_etag_real', 'sen_etag_real', 'act_etag_real']);
 
 async function getDeviceBySerial(shortSerial) {
     const p = getPool();
@@ -138,6 +148,7 @@ async function updateDeviceActuator(serial, fields) {
     params.push(etag);
 
     params.push(serial);
+    assertAllowedColumns(updates, ALLOWED_DEVICE_ACT_COLS);
     await p.execute(`UPDATE devices SET ${updates.join(', ')} WHERE serial_no = ?`, params);
 }
 
@@ -175,6 +186,7 @@ async function updateDeviceFirmware(serial, fields) {
 
     if (updates.length === 0) return;
     params.push(targetSerial);
+    assertAllowedColumns(updates, ALLOWED_DEVICE_SEN_COLS);
     await p.execute(`UPDATE devices SET ${updates.join(', ')} WHERE serial_no = ?`, params);
 }
 
@@ -195,6 +207,7 @@ async function updateDeviceMount(serial, fields) {
 
     if (updates.length === 0) return;
     params.push(serial);
+    assertAllowedColumns(updates, ALLOWED_DEVICE_MOUNT_COLS);
     await p.execute(`UPDATE devices SET ${updates.join(', ')} WHERE serial_no = ?`, params);
 }
 
@@ -255,6 +268,7 @@ async function updateDeviceConfig(serial, fields, fullConfigJson) {
     params.push(etag);
 
     params.push(serial);
+    assertAllowedColumns(updates, ALLOWED_DEVICE_CONFIG_COLS);
     await p.execute(`UPDATE devices SET ${updates.join(', ')} WHERE serial_no = ?`, params);
 }
 
@@ -329,6 +343,7 @@ async function storeRealEtag(serial, resource, etag) {
         case 'act': col = 'act_etag_real'; break;
         default: throw new Error(`Invalid ETag resource: ${resource}`);
     }
+    assertAllowedColumns(col, ALLOWED_DEVICE_REAL_ETAG_COLS);
     const p = getPool();
     await p.execute(`UPDATE devices SET ${col}=? WHERE serial_no=?`, [etag, serial]);
 }
