@@ -34,7 +34,14 @@ need wc
 need grep
 need printf
 
-if lsusb | grep -qi 'st-link'; then
+# Detect ST-Link: lsusb on Linux, ioreg on macOS (brew lsusb is broken on macOS 26+)
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  stlink_present() { ioreg -p IOUSB -l 2>/dev/null | grep -qiE 'st-?link'; }
+else
+  stlink_present() { lsusb | grep -qiE 'st-?link'; }
+fi
+
+if stlink_present; then
   echo "Flash - ST-Link device detected"
 else
   echo "Flash - No ST-Link device detected"

@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+- fix(patch_ib_firmware): eliminate a status race in the SPI flash dump/program OpenOCD scripts that could silently capture stale 4 KiB chunks when dumping and silently skip sectors when programming; both now clear the stub status before each run and wait for the specific completion code
+- feat(patch_ib_firmware): SPI dumps read every chunk until two consecutive reads agree, report a reliability summary, and abort (non-zero exit) instead of producing a partial image; `SPI_SLOW=1` diagnostic mode
+- fix(patch_ib_firmware): macOS/BSD portability — `patch_crc.sh` computed the header CRC as `0x0000` under BSD awk (hex literals unsupported), `clone_rootca.sh` failed under BSD `seq`, `patch_crc.sh` read-back verification was skipped under BSD `od`, ST-Link detection now uses `ioreg` on macOS
+- fix(patch_ib_firmware): RootCA identity check compares the DER hash instead of a line-ending-dependent PEM hash, so `original/` backups are written on Linux/macOS
+- chore(patch_ib_firmware): shell scripts committed with the executable bit
+- docs(patch_ib_firmware): macOS install notes, dump verification procedure, Tag-Connect TC2050 footprint
+- 
 ## [0.4.0] - 2026-09-21
 
 - fix: more critical issues in device/zone/circuit config generation/processing and wireless sensor emulator

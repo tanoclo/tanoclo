@@ -70,6 +70,9 @@ graph TD
 > [!IMPORTANT]
 > When ordering, make sure to select the **5 Pin / 5P, Double Row, 1.27mm spacing** variant.
 
+> [!TIP]
+> **The test point cluster is a standard Tag-Connect TC2050 footprint** (2×5 pads at 1.27 mm, three small alignment holes and four larger leg holes). A genuine [TC2050-IDC](https://www.tag-connect.com/product/tc2050-idc-tag-connect-2050-idc) cable self-centres on the alignment holes and clips in with its legs, which removes the seating problems of the generic clips (see §6.1). It ends in a 10-pin 1.27 mm IDC connector; wire the four SWD signals from that to the ST-Link as in §5.2.
+
 ---
 
 ## 3. Installing Required Tools
@@ -91,6 +94,14 @@ winget install -e --id ShiningLight.OpenSSL
 ```
 
 The PowerShell script equivalents (`.ps1`) handle the remaining tool requirements internally — no additional installation needed.
+
+### macOS (bash, Homebrew)
+
+```bash
+brew install openocd openssl
+```
+
+The bash scripts run unmodified on macOS with the stock BSD userland (`dd`, `od`, `awk`, `stat`, …); ST-Link detection uses `ioreg`, so `lsusb` is not required. No USB driver or permissions setup is needed for the ST-Link.
 
 > [!NOTE]
 > Both the bash and PowerShell scripts check for required tools at startup and will exit with a clear error if anything is missing.
@@ -215,6 +226,25 @@ xPSR: 0x2........ pc: 0x2........ msp: 0x2........" messages, these are to be ex
 ```
 
 By default the scripts will dump the internal and SPI flash partitions, extract the Tado root CA, generate new TLS certificates, replace the Tado root CA in the internal and SPI firmware images and write these back to the device, and finally flash these firmware images to all three firmware slots of the device.
+
+### 6.1 Verifying the SPI Dump (Recommended)
+
+The internal flash is read by OpenOCD's own STM32 driver over SWD and is reliable. The external SPI flash is read through a small RAM stub over the board's SPI bus, and a marginal pogo-pin contact on the **3V3 or GND** pins can corrupt those reads (the flash chip's output drive weakens as the rail sags). `read.sh` therefore reads every 4 KiB chunk at least twice and only accepts it when two consecutive reads agree, and prints a reliability summary at the end:
+
+```
+OpenOCD dump_external_flash - Read reliability: stub errors=0, read mismatches=0, chunks needing >2 reads=0 (extra reads=0) over 512 chunks
+```
+
+Non-zero counters mean the retries had to work for it — re-seat the clip. Before flashing, dump twice and compare; the two SPI images must be byte-identical:
+
+```bash
+./read.sh && cp unmodded_spi.bin spi_a.bin && ./read.sh && cmp unmodded_spi.bin spi_a.bin && echo IDENTICAL
+```
+
+After flashing, run `./read.sh` again and `cmp` the dumps against `out/IB-patched-ca-endpoint-crc.bin` and `out/IB-SPI-patched-ca-endpoint.bin`; a clean match is the definitive proof that both chips hold exactly the intended images. Setting `SPI_SLOW=1` in the environment (honoured by both `read.sh` and `flash.sh`) runs the stub's SPI clock at ~31 kHz instead of ~500 kHz, which helps distinguish a loading/rise-time problem (errors disappear) from bus contention (errors persist).
+
+> [!WARNING]
+> Do not power the bridge from its own USB supply while dumping or flashing. Besides the double-supply risk noted above, a fully powered board brings up the radio and Ethernet controller before OpenOCD resets the STM32, after which their chip-selects float and they can drive MISO — the stub then fails its JEDEC ID check (`status 0xEE`). Power the board from the ST-Link's 3V3 pin only.
 
 ### Command Line Options
 

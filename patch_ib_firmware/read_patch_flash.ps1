@@ -270,13 +270,15 @@ Move-Item *.der out/ -Force -ErrorAction SilentlyContinue
 Move-Item *.bin out/ -Force -ErrorAction SilentlyContinue
 Write-Host "Read Patch Flash - Done moving files to out directory"
 
-# Fill original directory if the extracted RootCA matches the original hardcoded SHA256
-$originalRootCaSha = "1cd811ecdbdd2f127b4d67c57e9a191f46a53c70193af9c933bc9a24f379b23f"
+# Fill original directory if the extracted RootCA matches the original hardcoded SHA256.
+# Hash the DER (canonical bytes) rather than the PEM, whose hash depends on line endings (CRLF vs LF).
+$originalRootCaSha = "a9bb9cf7783815fb0302bf58cc45c3a944fb632db8f69b3d8c7035eca3788fc9"
 $extractedCaCer = "out/tadoRootCA.cer"
+$extractedCaDer = "out/tadoRootCA.der"
 
-if (Test-Path $extractedCaCer) {
+if ((Test-Path $extractedCaCer) -and (Test-Path $extractedCaDer)) {
     $sha256 = [System.Security.Cryptography.SHA256]::Create()
-    $cerBytes = [System.IO.File]::ReadAllBytes((Resolve-Path $extractedCaCer).Path)
+    $cerBytes = [System.IO.File]::ReadAllBytes((Resolve-Path $extractedCaDer).Path)
     $cerHash = [System.BitConverter]::ToString($sha256.ComputeHash($cerBytes)).Replace("-", "").ToLower()
     
     if ($cerHash -eq $originalRootCaSha) {

@@ -28,7 +28,7 @@ read_u16_le() {
   local file="$1" off="$2"
   dd if="$file" bs=1 skip="$off" count=2 2>/dev/null \
     | od -An -tx1 \
-    | awk '{ b0=$1; b1=$2; if (b0==""||b1=="") { print "0xffff"; exit } printf "0x%s%s\n", b1, b0 }'
+    | awk 'NF>=2 { printf "0x%s%s\n", $2, $1; found=1; exit } END { if (!found) print "0xffff" }'  # BSD od emits a trailing blank record
 }
 
 write_u16_le() {
@@ -52,28 +52,29 @@ crc16_fw_core() {
   # Stream bytes as decimals
   dd if="$file" bs=1 skip="$start" count="$len" 2>/dev/null \
   | od -An -tu1 -v \
-  | awk '
+  | awk -v INIT=65535 -v POLY=4128 -v MSB=32768 -v MASK=65535 '
+    # Constants passed in as decimals: BSD/macOS awk does not parse 0x hex literals
     BEGIN {
-      crc = 0xFFFF
-      poly = 0x1020  # CRC-16-CCITT variant: 0x1021 decomposed as 0x1020 with XOR 1 on MSB set
+      crc = INIT   # 0xFFFF
+      poly = POLY  # 0x1020: CRC-16-CCITT 0x1021 decomposed as 0x1020 with XOR 1 on MSB set
     }
     {
       for (i=1; i<=NF; i++) {
         b = $i
         crc = bxor(crc, blshift(b, 8))
         for (k=0; k<8; k++) {
-          if (band(crc, 0x8000) != 0) {
+          if (band(crc, MSB) != 0) {
             crc = blshift(crc, 1)
             crc = bxor(crc, poly)
             crc = bxor(crc, 1)
           } else {
             crc = blshift(crc, 1)
           }
-          crc = band(crc, 0xFFFF)
+          crc = band(crc, MASK)
         }
       }
     }
-    END { printf "0x%04x\n", band(crc, 0xFFFF) }
+    END { printf "0x%04x\n", band(crc, MASK) }
 
     # ---- bitwise helpers (portable awk) ----
     function band(a,b,   r,p,abit,bbit) {

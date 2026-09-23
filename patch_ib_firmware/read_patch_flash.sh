@@ -282,12 +282,14 @@ mv -f *.der out/ 2>/dev/null || true
 mv -f *.bin out/ 2>/dev/null || true
 echo "Read Patch Flash - Done moving files to out directory"
 
-# Fill original directory if the extracted RootCA matches the original hardcoded SHA256
-original_root_ca_sha="1cd811ecdbdd2f127b4d67c57e9a191f46a53c70193af9c933bc9a24f379b23f"
+# Fill original directory if the extracted RootCA matches the original hardcoded SHA256.
+# Hash the DER (canonical bytes) rather than the PEM, whose hash depends on line endings (CRLF vs LF).
+original_root_ca_sha="a9bb9cf7783815fb0302bf58cc45c3a944fb632db8f69b3d8c7035eca3788fc9"
 extracted_ca_cer="out/tadoRootCA.cer"
+extracted_ca_der="out/tadoRootCA.der"
 
-if [[ -f "$extracted_ca_cer" ]]; then
-  cer_hash=$(sha256sum "$extracted_ca_cer" | awk '{print $1}' | tr -d ' ' | tr 'A-Z' 'a-z')
+if [[ -f "$extracted_ca_cer" && -f "$extracted_ca_der" ]]; then
+  cer_hash=$(openssl dgst -sha256 -r "$extracted_ca_der" | awk '{print $1}')
   if [[ "$cer_hash" == "$original_root_ca_sha" ]]; then
     echo "Read Patch Flash - Extracted RootCA matches original Tado RootCA. Writing true unmodded backups to original directory."
     mkdir -p original

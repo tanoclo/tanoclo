@@ -31,8 +31,8 @@ dd if="$CERT" of="$OUT_FW" bs=1 seek="$CERT_OFFSET" count="$CERT_LEN" conv=notru
 echo "Patch RootCA - RootCA patched at 0x$(printf '%X' "$CERT_OFFSET")"
 
 # ---- Validate patch ----
-PATCH_SHA=$(dd if="$OUT_FW" bs=1 skip="$CERT_OFFSET" count="$CERT_LEN" status=none | sha256sum | awk '{print $1}')
-CERT_SHA=$(sha256sum "$CERT" | awk '{print $1}')
+PATCH_SHA=$(dd if="$OUT_FW" bs=1 skip="$CERT_OFFSET" count="$CERT_LEN" status=none | openssl dgst -sha256 -r | awk '{print $1}')
+CERT_SHA=$(openssl dgst -sha256 -r "$CERT" | awk '{print $1}')
 if [[ "$PATCH_SHA" != "$CERT_SHA" ]]; then
   echo "Patch RootCA - ERROR: verification failed - embedded cert hash does not match source cert" >&2
   echo "  expected: $CERT_SHA" >&2

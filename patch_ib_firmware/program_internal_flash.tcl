@@ -16,7 +16,7 @@ proc assert_file_size {path expected} {
     set sz [file size $path]
     if {$sz != $expected} {
         puts [format "OpenOCD program_internal_flash - ERROR: %s size is %d, expected %d (0x%X)" $path $sz $expected $expected]
-        shutdown
+        shutdown error
     }
 }
 

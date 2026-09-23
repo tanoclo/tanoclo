@@ -150,9 +150,9 @@ CERT_LEN=639
 
 PATCH_SHA=$(
   dd if="$PATCHED_FW" bs=1 skip="$CERT_OFFSET" count="$CERT_LEN" status=none \
-  | sha256sum | awk '{print $1}'
+  | openssl dgst -sha256 -r | awk '{print $1}'
 )
-ROOT_SHA=$(sha256sum "$ROOT_DER" | awk '{print $1}')
+ROOT_SHA=$(openssl dgst -sha256 -r "$ROOT_DER" | awk '{print $1}')
 
 if [[ "$PATCH_SHA" != "$ROOT_SHA" ]]; then
   echo "Build all and patch - ERROR: embedded RootCA does not match rootca.der" >&2

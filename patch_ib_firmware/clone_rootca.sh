@@ -138,10 +138,13 @@ make_issuer_cert() {
 BEST_DIFF=999999
 BEST_DER="$WORK/best.der"
 
-for i in $(seq 9404289437119033189 9404289437119064190); do
+# Serials 0x8282BF6AC0702F65 .. +31001. Iterate a small offset rather than the decimal serial,
+# which exceeds INT64_MAX (and BSD seq loses precision at that magnitude).
+SERIAL_BASE=8282BF6AC0702F65
+for (( off=0; off<=31001; off++ )); do
   reset_ca_db
 
-  SERIAL="$(printf "%016X" "$i")"
+  SERIAL="$(printf "%016X" $(( 0x$SERIAL_BASE + off )))"
   echo "$SERIAL" > "$CA/serial"
 
   # 5a) Create issuer.pem (for AKI computation)
