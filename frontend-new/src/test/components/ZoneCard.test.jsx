@@ -49,4 +49,12 @@ describe('components/zone/ZoneCard', () => {
     const html = renderToString(<ZoneCard zone={zone} state={state} />);
     expect(html).toContain('Hot Water');
   });
+
+  it('renders device hardware error badge when deviceErrors are present', () => {
+    const zone = { id: 10, name: 'Slaapkamer', type: 'HEATING' };
+    const state = { setting: { power: 'ON', temperature: { celsius: 20.0 } } };
+    const html = renderToString(<ZoneCard zone={zone} state={state} deviceErrors={['VA1234567890: Motor Blocked, Calibration Fault']} />);
+    expect(html).toContain('Slaapkamer');
+    expect(html).toContain('title="VA1234567890: Motor Blocked, Calibration Fault"');
+  });
 });

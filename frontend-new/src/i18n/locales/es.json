@@ -698,6 +698,7 @@
     "battery_state": "Estado de la batería",
     "battery_low_warning": "¡Batería baja en {{name}}! Por favor, reemplace las baterías.",
     "battery_depleted_warning": "¡Batería agotada/crítica en {{name}}! Por favor, reemplace las baterías.",
+    "device_error_warning": "Error de hardware en {{name}}: {{error}}",
     "zone_assignment": "Asignación de zona",
     "unassigned_none": "No asignado / Ninguno",
     "rf_config": "Configuración de RF",

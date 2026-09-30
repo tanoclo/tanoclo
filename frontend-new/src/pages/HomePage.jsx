@@ -29,7 +29,7 @@ import { getMobileDevices } from '../api/users';
 import { getClimateQuality } from '../api/weather';
 import { getDeviceBatteryData } from '../api/tanoclo';
 import { getAutoPresenceState } from '../utils/presence';
-import { Sun, CloudRain, Flame, RotateCcw, Cloud, AlertTriangle, ChevronDown } from 'lucide-react';
+import { Sun, CloudRain, Flame, RotateCcw, Cloud, AlertTriangle, ChevronDown, ShieldAlert } from 'lucide-react';
 import { formatTemperature } from '../utils/temperature';
 import logger from '../utils/logger';
 
@@ -85,6 +85,24 @@ export default function HomePage() {
   );
 
   const autoPresenceState = getAutoPresenceState(homeUsers, mobileDevices);
+
+  // Map zone_id to active device hardware errors
+  const zoneDeviceErrors = React.useMemo(() => {
+    const map = {};
+    if (!batteryDevices) return map;
+    for (const d of batteryDevices) {
+      if (!d.is_emulated && d.zone_id && d.error_flags && d.error_flags !== 0 && d.friendly_error_flags !== 'None') {
+        const label = d.friendly_name || d.serial_no;
+        const err = `${label}: ${d.friendly_error_flags}`;
+        if (!map[d.zone_id]) {
+          map[d.zone_id] = [err];
+        } else {
+          map[d.zone_id].push(err);
+        }
+      }
+    }
+    return map;
+  }, [batteryDevices]);
 
   // Fallback timeout for SWR stuck spinner
   React.useEffect(() => {
@@ -461,28 +479,63 @@ export default function HomePage() {
         {/* Zone Cards Grid */}
         {(!isLoading || loadingTimedOut) && orderedZones.length > 0 && (
           <>
-            {/* Persistent low/depleted battery warnings */}
+            {/* Persistent device hardware error and low/depleted battery warnings */}
             {(() => {
+              const errorDevices = (batteryDevices || []).filter(d =>
+                !d.is_emulated && d.error_flags && d.error_flags !== 0 && d.friendly_error_flags !== 'None'
+              );
               const lowBatteryDevices = (batteryDevices || []).filter(d =>
                 !d.is_emulated && (d.battery_state === 'LOW' || d.battery_state === 'CRITICAL' || d.battery_state === 'DEPLETED')
               );
-              if (lowBatteryDevices.length === 0) return null;
+              if (errorDevices.length === 0 && lowBatteryDevices.length === 0) return null;
               return (
                 <div style={{
                   display: 'flex',
                   flexDirection: 'column',
                   gap: '0.5rem',
-                  maxHeight: '150px',
+                  maxHeight: '180px',
                   overflowY: 'auto',
                   marginBottom: '1rem',
                   paddingRight: '4px'
                 }}>
+                  {errorDevices.map(d => {
+                    const label = d.friendly_name || d.serial_no;
+                    const errText = d.friendly_error_flags || `Error 0x${Number(d.error_flags).toString(16).toUpperCase()}`;
+                    return (
+                      <div
+                        key={`err-${d.serial_no}`}
+                        onClick={() => navigate(`/settings?section=devices&deviceId=${d.serial_no}`)}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.75rem',
+                          backgroundColor: 'var(--danger-glow, rgba(239, 68, 68, 0.15))',
+                          border: '1px solid var(--danger, #ef4444)',
+                          borderRadius: 'var(--radius-md)',
+                          padding: '0.6rem 1rem',
+                          cursor: 'pointer',
+                          transition: 'transform var(--transition-fast)',
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.005)'}
+                        onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                      >
+                        <ShieldAlert size={16} style={{ color: 'var(--danger, #ef4444)', flexShrink: 0 }} />
+                        <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                          {t('settings.device_error_warning', {
+                            name: label,
+                            error: errText,
+                            defaultValue: `Hardware error for ${label}: ${errText}`
+                          })}
+                        </span>
+                      </div>
+                    );
+                  })}
                   {lowBatteryDevices.map(d => {
                     const isDepleted = d.battery_state === 'DEPLETED' || d.battery_state === 'CRITICAL';
                     const label = d.friendly_name || d.serial_no;
                     return (
                       <div
-                        key={d.serial_no}
+                        key={`bat-${d.serial_no}`}
                         onClick={() => navigate(`/settings?section=devices&deviceId=${d.serial_no}`)}
                         style={{
                           display: 'flex',
@@ -521,6 +574,7 @@ export default function HomePage() {
                   key={zone.id}
                   zone={zone}
                   state={zoneStates?.zoneStates?.[zone.id]}
+                  deviceErrors={zoneDeviceErrors[zone.id]}
                   onClick={() => setSelectedZoneId(zone.id)}
                 />
               ))}
@@ -557,6 +611,7 @@ export default function HomePage() {
           <ZoneDetail
             zoneId={selectedZoneId}
             isOpen={selectedZoneId !== null}
+            deviceErrors={zoneDeviceErrors[selectedZoneId]}
             onClose={() => setSelectedZoneId(null)}
           />
         )}

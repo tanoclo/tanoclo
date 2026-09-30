@@ -546,6 +546,7 @@
     "battery_state": "Battery State",
     "battery_low_warning": "Low battery for {{name}}! Please replace batteries.",
     "battery_depleted_warning": "Battery critical/depleted for {{name}}! Please replace batteries.",
+    "device_error_warning": "Hardware error for {{name}}: {{error}}",
     "zone_assignment": "Zone Assignment",
     "unassigned_none": "Unassigned / None",
     "rf_config": "RF Configuration",

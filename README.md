@@ -42,6 +42,7 @@ TaNoClo replaces Tado's cloud infrastructure with a high-performance local stack
 ```text
 tanoclo/
 ├── docs/                     # Technical specifications and guides
+│   ├── coap_debug_endpoints.md # Diagnostic, memory dump & NVM whitelist endpoints
 │   ├── coap_tlv.md           # CoAP options and TLV payload formats reference
 │   ├── emulated_devices.md   # Room Unit (RU) virtual emulation architecture & REST RPC
 │   ├── fine_tuning.md        # Stepper limits, displays, and open window tuning

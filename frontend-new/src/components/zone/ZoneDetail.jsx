@@ -13,7 +13,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
-import { AlertTriangle, Flame } from 'lucide-react';
+import { AlertTriangle, Flame, ShieldAlert } from 'lucide-react';
 import { useHome } from '../../context/HomeContext';
 import { useAuth } from '../../hooks/useAuth';
 import { setZoneOverlay, resumeZoneSchedule, dismissOpenWindow, getDefaultOverlay } from '../../api/zones';
@@ -53,9 +53,10 @@ const getTimerEndTime = (expiryTimestamp) => {
  * @brief Unified zone details sidebar dialog sheet overlay component.
  * @param {number} props.zoneId - Active target zone identifier.
  * @param {boolean} props.isOpen - Whether slide-out overlay sheet is visible.
+ * @param {Array} props.deviceErrors - Active device error strings for this zone.
  * @param {function} props.onClose - Modal dismiss action callback hook.
  */
-export default function ZoneDetail({ zoneId, isOpen, onClose }) {
+export default function ZoneDetail({ zoneId, isOpen, deviceErrors, onClose }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { resolvedTheme: theme } = useContext(ThemeContext);
@@ -490,6 +491,38 @@ export default function ZoneDetail({ zoneId, isOpen, onClose }) {
 
         {/* Scrollable Modal Content */}
         <div className="modal-content-scrollable">
+          {/* Device Hardware Error Banner */}
+          {deviceErrors && deviceErrors.length > 0 && (
+            <div
+              onClick={() => {
+                onClose();
+                navigate('/settings?section=devices');
+              }}
+              style={{
+                backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                border: '1px solid #ef4444',
+                borderRadius: '16px',
+                padding: '0.75rem 1rem',
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.75rem',
+                fontSize: '0.85rem',
+                marginBottom: '1rem',
+                cursor: 'pointer',
+                transition: 'transform 0.15s ease'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.005)'}
+              onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+            >
+              <ShieldAlert size={18} style={{ flexShrink: 0, color: '#ef4444' }} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', width: '100%' }}>
+                <strong style={{ color: '#ef4444' }}>{t('settings.error_flags', { defaultValue: 'Device Error' })}</strong>
+                <span style={{ color: 'var(--text-primary)' }}>{deviceErrors.join(', ')}</span>
+              </div>
+            </div>
+          )}
+
           {/* Open Window Banner */}
           {openWindowDetected && (
             <div style={{

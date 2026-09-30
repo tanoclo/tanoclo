@@ -12,6 +12,7 @@ const authMiddleware = require('../middleware/auth');
 const { getLogger } = require('../../lib/logger');
 const { getLocalParts, parseLocalTimeInTimezone, getDayBoundsInTimezone } = require('../../lib/utils');
 const battery = require('../../lib/battery');
+const { getFriendlyErrorFlags } = require('../../lib/mqtt-publisher');
 
 const router = express.Router();
 const _log = getLogger('tanoclo-api');
@@ -82,13 +83,19 @@ router.get('/:homeId/tanoclo/devices/battery', async (req, res) => {
              (CASE WHEN ed.serial_no IS NOT NULL THEN 100 ELSE d.battery_percent END) as battery_percent,
              d.battery_type, d.last_contact, d.ipv6_address,
              d.friendly_name,
+             (CASE WHEN ed.serial_no IS NOT NULL THEN 0 ELSE COALESCE(d.field_01a3, 0) END) as error_flags,
              (CASE WHEN ed.serial_no IS NOT NULL THEN 1 ELSE 0 END) AS is_emulated
              FROM devices d
              LEFT JOIN emulated_devices ed ON d.serial_no = ed.serial_no
              WHERE d.home_id = ?`,
             [homeId]
         );
-        res.json(rows);
+        const mapped = rows.map(r => ({
+            ...r,
+            error_flags: r.error_flags !== null && r.error_flags !== undefined ? parseInt(r.error_flags, 10) : 0,
+            friendly_error_flags: getFriendlyErrorFlags ? getFriendlyErrorFlags(r.error_flags) : 'None'
+        }));
+        res.json(mapped);
     } catch (err) {
         _log('error', `Error fetching device battery data: ${err.message}`);
         res.status(500).json({ error: 'internal_error' });

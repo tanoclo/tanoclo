@@ -205,3 +205,49 @@ mosquitto_pub -h localhost -t "tado/tanoclo/emulated/RU4200000001/set/humidity" 
 # Send full JSON telemetry
 mosquitto_pub -h localhost -t "tado/tanoclo/emulated/RU4200000001/telemetry" -m '{"temp_celsius":21.5,"humidity_percent":55.0}'
 ```
+
+### 5.3 Home Assistant Automation Example: External Sensor Sync
+
+You can synchronize temperature and humidity measurements from any Home Assistant sensor entity (e.g. Zigbee sensors, BLE thermometers, ESPHome environmental sensors, or genuine Tado Radiator Valves `VA...`) into an emulated Room Unit (`RU...`).
+
+The following automation triggers whenever the external sensor reports a new valid temperature or humidity reading, updates the emulated device entity values, and presses the `Send Telemetry Push` button to transmit an immediate RF telemetry packet (`PUT /d/{serial}/sen`) to the Tado Internet Bridge:
+
+```yaml
+alias: "Tado Emulated: Sync External Sensor to Emulated RU"
+description: "Sync temperature and humidity from an external room sensor to an emulated Tado Room Unit"
+triggers:
+  - trigger: state
+    entity_id:
+      - sensor.living_room_temperature
+      - sensor.living_room_humidity
+    not_to:
+      - unavailable
+      - unknown
+conditions:
+  - condition: template
+    value_template: >-
+      {{ states('sensor.living_room_temperature') not in ['unavailable', 'unknown'] and
+         states('sensor.living_room_humidity') not in ['unavailable', 'unknown'] }}
+actions:
+  - action: number.set_value
+    target:
+      entity_id: number.emulated_ru02_ru0000000000_emulated_temperature
+    data:
+      value: "{{ states('sensor.living_room_temperature') }}"
+  - action: number.set_value
+    target:
+      entity_id: number.emulated_ru02_ru0000000000_emulated_humidity
+    data:
+      value: "{{ states('sensor.living_room_humidity') }}"
+  - action: button.press
+    target:
+      entity_id: button.emulated_ru02_ru0000000000_send_telemetry_push
+    data: {}
+mode: restart
+max_exceeded: silent
+```
+
+> [!TIP]
+> **Customizing Entities:**
+> - **Input Entities:** Replace `sensor.living_room_temperature` and `sensor.living_room_humidity` with any temperature (°C) and humidity (%) entities in your Home Assistant instance. Any source device (Zigbee, Z-Wave, BLE, ESPHome, or other Tado devices) can be used.
+> - **Target Entities:** Replace `number.emulated_ru02_ru0000000000_emulated_temperature`, `number.emulated_ru02_ru0000000000_emulated_humidity`, and `button.emulated_ru02_ru0000000000_send_telemetry_push` with your emulated device's specific entity IDs (derived from your emulated device's serial number).

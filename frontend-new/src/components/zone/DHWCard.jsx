@@ -13,9 +13,10 @@ import { useTranslation } from 'react-i18next';
  * @brief Dashboard card displaying Domestic Hot Water metrics.
  * @param {object} props.zone - DHW zone metadata.
  * @param {object} props.state - Current DHW zone state.
+ * @param {Array} props.deviceErrors - Active device error strings for this zone.
  * @param {function} props.onClick - Navigation callback on click.
  */
-export default function DHWCard({ zone, state, onClick }) {
+export default function DHWCard({ zone, state, deviceErrors, onClick }) {
   const { t } = useTranslation();
 
   if (!zone) return null;
@@ -113,6 +114,20 @@ export default function DHWCard({ zone, state, onClick }) {
           <Droplet size={12} style={{ fill: 'currentColor' }} />
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          {deviceErrors && deviceErrors.length > 0 && (
+            <div
+              title={deviceErrors.join('\n')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--danger, #ef4444)',
+                filter: 'drop-shadow(0 0 6px rgba(239, 68, 68, 0.6))'
+              }}
+            >
+              <ShieldAlert size={16} />
+            </div>
+          )}
           {isOffline && <ShieldAlert size={16} />}
           {isHeating && !isOffline && (
             <Flame

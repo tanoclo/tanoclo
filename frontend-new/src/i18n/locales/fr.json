@@ -698,6 +698,7 @@
     "battery_state": "État de la batterie",
     "battery_low_warning": "Piles faibles pour {{name}} ! Veuillez remplacer les piles.",
     "battery_depleted_warning": "Piles épuisées/critiques pour {{name}} ! Veuillez remplacer les piles.",
+    "device_error_warning": "Erreur matérielle pour {{name}} : {{error}}",
     "zone_assignment": "Affectation de zone",
     "unassigned_none": "Non affecté / Aucun",
     "rf_config": "Configuration RF",

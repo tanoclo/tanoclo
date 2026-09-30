@@ -14,16 +14,17 @@ import DHWCard from './DHWCard';
  * @brief Dashboard card displaying Zone status summary metrics.
  * @param {object} props.zone - Active zone details metadata.
  * @param {object} props.state - Current telemetry status.
+ * @param {Array} props.deviceErrors - Active device error strings for this zone.
  * @param {function} props.onClick - Navigation callback on click.
  */
-export default function ZoneCard({ zone, state, onClick }) {
+export default function ZoneCard({ zone, state, deviceErrors, onClick }) {
   const { t } = useTranslation();
 
   if (!zone) return null;
 
   // Render DHW Card if this is a hot water zone
   if (zone.type === 'HOT_WATER' || zone.type === 'DHW') {
-    return <DHWCard zone={zone} state={state} onClick={onClick} />;
+    return <DHWCard zone={zone} state={state} deviceErrors={deviceErrors} onClick={onClick} />;
   }
 
   const currentTemp = state?.sensorDataPoints?.insideTemperature?.celsius;
@@ -136,6 +137,20 @@ export default function ZoneCard({ zone, state, onClick }) {
         ) : <div />}
 
         <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+          {deviceErrors && deviceErrors.length > 0 && (
+            <div
+              title={deviceErrors.join('\n')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: 'var(--danger, #ef4444)',
+                filter: 'drop-shadow(0 0 6px rgba(239, 68, 68, 0.6))'
+              }}
+            >
+              <ShieldAlert size={16} />
+            </div>
+          )}
           {isOffline && <ShieldAlert size={16} />}
           {isHeating && !isOffline && (
             <Flame

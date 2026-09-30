@@ -698,6 +698,7 @@
     "battery_state": "Batterijstatus",
     "battery_low_warning": "Batterij bijna leeg voor {{name}}! Vervang de batterijen.",
     "battery_depleted_warning": "Batterij leeg/kritiek voor {{name}}! Vervang de batterijen.",
+    "device_error_warning": "Hardwarefout voor {{name}}: {{error}}",
     "zone_assignment": "Zone-toewijzing",
     "unassigned_none": "Niet toegewezen / Geen",
     "rf_config": "RF-configuratie",

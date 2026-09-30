@@ -698,6 +698,7 @@
     "battery_state": "Batteriezustand",
     "battery_low_warning": "Niedriger Batteriestatus für {{name}}! Bitte Batterien wechseln.",
     "battery_depleted_warning": "Batterie leer/kritisch für {{name}}! Bitte Batterien wechseln.",
+    "device_error_warning": "Hardwarefehler bei {{name}}: {{error}}",
     "zone_assignment": "Zonenzuweisung",
     "unassigned_none": "Nicht zugewiesen / Keine",
     "rf_config": "RF-Konfiguration",
