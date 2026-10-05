@@ -13,6 +13,7 @@ const config = require('./config');
 const { getLocalParts, parseLocalTimeInTimezone } = require('./utils');
 const { getLogger } = require('./logger');
 const log = getLogger('cron');
+const meshRecovery = require('./mesh-recovery');
 
 let _broadcastTimeFn = null;
 let _broadcastRfKeyFn = null;
@@ -115,6 +116,16 @@ function start({ broadcastTime, broadcastRfKey, pushZoneOverlayDelete, pushSched
 
     // 9. Auto-presence evaluation (Every 1 minute)
     _intervals.push(setInterval(evaluateAllHomesPresence, 60 * 1000));
+
+    // 10. Mesh Recovery Escalation Check (Every 1 minute)
+    _intervals.push(setInterval(() => {
+        meshRecovery.checkFallbackEscalation().catch(e => log('debug', `[cron] Fallback escalation error: ${e.message}`));
+    }, 60 * 1000));
+
+    // 11. Proactive Route Keep-Alive (Every 15 minutes)
+    _intervals.push(setInterval(() => {
+        meshRecovery.runProactiveKeepAlive().catch(e => log('debug', `[cron] Keep-alive error: ${e.message}`));
+    }, 15 * 60 * 1000));
 
     // Prevent cron intervals from keeping the process alive during crash paths
     for (const id of _intervals) id.unref();

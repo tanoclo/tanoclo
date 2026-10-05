@@ -246,6 +246,12 @@ async function handleDeviceError(ws, frame, coapMsg, decoded, peerInfo, pathInfo
 
     if (deviceId) {
         await db.updateDeviceErrorFlags(deviceId, flags);
+        try {
+            const meshRecovery = require('../mesh-recovery');
+            await meshRecovery.onDeviceError(pathInfo.homeId, deviceId, flags);
+        } catch (e) {
+            log('debug', `[mesh-recovery] onDeviceError error: ${e.message}`);
+        }
         if (mqttPublisher) {
             const shortSerial = extractShortSerial(deviceId);
             if (shortSerial) {

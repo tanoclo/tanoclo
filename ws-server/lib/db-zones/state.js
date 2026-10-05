@@ -216,26 +216,26 @@ async function insertMergedZoneMeasurement(homeId, zoneId, updates) {
 
     const prev = rows.length > 0 ? rows[0] : {};
 
-    const tempCelsius = updates['0x012d'] !== undefined ? updates['0x012d'] : (prev.field_012d ?? null);
-    const humidityPct = updates['0x0135'] !== undefined ? updates['0x0135'] : (prev.field_0135 ?? null);
-    const heatingPower = updates['0x40a0'] !== undefined ? updates['0x40a0'] : (prev.field_40a0 ?? null);
+    const tempCelsius = (updates['0x012d'] !== undefined ? updates['0x012d'] : (updates.field_012d !== undefined ? updates.field_012d : prev.field_012d)) ?? null;
+    const humidityPct = (updates['0x0135'] !== undefined ? updates['0x0135'] : (updates.field_0135 !== undefined ? updates.field_0135 : prev.field_0135)) ?? null;
+    const heatingPower = (updates['0x40a0'] !== undefined ? updates['0x40a0'] : (updates.field_40a0 !== undefined ? updates.field_40a0 : prev.field_40a0)) ?? null;
     const linkState = updates.link_state !== undefined ? updates.link_state : (prev.link_state ?? 'ONLINE');
     const tadoMode = updates.tado_mode !== undefined ? updates.tado_mode : (prev.tado_mode ?? 'HOME');
-    const zoneEnabled = updates['0x61e0'] !== undefined ? updates['0x61e0'] : (prev.field_61e0 ?? 1);
-    const homeAwayLiteral = updates['0x6160'] !== undefined ? updates['0x6160'] : (prev.field_6160 ?? 1);
+    const zoneEnabled = (updates['0x61e0'] !== undefined ? updates['0x61e0'] : (updates.field_61e0 !== undefined ? updates.field_61e0 : prev.field_61e0)) ?? 1;
+    const homeAwayLiteral = (updates['0x6160'] !== undefined ? updates['0x6160'] : (updates.field_6160 !== undefined ? updates.field_6160 : prev.field_6160)) ?? 1;
     let homeAway = homeAwayLiteral;
     if (homeAway === 'HOME') homeAway = 1;
     else if (homeAway === 'AWAY') homeAway = 2;
     else homeAway = parseInt(homeAway) || 1;
 
-    const overlayMode = updates['0x6240'] !== undefined ? updates['0x6240'] : (prev.field_6240 ?? null);
-    const overlayTargetTemp = updates['0x6280'] !== undefined ? updates['0x6280'] : (prev.field_6280 ?? null);
-    const scheduleTemp = updates['0x6200'] !== undefined ? updates['0x6200'] : (prev.field_6200 ?? null);
-    const overlayHasSetpoint = updates['0x6260'] !== undefined ? updates['0x6260'] : (prev.field_6260 ?? null);
-    const zoneServiceType = updates['0x6020'] !== undefined ? updates['0x6020'] : (prev.field_6020 ?? null);
-    const zoneStateFlag = updates['0x6180'] !== undefined ? updates['0x6180'] : (prev.field_6180 ?? null);
-    const overlayStateAux = updates['0x62e0'] !== undefined ? updates['0x62e0'] : (prev.field_62e0 ?? null);
-    const resumeScheduleEvent = updates['0x6440'] !== undefined ? updates['0x6440'] : (prev.field_6440 ?? null);
+    const overlayMode = (updates['0x6240'] !== undefined ? updates['0x6240'] : (updates.field_6240 !== undefined ? updates.field_6240 : prev.field_6240)) ?? null;
+    const overlayTargetTemp = (updates['0x6280'] !== undefined ? updates['0x6280'] : (updates.field_6280 !== undefined ? updates.field_6280 : prev.field_6280)) ?? null;
+    const scheduleTemp = (updates['0x6200'] !== undefined ? updates['0x6200'] : (updates.field_6200 !== undefined ? updates.field_6200 : prev.field_6200)) ?? null;
+    const overlayHasSetpoint = (updates['0x6260'] !== undefined ? updates['0x6260'] : (updates.field_6260 !== undefined ? updates.field_6260 : prev.field_6260)) ?? null;
+    const zoneServiceType = (updates['0x6020'] !== undefined ? updates['0x6020'] : (updates.field_6020 !== undefined ? updates.field_6020 : prev.field_6020)) ?? null;
+    const zoneStateFlag = (updates['0x6180'] !== undefined ? updates['0x6180'] : (updates.field_6180 !== undefined ? updates.field_6180 : prev.field_6180)) ?? null;
+    const overlayStateAux = (updates['0x62e0'] !== undefined ? updates['0x62e0'] : (updates.field_62e0 !== undefined ? updates.field_62e0 : prev.field_62e0)) ?? null;
+    const resumeScheduleEvent = (updates['0x6440'] !== undefined ? updates['0x6440'] : (updates.field_6440 !== undefined ? updates.field_6440 : prev.field_6440)) ?? null;
     const openWindowDetected = updates.open_window_detected !== undefined ? updates.open_window_detected : (prev.open_window_detected ?? 0);
 
     await p.execute(

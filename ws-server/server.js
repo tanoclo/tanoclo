@@ -508,7 +508,6 @@ async function startServer() {
         INTERNAL_UWS_PORT
     });
 
-    // Command routes will be set up inside the child API process
     const cron = require('./lib/cron');
     commandApi.initialize({
         clients,
@@ -517,6 +516,9 @@ async function startServer() {
         log,
         proxyMidCache
     });
+
+    const meshRecovery = require('./lib/mesh-recovery');
+    meshRecovery.init(db, commandApi, commandApi, log);
 
     cron.start({
         broadcastTime,

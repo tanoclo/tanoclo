@@ -78,6 +78,12 @@ async function handleZoneFallback(ws, frame, coapMsg, decoded, peerInfo, pathInf
 
     if (zoneId != null && val !== undefined) {
         await db.updateZoneFallback(homeId, zoneId, val);
+        try {
+            const meshRecovery = require('../mesh-recovery');
+            await meshRecovery.onZoneFallback(homeId, zoneId, val);
+        } catch (e) {
+            log('debug', `[mesh-recovery] onZoneFallback error: ${e.message}`);
+        }
     }
 }
 
