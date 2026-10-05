@@ -14,7 +14,9 @@ import Button from '../../components/common/Button';
 import Spinner from '../../components/common/Spinner';
 const HeatingActivityChart = lazy(() => import('../../components/charts/HeatingActivityChart'));
 const CombinedTelemetryChart = lazy(() => import('../../components/charts/CombinedTelemetryChart'));
+const CircuitTelemetryChart = lazy(() => import('../../components/charts/CircuitTelemetryChart'));
 import { getRunningTimes } from '../../api/heating';
+import { getCircuits, getCircuitDayReport } from '../../api/tanoclo';
 import { apiFetch } from '../../api/client';
 import { SWR_KEYS } from '../../utils/swrKeys';
 
@@ -26,8 +28,10 @@ import { SWR_KEYS } from '../../utils/swrKeys';
 export default function EnergySettings({ homeId, zones }) {
   const { t } = useTranslation();
 
-  // Raw Boiler & Zone Telemetry selector states
+  // Telemetry target selector states
+  const [telemetryType, setTelemetryType] = useState('zone'); // 'zone' | 'circuit'
   const [selectedTelemetryZoneId, setSelectedTelemetryZoneId] = useState(null);
+  const [selectedCircuitId, setSelectedCircuitId] = useState(1);
   const [telemetryDate, setTelemetryDate] = useState(new Date().toLocaleDateString('sv'));
 
   // Heating Activity / Boiler Page inline states
@@ -50,6 +54,11 @@ export default function EnergySettings({ homeId, zones }) {
     setBoilerToDate(prev => prev !== targetTo ? targetTo : prev);
   }, [boilerAggregate]);
 
+  const { data: circuits } = useSWR(
+    homeId ? SWR_KEYS.circuits(homeId) : null,
+    () => getCircuits(homeId)
+  );
+
   const { data: runningTimesData } = useSWR(
     homeId && boilerFromDate && boilerToDate
       ? SWR_KEYS.runningTimesQuery(homeId, boilerFromDate, boilerToDate, boilerAggregate)
@@ -58,10 +67,17 @@ export default function EnergySettings({ homeId, zones }) {
   );
 
   const { data: telemetryData, error: telemetryError, isLoading: isTelemetryLoading } = useSWR(
-    homeId && selectedTelemetryZoneId && telemetryDate
+    homeId && telemetryType === 'zone' && selectedTelemetryZoneId && telemetryDate
       ? SWR_KEYS.dayReport(homeId, selectedTelemetryZoneId, telemetryDate)
       : null,
     () => apiFetch(`/api/v2/homes/${homeId}/tanoclo/zones/${selectedTelemetryZoneId}/dayReport?date=${telemetryDate}`)
+  );
+
+  const { data: circuitTelemetryData, error: circuitTelemetryError, isLoading: isCircuitTelemetryLoading } = useSWR(
+    homeId && telemetryType === 'circuit' && selectedCircuitId && telemetryDate
+      ? SWR_KEYS.circuitDayReport(homeId, selectedCircuitId, telemetryDate)
+      : null,
+    () => getCircuitDayReport(homeId, selectedCircuitId, telemetryDate)
   );
 
   return (
@@ -183,41 +199,114 @@ export default function EnergySettings({ homeId, zones }) {
         )}
       </Card>
 
-      {/* Zone Telemetry Profile */}
+      {/* Telemetry Profiles (Zones and Circuits) */}
       <Card style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-        <div>
-          <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700 }}>
-            {t('zone.system_telemetry_profiles')}
-          </h3>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', margin: '4px 0 0' }}>
-            {t('settings.telemetry_profile_desc', 'Select a zone to inspect detailed historical temperature, target settings, and heating power telemetry profiles.')}
-          </p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700 }}>
+              {t('zone.system_telemetry_profiles')}
+            </h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', margin: '4px 0 0' }}>
+              {t('settings.telemetry_profile_desc', 'Select a zone or heating circuit to inspect detailed historical temperature, target settings, and heating power telemetry profiles.')}
+            </p>
+          </div>
+
+          {/* Type Toggle: Zone vs Circuit */}
+          <div style={{
+            display: 'flex',
+            backgroundColor: 'var(--bg-input)',
+            padding: '2px',
+            borderRadius: 'var(--radius-md)',
+            border: '1px solid var(--border-color)',
+          }}>
+            <button
+              onClick={() => setTelemetryType('zone')}
+              style={{
+                padding: '0.3rem 0.75rem',
+                borderRadius: 'calc(var(--radius-md) - 4px)',
+                border: 'none',
+                backgroundColor: telemetryType === 'zone' ? 'var(--bg-card-hover)' : 'transparent',
+                color: telemetryType === 'zone' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                fontWeight: 600,
+                fontSize: '0.75rem',
+                cursor: 'pointer',
+                transition: 'all var(--transition-fast)'
+              }}
+            >
+              {t('settings.room_zones', 'Room Zones')}
+            </button>
+            <button
+              onClick={() => setTelemetryType('circuit')}
+              style={{
+                padding: '0.3rem 0.75rem',
+                borderRadius: 'calc(var(--radius-md) - 4px)',
+                border: 'none',
+                backgroundColor: telemetryType === 'circuit' ? 'var(--bg-card-hover)' : 'transparent',
+                color: telemetryType === 'circuit' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                fontWeight: 600,
+                fontSize: '0.75rem',
+                cursor: 'pointer',
+                transition: 'all var(--transition-fast)'
+              }}
+            >
+              {t('settings.heating_circuits', 'Heating Circuits')}
+            </button>
+          </div>
         </div>
 
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
-          <select
-            value={selectedTelemetryZoneId || ''}
-            onChange={(e) => setSelectedTelemetryZoneId(e.target.value ? parseInt(e.target.value) : null)}
-            style={{
-              backgroundColor: 'var(--bg-input)',
-              border: '1px solid var(--border-color)',
-              color: 'var(--text-primary)',
-              padding: '0.4rem 0.6rem',
-              borderRadius: 'var(--radius-sm)',
-              outline: 'none',
-              fontWeight: 600,
-              fontSize: '0.85rem',
-              cursor: 'pointer',
-              minWidth: '180px'
-            }}
-          >
-            <option value="">{t('tanoclo_ex.choose_room', '-- Select Room --')}</option>
-            {(zones || []).filter(z => z.type === 'HEATING').map(z => (
-              <option key={z.id} value={z.id}>{z.name}</option>
-            ))}
-          </select>
+          {telemetryType === 'zone' ? (
+            <select
+              value={selectedTelemetryZoneId || ''}
+              onChange={(e) => setSelectedTelemetryZoneId(e.target.value ? parseInt(e.target.value) : null)}
+              style={{
+                backgroundColor: 'var(--bg-input)',
+                border: '1px solid var(--border-color)',
+                color: 'var(--text-primary)',
+                padding: '0.4rem 0.6rem',
+                borderRadius: 'var(--radius-sm)',
+                outline: 'none',
+                fontWeight: 600,
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+                minWidth: '180px'
+              }}
+            >
+              <option value="">{t('tanoclo_ex.choose_room', '-- Select Room --')}</option>
+              {(zones || []).filter(z => z.type === 'HEATING').map(z => (
+                <option key={z.id} value={z.id}>{z.name}</option>
+              ))}
+            </select>
+          ) : (
+            <select
+              value={selectedCircuitId || ''}
+              onChange={(e) => setSelectedCircuitId(e.target.value ? parseInt(e.target.value, 10) : 1)}
+              style={{
+                backgroundColor: 'var(--bg-input)',
+                border: '1px solid var(--border-color)',
+                color: 'var(--text-primary)',
+                padding: '0.4rem 0.6rem',
+                borderRadius: 'var(--radius-sm)',
+                outline: 'none',
+                fontWeight: 600,
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+                minWidth: '180px'
+              }}
+            >
+              {circuits && circuits.length > 0 ? (
+                circuits.map(c => (
+                  <option key={c.number} value={c.number}>
+                    {t('settings.circuit_no', 'Circuit')} #{c.number} {c.driver_serial_no ? `(${c.driver_serial_no})` : ''}
+                  </option>
+                ))
+              ) : (
+                <option value="1">{t('settings.circuit_no', 'Circuit')} #1</option>
+              )}
+            </select>
+          )}
 
-          {selectedTelemetryZoneId && (
+          {((telemetryType === 'zone' && selectedTelemetryZoneId) || (telemetryType === 'circuit' && selectedCircuitId)) && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <Button
                 variant="secondary"
@@ -248,7 +337,8 @@ export default function EnergySettings({ homeId, zones }) {
           )}
         </div>
 
-        {selectedTelemetryZoneId && (
+        {/* Zone Telemetry View */}
+        {telemetryType === 'zone' && selectedTelemetryZoneId && (
           <div style={{ marginTop: '0.5rem', width: '100%' }}>
             {isTelemetryLoading && (
               <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}>
@@ -268,6 +358,33 @@ export default function EnergySettings({ homeId, zones }) {
                   </div>
                 }>
                   <CombinedTelemetryChart dayReportData={telemetryData} />
+                </Suspense>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Circuit Telemetry View */}
+        {telemetryType === 'circuit' && selectedCircuitId && (
+          <div style={{ marginTop: '0.5rem', width: '100%' }}>
+            {isCircuitTelemetryLoading && (
+              <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}>
+                <Spinner size={24} />
+              </div>
+            )}
+            {circuitTelemetryError && (
+              <div style={{ color: 'var(--danger)', fontSize: '0.85rem', padding: '1rem', textAlign: 'center' }}>
+                {t('zone.failed_load_telemetry', 'Failed to load telemetry data')}
+              </div>
+            )}
+            {circuitTelemetryData && !isCircuitTelemetryLoading && (
+              <div style={{ minHeight: '300px', width: '100%' }}>
+                <Suspense fallback={
+                  <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}>
+                    <Spinner size={24} />
+                  </div>
+                }>
+                  <CircuitTelemetryChart circuitDayReportData={circuitTelemetryData} />
                 </Suspense>
               </div>
             )}

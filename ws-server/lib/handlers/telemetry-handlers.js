@@ -177,6 +177,15 @@ async function handleHvacConfig(ws, frame, coapMsg, decoded, peerInfo, pathInfo)
         if (mqttPublisher) {
             mqttPublisher.publishHvacTelemetry(pathInfo.homeId, sanitizedFields).catch(e => log('debug', `[MQTT] HVAC config telemetry failed: ${e.message}`));
         }
+        try {
+            const [cRows] = await db.getPool().execute('SELECT number FROM heating_circuits WHERE home_id = ?', [pathInfo.homeId]);
+            const cNums = cRows.length > 0 ? cRows.map(r => r.number) : [1];
+            for (const cNum of cNums) {
+                await db.insertCircuitMeasurement(pathInfo.homeId, cNum, {}, sanitizedFields);
+            }
+        } catch (mErr) {
+            log('debug', `Circuit measurement from HVAC config failed: ${mErr.message}`);
+        }
     }
 }
 
@@ -201,6 +210,15 @@ async function handleHvac(ws, frame, coapMsg, decoded, peerInfo, pathInfo) {
         await db.upsertHeatingSystem(homeId, sanitizedFields);
         if (mqttPublisher) {
             mqttPublisher.publishHvacTelemetry(homeId, sanitizedFields).catch(e => log('debug', `[MQTT] HVAC telemetry failed: ${e.message}`));
+        }
+        try {
+            const [cRows] = await db.getPool().execute('SELECT number FROM heating_circuits WHERE home_id = ?', [homeId]);
+            const cNums = cRows.length > 0 ? cRows.map(r => r.number) : [1];
+            for (const cNum of cNums) {
+                await db.insertCircuitMeasurement(homeId, cNum, {}, sanitizedFields);
+            }
+        } catch (mErr) {
+            log('debug', `Circuit measurement from HVAC failed: ${mErr.message}`);
         }
     }
 }

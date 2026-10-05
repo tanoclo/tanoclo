@@ -148,6 +148,7 @@ router.post('/homes/:id/delete', adminAuth, async (req, res) => {
         const [devicesToUnpublish] = await conn.execute('SELECT id FROM mobile_devices WHERE home_id = ?', [homeId]);
         await conn.execute('DELETE FROM device_measurements WHERE home_id = ?', [homeId]);
         await conn.execute('DELETE FROM zone_measurements WHERE home_id = ?', [homeId]);
+        await conn.execute('DELETE FROM circuit_measurements WHERE home_id = ?', [homeId]);
         await conn.execute('DELETE FROM devices WHERE home_id = ?', [homeId]);
         await conn.execute('DELETE FROM zones WHERE home_id = ?', [homeId]);
         await conn.execute('DELETE FROM mobile_devices WHERE home_id = ?', [homeId]);

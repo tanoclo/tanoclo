@@ -13,12 +13,14 @@ import Spinner from '../common/Spinner';
 import Button from '../common/Button';
 import Modal from '../common/Modal';
 import { useHome } from '../../context/HomeContext';
-import { getRawBoilerData, getCircuits } from '../../api/tanoclo';
-import { Flame, RefreshCw, Settings, CheckCircle, AlertTriangle } from 'lucide-react';
+import { getRawBoilerData, getCircuits, getCircuitDayReport, getCircuitRunningTimes } from '../../api/tanoclo';
+import { Flame, RefreshCw, Settings, CheckCircle, AlertTriangle, Activity } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { apiFetch } from '../../api/client';
 import logger from '../../utils/logger';
 import { SWR_KEYS } from '../../utils/swrKeys';
+import CircuitTelemetryChart from '../charts/CircuitTelemetryChart';
+
 
 /**
  * @brief Boiler and heating circuits configuration diagnostic dashboard panel.
@@ -38,6 +40,27 @@ export default function BoilerCircuitsSettings() {
   const [loadingManus, setLoadingManus] = useState(false);
   const [loadingModels, setLoadingModels] = useState(false);
   const [isSavingModel, setIsSavingModel] = useState(false);
+
+  // Circuit telemetry modal state
+  const [selectedCircuitForTelemetry, setSelectedCircuitForTelemetry] = useState(null);
+  const [circuitModalDate, setCircuitModalDate] = useState(new Date().toLocaleDateString('sv'));
+
+  // Fetch circuit day report for telemetry modal
+  const { data: circuitTelemetryData, error: circuitTelemetryError, isLoading: isCircuitTelemetryLoading } = useSWR(
+    activeHomeId && selectedCircuitForTelemetry && circuitModalDate
+      ? SWR_KEYS.circuitDayReport(activeHomeId, selectedCircuitForTelemetry, circuitModalDate)
+      : null,
+    () => getCircuitDayReport(activeHomeId, selectedCircuitForTelemetry, circuitModalDate)
+  );
+
+  // Fetch circuit running times for telemetry modal
+  const { data: circuitRunningTimes } = useSWR(
+    activeHomeId && selectedCircuitForTelemetry && circuitModalDate
+      ? SWR_KEYS.circuitRunningTimes(activeHomeId, selectedCircuitForTelemetry, circuitModalDate, circuitModalDate, 'day')
+      : null,
+    () => getCircuitRunningTimes(activeHomeId, selectedCircuitForTelemetry, { from: circuitModalDate, to: circuitModalDate, aggregate: 'day' })
+  );
+
 
   // Fetch boiler telemetry
   const { data: boilerRaw, error: boilerErr, mutate: mutateBoiler } = useSWR(
@@ -643,6 +666,7 @@ export default function BoilerCircuitsSettings() {
                 <th style={{ padding: '0.75rem 1rem' }}>{t('settings.target_temp')}</th>
                 <th style={{ padding: '0.75rem 1rem' }}>{t('settings.heat_demand')}</th>
                 <th style={{ padding: '0.75rem 1rem' }}>{t('settings.operating_mode')}</th>
+                <th style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>{t('common.actions', 'Actions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -686,6 +710,16 @@ export default function BoilerCircuitsSettings() {
                     }}>
                       {t('tanoclo_ex.mode_val', { mode: circ.field_2090 ?? '0' })}
                     </span>
+                  </td>
+                  <td style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>
+                    <Button
+                      variant="secondary"
+                      onClick={() => setSelectedCircuitForTelemetry(circ.number)}
+                      style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', gap: '0.3rem' }}
+                    >
+                      <Activity size={12} />
+                      <span>{t('settings.view_activity', 'Activity')}</span>
+                    </Button>
                   </td>
                 </tr>
               ))}
@@ -813,6 +847,117 @@ export default function BoilerCircuitsSettings() {
               disabled={isSavingModel || !selectedModelId}
             >
               <span>{isSavingModel ? t('settings.saving') : t('heating_activity.save_boiler_model')}</span>
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Circuit Telemetry & Zone Heat Requests Modal */}
+      <Modal
+        isOpen={Boolean(selectedCircuitForTelemetry)}
+        onClose={() => setSelectedCircuitForTelemetry(null)}
+        title={`${t('settings.circuit_no', 'Circuit')} #${selectedCircuitForTelemetry} ${t('settings.circuit_telemetry', 'Telemetry & Zone Heat Requests')}`}
+        style={{ maxWidth: '850px', width: '95vw' }}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          {/* Date Picker Header */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+            <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+              {t('settings.circuit_telemetry_modal_desc', 'Inspect real-time modulation, temperatures, and mapped room heat request contributions.')}
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  const d = new Date(circuitModalDate);
+                  d.setDate(d.getDate() - 1);
+                  setCircuitModalDate(d.toLocaleDateString('sv'));
+                }}
+                style={{ padding: '0.3rem 0.6rem', minWidth: 'auto', fontSize: '0.8rem' }}
+              >
+                &lt;
+              </Button>
+              <input
+                type="date"
+                value={circuitModalDate}
+                onChange={(e) => setCircuitModalDate(e.target.value)}
+                style={{
+                  backgroundColor: 'var(--bg-input)',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--text-primary)',
+                  padding: '0.35rem 0.5rem',
+                  borderRadius: 'var(--radius-sm)',
+                  outline: 'none',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              />
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  const d = new Date(circuitModalDate);
+                  d.setDate(d.getDate() + 1);
+                  setCircuitModalDate(d.toLocaleDateString('sv'));
+                }}
+                style={{ padding: '0.3rem 0.6rem', minWidth: 'auto', fontSize: '0.8rem' }}
+              >
+                &gt;
+              </Button>
+            </div>
+          </div>
+
+          {/* Running times contribution summary */}
+          {circuitRunningTimes && (
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+              gap: '1rem',
+              padding: '0.85rem',
+              backgroundColor: 'var(--bg-input)',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--border-color)'
+            }}>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                  {t('settings.circuit_active_duration', 'Circuit Active Duration')}
+                </span>
+                <strong style={{ fontSize: '1.05rem', color: 'var(--warning)' }}>
+                  {circuitRunningTimes.circuitActiveHours || 0} hrs
+                </strong>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                  {t('settings.mapped_zones_count', 'Mapped Zones')}
+                </span>
+                <strong style={{ fontSize: '1.05rem' }}>
+                  {circuitRunningTimes.zoneBreakdown?.length || 0}
+                </strong>
+              </div>
+            </div>
+          )}
+
+          {/* Chart Display */}
+          {isCircuitTelemetryLoading ? (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '3rem' }}>
+              <Spinner size={32} />
+            </div>
+          ) : circuitTelemetryError ? (
+            <div style={{ color: 'var(--danger)', padding: '1.5rem', textAlign: 'center' }}>
+              {t('zone.failed_load_telemetry', 'Failed to load telemetry data')}
+            </div>
+          ) : circuitTelemetryData ? (
+            <CircuitTelemetryChart circuitDayReportData={circuitTelemetryData} />
+          ) : (
+            <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+              {t('zone.no_telemetry_data', 'No telemetry data available')}
+            </div>
+          )}
+
+          {/* Close button */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+            <Button variant="secondary" onClick={() => setSelectedCircuitForTelemetry(null)}>
+              {t('common.close', 'Close')}
             </Button>
           </div>
         </div>

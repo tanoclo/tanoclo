@@ -650,6 +650,64 @@ async function upsertHeatingCircuit(homeId, number, fields = {}) {
             await p.execute(`UPDATE heating_circuits SET ${updates.join(', ')} WHERE home_id=? AND number=?`, params);
         }
     }
+
+    try {
+        await insertCircuitMeasurement(homeId, number, fields, {});
+    } catch (err) {
+        _log('warn', `Failed to record circuit measurement for H:${homeId} C:${number}: ${err.message}`);
+    }
+}
+
+async function insertCircuitMeasurement(homeId, circuitNumber, circuitFields = {}, hvacFields = {}) {
+    circuitFields = circuitFields || {};
+    hvacFields = hvacFields || {};
+    const p = getPool();
+    const now = new Date().toISOString().replace('T', ' ').replace(/\.\d+Z$/, '');
+
+    let cRow = null;
+    try {
+        const [cRows] = await p.execute(
+            'SELECT field_4000, field_4040, field_4080, field_2090, field_2040 FROM heating_circuits WHERE home_id=? AND number=? LIMIT 1',
+            [homeId, circuitNumber]
+        );
+        if (cRows.length > 0) cRow = cRows[0];
+    } catch (e) {}
+
+    let hRow = null;
+    try {
+        const [hRows] = await p.execute(
+            'SELECT field_044c, field_044d, field_0450, field_0452, field_0457, field_0460 FROM heating_systems WHERE home_id=? LIMIT 1',
+            [homeId]
+        );
+        if (hRows.length > 0) hRow = hRows[0];
+    } catch (e) {}
+
+    const refTemp = (circuitFields['0x4000'] !== undefined ? circuitFields['0x4000'] : (circuitFields.field_4000 !== undefined ? circuitFields.field_4000 : cRow?.field_4000)) ?? null;
+    const targetTemp = (circuitFields['0x4040'] !== undefined ? circuitFields['0x4040'] : (circuitFields.field_4040 !== undefined ? circuitFields.field_4040 : cRow?.field_4040)) ?? null;
+    const demand = (circuitFields['0x4080'] !== undefined ? circuitFields['0x4080'] : (circuitFields.field_4080 !== undefined ? circuitFields.field_4080 : cRow?.field_4080)) ?? null;
+    const mode = (circuitFields['0x2090'] !== undefined ? circuitFields['0x2090'] : (circuitFields.field_2090 !== undefined ? circuitFields.field_2090 : cRow?.field_2090)) ?? null;
+    const dhwMaxFlow = (circuitFields['0x2040'] !== undefined ? circuitFields['0x2040'] : (circuitFields.field_2040 !== undefined ? circuitFields.field_2040 : cRow?.field_2040)) ?? null;
+
+    const chFlowTemp = (hvacFields['0x044c'] !== undefined ? hvacFields['0x044c'] : (hvacFields.field_044c !== undefined ? hvacFields.field_044c : hRow?.field_044c)) ?? null;
+    const chReturnTemp = (hvacFields['0x044d'] !== undefined ? hvacFields['0x044d'] : (hvacFields.field_044d !== undefined ? hvacFields.field_044d : hRow?.field_044d)) ?? null;
+    const setpoint = (hvacFields['0x0450'] !== undefined ? hvacFields['0x0450'] : (hvacFields.field_0450 !== undefined ? hvacFields.field_0450 : hRow?.field_0450)) ?? null;
+    const modulation = (hvacFields['0x0452'] !== undefined ? hvacFields['0x0452'] : (hvacFields.field_0452 !== undefined ? hvacFields.field_0452 : hRow?.field_0452)) ?? null;
+    const flameActive = (hvacFields['0x0457'] !== undefined ? hvacFields['0x0457'] : (hvacFields.field_0457 !== undefined ? hvacFields.field_0457 : hRow?.field_0457)) ?? null;
+    const waterPressure = (hvacFields['0x0460'] !== undefined ? hvacFields['0x0460'] : (hvacFields.field_0460 !== undefined ? hvacFields.field_0460 : hRow?.field_0460)) ?? null;
+
+    await p.execute(
+        `INSERT INTO circuit_measurements
+         (home_id, circuit_number, timestamp,
+          field_4000, field_4040, field_4080, field_2090, field_2040,
+          field_044c, field_044d, field_0450, field_0452, field_0457, field_0460)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+            homeId, circuitNumber, now,
+            refTemp, targetTemp, demand, mode, dhwMaxFlow,
+            chFlowTemp, chReturnTemp, setpoint, modulation, flameActive, waterPressure
+        ]
+    );
+    _log('debug', `circuit_measurements: home=${homeId} circuit=${circuitNumber} target=${targetTemp}°C ref=${refTemp}°C demand=${demand}% flow=${chFlowTemp}°C`);
 }
 
 async function updateCircuitConfig(homeId, circuitNumber, fields, fullConfigJson) {
@@ -830,6 +888,7 @@ module.exports = {
     purgeZone,
     getHeatingCircuit,
     upsertHeatingCircuit,
+    insertCircuitMeasurement,
     updateCircuitConfig,
     upsertHeatingSystem,
     sanitizeHvacFields

@@ -13,7 +13,7 @@ import Card from '../common/Card';
 import Button from '../common/Button';
 import Spinner from '../common/Spinner';
 import { useHome } from '../../context/HomeContext';
-import { getRawZoneData, getRawDeviceData } from '../../api/tanoclo';
+import { getRawZoneData, getRawDeviceData, getRawCircuitData, getCircuits } from '../../api/tanoclo';
 import { getDevices } from '../../api/devices';
 import { SWR_KEYS } from '../../utils/swrKeys';
 import { RefreshCw } from 'lucide-react';
@@ -45,7 +45,20 @@ const FRIENDLY_LABELS = {
   field_0136: 'Encoder Raw Pulses',
   link_state: 'Link State',
   tado_mode: 'Auto Mode',
-  field_6020: 'Zone Service Type'
+  field_6020: 'Zone Service Type',
+  // Circuit & HVAC Measurements FIDs
+  circuit_number: 'Circuit Number',
+  field_4000: 'Reference Temp (°C)',
+  field_4040: 'Target Temp (°C)',
+  field_4080: 'Circuit Demand %',
+  field_2090: 'Operating Mode/Flags',
+  field_2040: 'Max DHW Flow Temp (°C)',
+  field_044c: 'CH Flow Temp (°C)',
+  field_044d: 'CH Return Temp (°C)',
+  field_0450: 'Control Setpoint (°C)',
+  field_0452: 'Relative Modulation %',
+  field_0457: 'Burner Flame Active',
+  field_0460: 'Water Pressure (mbar)'
 };
 
 const parseTimestampToDate = (ts) => {
@@ -65,12 +78,13 @@ export default function RawExplorerSettings() {
   const { t } = useTranslation();
   const { activeHomeId, zones, homeInfo } = useHome();
   const { data: allDevices } = useSWR(activeHomeId ? SWR_KEYS.devices(activeHomeId) : null, () => getDevices(activeHomeId));
+  const { data: allCircuits } = useSWR(activeHomeId ? SWR_KEYS.circuits(activeHomeId) : null, () => getCircuits(activeHomeId));
 
   const homeTimeZone = homeInfo?.dateTimeZone || 'UTC';
 
   const getFriendlyLabel = (key) => {
     let lookupKey = key;
-    if (!key.startsWith('field_') && key !== 'open_window_detected') {
+    if (!key.startsWith('field_') && key !== 'open_window_detected' && key !== 'circuit_number') {
       lookupKey = `field_${key}`;
     }
     const translated = t(`tanoclo_ex.friendly_labels.${lookupKey}`);
@@ -83,6 +97,7 @@ export default function RawExplorerSettings() {
   const [explorerType, setExplorerType] = useState('zone');
   const [selectedZoneId, setSelectedZoneId] = useState('');
   const [selectedDeviceSerial, setSelectedDeviceSerial] = useState('');
+  const [selectedCircuitId, setSelectedCircuitId] = useState('');
   const [explorerData, setExplorerData] = useState(null);
   const [isFetchingExplorer, setIsFetchingExplorer] = useState(false);
 
@@ -95,6 +110,9 @@ export default function RawExplorerSettings() {
         setExplorerData(res);
       } else if (explorerType === 'device' && selectedDeviceSerial) {
         const res = await getRawDeviceData(activeHomeId, selectedDeviceSerial);
+        setExplorerData(res);
+      } else if (explorerType === 'circuit' && selectedCircuitId) {
+        const res = await getRawCircuitData(activeHomeId, selectedCircuitId);
         setExplorerData(res);
       }
     } catch (e) {
@@ -138,6 +156,7 @@ export default function RawExplorerSettings() {
             >
               <option value="zone">{t('settings.zone_measurements')}</option>
               <option value="device">{t('settings.device_measurements')}</option>
+              <option value="circuit">{t('settings.circuit_measurements', 'Circuit Measurements')}</option>
             </select>
           </div>
 
@@ -164,7 +183,7 @@ export default function RawExplorerSettings() {
                 ))}
               </select>
             </div>
-          ) : (
+          ) : explorerType === 'device' ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
               <label style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{t('settings.select_smart_thermostat')}</label>
               <select
@@ -205,11 +224,40 @@ export default function RawExplorerSettings() {
                 )}
               </select>
             </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+              <label style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{t('settings.select_circuit', 'Select Circuit')}</label>
+              <select
+                value={selectedCircuitId}
+                onChange={(e) => setSelectedCircuitId(e.target.value)}
+                style={{
+                  backgroundColor: 'var(--bg-input)',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--text-primary)',
+                  padding: '0.4rem 0.6rem',
+                  borderRadius: 'var(--radius-sm)',
+                  outline: 'none',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                <option value="">{t('tanoclo_ex.choose_circuit', '-- Select Circuit --')}</option>
+                {allCircuits && allCircuits.length > 0 ? (
+                  allCircuits.map(c => (
+                    <option key={c.number} value={c.number}>
+                      {t('settings.circuit_no', 'Circuit')} #{c.number} {c.driver_serial_no ? `(${c.driver_serial_no})` : ''}
+                    </option>
+                  ))
+                ) : (
+                  <option value="1">{t('settings.circuit_no', 'Circuit')} #1</option>
+                )}
+              </select>
+            </div>
           )}
 
           <Button
             onClick={handleFetchExplorer}
-            disabled={isFetchingExplorer || (explorerType === 'zone' ? !selectedZoneId : !selectedDeviceSerial)}
+            disabled={isFetchingExplorer || (explorerType === 'zone' ? !selectedZoneId : explorerType === 'device' ? !selectedDeviceSerial : !selectedCircuitId)}
             variant="primary"
             style={{ padding: '0.45rem 1rem' }}
           >
@@ -224,7 +272,10 @@ export default function RawExplorerSettings() {
       {explorerData && explorerData.measurements && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           <h4 style={{ fontSize: '0.9rem', fontWeight: 700, margin: 0 }}>
-            {t('tanoclo_ex.showing_records', { count: explorerData.measurements.length, target: explorerType === 'zone' ? `Zone #${selectedZoneId}` : `Device ${selectedDeviceSerial}` })}
+            {t('tanoclo_ex.showing_records', {
+              count: explorerData.measurements.length,
+              target: explorerType === 'zone' ? `Zone #${selectedZoneId}` : explorerType === 'device' ? `Device ${selectedDeviceSerial}` : `Circuit #${selectedCircuitId}`
+            })}
           </h4>
 
           {explorerData.measurements.length === 0 ? (

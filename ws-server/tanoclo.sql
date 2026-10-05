@@ -23075,6 +23075,24 @@ CREATE TABLE `devices` (
   `field_015d` int(11) DEFAULT NULL COMMENT 'device_type/role: 71=Wired Thermostat, 200=Wireless Sensor, 112/113=VA'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE `circuit_measurements` (
+  `id` bigint(20) NOT NULL,
+  `home_id` int(11) NOT NULL,
+  `circuit_number` int(11) NOT NULL,
+  `timestamp` varchar(64) NOT NULL,
+  `field_4000` decimal(5,2) DEFAULT NULL COMMENT 'circuit_reference_temp',
+  `field_4040` decimal(5,2) DEFAULT NULL COMMENT 'circuit_target_temp',
+  `field_4080` int(11) DEFAULT NULL COMMENT 'circuit_demand_percent',
+  `field_2090` int(11) DEFAULT NULL COMMENT 'circuit_mode_or_flags_2090',
+  `field_2040` decimal(5,2) DEFAULT NULL COMMENT 'circuit_dhw_max_flow_temperature',
+  `field_044c` decimal(5,2) DEFAULT NULL COMMENT 'ch_flow_temperature',
+  `field_044d` decimal(5,2) DEFAULT NULL COMMENT 'ch_return_temperature',
+  `field_0450` decimal(5,2) DEFAULT NULL COMMENT 'control_setpoint',
+  `field_0452` int(11) DEFAULT NULL COMMENT 'relative_modulation',
+  `field_0457` tinyint(4) DEFAULT NULL COMMENT 'flame_active',
+  `field_0460` int(11) DEFAULT NULL COMMENT 'water_pressure_mbar'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE `device_measurements` (
   `id` bigint(20) NOT NULL,
   `device_serial` varchar(20) NOT NULL,
@@ -24875,6 +24893,11 @@ ALTER TABLE `boiler_model_manufacturers`
 ALTER TABLE `devices`
   ADD PRIMARY KEY (`serial_no`);
 
+ALTER TABLE `circuit_measurements`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_cm_home_circuit_ts` (`home_id`,`circuit_number`,`timestamp`),
+  ADD KEY `idx_cm_ts` (`timestamp`);
+
 ALTER TABLE `device_measurements`
   ADD PRIMARY KEY (`id`),
   ADD KEY `idx_dev_ts` (`device_serial`,`timestamp`),
@@ -24969,6 +24992,9 @@ ALTER TABLE `zone_timetables`
 
 ALTER TABLE `admin_users`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `circuit_measurements`
+  MODIFY `id` bigint(20) NOT NULL AUTO_INCREMENT;
 
 ALTER TABLE `device_measurements`
   MODIFY `id` bigint(20) NOT NULL AUTO_INCREMENT;

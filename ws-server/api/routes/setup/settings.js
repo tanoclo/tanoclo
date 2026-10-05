@@ -83,6 +83,7 @@ router.get('/settings', adminAuth, async (req, res) => {
             jwt_secret: settings.jwt_secret || config.jwtSecret,
             cleanup_device_measurements_days: settings.cleanup_device_measurements_days !== undefined ? parseInt(settings.cleanup_device_measurements_days, 10) : config.cleanupDeviceMeasurementsDays,
             cleanup_zone_measurements_days: settings.cleanup_zone_measurements_days !== undefined ? parseInt(settings.cleanup_zone_measurements_days, 10) : config.cleanupZoneMeasurementsDays,
+            cleanup_circuit_measurements_days: settings.cleanup_circuit_measurements_days !== undefined ? parseInt(settings.cleanup_circuit_measurements_days, 10) : config.cleanupCircuitMeasurementsDays,
             cleanup_home_weather_days: settings.cleanup_home_weather_days !== undefined ? parseInt(settings.cleanup_home_weather_days, 10) : config.cleanupHomeWeatherDays,
             swagger_enabled: settings.swagger_enabled !== undefined ? (settings.swagger_enabled === '1' || settings.swagger_enabled === 'true') : config.swaggerEnabled,
             ota_auto_update: settings.ota_auto_update !== undefined ? (settings.ota_auto_update === '1' || settings.ota_auto_update === 'true') : config.otaAutoUpdate,
@@ -98,7 +99,7 @@ router.post('/settings', adminAuth, async (req, res) => {
     try {
         const pool = db.getPool();
         const now = new Date().toISOString();
-        const { log_level, jwt_secret, cleanup_device_measurements_days, cleanup_zone_measurements_days, cleanup_home_weather_days, swagger_enabled, carto_api_key } = req.body;
+        const { log_level, jwt_secret, cleanup_device_measurements_days, cleanup_zone_measurements_days, cleanup_circuit_measurements_days, cleanup_home_weather_days, swagger_enabled, carto_api_key } = req.body;
 
         if (log_level && ['debug', 'info', 'warn', 'error'].includes(log_level)) {
             await pool.execute(
@@ -137,6 +138,16 @@ router.post('/settings', adminAuth, async (req, res) => {
                 await pool.execute(
                     'INSERT INTO server_settings (`key`, `value`, updated_at) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`), updated_at = VALUES(updated_at)',
                     ['cleanup_zone_measurements_days', String(val), now]
+                );
+            }
+        }
+
+        if (cleanup_circuit_measurements_days !== undefined) {
+            const val = parseInt(cleanup_circuit_measurements_days, 10);
+            if (!isNaN(val) && val >= 1) {
+                await pool.execute(
+                    'INSERT INTO server_settings (`key`, `value`, updated_at) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE `value` = VALUES(`value`), updated_at = VALUES(updated_at)',
+                    ['cleanup_circuit_measurements_days', String(val), now]
                 );
             }
         }

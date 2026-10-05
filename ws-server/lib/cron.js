@@ -508,10 +508,12 @@ async function runCleanup() {
         const now = new Date();
         const deviceDays = config.cleanupDeviceMeasurementsDays || 30;
         const zoneDays = config.cleanupZoneMeasurementsDays || 390;
+        const circuitDays = config.cleanupCircuitMeasurementsDays || 390;
         const weatherDays = config.cleanupHomeWeatherDays || 390;
 
         const deviceCutoff = new Date(now.getTime() - deviceDays * 24 * 60 * 60 * 1000).toISOString();
         const zoneCutoff = new Date(now.getTime() - zoneDays * 24 * 60 * 60 * 1000).toISOString();
+        const circuitCutoff = new Date(now.getTime() - circuitDays * 24 * 60 * 60 * 1000).toISOString();
         const weatherCutoff = new Date(now.getTime() - weatherDays * 24 * 60 * 60 * 1000).toISOString();
         const nowStr = now.toISOString();
 
@@ -520,6 +522,9 @@ async function runCleanup() {
 
         const [res2] = await pool.execute('DELETE FROM zone_measurements WHERE timestamp < ?', [zoneCutoff]);
         if (res2.affectedRows > 0) log('info', `Cleaned up ${res2.affectedRows} old zone measurements`);
+
+        const [resCircuit] = await pool.execute('DELETE FROM circuit_measurements WHERE timestamp < ?', [circuitCutoff]);
+        if (resCircuit.affectedRows > 0) log('info', `Cleaned up ${resCircuit.affectedRows} old circuit measurements`);
 
         const [res4] = await pool.execute('DELETE FROM home_weather WHERE timestamp < ?', [weatherCutoff]);
         if (res4.affectedRows > 0) log('info', `Cleaned up ${res4.affectedRows} old home weather records`);

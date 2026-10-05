@@ -735,6 +735,11 @@ router.get('/dashboard', adminAuth, async (req, res) => {
                                         <div class="form-text text-white-50 small mt-1">How many days of zone measurements to keep. Default: 390 (13 months).</div>
                                     </div>
                                     <div class="mb-3">
+                                        <label class="form-label small text-info">Circuit Measurements Retention (Days)</label>
+                                        <input type="number" id="settings_cleanup_circuit_measurements_days" class="form-control form-control-sm bg-dark text-white border-secondary" min="1" required>
+                                        <div class="form-text text-white-50 small mt-1">How many days of circuit measurements to keep. Default: 390 (13 months).</div>
+                                    </div>
+                                    <div class="mb-3">
                                         <label class="form-label small text-info">Home Weather Retention (Days)</label>
                                         <input type="number" id="settings_cleanup_home_weather_days" class="form-control form-control-sm bg-dark text-white border-secondary" min="1" required>
                                         <div class="form-text text-white-50 small mt-1">How many days of home weather data to keep. Default: 390 (13 months).</div>
@@ -1476,6 +1481,7 @@ router.get('/dashboard', adminAuth, async (req, res) => {
                         document.getElementById('settings_carto_api_key').value = data.carto_api_key || '';
                         document.getElementById('settings_cleanup_device_measurements_days').value = data.cleanup_device_measurements_days || 30;
                         document.getElementById('settings_cleanup_zone_measurements_days').value = data.cleanup_zone_measurements_days || 390;
+                        document.getElementById('settings_cleanup_circuit_measurements_days').value = data.cleanup_circuit_measurements_days || 390;
                         document.getElementById('settings_cleanup_home_weather_days').value = data.cleanup_home_weather_days || 390;
                         document.getElementById('settings_swagger_enabled').checked = !!data.swagger_enabled;
                         document.getElementById('settings_ota_auto_update').checked = data.ota_auto_update !== false;
@@ -1488,6 +1494,7 @@ router.get('/dashboard', adminAuth, async (req, res) => {
                         const cartoApiKey = document.getElementById('settings_carto_api_key').value;
                         const deviceDays = parseInt(document.getElementById('settings_cleanup_device_measurements_days').value, 10);
                         const zoneDays = parseInt(document.getElementById('settings_cleanup_zone_measurements_days').value, 10);
+                        const circuitDays = parseInt(document.getElementById('settings_cleanup_circuit_measurements_days').value, 10);
                         const weatherDays = parseInt(document.getElementById('settings_cleanup_home_weather_days').value, 10);
                         const swaggerEnabled = document.getElementById('settings_swagger_enabled').checked;
 
@@ -1497,6 +1504,10 @@ router.get('/dashboard', adminAuth, async (req, res) => {
                         }
                         if (isNaN(zoneDays) || zoneDays < 1) {
                             alert('Zone measurements retention must be at least 1 day.');
+                            return;
+                        }
+                        if (isNaN(circuitDays) || circuitDays < 1) {
+                            alert('Circuit measurements retention must be at least 1 day.');
                             return;
                         }
                         if (isNaN(weatherDays) || weatherDays < 1) {
@@ -1509,6 +1520,7 @@ router.get('/dashboard', adminAuth, async (req, res) => {
                             carto_api_key: cartoApiKey,
                             cleanup_device_measurements_days: deviceDays,
                             cleanup_zone_measurements_days: zoneDays,
+                            cleanup_circuit_measurements_days: circuitDays,
                             cleanup_home_weather_days: weatherDays,
                             swagger_enabled: swaggerEnabled,
                             ota_auto_update: document.getElementById('settings_ota_auto_update').checked

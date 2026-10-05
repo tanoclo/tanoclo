@@ -67,6 +67,7 @@ const config = {
     // Database cleanup settings (retention in days)
     cleanupDeviceMeasurementsDays: 30,
     cleanupZoneMeasurementsDays: 390, // approx 13 months
+    cleanupCircuitMeasurementsDays: 390, // approx 13 months
     cleanupHomeWeatherDays: 390,       // approx 13 months
 
     // MQTT configuration (defaults — overridden from DB)
@@ -186,6 +187,14 @@ function _applySettings(rows) {
                     const val = parseInt(row.value, 10);
                     if (!isNaN(val) && val >= 1) {
                         config.cleanupZoneMeasurementsDays = val;
+                    }
+                }
+                break;
+            case 'cleanup_circuit_measurements_days':
+                if (row.value) {
+                    const val = parseInt(row.value, 10);
+                    if (!isNaN(val) && val >= 1) {
+                        config.cleanupCircuitMeasurementsDays = val;
                     }
                 }
                 break;

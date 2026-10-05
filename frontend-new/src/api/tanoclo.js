@@ -51,6 +51,40 @@ export function getCircuits(homeId) {
 }
 
 /**
+ * Gets raw circuit configuration and history measurements
+ * @param {string|number} homeId
+ * @param {string|number} circuitId
+ */
+export function getRawCircuitData(homeId, circuitId) {
+  return apiFetch(`/api/v2/homes/${homeId}/tanoclo/circuits/${circuitId}/raw`);
+}
+
+/**
+ * Gets circuit day report telemetry data
+ * @param {string|number} homeId
+ * @param {string|number} circuitId
+ * @param {string} date
+ */
+export function getCircuitDayReport(homeId, circuitId, date) {
+  return apiFetch(`/api/v2/homes/${homeId}/tanoclo/circuits/${circuitId}/dayReport${date ? `?date=${date}` : ''}`);
+}
+
+/**
+ * Gets circuit operating running times and zone contribution breakdown
+ * @param {string|number} homeId
+ * @param {string|number} circuitId
+ * @param {object} params
+ */
+export function getCircuitRunningTimes(homeId, circuitId, params = {}) {
+  const query = new URLSearchParams();
+  if (params.from) query.set('from', params.from);
+  if (params.to) query.set('to', params.to);
+  if (params.aggregate) query.set('aggregate', params.aggregate);
+  const qStr = query.toString();
+  return apiFetch(`/api/v2/homes/${homeId}/tanoclo/circuits/${circuitId}/runningTimes${qStr ? `?${qStr}` : ''}`);
+}
+
+/**
  * Gets Internet Bridge status
  * @param {string|number} homeId
  */
