@@ -124,7 +124,7 @@ async function handleZoneConfig(ws, frame, coapMsg, decoded, peerInfo, pathInfo)
 
             const payload = await db.buildZoneConfigTLV(homeId, zoneId);
             const etags = await db.getZoneEtags(homeId, zoneId);
-            const configEtag = (etags && etags.config_real) ? etags.config_real : db.generateEtag(payload);
+            const configEtag = (etags && etags.config_real) ? etags.config_real : ((etags && etags.config) ? etags.config : db.generateEtag(payload));
             await coapHelpers.sendCoAPWithBlock2(ws, coapMsg, payload || Buffer.alloc(0), configEtag, null, peerInfo, wsBridge.DIR_SERVER_TO_CLIENT);
         } catch (e) {
             log('error', `ZONE_CFG GET z/${zoneId}: ${e.message}`, e.stack);

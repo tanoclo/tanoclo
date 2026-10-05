@@ -49,16 +49,51 @@ function sendCoAPAck(ws, coapMsg, peerInfo, originalDirection, responseCode = nu
     sendWrappedCoAP(ws, ackBytes, peerInfo, responseDir);
 }
 
+// Bridge downlink pacing tracking: ensures >= 120ms airtime gap between heavy downlink blocks on same bridge
+const bridgeLastBlockTs = new Map();
+const MIN_INTER_BLOCK_GAP_MS = 120;
+
+function normalizeEtag(rawEtag) {
+    if (!rawEtag) return null;
+    let buf = null;
+    if (Buffer.isBuffer(rawEtag)) {
+        buf = rawEtag;
+    } else if (typeof rawEtag === 'string') {
+        const cleanHex = rawEtag.replace(/^0x/i, '');
+        if (cleanHex.length % 2 === 0) {
+            buf = Buffer.from(cleanHex, 'hex');
+        } else {
+            buf = Buffer.from(rawEtag, 'utf8');
+        }
+    }
+    if (buf && buf.length > 8) {
+        buf = buf.subarray(0, 8);
+    }
+    return buf;
+}
+
+async function paceDownlinkBlock(ws) {
+    if (!ws) return;
+    const lastTs = bridgeLastBlockTs.get(ws) || 0;
+    const now = Date.now();
+    const elapsed = now - lastTs;
+    if (elapsed < MIN_INTER_BLOCK_GAP_MS) {
+        await new Promise(r => setTimeout(r, MIN_INTER_BLOCK_GAP_MS - elapsed));
+    }
+    bridgeLastBlockTs.set(ws, Date.now());
+}
+
 async function sendCoAPWithBlock2(ws, coapMsg, fullPayload, etag, contentFormat, peerInfo, directionU16) {
     const block2Opt = coap.optionFirst(coapMsg, coap.OPT_BLOCK2);
     const clientBlock = block2Opt ? coap.decodeBlock(block2Opt) : { num: 0, szx: 3, blockSize: 128 };
 
     // Check if client provided an ETag for validation (Conditional GET)
-    const clientEtag = coap.optionFirst(coapMsg, coap.OPT_ETAG);
-    if (clientEtag && etag && Buffer.compare(clientEtag, etag) === 0 && clientBlock.num === 0) {
+    const clientEtag = normalizeEtag(coap.optionFirst(coapMsg, coap.OPT_ETAG));
+    const targetEtag = normalizeEtag(etag);
+    if (clientEtag && targetEtag && Buffer.compare(clientEtag, targetEtag) === 0 && clientBlock.num === 0) {
         log('debug', `ETag match for ${coap.uriPath(coapMsg)}, sending 2.03 Valid`);
         const validBytes = coap.buildAckWithOptions(coapMsg, coap.CODE_VALID, [
-            { num: coap.OPT_ETAG, value: etag },
+            { num: coap.OPT_ETAG, value: targetEtag },
             { num: coap.OPT_BLOCK2, value: coap.encodeBlock2(0, 0, clientBlock.szx) }
         ]);
         sendWrappedCoAP(ws, validBytes, peerInfo, directionU16);
@@ -72,7 +107,7 @@ async function sendCoAPWithBlock2(ws, coapMsg, fullPayload, etag, contentFormat,
     if (clientBlock.num === 0 || !session) {
         session = {
             payload: fullPayload,
-            etag: etag,
+            etag: targetEtag,
             expiresAt: Date.now() + 60000
         };
         downlinkBlockSessions.set(sessionKey, session);
@@ -95,8 +130,10 @@ async function sendCoAPWithBlock2(ws, coapMsg, fullPayload, etag, contentFormat,
     let finalEtag = session.etag;
     const isNeighbors = coap.uriPath(coapMsg).endsWith('/neighbors');
     if (!finalEtag && !isNeighbors) {
-        // Generate stable fallback ETag from payload
+        // Generate stable fallback ETag from payload (8 bytes)
         finalEtag = crypto.createHash('md5').update(fullPayload).digest().subarray(0, 8);
+    } else if (finalEtag) {
+        finalEtag = normalizeEtag(finalEtag);
     }
 
     if (finalEtag && !isNeighbors) options.push({ num: coap.OPT_ETAG, value: finalEtag });
@@ -105,6 +142,11 @@ async function sendCoAPWithBlock2(ws, coapMsg, fullPayload, etag, contentFormat,
     // Always include Block2 if the client requested it or if there's more data
     if (block2Opt || more === 1) {
         options.push({ num: coap.OPT_BLOCK2, value: coap.encodeBlock2(clientBlock.num, more, clientBlock.szx) });
+    }
+
+    // Apply downlink block pacing to prevent 802.15.4 half-duplex RF saturation during multi-block transfers
+    if (chunk.length > 64 || more === 1) {
+        await paceDownlinkBlock(ws);
     }
 
     const ackBytes = coap.buildAckWithOptions(coapMsg, coap.CODE_CONTENT, options, chunk);
@@ -226,5 +268,6 @@ module.exports = {
     sendCoAPAck,
     sendCoAPWithBlock2,
     sendWrappedCoAP,
-    sortZoneStateFields
+    sortZoneStateFields,
+    normalizeEtag
 };

@@ -297,6 +297,8 @@ async function runProactiveKeepAlive() {
             if (now - lastContact >= DEVICE_INACTIVE_THRESHOLD_MS) {
                 _log('debug', `[mesh-recovery] Keep-alive probe for inactive device ${dev.serial_no} (last contact ${Math.round((now - lastContact) / 60000)}m ago)`);
                 await probeDevice(dev.serial_no);
+                // Stagger keep-alive probes to prevent RF bursts
+                await new Promise(r => setTimeout(r, 500));
             }
         }
     } catch (e) {
