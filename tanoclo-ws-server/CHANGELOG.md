@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-05
+
+- feat: add circuit measurements
+- feat: prevent RF congestion, fix: etag handling
+- feat: add mesh recovery logic
+- feat: Show hardware errors on Home view
+- fix(patch_ib_firmware): address review feedback
+- fix: frontend-new icons missing
+- docs(patch_ib_firmware): macOS setup, dump verification, Tag-Connect footprint
+- fix(patch_ib_firmware): compare RootCA by DER hash, not PEM with CRLF
+- fix(patch_ib_firmware): eliminate stub status race in SPI dump/program; verify reads
+- fix(patch_ib_firmware): macOS/BSD userland portability
+- chore(patch_ib_firmware): commit shell scripts with the executable bit
+
 ## [0.4.0] - 2026-09-21
 
 - fix: more critical issues in device/zone/circuit config generation/processing and wireless sensor emulator

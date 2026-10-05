@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-05
+
+- feat: add circuit measurements
+- feat: prevent RF congestion, fix: etag handling
+- feat: add mesh recovery logic
+- feat: Show hardware errors on Home view
+- fix(patch_ib_firmware): address review feedback
+- fix: frontend-new icons missing
+- docs(patch_ib_firmware): macOS setup, dump verification, Tag-Connect footprint
+- fix(patch_ib_firmware): compare RootCA by DER hash, not PEM with CRLF
+- fix(patch_ib_firmware): eliminate stub status race in SPI dump/program; verify reads
+- fix(patch_ib_firmware): macOS/BSD userland portability
+- chore(patch_ib_firmware): commit shell scripts with the executable bit
+
 - fix(patch_ib_firmware): eliminate a status race in the SPI flash dump/program OpenOCD scripts that could silently capture stale 4 KiB chunks when dumping and silently skip sectors when programming; both now clear the stub status before each run and wait for the specific completion code
 - feat(patch_ib_firmware): SPI dumps read every chunk until two consecutive reads agree, report a reliability summary, and abort (non-zero exit) instead of producing a partial image; `SPI_SLOW=1` diagnostic mode
 - fix(patch_ib_firmware): macOS/BSD portability — `patch_crc.sh` computed the header CRC as `0x0000` under BSD awk (hex literals unsupported), `clone_rootca.sh` failed under BSD `seq`, `patch_crc.sh` read-back verification was skipped under BSD `od`, ST-Link detection now uses `ioreg` on macOS
