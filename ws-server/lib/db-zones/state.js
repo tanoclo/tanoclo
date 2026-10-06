@@ -251,12 +251,9 @@ async function insertMergedZoneMeasurement(homeId, zoneId, updates) {
         ]
     );
 
-    // Update the zone state/config ETags
+    // Update the zone state ETag on overlay/mode change
     if (updates['0x6240'] !== undefined || updates.tado_mode !== undefined) {
         await p.execute('UPDATE zones SET state_etag=? WHERE id=? AND home_id=?', [etag, zoneId, homeId]);
-    }
-    if (updates['0x61e0'] !== undefined) {
-        await p.execute('UPDATE zones SET config_etag=? WHERE id=? AND home_id=?', [etag, zoneId, homeId]);
     }
     // Only log temp/humidity if they're present (DHW zones like zone 0 have no sensors)
     if (tempCelsius != null || humidityPct != null) {

@@ -5,6 +5,7 @@
 
 'use strict';
 
+const crypto = require('crypto');
 const { getLogger } = require('../logger');
 const log = getLogger();
 const coapHelpers = require('./coap-helpers');
@@ -122,10 +123,17 @@ async function handleZoneConfig(ws, frame, coapMsg, decoded, peerInfo, pathInfo)
                 return;
             }
 
-            const payload = await db.buildZoneConfigTLV(homeId, zoneId);
+            const payload = (await db.buildZoneConfigTLV(homeId, zoneId)) || Buffer.alloc(0);
             const etags = await db.getZoneEtags(homeId, zoneId);
-            const configEtag = (etags && etags.config_real) ? etags.config_real : ((etags && etags.config) ? etags.config : db.generateEtag(payload));
-            await coapHelpers.sendCoAPWithBlock2(ws, coapMsg, payload || Buffer.alloc(0), configEtag, null, peerInfo, wsBridge.DIR_SERVER_TO_CLIENT);
+            const contentEtag = (etags && etags.config_real)
+                ? coapHelpers.normalizeEtag(etags.config_real)
+                : crypto.createHash('md5').update(payload).digest().subarray(0, 8);
+
+            if (!etags?.config_real && (!etags?.config || Buffer.compare(coapHelpers.normalizeEtag(etags.config) || Buffer.alloc(0), contentEtag) !== 0)) {
+                await db.updateZoneConfigEtag(homeId, zoneId, contentEtag).catch(err => log('debug', `Failed to update zone config etag: ${err.message}`));
+            }
+
+            await coapHelpers.sendCoAPWithBlock2(ws, coapMsg, payload, contentEtag, null, peerInfo, wsBridge.DIR_SERVER_TO_CLIENT);
         } catch (e) {
             log('error', `ZONE_CFG GET z/${zoneId}: ${e.message}`, e.stack);
             coapHelpers.sendCoAPAck(ws, coapMsg, peerInfo, frame.directionU16);

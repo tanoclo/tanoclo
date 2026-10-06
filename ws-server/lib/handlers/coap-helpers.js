@@ -49,9 +49,9 @@ function sendCoAPAck(ws, coapMsg, peerInfo, originalDirection, responseCode = nu
     sendWrappedCoAP(ws, ackBytes, peerInfo, responseDir);
 }
 
-// Bridge downlink pacing tracking: ensures >= 120ms airtime gap between heavy downlink blocks on same bridge
+// Bridge downlink pacing tracking: ensures >= 250ms airtime gap between heavy downlink blocks on same bridge
 const bridgeLastBlockTs = new Map();
-const MIN_INTER_BLOCK_GAP_MS = 120;
+const MIN_INTER_BLOCK_GAP_MS = 250;
 
 function normalizeEtag(rawEtag) {
     if (!rawEtag) return null;

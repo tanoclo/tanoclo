@@ -101,10 +101,18 @@ async function isZoneAlive(homeId, zoneId) {
     return anyRows.length > 0;
 }
 
+async function updateZoneConfigEtag(homeId, zoneId, etag) {
+    if (!homeId) throw new Error('homeId is required for updateZoneConfigEtag');
+    const p = getPool();
+    const etagBuf = Buffer.isBuffer(etag) ? etag : Buffer.from(etag, 'hex');
+    await p.execute('UPDATE zones SET config_etag=? WHERE id=? AND home_id=?', [etagBuf, zoneId, homeId]);
+}
+
 module.exports = {
     getZoneEtags,
     storeRealZoneEtag,
     storeRealCircuitEtag,
     getCircuitEtags,
-    isZoneAlive
+    isZoneAlive,
+    updateZoneConfigEtag
 };
