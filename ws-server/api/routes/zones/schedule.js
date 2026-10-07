@@ -30,6 +30,82 @@ const { copySchedule } = require('./state');
 const router = express.Router();
 const _log = getLogger('zones-api');
 
+const BLOCK_COLUMNS = 'id, day_type, start_time, end_time, geolocation_override, setting_type, setting_power, setting_temp_celsius, setting_temp_fahrenheit';
+
+function mapBlockRow(row) {
+    return {
+        dayType: row.day_type,
+        start: row.start_time,
+        end: row.end_time,
+        geolocationOverride: Boolean(row.geolocation_override),
+        setting: {
+            type: row.setting_type || 'HEATING',
+            power: row.setting_power || 'ON',
+            temperature: (row.setting_temp_celsius !== null) ? {
+                celsius: parseFloat(row.setting_temp_celsius),
+                fahrenheit: (row.setting_temp_fahrenheit !== null) ? parseFloat(row.setting_temp_fahrenheit) : null
+            } : null
+        }
+    };
+}
+
+function defaultDayTypes(timetableType) {
+    if (timetableType === 'SEVEN_DAY') return ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
+    if (timetableType === 'THREE_DAY') return ['MONDAY_TO_FRIDAY', 'SATURDAY', 'SUNDAY'];
+    return ['MONDAY_TO_SUNDAY'];
+}
+
+/**
+ * Runs fn(connection) in a transaction holding a lock on the zone row. schedule_blocks and
+ * zone_timetables have no unique keys, so every check-then-insert or delete-then-insert on a
+ * zone's schedule must be serialised here or overlapping requests leave duplicate rows.
+ */
+async function withZoneScheduleLock(zoneId, homeId, fn) {
+    const connection = await db.getPool().getConnection();
+    try {
+        await connection.beginTransaction();
+        await connection.execute('SELECT id FROM zones WHERE id = ? AND home_id = ? FOR UPDATE', [zoneId, homeId]);
+        const result = await fn(connection);
+        await connection.commit();
+        return result;
+    } catch (err) {
+        await connection.rollback().catch(() => { });
+        throw err;
+    } finally {
+        connection.release();
+    }
+}
+
+/** Returns the internal id of the zone's timetable of this type, creating it if missing. */
+async function ensureTimetable(conn, zoneId, homeId, type) {
+    const [tts] = await conn.execute('SELECT id FROM zone_timetables WHERE zone_id = ? AND home_id = ? AND type = ?', [zoneId, homeId, type]);
+    if (tts.length > 0) return tts[0].id;
+    const [insertRes] = await conn.execute('INSERT INTO zone_timetables (zone_id, home_id, type) VALUES (?, ?, ?)', [zoneId, homeId, type]);
+    return insertRes.insertId;
+}
+
+/** Seeds a flat default schedule if the timetable has no blocks at all. Returns true if it did. */
+async function ensureDefaultBlocks(conn, internalId, homeId, zoneId, timetableType) {
+    const [count] = await conn.execute('SELECT COUNT(*) as c FROM schedule_blocks WHERE timetable_id = ? AND home_id = ?', [internalId, homeId]);
+    if (count[0].c !== 0) return false;
+
+    const [zoneRows] = await conn.execute('SELECT type FROM zones WHERE id = ? AND home_id = ?', [zoneId, homeId]);
+    const isHotWater = (zoneRows.length > 0 ? zoneRows[0].type : 'HEATING') === 'HOT_WATER';
+    const settingType = isHotWater ? 'HOT_WATER' : 'HEATING';
+    const tempC = isHotWater ? 50.0 : 20.0;
+    const tempF = isHotWater ? 122.0 : 68.0;
+
+    for (const dt of defaultDayTypes(timetableType)) {
+        await conn.execute(`
+            INSERT INTO schedule_blocks (
+                timetable_id, home_id, day_type, start_time, end_time, geolocation_override, 
+                setting_type, setting_power, setting_temp_celsius, setting_temp_fahrenheit
+            ) VALUES (?, ?, ?, '00:00', '00:00', 0, ?, 'ON', ?, ?)
+        `, [internalId, homeId, dt, settingType, tempC, tempF]);
+    }
+    return true;
+}
+
 router.get('/:homeId/zones/:zoneId/schedule/timetables', (req, res) => {
     res.json([
         { id: 0, type: 'ONE_DAY' },
@@ -61,57 +137,28 @@ router.put('/:homeId/zones/:zoneId/schedule/activeTimetable', async (req, res) =
         const id = req.body.id ?? 0;
         const type = getTimetableTypeFromId(id);
 
-        const pool = db.getPool();
-        await pool.execute('UPDATE zone_timetables SET is_active = 0 WHERE zone_id = ? AND home_id = ?', [zoneId, homeId]);
+        await withZoneScheduleLock(zoneId, homeId, async (conn) => {
+            await conn.execute('UPDATE zone_timetables SET is_active = 0 WHERE zone_id = ? AND home_id = ?', [zoneId, homeId]);
 
-        const [updateRes] = await pool.execute(
-            'UPDATE zone_timetables SET is_active = 1 WHERE zone_id = ? AND home_id = ? AND type = ?',
-            [zoneId, homeId, type]
-        );
+            const [updateRes] = await conn.execute(
+                'UPDATE zone_timetables SET is_active = 1 WHERE zone_id = ? AND home_id = ? AND type = ?',
+                [zoneId, homeId, type]
+            );
 
-        if (updateRes.affectedRows === 0) {
-            const [check] = await pool.execute('SELECT id FROM zone_timetables WHERE zone_id = ? AND home_id = ? AND type = ?', [zoneId, homeId, type]);
-            if (check.length === 0) {
-                await pool.execute('INSERT INTO zone_timetables (zone_id, home_id, type, is_active) VALUES (?, ?, ?, 1)', [zoneId, homeId, type]);
-            }
-        }
-
-        const [ttRows] = await pool.execute('SELECT id FROM zone_timetables WHERE zone_id = ? AND home_id = ? AND type = ?', [zoneId, homeId, type]);
-        if (ttRows.length > 0) {
-            const internalId = ttRows[0].id;
-            const [blockCount] = await pool.execute('SELECT COUNT(*) as c FROM schedule_blocks WHERE timetable_id = ? AND home_id = ?', [internalId, homeId]);
-            if (blockCount[0].c === 0) {
-                const [zoneRows] = await pool.execute('SELECT type FROM zones WHERE id = ? AND home_id = ?', [zoneId, homeId]);
-                const zoneType = zoneRows.length > 0 ? zoneRows[0].type : 'HEATING';
-
-                let settingType = 'HEATING';
-                let settingPower = 'ON';
-                let tempC = 20.0;
-                let tempF = 68.0;
-
-                if (zoneType === 'HOT_WATER') {
-                    settingType = 'HOT_WATER';
-                    tempC = 50.0;
-                    tempF = 122.0;
-                }
-
-                let dayTypes = [];
-                if (type === 'SEVEN_DAY') dayTypes = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
-                else if (type === 'THREE_DAY') dayTypes = ['MONDAY_TO_FRIDAY', 'SATURDAY', 'SUNDAY'];
-                else dayTypes = ['MONDAY_TO_SUNDAY'];
-
-                for (const dt of dayTypes) {
-                    await pool.execute(`
-                        INSERT INTO schedule_blocks (
-                            timetable_id, home_id, day_type, start_time, end_time, geolocation_override, 
-                            setting_type, setting_power, setting_temp_celsius, setting_temp_fahrenheit
-                        ) VALUES (?, ?, ?, '00:00', '00:00', 0, ?, ?, ?, ?)
-                    `, [internalId, homeId, dt, settingType, settingPower, tempC, tempF]);
+            if (updateRes.affectedRows === 0) {
+                const [check] = await conn.execute('SELECT id FROM zone_timetables WHERE zone_id = ? AND home_id = ? AND type = ?', [zoneId, homeId, type]);
+                if (check.length === 0) {
+                    await conn.execute('INSERT INTO zone_timetables (zone_id, home_id, type, is_active) VALUES (?, ?, ?, 1)', [zoneId, homeId, type]);
                 }
             }
-        }
 
-        await pool.execute('UPDATE zones SET last_schedule_change_at = NOW() WHERE id = ? AND home_id = ?', [zoneId, homeId]);
+            const [ttRows] = await conn.execute('SELECT id FROM zone_timetables WHERE zone_id = ? AND home_id = ? AND type = ?', [zoneId, homeId, type]);
+            if (ttRows.length > 0) {
+                await ensureDefaultBlocks(conn, ttRows[0].id, homeId, zoneId, type);
+            }
+
+            await conn.execute('UPDATE zones SET last_schedule_change_at = NOW() WHERE id = ? AND home_id = ?', [zoneId, homeId]);
+        });
 
         res.json({ id, type });
     } catch (err) {
@@ -126,88 +173,20 @@ router.get('/:homeId/zones/:zoneId/schedule/timetables/:timetableId/blocks', asy
         const timetableType = getTimetableTypeFromId(parseInt(timetableId, 10));
         const pool = db.getPool();
 
-        let [tts] = await pool.execute('SELECT id FROM zone_timetables WHERE zone_id = ? AND home_id = ? AND type = ?', [zoneId, homeId, timetableType]);
-        let internalId;
-
-        if (tts.length === 0) {
-            const [insertRes] = await pool.execute('INSERT INTO zone_timetables (zone_id, home_id, type) VALUES (?, ?, ?)', [zoneId, homeId, timetableType]);
-            internalId = insertRes.insertId;
-        } else {
-            internalId = tts[0].id;
+        // Fast path, no lock: the timetable and its blocks already exist.
+        const [tts] = await pool.execute('SELECT id FROM zone_timetables WHERE zone_id = ? AND home_id = ? AND type = ?', [zoneId, homeId, timetableType]);
+        if (tts.length > 0) {
+            const [rows] = await pool.execute(`SELECT ${BLOCK_COLUMNS} FROM schedule_blocks WHERE timetable_id = ? AND home_id = ?`, [tts[0].id, homeId]);
+            if (rows.length > 0) return res.json(rows.map(mapBlockRow));
         }
 
-        const [rows] = await pool.execute(`
-            SELECT id, day_type, start_time, end_time, geolocation_override, setting_type, setting_power, setting_temp_celsius, setting_temp_fahrenheit 
-            FROM schedule_blocks 
-            WHERE timetable_id = ? AND home_id = ?
-        `, [internalId, homeId]);
-
-        let blocks = rows.map(row => ({
-            dayType: row.day_type,
-            start: row.start_time,
-            end: row.end_time,
-            geolocationOverride: Boolean(row.geolocation_override),
-            setting: {
-                type: row.setting_type || 'HEATING',
-                power: row.setting_power || 'ON',
-                temperature: (row.setting_temp_celsius !== null) ? {
-                    celsius: parseFloat(row.setting_temp_celsius),
-                    fahrenheit: (row.setting_temp_fahrenheit !== null) ? parseFloat(row.setting_temp_fahrenheit) : null
-                } : null
-            }
-        }));
-
-        if (blocks.length === 0) {
-            let dayTypes = [];
-            if (timetableType === 'SEVEN_DAY') dayTypes = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
-            else if (timetableType === 'THREE_DAY') dayTypes = ['MONDAY_TO_FRIDAY', 'SATURDAY', 'SUNDAY'];
-            else dayTypes = ['MONDAY_TO_SUNDAY'];
-
-            const [zoneRows] = await pool.execute('SELECT type FROM zones WHERE id = ? AND home_id = ?', [zoneId, homeId]);
-            const zoneType = zoneRows.length > 0 ? zoneRows[0].type : 'HEATING';
-
-            let settingType = 'HEATING';
-            let settingPower = 'ON';
-            let tempC = 20.0;
-            let tempF = 68.0;
-
-            if (zoneType === 'HOT_WATER') {
-                settingType = 'HOT_WATER';
-                tempC = 50.0;
-                tempF = 122.0;
-            }
-
-            for (const dt of dayTypes) {
-                await pool.execute(`
-                    INSERT INTO schedule_blocks (
-                        timetable_id, home_id, day_type, start_time, end_time, geolocation_override, 
-                        setting_type, setting_power, setting_temp_celsius, setting_temp_fahrenheit
-                    ) VALUES (?, ?, ?, '00:00', '00:00', 0, ?, ?, ?, ?)
-                `, [internalId, homeId, dt, settingType, settingPower, tempC, tempF]);
-            }
-
-            const [rowsAfterInsert] = await pool.execute(`
-                SELECT id, day_type, start_time, end_time, geolocation_override, setting_type, setting_power, setting_temp_celsius, setting_temp_fahrenheit 
-                FROM schedule_blocks 
-                WHERE timetable_id = ? AND home_id = ?
-            `, [internalId, homeId]);
-
-            blocks = rowsAfterInsert.map(row => ({
-                dayType: row.day_type,
-                start: row.start_time,
-                end: row.end_time,
-                geolocationOverride: Boolean(row.geolocation_override),
-                setting: {
-                    type: row.setting_type || 'HEATING',
-                    power: row.setting_power || 'ON',
-                    temperature: (row.setting_temp_celsius !== null) ? {
-                        celsius: parseFloat(row.setting_temp_celsius),
-                        fahrenheit: (row.setting_temp_fahrenheit !== null) ? parseFloat(row.setting_temp_fahrenheit) : null
-                    } : null
-                }
-            }));
-        }
-
+        // Slow path: create what is missing under the zone lock, re-checking inside it.
+        const blocks = await withZoneScheduleLock(zoneId, homeId, async (conn) => {
+            const internalId = await ensureTimetable(conn, zoneId, homeId, timetableType);
+            await ensureDefaultBlocks(conn, internalId, homeId, zoneId, timetableType);
+            const [rows] = await conn.execute(`SELECT ${BLOCK_COLUMNS} FROM schedule_blocks WHERE timetable_id = ? AND home_id = ?`, [internalId, homeId]);
+            return rows.map(mapBlockRow);
+        });
         res.json(blocks);
     } catch (err) {
         res.status(500).json({ error: 'internal_error' });
@@ -228,103 +207,36 @@ router.get('/:homeId/zones/:zoneId/schedule/timetables/:timetableId/blocks/:dayT
         const timetableType = getTimetableTypeFromId(parseInt(timetableId, 10));
         const pool = db.getPool();
 
-        let [tts] = await pool.execute('SELECT id FROM zone_timetables WHERE zone_id = ? AND home_id = ? AND type = ?', [zoneId, homeId, timetableType]);
-        let internalId;
-
-        if (tts.length === 0) {
-            const [insertRes] = await pool.execute('INSERT INTO zone_timetables (zone_id, home_id, type) VALUES (?, ?, ?)', [zoneId, homeId, timetableType]);
-            internalId = insertRes.insertId;
-        } else {
-            internalId = tts[0].id;
+        // Fast path, no lock: the day already has blocks.
+        const [tts] = await pool.execute('SELECT id FROM zone_timetables WHERE zone_id = ? AND home_id = ? AND type = ?', [zoneId, homeId, timetableType]);
+        if (tts.length > 0) {
+            const [rows] = await pool.execute(`SELECT ${BLOCK_COLUMNS} FROM schedule_blocks WHERE timetable_id = ? AND home_id = ? AND day_type = ?`, [tts[0].id, homeId, dayType]);
+            if (rows.length > 0) return res.json(rows.map(mapBlockRow));
         }
 
-        const [rows] = await pool.execute(`
-            SELECT id, day_type, start_time, end_time, geolocation_override, setting_type, setting_power, setting_temp_celsius, setting_temp_fahrenheit 
-            FROM schedule_blocks 
-            WHERE timetable_id = ? AND home_id = ? AND day_type = ?
-        `, [internalId, homeId, dayType]);
+        // Slow path: create what is missing under the zone lock, re-checking inside it.
+        const blocks = await withZoneScheduleLock(zoneId, homeId, async (conn) => {
+            const internalId = await ensureTimetable(conn, zoneId, homeId, timetableType);
+            await ensureDefaultBlocks(conn, internalId, homeId, zoneId, timetableType);
 
-        let blocks = rows.map(row => ({
-            dayType: row.day_type,
-            start: row.start_time,
-            end: row.end_time,
-            geolocationOverride: Boolean(row.geolocation_override),
-            setting: {
-                type: row.setting_type || 'HEATING',
-                power: row.setting_power || 'ON',
-                temperature: (row.setting_temp_celsius !== null) ? {
-                    celsius: parseFloat(row.setting_temp_celsius),
-                    fahrenheit: (row.setting_temp_fahrenheit !== null) ? parseFloat(row.setting_temp_fahrenheit) : null
-                } : null
-            }
-        }));
+            const [rows] = await conn.execute(`SELECT ${BLOCK_COLUMNS} FROM schedule_blocks WHERE timetable_id = ? AND home_id = ? AND day_type = ?`, [internalId, homeId, dayType]);
+            if (rows.length > 0) return rows.map(mapBlockRow);
 
-        if (blocks.length === 0) {
-            const [zoneRows] = await pool.execute('SELECT type FROM zones WHERE id = ? AND home_id = ?', [zoneId, homeId]);
-            const zoneType = zoneRows.length > 0 ? zoneRows[0].type : 'HEATING';
-
-            const [allBlocks] = await pool.execute('SELECT COUNT(*) as c FROM schedule_blocks WHERE timetable_id = ? AND home_id = ?', [internalId, homeId]);
-            if (allBlocks[0].c === 0) {
-                let dayTypes = [];
-                if (timetableType === 'SEVEN_DAY') dayTypes = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
-                else if (timetableType === 'THREE_DAY') dayTypes = ['MONDAY_TO_FRIDAY', 'SATURDAY', 'SUNDAY'];
-                else dayTypes = ['MONDAY_TO_SUNDAY'];
-
-                let settingType = 'HEATING';
-                let settingPower = 'ON';
-                let tempC = 20.0;
-                let tempF = 68.0;
-
-                if (zoneType === 'HOT_WATER') {
-                    settingType = 'HOT_WATER';
-                    tempC = 50.0;
-                    tempF = 122.0;
+            // The timetable has blocks, just none for this day: answer with a flat default without storing it.
+            const [zoneRows] = await conn.execute('SELECT type FROM zones WHERE id = ? AND home_id = ?', [zoneId, homeId]);
+            const isHotWater = (zoneRows.length > 0 ? zoneRows[0].type : 'HEATING') === 'HOT_WATER';
+            return [{
+                dayType: dayType,
+                start: '00:00',
+                end: '00:00',
+                geolocationOverride: false,
+                setting: {
+                    type: isHotWater ? 'HOT_WATER' : 'HEATING',
+                    power: 'ON',
+                    temperature: isHotWater ? { celsius: 50.0, fahrenheit: 122.0 } : { celsius: 20.0, fahrenheit: 68.0 }
                 }
-
-                for (const dt of dayTypes) {
-                    await pool.execute(`
-                        INSERT INTO schedule_blocks (
-                            timetable_id, home_id, day_type, start_time, end_time, geolocation_override, 
-                            setting_type, setting_power, setting_temp_celsius, setting_temp_fahrenheit
-                        ) VALUES (?, ?, ?, '00:00', '00:00', 0, ?, ?, ?, ?)
-                    `, [internalId, homeId, dt, settingType, settingPower, tempC, tempF]);
-                }
-
-                const [rowsAfterInsert] = await pool.execute(`
-                    SELECT id, day_type, start_time, end_time, geolocation_override, setting_type, setting_power, setting_temp_celsius, setting_temp_fahrenheit 
-                    FROM schedule_blocks 
-                    WHERE timetable_id = ? AND home_id = ? AND day_type = ?
-                `, [internalId, homeId, dayType]);
-
-                blocks = rowsAfterInsert.map(row => ({
-                    dayType: row.day_type,
-                    start: row.start_time,
-                    end: row.end_time,
-                    geolocationOverride: Boolean(row.geolocation_override),
-                    setting: {
-                        type: row.setting_type || 'HEATING',
-                        power: row.setting_power || 'ON',
-                        temperature: (row.setting_temp_celsius !== null) ? {
-                            celsius: parseFloat(row.setting_temp_celsius),
-                            fahrenheit: (row.setting_temp_fahrenheit !== null) ? parseFloat(row.setting_temp_fahrenheit) : null
-                        } : null
-                    }
-                }));
-            } else {
-                blocks = [{
-                    dayType: dayType,
-                    start: '00:00',
-                    end: '00:00',
-                    geolocationOverride: false,
-                    setting: {
-                        type: zoneType === 'HOT_WATER' ? 'HOT_WATER' : 'HEATING',
-                        power: 'ON',
-                        temperature: zoneType === 'HOT_WATER' ? { celsius: 50.0, fahrenheit: 122.0 } : { celsius: 20.0, fahrenheit: 68.0 }
-                    }
-                }];
-            }
-        }
-
+            }];
+        });
         res.json(blocks);
     } catch (err) {
         res.status(500).json({ error: 'internal_error' });
@@ -337,39 +249,37 @@ router.put('/:homeId/zones/:zoneId/schedule/timetables/:timetableId/blocks/:dayT
         const { homeId, zoneId, timetableId, dayType } = req.params;
         const timetableType = getTimetableTypeFromId(parseInt(timetableId, 10));
         const blocks = req.body; // Array of blocks
-        const pool = db.getPool();
-
-        let [tts] = await pool.execute('SELECT id FROM zone_timetables WHERE zone_id = ? AND home_id = ? AND type = ?', [zoneId, homeId, timetableType]);
-        let internalId;
-
-        if (tts.length === 0) {
-            const [insertRes] = await pool.execute('INSERT INTO zone_timetables (zone_id, home_id, type) VALUES (?, ?, ?)', [zoneId, homeId, timetableType]);
-            internalId = insertRes.insertId;
-        } else {
-            internalId = tts[0].id;
+        if (!Array.isArray(blocks)) {
+            return res.status(400).json({ error: 'invalid_blocks' });
         }
 
-        await pool.execute('DELETE FROM schedule_blocks WHERE timetable_id = ? AND home_id = ? AND day_type = ?', [internalId, homeId, dayType]);
+        // Replace the day's blocks atomically; overlapping saves (e.g. repeated clicks) would
+        // otherwise interleave their DELETEs and INSERTs and leave duplicate rows.
+        await withZoneScheduleLock(zoneId, homeId, async (conn) => {
+            const internalId = await ensureTimetable(conn, zoneId, homeId, timetableType);
 
-        for (const block of blocks) {
-            const blockDayType = block.dayType || dayType;
-            const settingType = block.setting?.type || 'HEATING';
-            const settingPower = block.setting?.power || 'ON';
-            const settingTempC = block.setting?.temperature?.celsius ?? null;
-            const settingTempF = block.setting?.temperature?.fahrenheit ?? null;
+            await conn.execute('DELETE FROM schedule_blocks WHERE timetable_id = ? AND home_id = ? AND day_type = ?', [internalId, homeId, dayType]);
 
-            await pool.execute(`
-                INSERT INTO schedule_blocks (
-                    timetable_id, home_id, day_type, start_time, end_time, geolocation_override, 
-                    setting_type, setting_power, setting_temp_celsius, setting_temp_fahrenheit
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `, [
-                internalId, homeId, blockDayType, block.start, block.end,
-                block.geolocationOverride ? 1 : 0, settingType, settingPower, settingTempC, settingTempF
-            ]);
-        }
+            for (const block of blocks) {
+                const blockDayType = block.dayType || dayType;
+                const settingType = block.setting?.type || 'HEATING';
+                const settingPower = block.setting?.power || 'ON';
+                const settingTempC = block.setting?.temperature?.celsius ?? null;
+                const settingTempF = block.setting?.temperature?.fahrenheit ?? null;
 
-        await pool.execute('UPDATE zones SET last_schedule_change_at = NOW() WHERE id = ? AND home_id = ?', [zoneId, homeId]);
+                await conn.execute(`
+                    INSERT INTO schedule_blocks (
+                        timetable_id, home_id, day_type, start_time, end_time, geolocation_override, 
+                        setting_type, setting_power, setting_temp_celsius, setting_temp_fahrenheit
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                `, [
+                    internalId, homeId, blockDayType, block.start, block.end,
+                    block.geolocationOverride ? 1 : 0, settingType, settingPower, settingTempC, settingTempF
+                ]);
+            }
+
+            await conn.execute('UPDATE zones SET last_schedule_change_at = NOW() WHERE id = ? AND home_id = ?', [zoneId, homeId]);
+        });
 
         res.json(blocks);
     } catch (err) {
