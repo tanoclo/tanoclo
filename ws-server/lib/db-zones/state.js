@@ -583,16 +583,7 @@ async function getZoneBindingsForDevice(deviceId) {
             const z = zoneInfo[0];
             const isMeasuringLeader = (z.measuring_device_serial === currentDeviceSerial);
 
-            let prefix = '0d';
-            if (!isMeasuringLeader) {
-                // If not leader, and leader is RU -> 05
-                if (z.measuring_device_serial && (z.measuring_device_serial.startsWith('RU') || z.measuring_device_serial.startsWith('WR') || z.measuring_device_serial.startsWith('SU'))) {
-                    prefix = '05';
-                } else {
-                    // Default for VA leader (or VA follow VA)
-                    prefix = '0d';
-                }
-            }
+            const prefix = isMeasuringLeader ? '0d' : '05';
             pairs.push(prefix + Number(z.id).toString(16).padStart(2, '0'));
         }
     }

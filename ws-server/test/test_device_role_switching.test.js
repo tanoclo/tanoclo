@@ -86,4 +86,27 @@ describe('RU Device Role & Zone Bindings', () => {
         const pairs = await getZoneBindingsForDevice('RU0000000002');
         expect(pairs).toEqual(['0906']);
     });
+
+    it('getZoneBindingsForDevice returns role 0x0d for leader VA and 0x05 for follower VA', async () => {
+        const p = dbBase.getPool();
+        p.execute = vi.fn().mockImplementation(async (sql, params) => {
+            if (sql.includes('FROM devices')) {
+                return [[mockDev]];
+            }
+            if (sql.includes('FROM zones')) {
+                return [[{ id: 2, measuring_device_serial: 'VA0000000001' }]];
+            }
+            return [[]];
+        });
+
+        // Test leader VA
+        mockDev = { serial_no: 'VA0000000001', device_type: 'VA02', home_id: 1, zone_id: 2 };
+        const leaderPairs = await getZoneBindingsForDevice('VA0000000001');
+        expect(leaderPairs).toEqual(['0d02']);
+
+        // Test follower VA
+        mockDev = { serial_no: 'VA0000000002', device_type: 'VA02', home_id: 1, zone_id: 2 };
+        const followerPairs = await getZoneBindingsForDevice('VA0000000002');
+        expect(followerPairs).toEqual(['0502']);
+    });
 });

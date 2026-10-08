@@ -325,8 +325,8 @@ async function handleZoneState(ws, frame, coapMsg, decoded, peerInfo, pathInfo) 
                 log('error', `Failed to insert cleared overlay state measurement for ${zoneId}: ${err.message}`);
             }
         } else if (mode === 3 || mode === 1 || mode === 2) {
-            const temp = decoded.fields['0x6280'];
-            const hasSetpoint = decoded.fields['0x6260'];
+            const hasSetpoint = (decoded.fields['0x6260'] === 1 || decoded.fields['0x6260'] === true);
+            const temp = (hasSetpoint && mode !== 1) ? decoded.fields['0x6280'] : null;
             log('debug', `ZONE_STATE: Syncing active overlay for Z:${zoneId} (mode=${mode}, temp=${temp})`);
             await db.upsertZoneOverlay(homeId, zoneId, mode, temp, hasSetpoint).catch(err => {
                 log('error', `Failed to upsert overlay for ${zoneId}: ${err.message}`);

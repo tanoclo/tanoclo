@@ -644,8 +644,8 @@ std::vector<uint8_t> encapsulate_6lowpan_udp(const uint8_t *coap_data, size_t co
     // 4. 6LoWPAN IPHC Dispatch Mode (0x7E for Pairing/Uncompressed or 0x7A for Operational)
     pt.push_back(dispatch_mode);
 
-    // 6. 6LoWPAN UDP NHC
-    if (is_operational) {
+    // 6. 6LoWPAN UDP NHC (0x33 for port 4005 / mode 0x7E; 0xF7 0x00 for mode 0x7A port 5683)
+    if (dst_port == 5683 && is_operational && dispatch_mode == 0x7A) {
       pt.push_back(0xF7);
       pt.push_back(0x00);
     } else {

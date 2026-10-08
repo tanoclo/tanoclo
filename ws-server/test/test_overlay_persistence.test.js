@@ -100,6 +100,25 @@ test('legacy test suite runs successfully', async () => {
               throw new Error('FAIL: Overlay still exists in database after deleteZoneOverlay call');
           }
           console.log('SUCCESS: Overlay removed from DB via deleteZoneOverlay!');
+
+          // 3b. Testing upsertZoneOverlay for Mode 1 (OFF) and Mode 2 (ON)
+          console.log('3b. Testing upsertZoneOverlay mode 1 (OFF)...');
+          await db.upsertZoneOverlay(testHomeId, testZoneId, 1, 18, 0);
+          [rows] = await pool.execute('SELECT * FROM zone_overlays WHERE zone_id = ?', [testZoneId]);
+          if (rows.length === 0 || rows[0].setting_power !== 'OFF' || rows[0].setting_temp_celsius !== null) {
+              throw new Error(`FAIL: upsertZoneOverlay mode 1 should persist OFF with null temp, got: ${JSON.stringify(rows[0])}`);
+          }
+          console.log('SUCCESS: upsertZoneOverlay mode 1 correctly saved OFF with null temp!');
+
+          console.log('3c. Testing upsertZoneOverlay mode 2 (ON with setpoint)...');
+          await db.upsertZoneOverlay(testHomeId, testZoneId, 2, 21.5, 1);
+          [rows] = await pool.execute('SELECT * FROM zone_overlays WHERE zone_id = ?', [testZoneId]);
+          if (rows.length === 0 || rows[0].setting_power !== 'ON' || parseFloat(rows[0].setting_temp_celsius) !== 21.5) {
+              throw new Error(`FAIL: upsertZoneOverlay mode 2 should persist ON with 21.5 temp, got: ${JSON.stringify(rows[0])}`);
+          }
+          console.log('SUCCESS: upsertZoneOverlay mode 2 correctly saved ON with setpoint!');
+
+          await db.deleteZoneOverlay(testHomeId, testZoneId);
   
           // Setup Command Routes in Express
           setupCommandRoutes({

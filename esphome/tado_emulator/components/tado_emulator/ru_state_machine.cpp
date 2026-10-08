@@ -36,42 +36,16 @@ void RUStateMachine::trigger_telemetry(float temp_c, float hum_pct, uint16_t bat
   ESP_LOGI(TAG, "[%s] Trigger telemetry: temp=%.2fC hum=%.1f%% bat=%dmV",
            config_.serial_no.c_str(), temp_c, hum_pct, battery_mv);
 
-  // 1. Zone parameters (/z/p) is high-cadence feed for measuring leader
-  // Skip duplicate TX if already transmitted within last 60s and temperature hasn't changed
-  if (config_.is_measuring_leader) {
-    bool need_zp = (config_.last_zp_tx_ts == 0) ||
-                   (now_s > config_.last_zp_tx_ts && (now_s - config_.last_zp_tx_ts >= 60)) ||
-                   (std::fabs(temp_c - config_.last_reported_temp) >= 0.05f);
-    if (need_zp) {
-      std::vector<uint8_t> z_tlv = protocol::build_z_p_tlv(temp_c, hum_pct, config_.current_demand_percent);
-      std::string zp_query = (config_.zone_id > 0) ? ("lid=" + std::to_string(config_.zone_id)) : "";
-      OutboundFrame z_frame = build_encrypted_coap_frame(COAP_TYPE_CON, COAP_CODE_PUT, "z/p",
-                                                        z_tlv.data(), z_tlv.size(), config_.ib_mac,
-                                                        -1, 4, 0, 1800, zp_query);
-      if (!z_frame.empty()) {
-        outbound_frames.push_back(std::move(z_frame));
-        config_.last_zp_tx_ts = now_s;
-        config_.last_reported_temp = temp_c;
-      }
-    }
-  }
-
-  // 2. Device sensor (/d/{serial}/sen) is low-cadence health feed:
-  // Emit on initial boot, or if >= 900s (15 min) since last /sen, or if non-leader
-  bool need_sen = (config_.last_sen_tx_ts == 0) ||
-                  (now_s - config_.last_sen_tx_ts >= 900) ||
-                  (!config_.is_measuring_leader);
-
-  if (need_sen) {
-    std::vector<uint8_t> tlv = protocol::build_d_sen_tlv(temp_c, hum_pct, battery_mv,
-                                                        config_.target_ambient_light, 0, 0);
-    std::string path = "d/" + config_.serial_no + "/sen";
-    OutboundFrame frame = build_encrypted_coap_frame(COAP_TYPE_CON, COAP_CODE_PUT, path,
-                                                    tlv.data(), tlv.size(), config_.ib_mac);
-    if (!frame.empty()) {
-      outbound_frames.push_back(std::move(frame));
-      config_.last_sen_tx_ts = now_s;
-    }
+  // Room Units (RU) report ambient telemetry solely via /d/{serial}/sen to the Bridge
+  std::vector<uint8_t> tlv = protocol::build_d_sen_tlv(temp_c, hum_pct, battery_mv,
+                                                      config_.target_ambient_light, 0, 0);
+  std::string path = "d/" + config_.serial_no + "/sen";
+  OutboundFrame frame = build_encrypted_coap_frame(COAP_TYPE_CON, COAP_CODE_PUT, path,
+                                                  tlv.data(), tlv.size(), config_.ib_mac);
+  if (!frame.empty()) {
+    outbound_frames.push_back(std::move(frame));
+    config_.last_sen_tx_ts = now_s;
+    config_.last_reported_temp = temp_c;
   }
 }
 
@@ -201,21 +175,6 @@ void RUStateMachine::tick(uint32_t now_ms, uint32_t now_s, std::vector<OutboundF
                            (now_s >= config_.last_external_telemetry_ts) &&
                            (now_s - config_.last_external_telemetry_ts < 1800));
 
-    if (config_.is_measuring_leader && !external_active) {
-      if (config_.last_zp_tx_ts == 0) {
-        config_.last_zp_tx_ts = now_s;
-      } else if (now_s > config_.last_zp_tx_ts && (now_s - config_.last_zp_tx_ts >= 600)) {
-        config_.last_zp_tx_ts = now_s;
-        config_.last_telemetry_ts = now_s;
-        config_.last_reported_temp = config_.target_temp_celsius;
-        std::vector<uint8_t> z_tlv = protocol::build_z_p_tlv(config_.target_temp_celsius, config_.target_humidity_pct, config_.current_demand_percent);
-        std::string zp_query = (config_.zone_id > 0) ? ("lid=" + std::to_string(config_.zone_id)) : "";
-        OutboundFrame z_frame = build_encrypted_coap_frame(COAP_TYPE_CON, COAP_CODE_PUT, "z/p",
-                                                          z_tlv.data(), z_tlv.size(), config_.ib_mac,
-                                                          -1, 4, 0, 1800, zp_query);
-        if (!z_frame.empty()) outbound_frames.push_back(std::move(z_frame));
-      }
-    }
 
     // Autonomous device sensor heartbeat (~1200s / 20m)
     if (config_.last_sen_tx_ts == 0) {
@@ -425,6 +384,16 @@ void RUStateMachine::process_inbound_decrypted(const ParsedMac &mac, const uint8
   if ((frag_disp & 0xF8) == 0xC0 || (frag_disp & 0xF8) == 0xE0) {
     handle_fragment(mac, decrypted, len, outbound_frames, rx_key);
     return;
+  }
+
+  // Drop overheard downlink repetitions originated by self (e.g. Bridge forwarding our frame to VA)
+  if (len >= 20 && decrypted[3] == 0x04 && decrypted[8] == 0x7C) {
+    uint8_t self_iid[8];
+    self_iid[0] = config_.mac_addr[7] ^ 0x02;
+    for (int i = 1; i < 8; i++) self_iid[i] = config_.mac_addr[7 - i];
+    if (std::memcmp(decrypted + 12, self_iid, 8) == 0) {
+      return;
+    }
   }
 
   // 3. Check for CoAP
@@ -1257,11 +1226,12 @@ OutboundFrame RUStateMachine::build_encrypted_coap_frame(uint8_t type, uint8_t c
     }
   }
 
-  bool is_op_mesh = (dst_port == 5683 && (path == "z/p" || path == "z/s"));
+  bool is_op = (config_.has_op_key && (config_.state >= STATE_ONBOARD_FW_STATE));
+  bool is_routed = (dest_mac != nullptr && config_.ib_mac_known && std::memcmp(dest_mac, config_.ib_mac, 8) != 0);
   std::vector<uint8_t> pt = protocol::encapsulate_6lowpan_udp(coap.data(), coap.size(),
                                                              config_.mac_addr, dst,
                                                              5683, dst_port, dispatch_mode,
-                                                             fc, is_op_mesh);
+                                                             fc, is_op, is_routed);
 
   uint8_t seq = config_.seq_num++;
   std::vector<uint8_t> hdr = protocol::build_mac_header(seq, config_.mac_addr, dst, (type == COAP_TYPE_CON));

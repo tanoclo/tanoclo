@@ -42,9 +42,9 @@ async function getZoneOverlay(homeId, zoneId) {
 async function upsertZoneOverlay(homeId, zoneId, mode, temp, hasSetpoint) {
     const p = getPool();
     const settingType = "HEATING";
-    const settingPower = "ON";
-    const settingTempC = (hasSetpoint && temp !== null) ? temp : null;
-    const settingTempF = (hasSetpoint && temp !== null) ? parseFloat((temp * 1.8 + 32).toFixed(2)) : null;
+    const settingPower = (mode === 1) ? "OFF" : "ON";
+    const settingTempC = (settingPower === 'ON' && hasSetpoint && temp !== null) ? temp : null;
+    const settingTempF = (settingTempC !== null) ? parseFloat((settingTempC * 1.8 + 32).toFixed(2)) : null;
 
     await p.execute(
         `INSERT INTO zone_overlays (zone_id, home_id, setting_type, setting_power, setting_temp_celsius, setting_temp_fahrenheit, termination_type)
