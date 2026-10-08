@@ -648,12 +648,35 @@ router.get('/devices/:serialNo/state', async (req, res) => {
             }
         }
 
+        let setpointTemp = 20.0;
+        let zoneMode = 0;
+        if (dbDev && dbDev.home_id && dbDev.zone_id) {
+            try {
+                const dbZones = require('../../../lib/db-zones');
+                const zState = await dbZones.getZoneState(dbDev.home_id, dbDev.zone_id) || await dbZones.getZoneStateFallback(dbDev.home_id, dbDev.zone_id);
+                if (zState) {
+                    if (zState['0x6280'] != null) {
+                        setpointTemp = parseFloat(zState['0x6280']);
+                    } else if (zState['0x6200'] != null) {
+                        setpointTemp = parseFloat(zState['0x6200']);
+                    }
+                    if (zState['0x6240'] != null) {
+                        zoneMode = parseInt(zState['0x6240'], 10);
+                    }
+                }
+            } catch (zErr) {
+                console.warn(`[Emulated] Error querying zone setpoint for ${serialNo}: ${zErr.message}`);
+            }
+        }
+
         res.json({
             success: true,
             serial: serialNo,
             temp_celsius: tempC,
             humidity_percent: humidity,
             battery_mv: batteryMv,
+            setpoint_temp_celsius: setpointTemp,
+            zone_mode: zoneMode,
             zone_id: zoneId,
             peers: peers,
             fw_version: fwVersion,
@@ -712,7 +735,34 @@ router.post('/devices/:serialNo/sync', async (req, res) => {
             isMeasuringLeader = (zoneRows.length > 0 && zoneRows[0].measuring_device_serial === serialNo);
         }
 
+        let setpointTemp = 20.0;
+        let zoneMode = 0;
+        if (dbDev && dbDev.home_id && dbDev.zone_id) {
+            try {
+                const dbZones = require('../../../lib/db-zones');
+                const zState = await dbZones.getZoneState(dbDev.home_id, dbDev.zone_id) || await dbZones.getZoneStateFallback(dbDev.home_id, dbDev.zone_id);
+                if (zState) {
+                    if (zState['0x6280'] != null) {
+                        setpointTemp = parseFloat(zState['0x6280']);
+                    } else if (zState['0x6200'] != null) {
+                        setpointTemp = parseFloat(zState['0x6200']);
+                    }
+                    if (zState['0x6240'] != null) {
+                        zoneMode = parseInt(zState['0x6240'], 10);
+                    }
+                }
+            } catch (zErr) {
+                console.warn(`[Emulated] Error querying zone setpoint for ${serialNo}: ${zErr.message}`);
+            }
+        }
+
         const apiKey = emDev.esp32_api_key || emDev.api_key || null;
+        let resolvedOpKey = emDev.op_key || null;
+        if (!resolvedOpKey && dbBridge && dbBridge.field_0155) {
+            resolvedOpKey = dbBridge.field_0155;
+        }
+        let resolvedFactoryKey = emDev.factory_key || (dbDev && (dbDev.factory_key || dbDev.field_0007)) || null;
+
         const syncPayload = {
             cmd: 'sync',
             api_key: apiKey,
@@ -722,10 +772,12 @@ router.post('/devices/:serialNo/sync', async (req, res) => {
             ib_ipv6: ibIpv6,
             ib_mac: ibMacHex,
             ib_pan: ibPanNum,
-            factory_key: emDev.factory_key || null,
-            op_key: emDev.op_key || null,
+            factory_key: resolvedFactoryKey,
+            op_key: resolvedOpKey,
             home_id: homeId ? parseInt(homeId, 10) : 0,
             zone_id: (dbDev && dbDev.zone_id) ? parseInt(dbDev.zone_id, 10) : 0,
+            setpoint_temp_celsius: setpointTemp,
+            zone_mode: zoneMode,
             is_measuring_leader: isMeasuringLeader
         };
 

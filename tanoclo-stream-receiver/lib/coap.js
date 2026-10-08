@@ -175,6 +175,9 @@ function findCoapOffset(payload) {
             }
         } else if (disp === 0x7C && payload[9] === 0x00 && payload[10] === 0xD7) {
             return 12;
+        } else if (disp === 0x7C && payload[9] === 0xFD && payload[10] === 0x00 && payload[11] === 0x3F && payload.length >= 23) {
+            const off = parseNhc(payload, 20);
+            if (off !== -1) return off;
         } else if ((disp & 0xF8) === 0xC0 && payload.length >= 21) {
             const sub = findCoapOffset(payload.subarray(12));
             if (sub !== -1) return 12 + sub;
@@ -192,6 +195,7 @@ function findCoapOffset(payload) {
             else if (iphc === 0xF7 || iphc === 0xF3) nhcOffset = 8;
             else if (iphc === 0xF5) nhcOffset = 16;
             else if (mode === 0x7C && iphc === 0xD7) nhcOffset = 17;
+            else if (mode === 0x7C && iphc === 0xFD && payload.length >= 20) nhcOffset = 19;
 
             const off = parseNhc(payload, nhcOffset);
             if (off !== -1) return off;
@@ -211,6 +215,7 @@ function findCoapOffset(payload) {
             else if (iphc === 0xF7 || iphc === 0xF3) nhcOffset = 6;
             else if (iphc === 0xF5) nhcOffset = 14;
             else if (mode === 0x7C && iphc === 0xD7) nhcOffset = 15;
+            else if (mode === 0x7C && iphc === 0xFD && payload.length >= 18) nhcOffset = 17;
 
             const off = parseNhc(payload, nhcOffset);
             if (off !== -1) return off;

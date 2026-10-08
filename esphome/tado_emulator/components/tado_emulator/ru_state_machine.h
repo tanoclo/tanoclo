@@ -146,6 +146,7 @@ struct EmulatedDeviceConfig {
   uint8_t pair_tx_count_{0};
   uint32_t idle_fallback_s{900};        // 15 minutes idle fallback interval
   uint32_t last_fallback_push_ts{0};
+  uint32_t last_token_req_ms{0};
   uint32_t last_sen_tx_ts{0};
   uint32_t last_zp_tx_ts{0};
   float last_reported_temp{0.0f};
@@ -192,7 +193,10 @@ class RUStateMachine {
   OutboundFrame build_encrypted_coap_frame(uint8_t type, uint8_t code, const std::string &path,
                                           const uint8_t *payload, size_t payload_len,
                                           const uint8_t *dest_mac = nullptr,
-                                          int32_t block2_num = -1, uint8_t block2_szx = 4);
+                                          int32_t block2_num = -1, uint8_t block2_szx = 4,
+                                          uint16_t dst_port_override = 0,
+                                          uint32_t max_age = 0,
+                                          const std::string &uri_query = "");
   OutboundFrame build_encrypted_icmp_frame(const std::vector<uint8_t> &pt_icmp,
                                           const uint8_t *dest_mac = nullptr,
                                           const uint8_t *key_override = nullptr);

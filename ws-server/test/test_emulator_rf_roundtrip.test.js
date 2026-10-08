@@ -32,15 +32,16 @@ function extractCoapFromPlaintext(decrypted) {
     const firstByte = tadoPayload[4]; // offset 9 in decrypted
 
     const candidates = [];
-    if (firstByte === 0x33) candidates.push(12);
-    else if (firstByte === 0xF7) candidates.push(11);
-    else candidates.push(11, 12, 13, 10);
+    if (decrypted[8] === 0x7E && decrypted[9] === 0xF7) candidates.push(13);
+    else if (decrypted[8] === 0x7A && decrypted[9] === 0xF7) candidates.push(11);
+    else if (firstByte === 0x33) candidates.push(12, 11);
+    else candidates.push(11, 13, 12, 10);
 
     for (const off of candidates) {
         if (off <= tadoPayload.length - 4) {
             const candidateBytes = tadoPayload.subarray(off);
             const parsed = coap.parse(candidateBytes);
-            if (parsed && parsed.ok) {
+            if (parsed && parsed.ok && (parsed.code <= 4 || parsed.code >= 0x40)) {
                 return { parsed, coapBytes: candidateBytes };
             }
         }
@@ -50,7 +51,7 @@ function extractCoapFromPlaintext(decrypted) {
     for (let s = 9; s + 4 <= decrypted.length; s++) {
         if ((decrypted[s] & 0xC0) === 0x40) {
             const parsed = coap.parse(decrypted.subarray(s));
-            if (parsed && parsed.ok) {
+            if (parsed && parsed.ok && (parsed.code <= 4 || parsed.code >= 0x40)) {
                 return { parsed, coapBytes: decrypted.subarray(s) };
             }
         }
@@ -438,4 +439,53 @@ describe('Tado Emulator RF & Crypto Protocol Roundtrip', () => {
             expect(liveDecrypted).not.toBeNull();
         }
     });
+
+    it('5. Decodes operational z/p frame matching real RU structure (port 5683, Max-Age 1800, lid query)', () => {
+        const pt = Buffer.from('c51b00048c0c00007ef700f0163316334d14400394b3b17a0170112a220708156c69643d34e806e402539ef0c621989aff40600207c740a00100013502026b0020', 'hex');
+
+        // Verify inner protocol header
+        expect(pt[3]).toBe(0x04);
+
+        // Verify operational 6LoWPAN dispatch & NHC (0x7EF7 0x00 0xF0)
+        expect(pt[8]).toBe(0x7E);
+        expect(pt[9]).toBe(0xF7);
+        expect(pt[10]).toBe(0x00);
+        expect(pt[11]).toBe(0xF0);
+
+        // Verify UDP ports are 5683 -> 5683 (local mesh CoAP, NOT cloud forwarding port 4005)
+        const srcPort = pt.readUInt16BE(12);
+        const dstPort = pt.readUInt16BE(14);
+        expect(srcPort).toBe(5683);
+        expect(dstPort).toBe(5683);
+
+        // Verify CoAP extraction
+        const coapRes = extractCoapFromPlaintext(pt);
+        expect(coapRes).not.toBeNull();
+        const parsed = coapRes.parsed;
+        expect(parsed.ok).toBe(true);
+        expect(parsed.code).toBe(3); // PUT
+        expect(parsed.mid).toBe(0x94B3);
+
+        // Verify URI-Path is "z/p"
+        const uriPaths = parsed.options.filter(o => o.num === 11).map(o => o.value.toString('utf8')).join('/');
+        expect(uriPaths).toBe('z/p');
+
+        // Verify Option 14: Max-Age = 1800s (0x0708)
+        const maxAgeOpt = parsed.options.find(o => o.num === 14);
+        expect(maxAgeOpt).toBeDefined();
+        expect(maxAgeOpt.value.readUInt16BE(0)).toBe(1800);
+
+        // Verify Option 15: Uri-Query = "lid=4"
+        const queryOpt = parsed.options.find(o => o.num === 15);
+        expect(queryOpt).toBeDefined();
+        expect(queryOpt.value.toString('utf8')).toBe('lid=4');
+
+        // Verify TLVs decoded from payload
+        expect(parsed.payload).toBeDefined();
+        const decodedTlvs = tlv.decode(parsed.payload);
+        expect(decodedTlvs.fields['0x4060']).toBeCloseTo(19.91, 1);
+        expect(decodedTlvs.fields['0x40a0']).toBe(0);
+        expect(decodedTlvs.fields['0x0135']).toBeCloseTo(61.9, 1);
+    });
 });
+

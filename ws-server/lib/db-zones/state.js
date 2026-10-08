@@ -195,13 +195,16 @@ async function getZonesForHome(homeId) {
 }
 
 async function insertZoneMeasurement(homeId, zoneId, tempCelsius, humidityPct, heatingPower, linkState = 'ONLINE', tadoMode = 'HOME') {
-    await insertMergedZoneMeasurement(homeId, zoneId, {
+    const updates = {
         '0x012d': tempCelsius,
-        '0x0135': humidityPct,
         '0x40a0': heatingPower,
         link_state: linkState,
         tado_mode: tadoMode
-    });
+    };
+    if (humidityPct !== undefined && humidityPct !== null) {
+        updates['0x0135'] = humidityPct;
+    }
+    await insertMergedZoneMeasurement(homeId, zoneId, updates);
 }
 
 async function insertMergedZoneMeasurement(homeId, zoneId, updates) {
@@ -237,6 +240,20 @@ async function insertMergedZoneMeasurement(homeId, zoneId, updates) {
     const overlayStateAux = (updates['0x62e0'] !== undefined ? updates['0x62e0'] : (updates.field_62e0 !== undefined ? updates.field_62e0 : prev.field_62e0)) ?? null;
     const resumeScheduleEvent = (updates['0x6440'] !== undefined ? updates['0x6440'] : (updates.field_6440 !== undefined ? updates.field_6440 : prev.field_6440)) ?? null;
     const openWindowDetected = updates.open_window_detected !== undefined ? updates.open_window_detected : (prev.open_window_detected ?? 0);
+
+    // Deduplication guard: ignore redundant insert if identical measurement within 15 seconds
+    if (rows.length > 0 && prev.timestamp) {
+        const prevMs = new Date(prev.timestamp).getTime();
+        const nowMs = new Date(now).getTime();
+        if (Math.abs(nowMs - prevMs) <= 15000 &&
+            Number(tempCelsius) === Number(prev.field_012d) &&
+            Number(humidityPct) === Number(prev.field_0135) &&
+            Number(heatingPower) === Number(prev.field_40a0) &&
+            linkState === (prev.link_state ?? 'ONLINE') &&
+            tadoMode === (prev.tado_mode ?? 'HOME')) {
+            return;
+        }
+    }
 
     await p.execute(
         `INSERT INTO zone_measurements 

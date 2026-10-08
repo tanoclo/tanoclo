@@ -147,6 +147,8 @@ struct ParsedCoAP {
   std::vector<ParsedCoAPOption> options;
   std::string uri_path;
   std::vector<uint8_t> payload;
+  bool is_mesh_routed{false};
+  uint8_t mesh_peer_mac[8]{0};
 };
 
 struct ParsedICMPv6 {
@@ -185,12 +187,14 @@ std::vector<uint8_t> encrypt_ccm(const uint8_t *header_16b, const uint8_t *plain
 bool decrypt_aes128_ecb(const uint8_t *ciphertext_16b, const uint8_t *key, uint8_t *out_plaintext_16b);
 
 // 6LoWPAN IPHC / NHC
-int find_coap_offset(const uint8_t *buf, size_t len, uint16_t *out_src_port = nullptr, uint16_t *out_dst_port = nullptr);
+int find_coap_offset(const uint8_t *buf, size_t len, uint16_t *out_src_port = nullptr, uint16_t *out_dst_port = nullptr, uint8_t *out_mesh_peer_mac = nullptr);
 std::vector<uint8_t> encapsulate_6lowpan_udp(const uint8_t *coap_data, size_t coap_len,
                                              const uint8_t *src_mac, const uint8_t *dst_mac,
                                              uint16_t src_port = 5683, uint16_t dst_port = 4005,
                                              uint8_t dispatch_mode = 0x7E,
-                                             uint32_t frame_counter = 1);
+                                             uint32_t frame_counter = 1,
+                                             bool is_operational = false,
+                                             bool is_mesh_routed = false);
 uint16_t compute_ipv6_checksum(const uint8_t *src_mac, const uint8_t *dst_mac, uint8_t proto,
                                const uint8_t *payload, size_t len);
 uint16_t compute_ipv6_checksum_ex(const uint8_t src_ip[16], const uint8_t dst_ip[16], uint8_t proto,
@@ -218,7 +222,9 @@ std::vector<uint8_t> serialize_coap(uint8_t type, uint8_t code, uint16_t mid,
                                    const std::string &uri_path,
                                    const uint8_t *payload, size_t payload_len,
                                    const uint8_t *session_token = nullptr,
-                                   int32_t block2_num = -1, uint8_t block2_szx = 4);
+                                   int32_t block2_num = -1, uint8_t block2_szx = 4,
+                                   uint32_t max_age = 0,
+                                   const std::string &uri_query = "");
 std::vector<uint8_t> build_coap_ack(uint16_t mid, uint8_t code = COAP_CODE_CHANGED,
                                    const uint8_t *token = nullptr, size_t token_len = 0,
                                    const uint8_t *payload = nullptr, size_t payload_len = 0);

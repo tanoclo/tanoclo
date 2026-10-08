@@ -352,7 +352,9 @@ bool decrypt_aes128_ecb(const uint8_t *ciphertext_16b, const uint8_t *key, uint8
 // 6LoWPAN IPHC / NHC & Checksums
 // ---------------------------------------------------------------------------
 
-static int parse_6lowpan_iphc_udp(const uint8_t *buf, size_t len, size_t offset, uint16_t *out_src_port, uint16_t *out_dst_port) {
+static int parse_6lowpan_iphc_udp(const uint8_t *buf, size_t len, size_t offset,
+                                   uint16_t *out_src_port, uint16_t *out_dst_port,
+                                   uint8_t *out_mesh_peer_mac = nullptr) {
   if (len < offset + 2) return -1;
   const uint8_t *p = buf + offset;
   const uint8_t *end = buf + len;
@@ -389,13 +391,25 @@ static int parse_6lowpan_iphc_udp(const uint8_t *buf, size_t len, size_t offset,
   // Source Address
   uint8_t sac = (iphc1 >> 6) & 0x01;
   uint8_t sam = (iphc1 >> 4) & 0x03;
+  const uint8_t *src_iid = nullptr;
   if (sac == 0) {
     if (sam == 0) p += 16;
-    else if (sam == 1) p += 8;
+    else if (sam == 1) { src_iid = p; p += 8; }
     else if (sam == 2) p += 2;
   } else {
-    if (sam == 1) p += 8;
+    if (sam == 1) { src_iid = p; p += 8; }
     else if (sam == 2) p += 2;
+  }
+
+  if (out_mesh_peer_mac && src_iid) {
+    out_mesh_peer_mac[7] = src_iid[0] ^ 0x02;
+    out_mesh_peer_mac[6] = src_iid[1];
+    out_mesh_peer_mac[5] = src_iid[2];
+    out_mesh_peer_mac[4] = src_iid[3];
+    out_mesh_peer_mac[3] = src_iid[4];
+    out_mesh_peer_mac[2] = src_iid[5];
+    out_mesh_peer_mac[1] = src_iid[6];
+    out_mesh_peer_mac[0] = src_iid[7];
   }
 
   // Destination Address
@@ -468,20 +482,21 @@ static int parse_6lowpan_iphc_udp(const uint8_t *buf, size_t len, size_t offset,
   return -1;
 }
 
-int find_coap_offset(const uint8_t *buf, size_t len, uint16_t *out_src_port, uint16_t *out_dst_port) {
+int find_coap_offset(const uint8_t *buf, size_t len, uint16_t *out_src_port, uint16_t *out_dst_port, uint8_t *out_mesh_peer_mac) {
   if (!buf || len < 4) return -1;
   if (out_src_port) *out_src_port = 5683;
   if (out_dst_port) *out_dst_port = 5683;
+  if (out_mesh_peer_mac) std::memset(out_mesh_peer_mac, 0, 8);
 
   // Case 1: Tado standard unicast framing (pt[3] == 0x04)
   if (buf[3] == 0x04 && len >= 9) {
     uint8_t disp = buf[8];
     if ((disp & 0xE0) == 0x60) {
-      int off = parse_6lowpan_iphc_udp(buf, len, 8, out_src_port, out_dst_port);
+      int off = parse_6lowpan_iphc_udp(buf, len, 8, out_src_port, out_dst_port, out_mesh_peer_mac);
       if (off != -1) return off;
     } else if ((disp & 0xF8) == 0xC0 && len >= 13) {
       // FRAG1 inside Tado framing
-      int sub = find_coap_offset(buf + 12, len - 12, out_src_port, out_dst_port);
+      int sub = find_coap_offset(buf + 12, len - 12, out_src_port, out_dst_port, out_mesh_peer_mac);
       if (sub != -1) return 12 + sub;
     }
   }
@@ -489,11 +504,11 @@ int find_coap_offset(const uint8_t *buf, size_t len, uint16_t *out_src_port, uin
   // Case 2: Direct 6LoWPAN dispatch at pt[3]
   uint8_t d3 = buf[3];
   if ((d3 & 0xE0) == 0x60 && len >= 5) {
-    int off = parse_6lowpan_iphc_udp(buf, len, 3, out_src_port, out_dst_port);
+    int off = parse_6lowpan_iphc_udp(buf, len, 3, out_src_port, out_dst_port, out_mesh_peer_mac);
     if (off != -1) return off;
   } else if ((d3 & 0xF8) == 0xC0 && len >= 8) {
     // FRAG1 direct
-    int sub = find_coap_offset(buf + 7, len - 7, out_src_port, out_dst_port);
+    int sub = find_coap_offset(buf + 7, len - 7, out_src_port, out_dst_port, out_mesh_peer_mac);
     if (sub != -1) return 7 + sub;
   }
 
@@ -565,7 +580,9 @@ std::vector<uint8_t> encapsulate_6lowpan_udp(const uint8_t *coap_data, size_t co
                                              const uint8_t *src_mac, const uint8_t *dst_mac,
                                              uint16_t src_port, uint16_t dst_port,
                                              uint8_t dispatch_mode,
-                                             uint32_t frame_counter) {
+                                             uint32_t frame_counter,
+                                             bool is_operational,
+                                             bool is_mesh_routed) {
   std::vector<uint8_t> pt;
 
   // 1. MAC suffix (3 bytes in LE: src_mac[5..7])
@@ -582,10 +599,7 @@ std::vector<uint8_t> encapsulate_6lowpan_udp(const uint8_t *coap_data, size_t co
   pt.push_back((uint8_t)((frame_counter >> 16) & 0xFF));
   pt.push_back((uint8_t)((frame_counter >> 24) & 0xFF));
 
-  // 4. 6LoWPAN IPHC Dispatch Mode (0x7E for Pairing/Uncompressed or 0x7A for Operational)
-  pt.push_back(dispatch_mode);
-
-  // 5. Compute UDP Checksum over pseudo-header
+  // Compute UDP Checksum over pseudo-header
   std::vector<uint8_t> udp_pkt;
   udp_pkt.push_back((src_port >> 8) & 0xFF);
   udp_pkt.push_back(src_port & 0xFF);
@@ -600,15 +614,51 @@ std::vector<uint8_t> encapsulate_6lowpan_udp(const uint8_t *coap_data, size_t co
 
   uint16_t csum = compute_ipv6_checksum(src_mac, dst_mac, 17, udp_pkt.data(), udp_pkt.size());
 
-  // 6. 6LoWPAN UDP NHC (8 bytes: [0x33, 0xF0, src_port:2, dst_port:2, csum:2])
-  pt.push_back(0x33);
-  pt.push_back(0xF0);
-  pt.push_back((src_port >> 8) & 0xFF);
-  pt.push_back(src_port & 0xFF);
-  pt.push_back((dst_port >> 8) & 0xFF);
-  pt.push_back(dst_port & 0xFF);
-  pt.push_back((csum >> 8) & 0xFF);
-  pt.push_back(csum & 0xFF);
+  if (is_mesh_routed) {
+    // 6LoWPAN IPHC Routed via Bridge Coordinator (RFC 6282):
+    // Dispatch 0x7C, CID=1, SAC=1, SAM=11 (src RU elided), DAC=1, DAM=01 (dst peer 64-bit IID inline)
+    pt.push_back(0x7C);
+    pt.push_back(0xFD);
+    pt.push_back(0x00); // CID=0
+    pt.push_back(0x3F); // Hop limit = 63
+
+    // 8-byte destination IID from dst_mac
+    pt.push_back(dst_mac[7] ^ 0x02);
+    pt.push_back(dst_mac[6]);
+    pt.push_back(dst_mac[5]);
+    pt.push_back(dst_mac[4]);
+    pt.push_back(dst_mac[3]);
+    pt.push_back(dst_mac[2]);
+    pt.push_back(dst_mac[1]);
+    pt.push_back(dst_mac[0]);
+
+    // UDP NHC
+    pt.push_back(0xF0);
+    pt.push_back((src_port >> 8) & 0xFF);
+    pt.push_back(src_port & 0xFF);
+    pt.push_back((dst_port >> 8) & 0xFF);
+    pt.push_back(dst_port & 0xFF);
+    pt.push_back((csum >> 8) & 0xFF);
+    pt.push_back(csum & 0xFF);
+  } else {
+    // 4. 6LoWPAN IPHC Dispatch Mode (0x7E for Pairing/Uncompressed or 0x7A for Operational)
+    pt.push_back(dispatch_mode);
+
+    // 6. 6LoWPAN UDP NHC
+    if (is_operational) {
+      pt.push_back(0xF7);
+      pt.push_back(0x00);
+    } else {
+      pt.push_back(0x33);
+    }
+    pt.push_back(0xF0);
+    pt.push_back((src_port >> 8) & 0xFF);
+    pt.push_back(src_port & 0xFF);
+    pt.push_back((dst_port >> 8) & 0xFF);
+    pt.push_back(dst_port & 0xFF);
+    pt.push_back((csum >> 8) & 0xFF);
+    pt.push_back(csum & 0xFF);
+  }
 
   // 7. CoAP Datagram
   pt.insert(pt.end(), coap_data, coap_data + coap_len);
@@ -931,7 +981,9 @@ std::vector<uint8_t> serialize_coap(uint8_t type, uint8_t code, uint16_t mid,
                                    const std::string &uri_path,
                                    const uint8_t *payload, size_t payload_len,
                                    const uint8_t *session_token,
-                                   int32_t block2_num, uint8_t block2_szx) {
+                                   int32_t block2_num, uint8_t block2_szx,
+                                   uint32_t max_age,
+                                   const std::string &uri_query) {
   std::vector<uint8_t> coap;
   uint8_t tkl = (uint8_t)std::min(token_len, (size_t)8);
   coap.push_back((1 << 6) | ((type & 0x03) << 4) | (tkl & 0x0F));
@@ -967,6 +1019,35 @@ std::vector<uint8_t> serialize_coap(uint8_t type, uint8_t code, uint16_t mid,
     coap.push_back(((delta & 0x0F) << 4) | 0x01);
     coap.push_back(0x2A); // 42
     last_opt = 12;
+  }
+
+  // Option 14: Max-Age
+  if (max_age > 0) {
+    uint16_t delta = 14 - last_opt;
+    if (max_age <= 0xFF) {
+      coap.push_back(((delta & 0x0F) << 4) | 0x01);
+      coap.push_back((uint8_t)max_age);
+    } else if (max_age <= 0xFFFF) {
+      coap.push_back(((delta & 0x0F) << 4) | 0x02);
+      coap.push_back((max_age >> 8) & 0xFF);
+      coap.push_back(max_age & 0xFF);
+    }
+    last_opt = 14;
+  }
+
+  // Option 15: Uri-Query (RFC 7252)
+  if (!uri_query.empty()) {
+    size_t start = 0;
+    while (start < uri_query.length()) {
+      size_t amp = uri_query.find('&', start);
+      std::string q = (amp == std::string::npos) ? uri_query.substr(start) : uri_query.substr(start, amp - start);
+      uint16_t delta = 15 - last_opt;
+      coap.push_back(((delta & 0x0F) << 4) | ((uint8_t)q.length() & 0x0F));
+      for (char c : q) coap.push_back((uint8_t)c);
+      last_opt = 15;
+      if (amp == std::string::npos) break;
+      start = amp + 1;
+    }
   }
 
   // Option 23: Block2

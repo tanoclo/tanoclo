@@ -44,8 +44,10 @@ void RUStateMachine::trigger_telemetry(float temp_c, float hum_pct, uint16_t bat
                    (std::fabs(temp_c - config_.last_reported_temp) >= 0.05f);
     if (need_zp) {
       std::vector<uint8_t> z_tlv = protocol::build_z_p_tlv(temp_c, hum_pct, config_.current_demand_percent);
+      std::string zp_query = (config_.zone_id > 0) ? ("lid=" + std::to_string(config_.zone_id)) : "";
       OutboundFrame z_frame = build_encrypted_coap_frame(COAP_TYPE_CON, COAP_CODE_PUT, "z/p",
-                                                        z_tlv.data(), z_tlv.size(), config_.ib_mac);
+                                                        z_tlv.data(), z_tlv.size(), config_.ib_mac,
+                                                        -1, 4, 0, 1800, zp_query);
       if (!z_frame.empty()) {
         outbound_frames.push_back(std::move(z_frame));
         config_.last_zp_tx_ts = now_s;
@@ -149,6 +151,39 @@ void RUStateMachine::tick(uint32_t now_ms, uint32_t now_s, std::vector<OutboundF
 
   // 1. Operational State: Autonomous heartbeats & Hourly maintenance burst
   if (config_.state == STATE_OPERATIONAL) {
+    // Ensure valid session token: request via POST /auth/token if missing
+    bool has_valid_token = false;
+    if (config_.has_session_token) {
+      for (size_t i = 0; i < 8; i++) {
+        if (config_.session_token[i] != 0) {
+          has_valid_token = true;
+          break;
+        }
+      }
+    }
+    if (!has_valid_token && config_.ib_mac_known) {
+      bool has_pending_token = false;
+      for (const auto &p : config_.pending_cons) {
+        if (p.path == "auth/token") {
+          has_pending_token = true;
+          break;
+        }
+      }
+      if (!has_pending_token && (config_.last_token_req_ms == 0 || (now_ms - config_.last_token_req_ms >= 30000))) {
+        config_.last_token_req_ms = now_ms;
+        std::vector<uint8_t> tlv;
+        protocol::append_tlv_string(tlv, 0x0260, config_.serial_no);
+        uint8_t nonce[16];
+        for (int i = 0; i < 16; i++) nonce[i] = (uint8_t)(esp_random() & 0xFF);
+        protocol::append_tlv_bytes(tlv, TLV_CLIENT_NONCE, nonce, 16);
+
+        ESP_LOGI(TAG, "[%s] Missing session token -> requesting via POST auth/token", config_.serial_no.c_str());
+        OutboundFrame tok_frame = build_encrypted_coap_frame(COAP_TYPE_CON, COAP_CODE_POST, "auth/token",
+                                                             tlv.data(), tlv.size(), config_.ib_mac);
+        if (!tok_frame.empty()) outbound_frames.push_back(std::move(tok_frame));
+      }
+    }
+
     // Firmware-true startup sync on boot / wake
     if (!config_.boot_sync_done && config_.ib_mac_known) {
       config_.boot_sync_done = true;
@@ -174,8 +209,10 @@ void RUStateMachine::tick(uint32_t now_ms, uint32_t now_s, std::vector<OutboundF
         config_.last_telemetry_ts = now_s;
         config_.last_reported_temp = config_.target_temp_celsius;
         std::vector<uint8_t> z_tlv = protocol::build_z_p_tlv(config_.target_temp_celsius, config_.target_humidity_pct, config_.current_demand_percent);
+        std::string zp_query = (config_.zone_id > 0) ? ("lid=" + std::to_string(config_.zone_id)) : "";
         OutboundFrame z_frame = build_encrypted_coap_frame(COAP_TYPE_CON, COAP_CODE_PUT, "z/p",
-                                                          z_tlv.data(), z_tlv.size(), config_.ib_mac);
+                                                          z_tlv.data(), z_tlv.size(), config_.ib_mac,
+                                                          -1, 4, 0, 1800, zp_query);
         if (!z_frame.empty()) outbound_frames.push_back(std::move(z_frame));
       }
     }
@@ -392,10 +429,19 @@ void RUStateMachine::process_inbound_decrypted(const ParsedMac &mac, const uint8
 
   // 3. Check for CoAP
   uint16_t src_port = 5683, dst_port = 5683;
-  int coap_off = protocol::find_coap_offset(decrypted, len, &src_port, &dst_port);
+  uint8_t mesh_peer_mac[8]{0};
+  int coap_off = protocol::find_coap_offset(decrypted, len, &src_port, &dst_port, mesh_peer_mac);
   if (coap_off != -1) {
     ParsedCoAP coap = protocol::parse_coap(decrypted + coap_off, len - coap_off);
     if (coap.ok) {
+      bool has_peer = false;
+      for (int i = 0; i < 8; i++) {
+        if (mesh_peer_mac[i] != 0) { has_peer = true; break; }
+      }
+      if (has_peer) {
+        coap.is_mesh_routed = true;
+        std::memcpy(coap.mesh_peer_mac, mesh_peer_mac, 8);
+      }
       if (is_mac_acked_request(coap.mid)) {
         return;
       }
@@ -791,7 +837,11 @@ void RUStateMachine::handle_coap_message(const ParsedCoAP &coap, const ParsedMac
 
   // Case 2: Inbound 2.05 Content response (e.g. session token for /auth/token)
   if (coap.code == COAP_CODE_CONTENT) {
-    if (config_.state == STATE_PAIRING_TOKEN) {
+    std::string out_path = lookup_outbound_path(coap.mid);
+    bool is_auth_token_resp = (config_.state == STATE_PAIRING_TOKEN ||
+                               out_path == "auth/token" ||
+                               coap.uri_path == "auth/token");
+    if (is_auth_token_resp) {
       bool got_token = false;
       // Check Option 2048 (COAP_OPT_SESSION_TOKEN)
       for (const auto &opt : coap.options) {
@@ -819,7 +869,15 @@ void RUStateMachine::handle_coap_message(const ParsedCoAP &coap, const ParsedMac
       }
 
       if (got_token) {
-        begin_onboarding(outbound_frames);
+        ESP_LOGI(TAG, "[%s] Acquired session token: %02X%02X%02X%02X%02X%02X%02X%02X",
+                 config_.serial_no.c_str(),
+                 config_.session_token[0], config_.session_token[1],
+                 config_.session_token[2], config_.session_token[3],
+                 config_.session_token[4], config_.session_token[5],
+                 config_.session_token[6], config_.session_token[7]);
+        if (config_.state == STATE_PAIRING_TOKEN) {
+          begin_onboarding(outbound_frames);
+        }
       }
     }
     // Handle GET /d/{serial}/config response (during onboarding or operational sync)
@@ -885,12 +943,47 @@ void RUStateMachine::handle_coap_message(const ParsedCoAP &coap, const ParsedMac
         if (!frame.empty()) outbound_frames.push_back(std::move(frame));
         return;
       } else {
-        ESP_LOGI(TAG, "[%s] Zone config complete (last block %lu)", config_.serial_no.c_str(), (unsigned long)b2_num);
+        ESP_LOGI(TAG, "[%s] Zone config complete (last block %lu) -> requesting zone state", config_.serial_no.c_str(), (unsigned long)b2_num);
+        if (config_.home_id > 0 && config_.zone_id > 0 && config_.ib_mac_known) {
+          std::string zs_path = "h/" + std::to_string(config_.home_id) + "/z/" + std::to_string(config_.zone_id) + "/s";
+          OutboundFrame frame = build_encrypted_coap_frame(COAP_TYPE_CON, COAP_CODE_GET,
+                                                          zs_path,
+                                                          nullptr, 0, config_.ib_mac);
+          if (!frame.empty()) outbound_frames.push_back(std::move(frame));
+        }
         if (config_.state == STATE_ONBOARD_ZONE_CONFIG) {
           advance_onboarding(outbound_frames);
           return;
         }
       }
+    }
+
+    // Handle incoming zone state response (e.g. GET h/{home_id}/z/{zone_id}/s or z/s)
+    if (coap.code == COAP_CODE_CONTENT &&
+        (out_path.find("/s") != std::string::npos || coap.uri_path.find("/s") != std::string::npos ||
+         out_path == "z/s" || coap.uri_path == "z/s")) {
+      auto tlvs = protocol::parse_tlvs(coap.payload.data(), coap.payload.size());
+      float sp_schedule = -1.0f;
+      float sp_overlay = -1.0f;
+      for (const auto &t : tlvs) {
+        if (t.tag == TLV_ZONE_TARGET_TEMP_6200 && t.value.size() >= 2) {
+          int16_t raw_sp = (int16_t)((t.value[0] << 8) | t.value[1]);
+          sp_schedule = raw_sp / 100.0f;
+        } else if (t.tag == TLV_ZONE_OVERLAY_TEMP_6280 && t.value.size() >= 2) {
+          int16_t raw_sp = (int16_t)((t.value[0] << 8) | t.value[1]);
+          sp_overlay = raw_sp / 100.0f;
+        } else if (t.tag == TLV_ZONE_OVERLAY_MODE_6240 && t.value.size() >= 2) {
+          config_.zone_mode = (t.value[0] << 8) | t.value[1];
+        }
+      }
+      if (config_.zone_mode > 0 && sp_overlay >= 0.0f) {
+        config_.setpoint_temp_celsius = sp_overlay;
+      } else if (sp_schedule >= 0.0f) {
+        config_.setpoint_temp_celsius = sp_schedule;
+      }
+      ESP_LOGI(TAG, "[%s] Zone state received from bridge: mode=%d setpoint=%.2fC",
+               config_.serial_no.c_str(), config_.zone_mode, config_.setpoint_temp_celsius);
+      return;
     }
     return;
   }
@@ -1080,8 +1173,10 @@ void RUStateMachine::handle_coap_message(const ParsedCoAP &coap, const ParsedMac
 
     if (config_.is_measuring_leader) {
       std::vector<uint8_t> zp_tlv = protocol::build_z_p_tlv(config_.target_temp_celsius, config_.target_humidity_pct, config_.current_demand_percent);
+      std::string zp_query = (config_.zone_id > 0) ? ("lid=" + std::to_string(config_.zone_id)) : "";
       OutboundFrame zp_frame = build_encrypted_coap_frame(COAP_TYPE_CON, COAP_CODE_PUT, "z/p",
-                                                          zp_tlv.data(), zp_tlv.size(), config_.ib_mac);
+                                                          zp_tlv.data(), zp_tlv.size(), config_.ib_mac,
+                                                          -1, 4, 0, 1800, zp_query);
       if (!zp_frame.empty()) outbound_frames.push_back(std::move(zp_frame));
     }
     return;
@@ -1124,21 +1219,49 @@ std::string RUStateMachine::lookup_outbound_path(uint16_t mid) {
 OutboundFrame RUStateMachine::build_encrypted_coap_frame(uint8_t type, uint8_t code, const std::string &path,
                                                          const uint8_t *payload, size_t payload_len,
                                                          const uint8_t *dest_mac,
-                                                         int32_t block2_num, uint8_t block2_szx) {
+                                                         int32_t block2_num, uint8_t block2_szx,
+                                                         uint16_t dst_port_override,
+                                                         uint32_t max_age,
+                                                         const std::string &uri_query) {
   uint16_t mid = config_.coap_mid++;
-  const uint8_t *tok_ptr = (path != "auth/token" && config_.has_session_token) ? config_.session_token : nullptr;
+
+  bool has_valid_token = false;
+  if (config_.has_session_token) {
+    for (size_t i = 0; i < 8; i++) {
+      if (config_.session_token[i] != 0) {
+        has_valid_token = true;
+        break;
+      }
+    }
+  }
+
+  const uint8_t *tok_ptr = (path != "auth/token" && has_valid_token) ? config_.session_token : nullptr;
 
   std::vector<uint8_t> coap = protocol::serialize_coap(type, code, mid, nullptr, 0, path,
                                                       payload, payload_len, tok_ptr,
-                                                      block2_num, block2_szx);
+                                                      block2_num, block2_szx,
+                                                      max_age, uri_query);
 
   const uint8_t *dst = dest_mac ? dest_mac : (config_.ib_mac_known ? config_.ib_mac : nullptr);
   uint8_t dispatch_mode = 0x7E;
   uint32_t fc = config_.frame_counter++;
+
+  uint16_t dst_port = dst_port_override;
+  if (dst_port == 0) {
+    if ((path == "z/p" || path == "z/extui" || path == "z/s") && has_valid_token) {
+      dst_port = 5683;
+    } else if (path == "d/info") {
+      dst_port = 5683;
+    } else {
+      dst_port = 4005;
+    }
+  }
+
+  bool is_op_mesh = (dst_port == 5683 && (path == "z/p" || path == "z/s"));
   std::vector<uint8_t> pt = protocol::encapsulate_6lowpan_udp(coap.data(), coap.size(),
                                                              config_.mac_addr, dst,
-                                                             5683, 4005, dispatch_mode,
-                                                             fc);
+                                                             5683, dst_port, dispatch_mode,
+                                                             fc, is_op_mesh);
 
   uint8_t seq = config_.seq_num++;
   std::vector<uint8_t> hdr = protocol::build_mac_header(seq, config_.mac_addr, dst, (type == COAP_TYPE_CON));
@@ -1202,10 +1325,15 @@ void RUStateMachine::emit_coap_ack_response(uint8_t coap_code, const ParsedCoAP 
     ack_coap = protocol::build_coap_ack(coap.mid, coap_code,
                                         coap.token.data(), coap.token.size());
   }
+  bool is_op = (config_.has_op_key && (config_.state >= STATE_ONBOARD_FW_STATE));
+  const uint8_t *peer_dst = coap.is_mesh_routed ? coap.mesh_peer_mac : mac.src_mac;
+
   std::vector<uint8_t> pt = protocol::encapsulate_6lowpan_udp(ack_coap.data(), ack_coap.size(),
-                                                             config_.mac_addr, mac.src_mac,
+                                                             config_.mac_addr, peer_dst,
                                                              coap.dst_port, coap.src_port,
-                                                             0x7E, config_.frame_counter++);
+                                                             coap.is_mesh_routed ? 0x7C : 0x7E,
+                                                             config_.frame_counter++,
+                                                             is_op, coap.is_mesh_routed);
   OutboundFrame frame = build_encrypted_icmp_frame(pt, mac.src_mac, rx_key);
   if (!frame.empty()) {
     track_outbound_response(frame.seq, coap.mid);

@@ -266,11 +266,15 @@ void TadoEmulatorComponent::process_queued_packet(const RxPacket &pkt) {
           bool config_changed = (!was_operational && dev.get_config().state == STATE_OPERATIONAL) ||
                                 (cfg.zone_id != dev.get_config().zone_id) ||
                                 (cfg.is_measuring_leader != dev.get_config().is_measuring_leader) ||
-                                (cfg.home_id != dev.get_config().home_id);
+                                (cfg.home_id != dev.get_config().home_id) ||
+                                (cfg.has_session_token != dev.get_config().has_session_token) ||
+                                (cfg.setpoint_temp_celsius != dev.get_config().setpoint_temp_celsius) ||
+                                (cfg.zone_mode != dev.get_config().zone_mode);
           if (config_changed) {
             save_to_nvs();
-            ESP_LOGI(TAG, "Device %s state/config saved to NVS (zone=%lu, leader=%d).",
-                     cfg.serial_no.c_str(), (unsigned long)dev.get_config().zone_id, dev.get_config().is_measuring_leader);
+            ESP_LOGI(TAG, "Device %s state/config saved to NVS (zone=%lu, leader=%d, setpoint=%.2fC, mode=%u).",
+                     cfg.serial_no.c_str(), (unsigned long)dev.get_config().zone_id, dev.get_config().is_measuring_leader,
+                     dev.get_config().setpoint_temp_celsius, dev.get_config().zone_mode);
           }
           for (const auto &frame : outbound) {
             transmit_frame(frame);
@@ -335,6 +339,9 @@ void TadoEmulatorComponent::save_to_nvs() {
     nvs_set_u8(handle, (prefix + "ldr").c_str(), cfg.is_measuring_leader ? 1 : 0);
     nvs_set_blob(handle, (prefix + "ibm").c_str(), cfg.ib_mac, 8);
     nvs_set_u32(handle, (prefix + "fc").c_str(), cfg.frame_counter);
+    uint32_t raw_sp = (uint32_t)(cfg.setpoint_temp_celsius * 100.0f);
+    nvs_set_u32(handle, (prefix + "sp").c_str(), raw_sp);
+    nvs_set_u8(handle, (prefix + "zm").c_str(), cfg.zone_mode);
   }
 
   nvs_commit(handle);
@@ -372,7 +379,13 @@ void TadoEmulatorComponent::load_from_nvs() {
     blen = 16;
     if (nvs_get_blob(handle, (prefix + "fak").c_str(), cfg.factory_key, &blen) == ESP_OK) cfg.has_factory_key = true;
     blen = 8;
-    if (nvs_get_blob(handle, (prefix + "tok").c_str(), cfg.session_token, &blen) == ESP_OK) cfg.has_session_token = true;
+    if (nvs_get_blob(handle, (prefix + "tok").c_str(), cfg.session_token, &blen) == ESP_OK) {
+      bool all_zero = true;
+      for (size_t b = 0; b < 8; b++) {
+        if (cfg.session_token[b] != 0) { all_zero = false; break; }
+      }
+      cfg.has_session_token = !all_zero;
+    }
     uint8_t st = 0;
     nvs_get_u8(handle, (prefix + "st").c_str(), &st);
     cfg.state = (RUState)st;
@@ -388,6 +401,14 @@ void TadoEmulatorComponent::load_from_nvs() {
     uint32_t fc = 1;
     if (nvs_get_u32(handle, (prefix + "fc").c_str(), &fc) == ESP_OK && fc > 0) {
       cfg.frame_counter = fc + 100;
+    }
+    uint32_t raw_sp = 0;
+    if (nvs_get_u32(handle, (prefix + "sp").c_str(), &raw_sp) == ESP_OK && raw_sp > 0) {
+      cfg.setpoint_temp_celsius = raw_sp / 100.0f;
+    }
+    uint8_t zm = 0;
+    if (nvs_get_u8(handle, (prefix + "zm").c_str(), &zm) == ESP_OK) {
+      cfg.zone_mode = zm;
     }
 
     cfg.derive_short_addr();
@@ -687,9 +708,39 @@ void TadoEmulatorComponent::handle_cmd_request(AsyncWebServerRequest *request, c
       cfg.ib_mac_known = true;
     }
 
+    cfg.setpoint_temp_celsius = (float)json_get_num(body, "setpoint_temp_celsius", cfg.setpoint_temp_celsius);
+    cfg.zone_mode = (uint8_t)json_get_num(body, "zone_mode", cfg.zone_mode);
+
     if (devices_mutex_ != nullptr && xSemaphoreTakeRecursive(devices_mutex_, pdMS_TO_TICKS(100)) == pdTRUE) {
       for (auto it = devices_.begin(); it != devices_.end(); ++it) {
         if (it->get_config().serial_no == ser) {
+          const auto &old = it->get_config();
+          if (!cfg.has_session_token && old.has_session_token) {
+            std::memcpy(cfg.session_token, old.session_token, 8);
+            cfg.has_session_token = true;
+          }
+          if (!cfg.has_op_key && old.has_op_key) {
+            std::memcpy(cfg.op_key, old.op_key, 16);
+            cfg.has_op_key = true;
+            cfg.state = old.state;
+          }
+          if (!cfg.has_factory_key && old.has_factory_key) {
+            std::memcpy(cfg.factory_key, old.factory_key, 16);
+            cfg.has_factory_key = true;
+          }
+          if (!cfg.ib_mac_known && old.ib_mac_known) {
+            std::memcpy(cfg.ib_mac, old.ib_mac, 8);
+            cfg.ib_mac_known = true;
+          }
+          if (cfg.home_id == 0 && old.home_id != 0) {
+            cfg.home_id = old.home_id;
+          }
+          if (cfg.zone_id == 0 && old.zone_id != 0) {
+            cfg.zone_id = old.zone_id;
+          }
+          if (old.frame_counter > cfg.frame_counter) {
+            cfg.frame_counter = old.frame_counter;
+          }
           devices_.erase(it);
           break;
         }
@@ -697,7 +748,8 @@ void TadoEmulatorComponent::handle_cmd_request(AsyncWebServerRequest *request, c
       devices_.emplace_back(cfg);
       save_to_nvs();
       xSemaphoreGiveRecursive(devices_mutex_);
-      ESP_LOGI(TAG, "Device %s synced and operational", ser.c_str());
+      ESP_LOGI(TAG, "Device %s synced and operational (setpoint=%.2fC, mode=%u)",
+               ser.c_str(), cfg.setpoint_temp_celsius, cfg.zone_mode);
       request->send(200, "application/json", "{\"ok\":true,\"message\":\"Device synced\"}");
       return;
     }

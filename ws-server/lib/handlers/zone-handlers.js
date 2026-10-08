@@ -371,19 +371,29 @@ async function handleZoneParams(ws, frame, coapMsg, decoded, peerInfo, pathInfo)
 
     log('debug', `ZONE_PARAMS /z/p dev=${deviceId} z=${zoneId} h=${homeId}: ${JSON.stringify(decoded.fields)}`);
 
-    const temp = decoded.fields['0x4060'];
+    const temp = decoded.fields['0x4060'] ?? decoded.fields['0x012d'];
     const demand = decoded.fields['0x40a0'];
-    const humidity = decoded.fields['0x4080'];
+    const humidity = decoded.fields['0x0135'];
 
     if (zoneId != null && homeId != null) {
-        if (demand !== undefined && demand !== null) {
-            await db.insertZoneDemand(homeId, zoneId, demand);
-        }
-        if (temp !== undefined && temp !== null) {
-            await db.insertZoneMeasurement(homeId, zoneId, temp, humidity ?? null, demand ?? 0);
+        const updates = {};
+        if (temp !== undefined && temp !== null) updates['0x012d'] = temp;
+        if (humidity !== undefined && humidity !== null) updates['0x0135'] = humidity;
+        if (demand !== undefined && demand !== null) updates['0x40a0'] = demand;
+
+        if (Object.keys(updates).length > 0) {
+            await db.insertMergedZoneMeasurement(homeId, zoneId, updates);
         }
         if (typeof onStateChange === 'function') {
             onStateChange(homeId, 'zone-state', { zoneId });
+        }
+        if (mqttPublisher) {
+            db.getPool().execute('SELECT * FROM zone_measurements WHERE zone_id = ? AND home_id = ? ORDER BY id DESC LIMIT 1', [zoneId, homeId])
+                .then(([rows]) => {
+                    if (rows.length > 0) {
+                        mqttPublisher.publishZoneTelemetry(homeId, zoneId, rows[0]).catch(e => log('debug', `[MQTT] Zone telemetry failed: ${e.message}`));
+                    }
+                }).catch(e => log('debug', `[MQTT] Zone measurement query failed: ${e.message}`));
         }
     }
 }

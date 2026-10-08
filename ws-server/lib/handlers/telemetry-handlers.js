@@ -108,13 +108,14 @@ async function handleSensorData(ws, frame, coapMsg, decoded, peerInfo, pathInfo)
         log('debug', `Zone ${zone.zoneId} Telemetry: deviceId=${deviceId} shortSerial=${shortSerial} measuringSerial=${zone.measuringSerial} isLeader=${isLeader}`);
 
         if (isLeader) {
+            const updates = { '0x012d': tempC };
+            if (humPct !== null && humPct !== undefined) {
+                updates['0x0135'] = humPct;
+            }
             await db.insertMergedZoneMeasurement(
                 zone.homeId,
                 zone.zoneId,
-                {
-                    '0x012d': tempC,
-                    '0x0135': humPct ?? 50.0
-                }
+                updates
             );
 
             if (typeof onStateChange === 'function') {
