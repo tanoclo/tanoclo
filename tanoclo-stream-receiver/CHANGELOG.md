@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-08
+
+- fix: zone overlays, setpoint handling and bindings
+- fix: emulator CoAP
+- feat: Show hardware errors on Home view
+- fix: more critical issues in device/zone/circuit config generation/processing and wireless sensor emulator
+- fix: /z/p response in tado_emulator
+- fix: caching issues with workflows
+
 ## [0.3.1] - 2026-09-12
 
 - fix: Docker build
