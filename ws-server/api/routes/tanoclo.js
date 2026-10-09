@@ -119,7 +119,7 @@ router.get('/:homeId/tanoclo/devices/battery', async (req, res) => {
              d.connection_state, 
              (CASE WHEN ed.serial_no IS NOT NULL THEN 'NORMAL' ELSE d.battery_state END) as battery_state,
              (CASE WHEN ed.serial_no IS NOT NULL THEN 100 ELSE d.battery_percent END) as battery_percent,
-             d.battery_type, d.last_contact, d.ipv6_address,
+             d.battery_type, d.battery_curve_custom, d.va_motor_error_detection, d.last_contact, d.ipv6_address,
              d.friendly_name,
              (CASE WHEN ed.serial_no IS NOT NULL THEN 0 ELSE COALESCE(d.field_01a3, 0) END) as error_flags,
              (CASE WHEN ed.serial_no IS NOT NULL THEN 1 ELSE 0 END) AS is_emulated
@@ -315,25 +315,75 @@ router.put('/:homeId/tanoclo/devices/:serial/battery', async (req, res) => {
         const pool = db.getPool();
         const homeId = req.params.homeId;
         const serial = req.params.serial;
-        const { batteryType } = req.body;
+        const { batteryType, customCurve, motorErrorDetection } = req.body;
 
-        if (!batteryType) {
-            return res.status(400).json({ error: 'Missing batteryType' });
+        const updates = [];
+        const params = [];
+
+        // Battery type
+        if (batteryType) {
+            updates.push('battery_type = ?');
+            params.push(batteryType);
         }
 
+        // Custom curve validation
+        if (customCurve !== undefined) {
+            if (customCurve === null) {
+                updates.push('battery_curve_custom = NULL');
+            } else {
+                if (!Array.isArray(customCurve) || customCurve.length < 2 || customCurve.length > 20) {
+                    return res.status(400).json({ error: 'customCurve must be array of 2-20 [mV, percent] pairs' });
+                }
+                for (const point of customCurve) {
+                    if (!Array.isArray(point) || point.length !== 2 ||
+                        typeof point[0] !== 'number' || typeof point[1] !== 'number' ||
+                        point[1] < 0 || point[1] > 100) {
+                        return res.status(400).json({ error: 'Each curve point must be [mV, percent] with percent 0-100' });
+                    }
+                }
+                // Sort descending by mV
+                const sorted = [...customCurve].sort((a, b) => b[0] - a[0]);
+                updates.push('battery_curve_custom = ?');
+                params.push(JSON.stringify(sorted));
+            }
+        }
+
+        // Motor error detection (VA only)
+        if (motorErrorDetection !== undefined) {
+            if (!serial.startsWith('VA')) {
+                return res.status(400).json({ error: 'motorErrorDetection only applicable to VA devices' });
+            }
+            updates.push('va_motor_error_detection = ?');
+            params.push(motorErrorDetection ? 1 : 0);
+        }
+
+        if (updates.length === 0) {
+            return res.status(400).json({ error: 'No valid fields to update' });
+        }
+
+        params.push(homeId, serial);
         await pool.execute(
-            'UPDATE devices SET battery_type = ? WHERE home_id = ? AND serial_no = ?',
-            [batteryType, homeId, serial]
+            `UPDATE devices SET ${updates.join(', ')} WHERE home_id = ? AND serial_no = ?`,
+            params
         );
 
+        // Recalculate battery percentage with new settings
         let batteryPercent = null;
         let batteryState = null;
+        const effectiveType = batteryType || 'alkaline';
         const [meas] = await pool.execute(
             'SELECT field_0162 FROM device_measurements WHERE device_serial = ? AND field_0162 IS NOT NULL AND field_0162 > 0 ORDER BY id DESC LIMIT 1',
             [serial]
         );
         if (meas.length > 0 && meas[0].field_0162) {
-            batteryPercent = battery.getBatteryPercent(meas[0].field_0162, serial, batteryType);
+            // Fetch the device to get the (possibly just-updated) custom curve
+            const [devRows] = await pool.execute(
+                'SELECT battery_type, battery_curve_custom FROM devices WHERE home_id = ? AND serial_no = ?',
+                [homeId, serial]
+            );
+            const dev = devRows[0];
+            const curve = dev?.battery_curve_custom ? (typeof dev.battery_curve_custom === 'string' ? JSON.parse(dev.battery_curve_custom) : dev.battery_curve_custom) : null;
+            batteryPercent = battery.getBatteryPercent(meas[0].field_0162, serial, dev?.battery_type || effectiveType, curve);
             if (batteryPercent != null) {
                 batteryState = battery.classifyBatteryState(batteryPercent);
                 battery.resetBatteryGuardState(serial);
@@ -345,9 +395,23 @@ router.put('/:homeId/tanoclo/devices/:serial/battery', async (req, res) => {
             }
         }
 
-        res.json({ success: true, batteryType, batteryPercent, batteryState });
+        res.json({ success: true, batteryType: effectiveType, batteryPercent, batteryState });
     } catch (err) {
-        _log('error', `Error updating battery type: ${err.message}`);
+        _log('error', `Error updating battery settings: ${err.message}`);
+        res.status(500).json({ error: 'internal_error' });
+    }
+});
+
+// GET /:homeId/tanoclo/devices/:serial/battery/defaultCurve
+router.get('/:homeId/tanoclo/devices/:serial/battery/defaultCurve', async (req, res) => {
+    try {
+        const serial = req.params.serial;
+        const chemistry = req.query.chemistry || 'alkaline';
+        const prefix = serial.substring(0, 2).toUpperCase();
+        const curve = battery.getDefaultCurve(prefix, chemistry);
+        res.json({ curve, devicePrefix: prefix, chemistry });
+    } catch (err) {
+        _log('error', `Error fetching default curve: ${err.message}`);
         res.status(500).json({ error: 'internal_error' });
     }
 });

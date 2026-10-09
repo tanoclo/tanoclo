@@ -94,16 +94,33 @@ export function getBridge(homeId) {
 
 
 /**
- * Updates device battery type chemistry
+ * Updates device battery settings (type, custom curve, motor error detection)
  * @param {string|number} homeId
  * @param {string} serial
- * @param {string} batteryType
+ * @param {object} settings - { batteryType, customCurve, motorErrorDetection }
  */
-export function updateDeviceBatteryType(homeId, serial, batteryType) {
+export function updateDeviceBatterySettings(homeId, serial, settings) {
   return apiFetch(`/api/v2/homes/${homeId}/tanoclo/devices/${serial}/battery`, {
     method: 'PUT',
-    body: { batteryType }
+    body: settings
   });
+}
+
+/**
+ * Backwards-compatible wrapper
+ */
+export function updateDeviceBatteryType(homeId, serial, batteryType) {
+  return updateDeviceBatterySettings(homeId, serial, { batteryType });
+}
+
+/**
+ * Gets the default built-in battery curve for a device
+ * @param {string|number} homeId
+ * @param {string} serial
+ * @param {string} chemistry
+ */
+export function getDefaultBatteryCurve(homeId, serial, chemistry) {
+  return apiFetch(`/api/v2/homes/${homeId}/tanoclo/devices/${serial}/battery/defaultCurve?chemistry=${chemistry}`);
 }
 
 /**

@@ -23073,7 +23073,9 @@ CREATE TABLE `devices` (
   `field_019d` tinyint(3) UNSIGNED DEFAULT 128 COMMENT 'display_contrast',
   `field_02b2` int(11) DEFAULT 0 COMMENT 'display_active_timeout',
   `field_015d` int(11) DEFAULT NULL COMMENT 'device_type/role: 71=Wired Thermostat, 200=Wireless Sensor, 112/113=VA',
-  `valve_sensitivity` int(11) NOT NULL DEFAULT 100 COMMENT 'Valve demand scale denominator (0x4160): 50-100 (default 100)'
+  `valve_sensitivity` int(11) NOT NULL DEFAULT 100 COMMENT 'Valve demand scale denominator (0x4160): 50-100 (default 100)',
+  `battery_curve_custom` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`battery_curve_custom`)) COMMENT 'Custom discharge curve [[mv, pct], ...] overrides default for battery_type',
+  `va_motor_error_detection` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Enable low-battery inference from persistent motor errors (VA only)'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `balancing_snapshots` (

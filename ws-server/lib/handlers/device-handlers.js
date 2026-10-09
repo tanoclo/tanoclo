@@ -10,6 +10,7 @@ const { getLogger } = require('../logger');
 const log = getLogger();
 const coapHelpers = require('./coap-helpers');
 const wsBridge = require('../ws-bridge');
+const battery = require('../battery');
 
 let db, coap, tlv, config, mqttPublisher, workerPool;
 let clients, ipv6ToDevice;
@@ -246,6 +247,30 @@ async function handleDeviceError(ws, frame, coapMsg, decoded, peerInfo, pathInfo
 
     if (deviceId) {
         await db.updateDeviceErrorFlags(deviceId, flags);
+
+        // VA motor error → battery state inference
+        if (deviceId && deviceId.startsWith('VA')) {
+            try {
+                const dev = await db.getDeviceBySerial(deviceId) || await db.getDeviceByFullSerial(deviceId);
+                if (dev && dev.va_motor_error_detection) {
+                    const result = battery.evaluateMotorErrors(deviceId, flags, true);
+                    log('debug', `MOTOR_ERR_EVAL ${deviceId}: motorBatteryLow=${result.motorBatteryLow}, consecutive=${result.consecutiveErrors}`);
+                    if (result.motorBatteryLow) {
+                        const currentState = dev.battery_state || 'NORMAL';
+                        if (currentState === 'NORMAL') {
+                            const p = require('../db').getPool();
+                            await p.execute(
+                                'UPDATE devices SET battery_state = ? WHERE serial_no = ?',
+                                ['LOW', dev.serial_no]
+                            );
+                            log('info', `MOTOR_ERR_BATTERY ${deviceId}: Set battery_state=LOW (${result.consecutiveErrors} consecutive motor errors)`);
+                        }
+                    }
+                }
+            } catch (e) {
+                log('debug', `[motor-error-battery] Failed for ${deviceId}: ${e.message}`);
+            }
+        }
         try {
             const meshRecovery = require('../mesh-recovery');
             await meshRecovery.onDeviceError(pathInfo.homeId, deviceId, flags);

@@ -250,3 +250,96 @@ describe('filterBatteryMv and seedBatteryGuardState compatibility', () => {
     expect(resVA.percent).toBe(22);
   });
 });
+
+describe('getDefaultCurve', () => {
+    it('returns VA alkaline curve for VA prefix', () => {
+        const curve = battery.getDefaultCurve('VA', 'alkaline');
+        expect(curve).toEqual(battery.VA_ALKALINE_CURVE);
+    });
+
+    it('returns RU nimh curve for RU prefix', () => {
+        const curve = battery.getDefaultCurve('RU', 'nimh');
+        expect(curve).toEqual(battery.RU_NIMH_CURVE);
+    });
+
+    it('defaults to VA curve for unknown prefix', () => {
+        const curve = battery.getDefaultCurve('XX', 'alkaline');
+        expect(curve).toEqual(battery.VA_ALKALINE_CURVE);
+    });
+});
+
+describe('getBatteryPercent with customCurve', () => {
+    const customCurve = [[3000, 100], [2500, 50], [2000, 0]];
+
+    it('uses custom curve when provided', () => {
+        const pct = battery.getBatteryPercent(2750, 'VA01234', 'alkaline', customCurve);
+        expect(pct).toBe(75); // midpoint between 3000/100 and 2500/50
+    });
+
+    it('falls back to default when customCurve is null', () => {
+        const pctCustom = battery.getBatteryPercent(2800, 'VA01234', 'alkaline', null);
+        const pctDefault = battery.getBatteryPercent(2800, 'VA01234', 'alkaline');
+        expect(pctCustom).toBe(pctDefault);
+    });
+
+    it('falls back to default when customCurve has fewer than 2 points', () => {
+        const pctCustom = battery.getBatteryPercent(2800, 'VA01234', 'alkaline', [[3000, 100]]);
+        const pctDefault = battery.getBatteryPercent(2800, 'VA01234', 'alkaline');
+        expect(pctCustom).toBe(pctDefault);
+    });
+});
+
+describe('evaluateMotorErrors', () => {
+    beforeEach(() => {
+        battery.resetMotorErrorState();
+    });
+
+    it('returns false when disabled', () => {
+        const result = battery.evaluateMotorErrors('VA01', 0x800, false);
+        expect(result.motorBatteryLow).toBe(false);
+    });
+
+    it('returns false after 1 motor error (below threshold)', () => {
+        const r1 = battery.evaluateMotorErrors('VA01', 0x800, true);
+        expect(r1.motorBatteryLow).toBe(false);
+        expect(r1.consecutiveErrors).toBe(1);
+    });
+
+    it('returns false after 2 motor errors (below threshold)', () => {
+        battery.evaluateMotorErrors('VA01', 0x800, true);
+        const r2 = battery.evaluateMotorErrors('VA01', 0x800, true);
+        expect(r2.motorBatteryLow).toBe(false);
+        expect(r2.consecutiveErrors).toBe(2);
+    });
+
+    it('returns true after 3 consecutive motor errors', () => {
+        battery.evaluateMotorErrors('VA01', 0x800, true); // Motor Blocked
+        battery.evaluateMotorErrors('VA01', 0x2000, true); // Calibration Fault
+        const r3 = battery.evaluateMotorErrors('VA01', 0x1000, true); // Valve Travel Too Short
+        expect(r3.motorBatteryLow).toBe(true);
+        expect(r3.consecutiveErrors).toBe(3);
+    });
+
+    it('resets immediately on 1 clean report', () => {
+        battery.evaluateMotorErrors('VA01', 0x800, true);
+        battery.evaluateMotorErrors('VA01', 0x800, true);
+        // Clean report
+        const clean = battery.evaluateMotorErrors('VA01', 0, true);
+        expect(clean.motorBatteryLow).toBe(false);
+        expect(clean.consecutiveErrors).toBe(0);
+        // Next motor error starts from 1 again
+        const r1 = battery.evaluateMotorErrors('VA01', 0x800, true);
+        expect(r1.consecutiveErrors).toBe(1);
+    });
+
+    it('tracks devices independently', () => {
+        battery.evaluateMotorErrors('VA01', 0x800, true);
+        battery.evaluateMotorErrors('VA01', 0x800, true);
+        battery.evaluateMotorErrors('VA02', 0x800, true);
+        
+        const r3a = battery.evaluateMotorErrors('VA01', 0x800, true);
+        const r2b = battery.evaluateMotorErrors('VA02', 0x800, true);
+        expect(r3a.motorBatteryLow).toBe(true); // VA01: 3rd
+        expect(r2b.motorBatteryLow).toBe(false); // VA02: 2nd
+    });
+});

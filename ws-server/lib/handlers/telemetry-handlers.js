@@ -63,8 +63,8 @@ async function handleSensorData(ws, frame, coapMsg, decoded, peerInfo, pathInfo)
     let batteryPercent = null;
 
     if (rawBatteryMv != null) {
-        const chemistry = await db.getDeviceBatteryConfig(shortSerial);
-        const bResult = battery.processBatteryReading(shortSerial, rawBatteryMv, chemistry, { fullSerial: deviceId });
+        const batConfig = await db.getDeviceBatteryConfig(shortSerial);
+        const bResult = battery.processBatteryReading(shortSerial, rawBatteryMv, batConfig.batteryType, { fullSerial: deviceId, customCurve: batConfig.customCurve });
         batteryMv = bResult.mv;
         batteryPercent = bResult.percent;
         batteryState = bResult.batteryState;

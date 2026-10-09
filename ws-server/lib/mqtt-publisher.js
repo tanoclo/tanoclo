@@ -538,7 +538,8 @@ async function publishDeviceTelemetry(shortSerial, homeId, zoneId, sensorFields,
             }
 
             if (volt !== undefined && dev) {
-                const calcPct = battery.getBatteryPercent(Number(volt), dev.serial_no, dev.battery_type);
+                const customCurve = dev.battery_curve_custom ? (typeof dev.battery_curve_custom === 'string' ? JSON.parse(dev.battery_curve_custom) : dev.battery_curve_custom) : null;
+                const calcPct = battery.getBatteryPercent(Number(volt), dev.serial_no, dev.battery_type, customCurve);
                 if (calcPct !== null) {
                     _pub(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/battery_percent`, calcPct);
                 }

@@ -323,10 +323,16 @@ async function updateDeviceSessionToken(serial, token) {
 async function getDeviceBatteryConfig(shortSerial) {
     const p = getPool();
     const [rows] = await p.execute(
-        'SELECT battery_type FROM devices WHERE serial_no = ? OR serial_no LIKE CONCAT(?, "%") LIMIT 1',
+        'SELECT battery_type, battery_curve_custom, va_motor_error_detection FROM devices WHERE serial_no = ? OR serial_no LIKE CONCAT(?, "%") LIMIT 1',
         [shortSerial, shortSerial]
     );
-    return rows.length > 0 ? rows[0].battery_type : 'alkaline';
+    if (rows.length === 0) return { batteryType: 'alkaline', customCurve: null, motorErrorDetection: false };
+    const row = rows[0];
+    return {
+        batteryType: row.battery_type || 'alkaline',
+        customCurve: row.battery_curve_custom ? (typeof row.battery_curve_custom === 'string' ? JSON.parse(row.battery_curve_custom) : row.battery_curve_custom) : null,
+        motorErrorDetection: Boolean(row.va_motor_error_detection)
+    };
 }
 
 async function upsertDeviceNeighbors(serial, homeId, neighborData) {

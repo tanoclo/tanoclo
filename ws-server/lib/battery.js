@@ -140,7 +140,7 @@ function classifyBatteryState(percent) {
  * @param {string} [chemistry='alkaline'] 'alkaline' or 'nimh'
  * @returns {number|null} 0-100 percentage, or null if unknown
  */
-function getBatteryPercent(mv, deviceId, chemistry) {
+function getBatteryPercent(mv, deviceId, chemistry, customCurve) {
     if (mv == null || mv <= 0) return null;
 
     chemistry = (chemistry || 'alkaline').toLowerCase();
@@ -152,7 +152,9 @@ function getBatteryPercent(mv, deviceId, chemistry) {
     }
 
     let curve;
-    if (prefix === 'VA') {
+    if (customCurve && Array.isArray(customCurve) && customCurve.length >= 2) {
+        curve = customCurve;
+    } else if (prefix === 'VA') {
         curve = isNimh ? VA_NIMH_CURVE : VA_ALKALINE_CURVE;
     } else if (prefix === 'RU') {
         curve = isNimh ? RU_NIMH_CURVE : RU_ALKALINE_CURVE;
@@ -204,7 +206,7 @@ function processBatteryReading(deviceId, rawMv, chemistry, options = {}) {
 
     let state = _guardState.get(key);
     if (!state) {
-        const initialPercent = getBatteryPercent(rawMv, fullSerial, chemistry);
+        const initialPercent = getBatteryPercent(rawMv, fullSerial, chemistry, options.customCurve);
         const initialState = classifyBatteryState(initialPercent);
         state = {
             confirmedMv: rawMv,
@@ -230,7 +232,7 @@ function processBatteryReading(deviceId, rawMv, chemistry, options = {}) {
     const mvDrop = state.confirmedMv - rawMv;
 
     // Candidate percentage and candidate state
-    const candidatePercent = getBatteryPercent(rawMv, fullSerial, chemistry);
+    const candidatePercent = getBatteryPercent(rawMv, fullSerial, chemistry, options.customCurve);
     const candidateState = classifyBatteryState(candidatePercent);
 
     const confirmedRank = STATE_RANK[state.confirmedState] || 3;
@@ -383,6 +385,61 @@ function resetBatteryGuardState(deviceId) {
     else _guardState.clear();
 }
 
+/**
+ * Return the default built-in curve for a device prefix + chemistry.
+ * @param {string} devicePrefix  'VA' or 'RU'
+ * @param {string} [chemistry='alkaline']
+ * @returns {Array<[number, number]>}
+ */
+function getDefaultCurve(devicePrefix, chemistry) {
+    const isNimh = (chemistry || 'alkaline').toLowerCase() === 'nimh';
+    const prefix = (devicePrefix || '').toUpperCase();
+    if (prefix === 'RU') return isNimh ? RU_NIMH_CURVE : RU_ALKALINE_CURVE;
+    return isNimh ? VA_NIMH_CURVE : VA_ALKALINE_CURVE;
+}
+
+/** Track consecutive motor/calibration error reports per VA device. */
+const _motorErrorCounts = new Map();
+const MOTOR_ERROR_THRESHOLD = 3;
+
+/**
+ * Evaluate whether persistent motor errors indicate depleted batteries.
+ * Motor Blocked (0x800), Valve Travel Too Short (0x1000), Calibration Fault (0x2000).
+ * Requires 3 consecutive reports with errors. 1 clean report clears immediately.
+ * 
+ * @param {string} serial  VA device serial
+ * @param {number} errorFlags  Raw 0x01a3 value
+ * @param {boolean} enabled  Whether va_motor_error_detection is on for this device
+ * @returns {{ motorBatteryLow: boolean, consecutiveErrors: number }}
+ */
+function evaluateMotorErrors(serial, errorFlags, enabled) {
+    if (!enabled) return { motorBatteryLow: false, consecutiveErrors: 0 };
+    
+    const MOTOR_BITS = 0x800 | 0x1000 | 0x2000;
+    const hasMotorError = (Number(errorFlags) & MOTOR_BITS) !== 0;
+    
+    const key = String(serial);
+    const count = _motorErrorCounts.get(key) || 0;
+    
+    if (hasMotorError) {
+        const newCount = count + 1;
+        _motorErrorCounts.set(key, newCount);
+        return { motorBatteryLow: newCount >= MOTOR_ERROR_THRESHOLD, consecutiveErrors: newCount };
+    }
+    // Immediate clear on 1 clean report
+    _motorErrorCounts.delete(key);
+    return { motorBatteryLow: false, consecutiveErrors: 0 };
+}
+
+/**
+ * Reset motor error count for a device (e.g. on battery replacement).
+ * @param {string} [serial]  If omitted, clears all
+ */
+function resetMotorErrorState(serial) {
+    if (serial) _motorErrorCounts.delete(String(serial));
+    else _motorErrorCounts.clear();
+}
+
 module.exports = {
     VA_ALKALINE_CURVE,
     VA_NIMH_CURVE,
@@ -396,5 +453,8 @@ module.exports = {
     inferCellsFromMv,
     filterBatteryMv,
     seedBatteryGuardState,
-    resetBatteryGuardState
+    resetBatteryGuardState,
+    getDefaultCurve,
+    evaluateMotorErrors,
+    resetMotorErrorState
 };

@@ -30,7 +30,7 @@ import {
   addDeviceToZone, removeDeviceFromZone, createZone
 } from '../../api/zones';
 import {
-  getDeviceBatteryData, getBridge, updateDeviceBatteryType, getCircuits
+  getDeviceBatteryData, getBridge, updateDeviceBatteryType, updateDeviceBatterySettings, getDefaultBatteryCurve, getCircuits
 } from '../../api/tanoclo';
 import { useHome } from '../../context/HomeContext';
 import {
@@ -45,6 +45,7 @@ import DeviceSettingsGeneral from './DeviceSettingsGeneral';
 import DeviceSettingsChild from './DeviceSettingsChild';
 import DeviceAdvancedSettings from './DeviceAdvancedSettings';
 import DeviceNeighborsTable from './DeviceNeighborsTable';
+import BatteryCurveEditor from './BatteryCurveEditor';
 
 /**
  * @brief Unified device settings page component.
@@ -97,6 +98,12 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
     () => getCircuits(homeId)
   );
 
+  const currentBatteryType = (batteryData || []).find(b => b.serial_no === deviceId)?.battery_type || 'alkaline';
+  const { data: defaultCurveData } = useSWR(
+    homeId && deviceId && !isBridge ? `battery-default-curve-${deviceId}-${currentBatteryType}` : null,
+    () => getDefaultBatteryCurve(homeId, deviceId, currentBatteryType)
+  );
+
   const { zones, mutateZones, homeInfo } = useHome();
   const isReadOnly = (homeInfo?.configReadonly ?? homeInfo?.zoneConfigReadonly) && !homeInfo?.devBypass;
 
@@ -114,6 +121,7 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
 
   const [friendlyNameInput, setFriendlyNameInput] = useState('');
   const [isSavingFriendlyName, setIsSavingFriendlyName] = useState(false);
+  const [isSavingCurve, setIsSavingCurve] = useState(false);
 
   // Display Settings States
   const [displayBrightness, setDisplayBrightness] = useState(112);
@@ -488,6 +496,31 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
     }
   };
 
+  const handleSaveCurve = async (curveOrNull) => {
+    setIsSavingCurve(true);
+    try {
+      await updateDeviceBatterySettings(homeId, device.serialNo, { customCurve: curveOrNull });
+      await mutateBattery();
+      showToast(t('settings.battery_curve_saved', 'Battery curve saved'), 'success');
+    } catch (err) {
+      logger.error('Failed to save battery curve:', err);
+      showToast(err.message || t('settings.failed_save_battery_curve', 'Failed to save battery curve'), 'error');
+    } finally {
+      setIsSavingCurve(false);
+    }
+  };
+
+  const handleMotorErrorToggle = async (enabled) => {
+    try {
+      await updateDeviceBatterySettings(homeId, device.serialNo, { motorErrorDetection: enabled });
+      await mutateBattery();
+      showToast(t('settings.motor_error_detection_updated', 'Motor error detection updated'), 'success');
+    } catch (err) {
+      logger.error('Failed to toggle motor error detection:', err);
+      showToast(err.message || t('settings.failed_update_motor_error', 'Failed to update motor error detection'), 'error');
+    }
+  };
+
   const handleDelete = () => {
     if (device?.deviceType?.startsWith('RU') && !device?.isEmulated) {
       showToast(t('settings.ru_reconfigure_remove_warning'), "error");
@@ -634,6 +667,20 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
             isChangingRole={isChangingRole}
             t={t}
           />
+
+          {/* Battery Curve Editor (non-bridge, non-emulated devices) */}
+          {!isBridge && !device?.isEmulated && (
+            <BatteryCurveEditor
+              customCurve={batteryInfo?.battery_curve_custom ? (typeof batteryInfo.battery_curve_custom === 'string' ? JSON.parse(batteryInfo.battery_curve_custom) : batteryInfo.battery_curve_custom) : null}
+              defaultCurve={defaultCurveData?.curve}
+              onSave={handleSaveCurve}
+              isSaving={isSavingCurve}
+              isVA={isValve}
+              motorErrorDetection={batteryInfo?.va_motor_error_detection}
+              onMotorErrorToggle={handleMotorErrorToggle}
+              t={t}
+            />
+          )}
 
           {/* RF Config (Bridges) */}
           {isBridge && bridge && (
