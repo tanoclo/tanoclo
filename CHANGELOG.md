@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-09
+
+- feat: add more FIDs
+- feat: Add translations to admin/setup portal
+- feat: add valve sensitivity
+- feat: auto flow temp optimization
+- feat: improve emulator
+
 ## [0.5.2] - 2026-10-08
 
 - fix: zone overlays, setpoint handling and bindings
