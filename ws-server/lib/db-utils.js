@@ -20,7 +20,7 @@ const crypto = require('crypto');
 // Single source of truth — imported by command-api.js and coap-transport.js.
 // Note: Unknown HVAC FIDs (0x046c, 0x046d, 0x0471, 0x0481) stripped from device config;
 const CONFIG_FIDS_ORDER = [
-    0x0143, 0x0140, 0x015d, 0x015c, 0x019d, 0x019e, 0x02b2, 0x02b3, 0x021a, 0x0149, 0x015e, 0x0158, 0x015a, 0x0155
+    0x0143, 0x0140, 0x015d, 0x015c, 0x019d, 0x019e, 0x02b2, 0x02b3, 0x021a, 0x0149, 0x015e, 0x0158, 0x4160, 0x015a, 0x0155
 ];
 
 function sortConfigFields(fields) {
@@ -146,6 +146,15 @@ async function buildDeviceConfigTLV(deviceId) {
 
     if (pairs.length > 0) {
         fields['0x015e'] = pairs;
+    }
+
+    if (deviceId.startsWith('VA')) {
+        const sensitivity = dbDev.valve_sensitivity !== null && dbDev.valve_sensitivity !== undefined ? Number(dbDev.valve_sensitivity) : 100;
+        if (sensitivity >= 50 && sensitivity <= 100) {
+            fields['0x4160'] = sensitivity;
+        }
+    } else {
+        delete fields['0x4160'];
     }
 
     // Dynamic ETag Generation for Valve Actuators

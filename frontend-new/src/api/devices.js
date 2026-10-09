@@ -96,6 +96,28 @@ export function updateChildLock(homeId, deviceId, childLockEnabled) {
 }
 
 /**
+ * Updates valve sensitivity denominator (50-100) of a VA device
+ * @param {string|number} homeId
+ * @param {string} deviceId
+ * @param {number} valveSensitivity
+ */
+export function updateValveSensitivity(homeId, deviceId, valveSensitivity) {
+  return apiFetch(`/api/v2/homes/${homeId}/devices/${deviceId}/valveSensitivity`, {
+    method: 'PUT',
+    body: { valveSensitivity }
+  });
+}
+
+/**
+ * Gets valve sensitivity denominator of a VA device
+ * @param {string|number} homeId
+ * @param {string} deviceId
+ */
+export function getValveSensitivity(homeId, deviceId) {
+  return apiFetch(`/api/v2/homes/${homeId}/devices/${deviceId}/valveSensitivity`);
+}
+
+/**
  * Updates device role between Wired Thermostat (71) and Wireless Sensor (200)
  * @param {string|number} homeId
  * @param {string} deviceId

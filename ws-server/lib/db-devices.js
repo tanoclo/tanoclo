@@ -25,7 +25,7 @@ const ALLOWED_DEVICE_MOUNT_COLS = new Set(['field_016a', 'field_01fa', 'field_01
 const ALLOWED_DEVICE_CONFIG_COLS = new Set([
     'last_config_json', 'field_0143', 'field_0140', 'field_015d', 'field_015c', 'field_02b3', 'field_021a',
     'field_0149', 'field_015e', 'field_0158', 'field_015a', 'field_019e', 'field_019d',
-    'field_02b2', 'config_etag'
+    'field_02b2', 'valve_sensitivity', 'config_etag'
 ]);
 const ALLOWED_DEVICE_REAL_ETAG_COLS = new Set(['lock_etag_real', 'config_etag_real', 'sen_etag_real', 'act_etag_real']);
 

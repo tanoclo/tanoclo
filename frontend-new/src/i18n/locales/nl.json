@@ -556,6 +556,7 @@
     "temp_offset": "Temperatuurcompensatie",
     "child_lock": "Kinderbeveiliging",
     "orientation": "Oriëntatie",
+    "valve_sensitivity": "Ventielgevoeligheid",
     "add_device": "Apparaat toevoegen",
     "invite_person": "Persoon uitnodigen",
     "address": {
@@ -811,6 +812,10 @@
     "display_orientation_desc": "Richting van het display ten opzichte van de klepsteel.",
     "orientation_vertical": "Verticaal",
     "orientation_horizontal": "Horizontaal",
+    "valve_sensitivity_desc": "Proportionele schaling van de ventielvraag (0x4160). Lagere waarden verhogen de openingsgraad t.o.v. de warmtevraag (bijv. 50% = +100% boost voor gietijzeren radiatoren of tochtige kamers, 100% = standaard 1,0×).",
+    "valve_sensitivity_standard": "Standaard (1,00×)",
+    "valve_sensitivity_saved": "Ventielgevoeligheid succesvol bijgewerkt",
+    "failed_save_valve_sensitivity": "Bijwerken van ventielgevoeligheid mislukt",
     "danger_zone": "Gevarenzone",
     "remove_device_desc": "Koppel dit apparaat permanent los en verwijder het uit je huis.",
     "deleting": "Verwijderen...",

@@ -107,6 +107,7 @@ async function applyDeviceConfigOverrides(deviceId, fields, updates = null) {
             delete fields['0x02b2'];
             delete fields['0x0149'];
             delete fields['0x021a'];
+            delete fields['0x4160'];
             delete fields['0x015a'];
         }
 
@@ -119,6 +120,23 @@ async function applyDeviceConfigOverrides(deviceId, fields, updates = null) {
 
         const isVA = deviceId.startsWith('VA');
         if (isVA) {
+            let sensitivity = null;
+            if (updates && ('valve_sensitivity' in updates || 'valveSensitivity' in updates || '0x4160' in updates)) {
+                const parsed = Number(updates.valve_sensitivity ?? updates.valveSensitivity ?? updates['0x4160']);
+                if (!isNaN(parsed) && parsed >= 50 && parsed <= 100) {
+                    sensitivity = parsed;
+                }
+            }
+            if (sensitivity === null && dbDev.valve_sensitivity !== undefined && dbDev.valve_sensitivity !== null) {
+                const parsed = Number(dbDev.valve_sensitivity);
+                if (!isNaN(parsed) && parsed >= 50 && parsed <= 100) {
+                    sensitivity = parsed;
+                }
+            }
+            if (sensitivity !== null) {
+                updateFieldInMap(fields, '0x4160', sensitivity);
+            }
+
             const hash = api._db.calculateVADeviceETag(fields);
             let suffix = crypto.createHash('sha256').update(deviceId).digest('hex').substring(0, 12);
             if (dbDev.config_etag_real && dbDev.config_etag_real.length === 8) {
@@ -882,6 +900,10 @@ async function handleDeviceRegistration(req, res, deviceId) {
     }
 }
 
+async function pushDeviceValveSensitivity(deviceId, sensitivity) {
+    return pushConfigRefresh(deviceId);
+}
+
 module.exports = {
     updateFieldInMap,
     applyDeviceConfigOverrides,
@@ -905,6 +927,7 @@ module.exports = {
     handleRfKeyRefresh,
     handleGlobalConfigRefresh,
     pushConfigRefresh,
+    pushDeviceValveSensitivity,
     pushDeviceUnassociation,
     pushUnassociateNeighborByIp,
     handleUnassociateNeighbor,

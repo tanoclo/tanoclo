@@ -2175,6 +2175,59 @@ paths:
           $ref: "#/components/responses/Unauthorized401"
         "403":
           $ref: "#/components/responses/AccessDenied403"
+  /devices/{deviceId}/valveSensitivity:
+    put:
+      summary: Set valve sensitivity denominator (0x4160) for this valve device.
+      operationId: setValveSensitivity
+      tags:
+        - device
+      parameters:
+        - in: path
+          name: deviceId
+          schema:
+            $ref: "#/components/schemas/DeviceId"
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ValveSensitivity"
+      responses:
+        "200":
+          description: successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValveSensitivity"
+        "400":
+          description: invalid value
+        "401":
+          $ref: "#/components/responses/Unauthorized401"
+        "403":
+          $ref: "#/components/responses/AccessDenied403"
+    get:
+      summary: Get valve sensitivity denominator for this device
+      operationId: getValveSensitivity
+      tags:
+        - device
+      parameters:
+        - in: path
+          name: deviceId
+          schema:
+            $ref: "#/components/schemas/DeviceId"
+          required: true
+      responses:
+        "200":
+          description: successful response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ValveSensitivity"
+        "401":
+          $ref: "#/components/responses/Unauthorized401"
+        "403":
+          $ref: "#/components/responses/AccessDenied403"
   /devices/{deviceId}/identify:
     post:
       summary: Instruct the device to say 'hi' on its display.
@@ -5390,6 +5443,15 @@ components:
         childLockEnabled:
           type: boolean
           example: false
+    ValveSensitivity:
+      type: object
+      description: input for PUT /devices/{deviceId}/valveSensitivity
+      properties:
+        valveSensitivity:
+          type: integer
+          minimum: 50
+          maximum: 100
+          example: 100
     DataInterval:
       type: object
       description: element of a DayReport

@@ -117,6 +117,10 @@ function mapDevice(d) {
         mapped.childLockEnabled = Boolean(d.child_lock_enabled);
     }
 
+    if (d.device_type && d.device_type.startsWith('VA')) {
+        mapped.valveSensitivity = d.valve_sensitivity !== null && d.valve_sensitivity !== undefined ? parseInt(d.valve_sensitivity, 10) : 100;
+    }
+
     if (d.device_type === 'IB01' || (d.device_type && d.device_type.startsWith('IB'))) {
         mapped.inPairingMode = Boolean(d.in_pairing_mode);
         try {

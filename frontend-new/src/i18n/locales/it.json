@@ -556,6 +556,7 @@
     "temp_offset": "Temperatura Offset",
     "child_lock": "Blocco bambini",
     "orientation": "Orientamento",
+    "valve_sensitivity": "Sensibilità valvola",
     "add_device": "Aggiungi dispositivo",
     "invite_person": "Invita persona",
     "address": {
@@ -811,6 +812,10 @@
     "display_orientation_desc": "Direzione del display rispetto allo stelo della valvola.",
     "orientation_vertical": "Verticale",
     "orientation_horizontal": "Orizzontale",
+    "valve_sensitivity_desc": "Scala proporzionale della richiesta della valvola (0x4160). Valori più bassi aumentano l'aggressività di apertura rispetto alla richiesta termica (es. 50% = +100% boost per radiatori in ghisa o ambienti con spifferi, 100% = standard 1,0×).",
+    "valve_sensitivity_standard": "Standard (1,00×)",
+    "valve_sensitivity_saved": "Sensibilità valvola aggiornata con successo",
+    "failed_save_valve_sensitivity": "Impossibile aggiornare la sensibilità della valvola",
     "danger_zone": "Zona di pericolo",
     "remove_device_desc": "Scollega ed elimina definitivamente questo dispositivo dalla tua casa.",
     "deleting": "Eliminazione...",

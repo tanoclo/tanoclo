@@ -246,6 +246,60 @@ async function setChildLock(req, res) {
     }
 }
 
+async function getValveSensitivity(req, res) {
+    try {
+        const { deviceId } = req.params;
+        const homeId = await verifyDeviceHome(req, deviceId);
+        const pool = db.getPool();
+        const [devices] = await pool.execute('SELECT valve_sensitivity FROM devices WHERE serial_no = ? AND home_id = ?', [deviceId, homeId]);
+        if (devices.length === 0) return res.status(404).json({ error: 'Device not found' });
+
+        res.json({ valveSensitivity: parseInt(devices[0].valve_sensitivity ?? 100, 10) });
+    } catch (err) {
+        if (err.statusCode) return res.status(err.statusCode).json({ error: err.message.toLowerCase() });
+        res.status(500).json({ error: 'internal_error' });
+    }
+}
+
+async function setValveSensitivity(req, res) {
+    try {
+        const { deviceId } = req.params;
+        const homeId = await verifyDeviceHome(req, deviceId);
+        const { isReadOnly, devBypass } = await checkConfigReadonly(homeId);
+        if (isReadOnly && !devBypass) {
+            return res.status(403).json({ error: 'config_readonly', message: 'Configuration is read-only' });
+        }
+
+        const rawVal = req.body.valveSensitivity ?? req.body.sensitivity;
+        const val = parseInt(rawVal, 10);
+        if (isNaN(val) || val < 50 || val > 100) {
+            return res.status(400).json({ error: 'invalid_value', message: 'valveSensitivity must be an integer between 50 and 100' });
+        }
+
+        const pool = db.getPool();
+        const [existing] = await pool.execute('SELECT * FROM devices WHERE serial_no = ? AND home_id = ?', [deviceId, homeId]);
+        if (existing.length === 0) return res.status(404).json({ error: 'Device not found' });
+
+        await pool.execute('UPDATE devices SET valve_sensitivity = ? WHERE serial_no = ? AND home_id = ?', [val, deviceId, homeId]);
+
+        await commandApi.pushConfigRefresh(deviceId).catch(err => {
+            _log('warn', `Failed to push config refresh for ${deviceId}: ${err.message}`);
+        });
+
+        const mqttPublisher = require('../../lib/mqtt-publisher');
+        if (mqttPublisher && mqttPublisher.publishValveSensitivity) {
+            await mqttPublisher.publishValveSensitivity(deviceId, val).catch(err => {
+                _log('warn', `Failed to publish valve sensitivity to MQTT for ${deviceId}: ${err.message}`);
+            });
+        }
+
+        res.json({ valveSensitivity: val });
+    } catch (err) {
+        if (err.statusCode) return res.status(err.statusCode).json({ error: err.message.toLowerCase() });
+        res.status(500).json({ error: 'internal_error' });
+    }
+}
+
 async function setOrientation(req, res) {
     try {
         const { deviceId } = req.params;
@@ -980,6 +1034,8 @@ router.put('/:homeId/devices/:deviceId/role', setDeviceRole);
 router.put('/:homeId/tanoclo/devices/:deviceId/role', setDeviceRole);
 router.post('/:homeId/devices/:deviceId/identify', identifyDevice);
 router.put('/:homeId/devices/:deviceId/childLock', setChildLock);
+router.get('/:homeId/devices/:deviceId/valveSensitivity', getValveSensitivity);
+router.put('/:homeId/devices/:deviceId/valveSensitivity', setValveSensitivity);
 router.post('/:homeId/devices/:deviceId/orientation', setOrientation);
 router.post('/:homeId/devices/:deviceId/pairing', setPairing);
 router.delete('/:homeId/devices/:deviceId/pairing', deletePairing);
@@ -1007,6 +1063,8 @@ router.put('/tanoclo/devices/:deviceId/role', setDeviceRole);
 router.post('/:deviceId/identify', identifyDevice);
 router.get('/:deviceId/childLock', getChildLock);
 router.put('/:deviceId/childLock', setChildLock);
+router.get('/:deviceId/valveSensitivity', getValveSensitivity);
+router.put('/:deviceId/valveSensitivity', setValveSensitivity);
 router.post('/:deviceId/orientation', setOrientation);
 router.post('/:deviceId/pairing', setPairing);
 router.delete('/:deviceId/pairing', deletePairing);

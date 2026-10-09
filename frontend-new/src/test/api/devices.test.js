@@ -8,7 +8,7 @@ import { apiFetch } from '../../api/client';
 import {
   getDevices, createDevice, getDevice, deleteDevice,
   getTemperatureOffset, updateTemperatureOffset,
-  identifyDevice, updateChildLock, updateOrientation,
+  identifyDevice, updateChildLock, updateValveSensitivity, getValveSensitivity, updateOrientation,
   startPairing, stopPairing, updateActuatorLimits,
   updateFriendlyName, updateDisplaySettings
 } from '../../api/devices';
@@ -64,6 +64,18 @@ describe('api/devices.js', () => {
     expect(apiFetch).toHaveBeenCalledWith('/api/v2/homes/1/devices/DEV1/childLock', {
       method: 'PUT', body: { childLockEnabled: true }
     });
+  });
+
+  it('updateValveSensitivity → PUT with valveSensitivity', async () => {
+    await updateValveSensitivity(1, 'DEV1', 85);
+    expect(apiFetch).toHaveBeenCalledWith('/api/v2/homes/1/devices/DEV1/valveSensitivity', {
+      method: 'PUT', body: { valveSensitivity: 85 }
+    });
+  });
+
+  it('getValveSensitivity → GET /api/v2/homes/{homeId}/devices/{deviceId}/valveSensitivity', async () => {
+    await getValveSensitivity(1, 'DEV1');
+    expect(apiFetch).toHaveBeenCalledWith('/api/v2/homes/1/devices/DEV1/valveSensitivity');
   });
 
   it('updateOrientation → POST with orientation', async () => {

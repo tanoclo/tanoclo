@@ -556,6 +556,7 @@
     "temp_offset": "Compensación de temperatura",
     "child_lock": "Bloqueo de seguridad",
     "orientation": "Orientación",
+    "valve_sensitivity": "Sensibilidad de la válvula",
     "add_device": "Añadir dispositivo",
     "invite_person": "Invitar persona",
     "address": {
@@ -811,6 +812,10 @@
     "display_orientation_desc": "Dirección de la pantalla con respecto al vástago de la válvula.",
     "orientation_vertical": "Vertical",
     "orientation_horizontal": "Horizontal",
+    "valve_sensitivity_desc": "Escalado proporcional de la demanda de la válvula (0x4160). Valores más bajos aumentan la agresividad de apertura respecto a la demanda térmica (ej. 50% = +100% boost para radiadores de hierro fundido o habitaciones con corrientes, 100% = estándar 1,0×).",
+    "valve_sensitivity_standard": "Estándar (1,00×)",
+    "valve_sensitivity_saved": "Sensibilidad de la válvula actualizada con éxito",
+    "failed_save_valve_sensitivity": "Error al actualizar la sensibilidad de la válvula",
     "danger_zone": "Zona de peligro",
     "remove_device_desc": "Desconecte y elimine permanentemente este dispositivo de su casa.",
     "deleting": "Eliminando...",

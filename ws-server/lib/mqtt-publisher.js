@@ -629,6 +629,9 @@ async function publishCircuitTelemetry(homeId, circuitNumber, fields) {
     _pub(`${BASE_TOPIC}/h/${homeId}/c/${circuitNumber}/target_temperature`, target);
     _pub(`${BASE_TOPIC}/h/${homeId}/c/${circuitNumber}/reference_temperature`, reference);
     _pub(`${BASE_TOPIC}/h/${homeId}/c/${circuitNumber}/demand_percent`, demand);
+    if (fields['0x4100'] !== undefined) _pub(`${BASE_TOPIC}/h/${homeId}/c/${circuitNumber}/heating_active`, Boolean(fields['0x4100']));
+    if (fields['0x40c0'] !== undefined) _pub(`${BASE_TOPIC}/h/${homeId}/c/${circuitNumber}/pump_active`, Boolean(fields['0x40c0']));
+    if (fields['0x2060'] !== undefined) _pub(`${BASE_TOPIC}/h/${homeId}/c/${circuitNumber}/flow_temperature`, fields['0x2060']);
     _pubAvailability(`${BASE_TOPIC}/h/${homeId}/c/${circuitNumber}/availability`, true); // Circuit is online if bridge is connected
 }
 
@@ -859,6 +862,25 @@ async function publishOrientation(shortSerial, orientation) {
 }
 
 /**
+ * Publish Valve Sensitivity Scaling (0x4160)
+ */
+async function publishValveSensitivity(shortSerial, sensitivity) {
+    let homeId = null;
+    let isVA = false;
+    if (db) {
+        const dev = await db.getDeviceBySerial(shortSerial).catch(() => null);
+        if (dev) {
+            homeId = dev.home_id;
+            isVA = dev.device_type && dev.device_type.startsWith('VA');
+            shortSerial = dev.serial_no;
+        }
+    }
+    if (homeId && isVA) {
+        _pub(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/valve_sensitivity`, String(sensitivity));
+    }
+}
+
+/**
  * Publish Open Window State
  */
 async function publishOpenWindow(zoneId, active) {
@@ -903,6 +925,7 @@ module.exports = {
     publishDeviceAvailability,
     publishChildLock,
     publishOrientation,
+    publishValveSensitivity,
     publishOpenWindow,
     publishMountingState,
     publishMobileDeviceTelemetry,

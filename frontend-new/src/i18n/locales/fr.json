@@ -556,6 +556,7 @@
     "temp_offset": "Facteur de compensation de la température",
     "child_lock": "Sécurité enfant",
     "orientation": "Orientation",
+    "valve_sensitivity": "Sensibilité de la vanne",
     "add_device": "Ajouter un appareil",
     "invite_person": "Inviter une personne",
     "address": {
@@ -811,6 +812,10 @@
     "display_orientation_desc": "Direction de l'affichage par rapport à la tige de la vanne.",
     "orientation_vertical": "Verticale",
     "orientation_horizontal": "Horizontale",
+    "valve_sensitivity_desc": "Mise à l'échelle proportionnelle de la demande de la vanne (0x4160). Des valeurs plus faibles augmentent l'agressivité d'ouverture par rapport à la demande thermique (ex: 50% = +100% de boost pour radiateurs en fonte ou pièces exposées aux courants d'air, 100% = standard 1,0×).",
+    "valve_sensitivity_standard": "Standard (1,00×)",
+    "valve_sensitivity_saved": "Sensibilité de la vanne mise à jour avec succès",
+    "failed_save_valve_sensitivity": "Échec de la mise à jour de la sensibilité de la vanne",
     "danger_zone": "Zone de danger",
     "remove_device_desc": "Déconnectez et supprimez définitivement cet appareil de votre maison.",
     "deleting": "Suppression...",

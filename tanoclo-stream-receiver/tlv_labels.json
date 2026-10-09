@@ -1354,9 +1354,10 @@
       "notes": "UTC timestamp in seconds (seen in /time response)"
     },
     "0x013f": {
-      "name": "dev_hw_flags_013f",
+      "name": "temperature_unit_mode",
       "type": "u8",
-      "notes": "Device hardware flag (seen in /d/info)"
+      "unit": "enum",
+      "notes": "Temperature display unit mode (0 = Celsius / 5-25°C bounds, 1 = Fahrenheit / 41-77°F bounds). Traced to VA handle_config_dispatch 0x0802610e."
     },
     "0x01d4": {
       "name": "zone_peer_uri_1d4",
@@ -1394,6 +1395,60 @@
       "name": "dev_capabilities_01f9",
       "type": "u16be",
       "notes": "Device capabilities bitmask (seen in /d/info)"
+    },
+    "0x0197": {
+      "name": "secondary_temperature",
+      "type": "s16be",
+      "unit": "°C",
+      "scale": 0.01,
+      "decimals": 2,
+      "notes": "Auxiliary global temperature reading; forwarded to per-circuit 0x4060 in VA zone_to_circuit_handler 0x0802f528."
+    },
+    "0x01cf": {
+      "name": "auxiliary_temperature",
+      "type": "s16be",
+      "unit": "°C",
+      "scale": 0.01,
+      "decimals": 2,
+      "notes": "Global auxiliary temperature reading. Traced to VA handle_heating_circuit_telemetry 0x0801de08 (delta > 5°C dirty trigger)."
+    },
+    "0x0298": {
+      "name": "zone_presence_flag",
+      "type": "u8",
+      "unit": "bool",
+      "notes": "Zone presence boolean flag. Traced to VA zone_to_circuit_handler 0x0802f528."
+    },
+    "0x2060": {
+      "name": "circuit_flow_temperature",
+      "type": "s16be",
+      "unit": "°C",
+      "scale": 0.01,
+      "decimals": 2,
+      "notes": "Per-circuit flow temperature reading. Traced to VA handle_heating_circuit_telemetry 0x0801de08."
+    },
+    "0x40c0": {
+      "name": "circuit_pump_active",
+      "type": "bool",
+      "unit": "bool",
+      "notes": "Pump active boolean flag. Emitted per-circuit in VA heating_circuit_state_dispatch 0x0802f1fc."
+    },
+    "0x4100": {
+      "name": "circuit_heating_active",
+      "type": "bool",
+      "unit": "bool",
+      "notes": "Heating active boolean flag. Emitted per-circuit in VA heating_circuit_state_dispatch 0x0802f1fc."
+    },
+    "0x4140": {
+      "name": "circuit_owd_demand_cut",
+      "type": "u8",
+      "unit": "%",
+      "notes": "Open window detection active demand cut indicator. Emitted in VA heating_circuit_state_dispatch 0x0802f1fc."
+    },
+    "0x4160": {
+      "name": "demand_scale_denominator",
+      "type": "u8",
+      "unit": "ratio",
+      "notes": "Valve demand scaling denominator: (demand * 100) / denom clamped to 100%. Denom=100 is 1x gain, <100 amplifies, >100 reduces. Traced to VA heat_demand_scale_and_limit 0x0802f4a4."
     }
   }
 }

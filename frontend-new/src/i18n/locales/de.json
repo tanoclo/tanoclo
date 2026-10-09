@@ -556,6 +556,7 @@
     "temp_offset": "Temperatur-Korrektur",
     "child_lock": "Kindersicherung",
     "orientation": "Ausrichtung",
+    "valve_sensitivity": "Ventilempfindlichkeit",
     "add_device": "Gerät hinzufügen",
     "invite_person": "Person einladen",
     "address": {
@@ -811,6 +812,10 @@
     "display_orientation_desc": "Richtung des Displays relativ zum Ventilschaft.",
     "orientation_vertical": "Vertikal",
     "orientation_horizontal": "Horizontal",
+    "valve_sensitivity_desc": "Proportionale Skalierung des Ventilbedarfs (0x4160). Niedrigere Werte erhöhen die Ventilöffnung im Verhältnis zum Wärmebedarf (z. B. 50 % = +100 % Schub für Gussradiatoren oder zugige Räume, 100 % = Standard 1,0×).",
+    "valve_sensitivity_standard": "Standard (1,00×)",
+    "valve_sensitivity_saved": "Ventilempfindlichkeit erfolgreich aktualisiert",
+    "failed_save_valve_sensitivity": "Fehler beim Aktualisieren der Ventilempfindlichkeit",
     "danger_zone": "Gefahrenbereich",
     "remove_device_desc": "Trennen und löschen Sie dieses Gerät dauerhaft aus Ihrem Zuhause.",
     "deleting": "Löschen...",

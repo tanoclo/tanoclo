@@ -19,6 +19,7 @@ import Modal from '../common/Modal';
 import ConfirmModal from '../common/ConfirmModal';
 import {
   getDevice, getDevices, identifyDevice, updateChildLock,
+  updateValveSensitivity,
   updateOrientation, deleteDevice,
   startPairing, stopPairing, updateActuatorLimits,
   updateFriendlyName, updateDisplaySettings,
@@ -101,6 +102,8 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
 
   const [childLock, setChildLock] = useState(false);
   const [orientation, setOrientation] = useState('VERTICAL');
+  const [valveSensitivity, setValveSensitivity] = useState(100);
+  const [isSavingValveSensitivity, setIsSavingValveSensitivity] = useState(false);
   const [isIdentifying, setIsIdentifying] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -150,6 +153,9 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
       setDisplayBrightness(prev => prev !== (device.displayBrightness ?? 112) ? (device.displayBrightness ?? 112) : prev);
       setDisplayContrast(prev => prev !== (device.displayContrast ?? 128) ? (device.displayContrast ?? 128) : prev);
       setDisplayActiveTimeout(prev => prev !== (device.displayActiveTimeout ?? 0) ? (device.displayActiveTimeout ?? 0) : prev);
+      if (device.valveSensitivity !== undefined && device.valveSensitivity !== null) {
+        setValveSensitivity(prev => prev !== device.valveSensitivity ? device.valveSensitivity : prev);
+      }
       if (device.actuatorLimits) {
         setLowSteps(prev => prev !== (device.actuatorLimits.lowSteps ?? 0) ? (device.actuatorLimits.lowSteps ?? 0) : prev);
         setHighSteps(prev => prev !== (device.actuatorLimits.highSteps ?? 0) ? (device.actuatorLimits.highSteps ?? 0) : prev);
@@ -407,6 +413,24 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
       logger.error('Failed to change orientation:', err);
       setOrientation(prev);
       showToast(err.message || t('settings.failed_change_orientation', 'Failed to change display orientation.'), 'error');
+    }
+  };
+
+  const handleValveSensitivityChange = async (newVal) => {
+    const val = Number(newVal);
+    const prev = valveSensitivity;
+    setValveSensitivity(val);
+    setIsSavingValveSensitivity(true);
+    try {
+      await updateValveSensitivity(homeId, deviceId, val);
+      mutate();
+      showToast(t('settings.valve_sensitivity_saved', 'Valve sensitivity updated successfully'), 'success');
+    } catch (err) {
+      logger.error('Failed to update valve sensitivity:', err);
+      setValveSensitivity(prev);
+      showToast(err.message || t('settings.failed_save_valve_sensitivity', 'Failed to update valve sensitivity'), 'error');
+    } finally {
+      setIsSavingValveSensitivity(false);
     }
   };
 
@@ -793,7 +817,7 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
           )}
 
 
-          {/* Child Lock, Orientation */}
+          {/* Child Lock, Orientation, Valve Sensitivity */}
           <DeviceSettingsChild
             hasChildLock={hasChildLock}
             childLock={childLock}
@@ -801,6 +825,11 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
             hasOrientation={hasOrientation}
             orientation={orientation}
             handleOrientationChange={handleOrientationChange}
+            isValve={isValve}
+            valveSensitivity={valveSensitivity}
+            setValveSensitivity={setValveSensitivity}
+            handleValveSensitivityChange={handleValveSensitivityChange}
+            isSavingValveSensitivity={isSavingValveSensitivity}
             isBridge={isBridge}
             isReadOnly={isReadOnly}
             t={t}

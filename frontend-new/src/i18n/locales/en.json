@@ -404,6 +404,7 @@
     "temp_offset": "Temperature Offset",
     "child_lock": "Child Lock",
     "orientation": "Orientation",
+    "valve_sensitivity": "Valve Sensitivity",
     "add_device": "Add Device",
     "invite_person": "Invite Person",
     "address": {
@@ -659,6 +660,10 @@
     "display_orientation_desc": "Direction of the display relative to the valve stem.",
     "orientation_vertical": "Vertical",
     "orientation_horizontal": "Horizontal",
+    "valve_sensitivity_desc": "Proportional valve demand scaling (0x4160). Lower values increase valve opening aggression relative to heat demand (e.g. 50% = +100% boost for cast iron or drafty rooms, 100% = standard 1.0×).",
+    "valve_sensitivity_standard": "Standard (1.00×)",
+    "valve_sensitivity_saved": "Valve sensitivity updated successfully",
+    "failed_save_valve_sensitivity": "Failed to update valve sensitivity",
     "danger_zone": "Danger Zone",
     "remove_device_desc": "Permanently disconnect and delete this device from your home.",
     "deleting": "Deleting...",
