@@ -29,12 +29,26 @@ const ALLOWED_DEVICE_CONFIG_COLS = new Set([
 ]);
 const ALLOWED_DEVICE_REAL_ETAG_COLS = new Set(['lock_etag_real', 'config_etag_real', 'sen_etag_real', 'act_etag_real']);
 
+const LATEST_MEAS_SUBQUERY = `
+    LEFT JOIN (
+        SELECT dm1.device_serial, dm1.field_012e, dm1.field_01c8, dm1.field_0136, dm1.field_027a, dm1.field_0137, dm1.field_0161, dm1.field_0160
+        FROM device_measurements dm1
+        INNER JOIN (
+            SELECT device_serial, MAX(id) as max_id
+            FROM device_measurements
+            GROUP BY device_serial
+        ) dm2 ON dm1.id = dm2.max_id
+    ) dm ON d.serial_no = dm.device_serial
+`;
+
 async function getDeviceBySerial(shortSerial) {
     const p = getPool();
     const [rows] = await p.execute(
-        `SELECT d.*, ed.mode AS emulated_mode, (ed.serial_no IS NOT NULL) AS is_emulated 
+        `SELECT d.*, ed.mode AS emulated_mode, (ed.serial_no IS NOT NULL) AS is_emulated,
+                dm.field_012e, dm.field_01c8, dm.field_0136, dm.field_027a, dm.field_0137, dm.field_0161, dm.field_0160
          FROM devices d 
          LEFT JOIN emulated_devices ed ON d.serial_no = ed.serial_no 
+         ${LATEST_MEAS_SUBQUERY}
          WHERE d.serial_no = ? OR d.serial_no LIKE CONCAT(?, "%") LIMIT 1`,
         [shortSerial, shortSerial]
     );
@@ -44,9 +58,11 @@ async function getDeviceBySerial(shortSerial) {
 async function getDeviceByFullSerial(fullSerial) {
     const p = getPool();
     const [rows] = await p.execute(
-        `SELECT d.*, ed.mode AS emulated_mode, (ed.serial_no IS NOT NULL) AS is_emulated 
+        `SELECT d.*, ed.mode AS emulated_mode, (ed.serial_no IS NOT NULL) AS is_emulated,
+                dm.field_012e, dm.field_01c8, dm.field_0136, dm.field_027a, dm.field_0137, dm.field_0161, dm.field_0160
          FROM devices d 
          LEFT JOIN emulated_devices ed ON d.serial_no = ed.serial_no 
+         ${LATEST_MEAS_SUBQUERY}
          WHERE d.serial_no = ? LIMIT 1`,
         [fullSerial]
     );
@@ -56,9 +72,11 @@ async function getDeviceByFullSerial(fullSerial) {
 async function getDevicesForHome(homeId) {
     const p = getPool();
     const [rows] = await p.execute(
-        `SELECT d.*, ed.mode AS emulated_mode, (ed.serial_no IS NOT NULL) AS is_emulated 
+        `SELECT d.*, ed.mode AS emulated_mode, (ed.serial_no IS NOT NULL) AS is_emulated,
+                dm.field_012e, dm.field_01c8, dm.field_0136, dm.field_027a, dm.field_0137, dm.field_0161, dm.field_0160
          FROM devices d 
          LEFT JOIN emulated_devices ed ON d.serial_no = ed.serial_no 
+         ${LATEST_MEAS_SUBQUERY}
          WHERE d.home_id = ?`,
         [homeId]
     );
@@ -68,9 +86,11 @@ async function getDevicesForHome(homeId) {
 async function getDevicesInZone(homeId, zoneId) {
     const p = getPool();
     const [rows] = await p.execute(
-        `SELECT d.*, ed.mode AS emulated_mode, (ed.serial_no IS NOT NULL) AS is_emulated 
+        `SELECT d.*, ed.mode AS emulated_mode, (ed.serial_no IS NOT NULL) AS is_emulated,
+                dm.field_012e, dm.field_01c8, dm.field_0136, dm.field_027a, dm.field_0137, dm.field_0161, dm.field_0160
          FROM devices d 
          LEFT JOIN emulated_devices ed ON d.serial_no = ed.serial_no 
+         ${LATEST_MEAS_SUBQUERY}
          WHERE d.home_id = ? AND d.zone_id = ?`,
         [homeId, zoneId]
     );

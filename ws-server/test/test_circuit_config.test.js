@@ -30,7 +30,7 @@ test('legacy test suite runs successfully', async () => {
   
           console.log('\n1. Testing updateCircuitConfig...');
           const testMaxTemp = 55.0;
-          await db.updateCircuitConfig(homeId, circuitNumber, { circuit_dhw_max_flow_temperature: testMaxTemp }, { circuit_dhw_max_flow_temperature: testMaxTemp });
+          await db.updateCircuitConfig(homeId, circuitNumber, { circuit_max_flow_temperature: testMaxTemp }, { circuit_max_flow_temperature: testMaxTemp });
   
           // Retrieve config
           const etags = await db.getCircuitEtags(homeId, circuitNumber);

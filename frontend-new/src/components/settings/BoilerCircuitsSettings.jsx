@@ -605,6 +605,14 @@ export default function BoilerCircuitsSettings() {
               (boilerRaw.field_0460 & 0xffff) / 1000.0 < 1.0 ? 'var(--danger)' : 'var(--secondary)'
             )}
           </Card>
+          {boilerRaw.last_config_decoded?.['0x045e'] !== undefined && (
+            <Card style={{ padding: '1.25rem', display: 'flex', justifyContent: 'center' }}>
+              {renderCircularGauge(
+                parseFloat(boilerRaw.last_config_decoded['0x045e']),
+                0, 15, t('tanoclo_ex.dhw_flow_rate', 'DHW Flow Rate'), ' L/m', 'var(--secondary)'
+              )}
+            </Card>
+          )}
         </div>
       )}
 
@@ -617,6 +625,10 @@ export default function BoilerCircuitsSettings() {
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
                 <span style={{ color: 'var(--text-secondary)' }}>{t('settings.burner_ignition_starts')}</span>
                 <strong>{boilerRaw.field_0463 !== null && boilerRaw.field_0463 !== undefined && parseInt(boilerRaw.field_0463, 10) !== 65535 ? `${boilerRaw.field_0463} cyc` : '--'}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>{t('settings.ch_burner_starts', 'CH Burner Starts')}</span>
+                <strong>{boilerRaw.field_0465 !== null && boilerRaw.field_0465 !== undefined && parseInt(boilerRaw.field_0465, 10) !== 65535 ? `${boilerRaw.field_0465} cyc` : '--'}</strong>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
                 <span style={{ color: 'var(--text-secondary)' }}>{t('settings.ch_pump_cycles')}</span>
@@ -708,7 +720,10 @@ export default function BoilerCircuitsSettings() {
                       fontSize: '0.75rem',
                       fontWeight: 600
                     }}>
-                      {t('tanoclo_ex.mode_val', { mode: circ.field_2090 ?? '0' })}
+                      {Number(circ.field_2090) === 1 ? 'SCHEDULE' :
+                       Number(circ.field_2090) === 3 ? 'MANUAL' :
+                       Number(circ.field_2090) === 4 ? 'FROST_PROTECT' :
+                       t('tanoclo_ex.mode_val', { mode: circ.field_2090 ?? '0', defaultValue: 'STANDBY' })}
                     </span>
                   </td>
                   <td style={{ padding: '0.75rem 1rem', textAlign: 'right' }}>

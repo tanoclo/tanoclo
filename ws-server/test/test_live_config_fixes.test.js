@@ -32,14 +32,14 @@ test('legacy test suite runs successfully', async () => {
           const updateFieldInMap = testCmdApi.updateFieldInMap;
   
           // 2. Test updateFieldInMap behavior
-          console.log('\n2. Testing updateFieldInMap for circuit_dhw_max_flow_temperature...');
+          console.log('\n2. Testing updateFieldInMap for circuit_max_flow_temperature...');
           let configObj = {
               '0x2040': 5500,
-              'circuit_dhw_max_flow_temperature': 5500
+              'circuit_max_flow_temperature': 5500
           };
   
           // Update it with unscaled value 55
-          updateFieldInMap(configObj, 'circuit_dhw_max_flow_temperature', 55.0);
+          updateFieldInMap(configObj, 'circuit_max_flow_temperature', 55.0);
   
           console.log('configObj after update:', configObj);
           
@@ -47,8 +47,8 @@ test('legacy test suite runs successfully', async () => {
           if (configObj['0x2040'] !== undefined) {
               throw new Error('FAIL: Hex key "0x2040" should have been deleted!');
           }
-          if (configObj.circuit_dhw_max_flow_temperature !== 55.0) {
-              throw new Error(`FAIL: Expected 55.0, got ${configObj.circuit_dhw_max_flow_temperature}`);
+          if (configObj.circuit_max_flow_temperature !== 55.0) {
+              throw new Error(`FAIL: Expected 55.0, got ${configObj.circuit_max_flow_temperature}`);
           }
           console.log('SUCCESS: updateFieldInMap correctly deleted hex alias and stored unscaled value.');
   

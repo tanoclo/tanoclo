@@ -508,14 +508,21 @@ async function publishDeviceTelemetry(shortSerial, homeId, zoneId, sensorFields,
     if (sensorFields && homeId) {
         const temp = sensorFields.field_012d !== undefined ? sensorFields.field_012d : sensorFields['0x012d'];
         const auxTemp = sensorFields.field_012e !== undefined ? sensorFields.field_012e : sensorFields['0x012e'];
+        const stemTemp = sensorFields.field_01c8 !== undefined ? sensorFields.field_01c8 : sensorFields['0x01c8'];
         const hum = sensorFields.field_0135 !== undefined ? sensorFields.field_0135 : sensorFields['0x0135'];
         const volt = sensorFields.field_0162 !== undefined ? sensorFields.field_0162 : sensorFields['0x0162'];
         const light = sensorFields.field_0136 !== undefined ? sensorFields.field_0136 : sensorFields['0x0136'];
         const otVolt = sensorFields.field_0161 !== undefined ? sensorFields.field_0161 : sensorFields['0x0161'];
         const resetReason = sensorFields.field_0160 !== undefined ? sensorFields.field_0160 : sensorFields['0x0160'];
+        const dialInteraction = sensorFields.field_027a !== undefined ? sensorFields.field_027a : sensorFields['0x027a'];
+        const dialEncoder = sensorFields.field_0137 !== undefined ? sensorFields.field_0137 : sensorFields['0x0137'];
 
         _pub(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/temperature`, temp);
         _pub(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/aux_temperature`, auxTemp);
+        if (stemTemp !== undefined && stemTemp !== null) {
+            _pub(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/stem_temperature`, stemTemp);
+            _pubDebug(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/field_01c8`, stemTemp);
+        }
         _pub(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/humidity`, hum);
 
         // Only VA, RU, and SU have battery (not IB, BP, BR, WR)
@@ -548,6 +555,13 @@ async function publishDeviceTelemetry(shortSerial, homeId, zoneId, sensorFields,
         if (resetReason !== undefined && resetReason !== null) {
             _pub(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/reset_reason_raw`, resetReason);
             _pub(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/reset_reason`, getFriendlyResetReason(resetReason));
+        }
+
+        if (dialInteraction !== undefined && dialInteraction !== null) {
+            _pub(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/dial_interaction_result`, dialInteraction);
+        }
+        if (dialEncoder !== undefined && dialEncoder !== null) {
+            _pub(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/dial_encoder_steps`, dialEncoder);
         }
 
         // Raw/debug
@@ -625,10 +639,20 @@ async function publishCircuitTelemetry(homeId, circuitNumber, fields) {
     const target = fields.field_4000 !== undefined ? fields.field_4000 : fields['0x4000'];
     const reference = fields.field_4040 !== undefined ? fields.field_4040 : fields['0x4040'];
     const demand = fields.field_4080 !== undefined ? fields.field_4080 : fields['0x4080'];
+    const mode = fields.field_2090 !== undefined ? fields.field_2090 : fields['0x2090'];
 
     _pub(`${BASE_TOPIC}/h/${homeId}/c/${circuitNumber}/target_temperature`, target);
     _pub(`${BASE_TOPIC}/h/${homeId}/c/${circuitNumber}/reference_temperature`, reference);
     _pub(`${BASE_TOPIC}/h/${homeId}/c/${circuitNumber}/demand_percent`, demand);
+    if (mode !== undefined && mode !== null) {
+        let modeStr = 'STANDBY';
+        const numMode = Number(mode);
+        if (numMode === 1) modeStr = 'SCHEDULE';
+        else if (numMode === 3) modeStr = 'MANUAL_OVERRIDE';
+        else if (numMode === 4) modeStr = 'FROST_PROTECTION';
+        _pub(`${BASE_TOPIC}/h/${homeId}/c/${circuitNumber}/operating_mode`, modeStr);
+        _pubDebug(`${BASE_TOPIC}/h/${homeId}/c/${circuitNumber}/field_2090`, mode);
+    }
     if (fields['0x4100'] !== undefined) _pub(`${BASE_TOPIC}/h/${homeId}/c/${circuitNumber}/heating_active`, Boolean(fields['0x4100']));
     if (fields['0x40c0'] !== undefined) _pub(`${BASE_TOPIC}/h/${homeId}/c/${circuitNumber}/pump_active`, Boolean(fields['0x40c0']));
     if (fields['0x2060'] !== undefined) _pub(`${BASE_TOPIC}/h/${homeId}/c/${circuitNumber}/flow_temperature`, fields['0x2060']);
@@ -654,10 +678,12 @@ async function publishHvacTelemetry(homeId, fields) {
     let dhwMeasured = fields.field_045a !== undefined ? fields.field_045a : fields['0x045a'];
     let dhwSetpoint = fields.field_046f !== undefined ? fields.field_046f : fields['0x046f'];
     let chPumpStarts = fields.field_0464 !== undefined ? fields.field_0464 : fields['0x0464'];
+    let chBurnerStarts = fields.field_0465 !== undefined ? fields.field_0465 : fields['0x0465'];
     let dhwPumpStarts = fields.field_0465 !== undefined ? fields.field_0465 : fields['0x0465'];
     let chBurnerHours = fields.field_0467 !== undefined ? fields.field_0467 : fields['0x0467'];
     let dhwBurnerHours = fields.field_0468 !== undefined ? fields.field_0468 : fields['0x0468'];
     const faultFlags = fields.field_0458 !== undefined ? fields.field_0458 : fields['0x0458'];
+    let dhwFlowRate = fields.field_045e !== undefined ? fields.field_045e : fields['0x045e'];
 
     // Sanitize 16-bit and 32-bit sentinel values
     const sanitizeHvacValue = (v) => {
@@ -676,9 +702,11 @@ async function publishHvacTelemetry(homeId, fields) {
     starts = sanitizeHvacValue(starts);
     hours = sanitizeHvacValue(hours);
     chPumpStarts = sanitizeHvacValue(chPumpStarts);
+    chBurnerStarts = sanitizeHvacValue(chBurnerStarts);
     dhwPumpStarts = sanitizeHvacValue(dhwPumpStarts);
     chBurnerHours = sanitizeHvacValue(chBurnerHours);
     dhwBurnerHours = sanitizeHvacValue(dhwBurnerHours);
+    dhwFlowRate = sanitizeHvacValue(dhwFlowRate);
 
     // Fix water pressure bitmask bug: mask high 16-bits and handle sentinel
     if (press !== undefined && press !== null) {
@@ -705,7 +733,11 @@ async function publishHvacTelemetry(homeId, fields) {
     _pub(`${BASE_TOPIC}/h/${homeId}/boiler/exhaust_temperature`, exhaustTemp);
     _pub(`${BASE_TOPIC}/h/${homeId}/boiler/dhw_measured_temperature`, dhwMeasured);
     _pub(`${BASE_TOPIC}/h/${homeId}/boiler/dhw_setpoint`, dhwSetpoint);
+    if (dhwFlowRate !== undefined && dhwFlowRate !== null) {
+        _pub(`${BASE_TOPIC}/h/${homeId}/boiler/dhw_flow_rate_lpm`, dhwFlowRate);
+    }
     _pub(`${BASE_TOPIC}/h/${homeId}/boiler/ch_pump_starts`, chPumpStarts);
+    _pub(`${BASE_TOPIC}/h/${homeId}/boiler/ch_burner_starts`, chBurnerStarts);
     _pub(`${BASE_TOPIC}/h/${homeId}/boiler/dhw_pump_starts`, dhwPumpStarts);
     _pub(`${BASE_TOPIC}/h/${homeId}/boiler/ch_burner_hours`, chBurnerHours);
     _pub(`${BASE_TOPIC}/h/${homeId}/boiler/dhw_burner_hours`, dhwBurnerHours);

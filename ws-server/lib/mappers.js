@@ -139,6 +139,16 @@ function mapDevice(d) {
             mapped.neighborData = null;
         }
     }
+    mapped.hardwareDiagnostics = {
+        pcbTemperature: d.field_012e !== null && d.field_012e !== undefined ? parseFloat(d.field_012e) : null,
+        stemTemperature: d.field_01c8 !== null && d.field_01c8 !== undefined ? parseFloat(d.field_01c8) : null,
+        ambientLightLevel: d.field_0136 !== null && d.field_0136 !== undefined ? parseInt(d.field_0136, 10) : null,
+        dialInteractionResult: d.field_027a !== null && d.field_027a !== undefined ? parseInt(d.field_027a, 10) : null,
+        dialEncoderSteps: d.field_0137 !== null && d.field_0137 !== undefined ? parseInt(d.field_0137, 10) : null,
+        hvacLinkStatusFlags: d.field_0161 !== null && d.field_0161 !== undefined ? parseInt(d.field_0161, 10) : null,
+        openthermVoltage: d.field_0161 !== null && d.field_0161 !== undefined ? parseFloat(((Number(d.field_0161) & 0x0FFF) / 1000).toFixed(3)) : null,
+        resetReason: d.field_0160 || null
+    };
 
     return mapped;
 }

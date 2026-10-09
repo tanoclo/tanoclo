@@ -724,7 +724,7 @@ async function updateCircuitConfig(homeId, circuitNumber, fields, fullConfigJson
         Object.assign(mergedConfig, fullConfigJson);
     }
 
-    const val = fields['0x2040'] ?? fields.circuit_dhw_max_flow_temperature ?? fields.max_temp;
+    const val = fields['0x2040'] ?? fields.circuit_max_flow_temperature ?? fields.max_temp;
     if (val !== undefined) {
         mergedConfig['0x2040'] = val;
     }

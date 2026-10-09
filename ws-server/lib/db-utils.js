@@ -454,7 +454,7 @@ async function buildCircuitConfigTLV(homeId, circuitNumber) {
         fields['0x2040'] = 60.0;
     }
 
-    delete fields.circuit_dhw_max_flow_temperature;
+    delete fields.circuit_max_flow_temperature;
     delete fields.max_temp;
 
     fields = cleanFriendlyConfig(fields);

@@ -197,6 +197,48 @@ export default function DeviceSettingsGeneral({
         </div>
       </Card>
 
+      {/* Hardware Diagnostics Card */}
+      {!isBridge && device?.hardwareDiagnostics && (
+        <Card style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          <h3 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0 }}>{t('settings.hardware_diagnostics', 'Hardware Diagnostics')}</h3>
+          <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0 }}>
+            {t('settings.hardware_diagnostics_desc', 'Live onboard sensor telemetry and hardware link status.')}
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.5rem' }}>
+            {device.hardwareDiagnostics.pcbTemperature !== null && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>{t('settings.pcb_temperature', 'Onboard PCB Temperature')}</span>
+                <strong>{device.hardwareDiagnostics.pcbTemperature.toFixed(2)}°C</strong>
+              </div>
+            )}
+            {device.hardwareDiagnostics.stemTemperature !== null && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>{t('settings.stem_temperature', 'Radiator Base / Stem Temp')}</span>
+                <strong>{device.hardwareDiagnostics.stemTemperature.toFixed(2)}°C</strong>
+              </div>
+            )}
+            {device.hardwareDiagnostics.ambientLightLevel !== null && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>{t('settings.ambient_light', 'Ambient Light Level')}</span>
+                <strong>{device.hardwareDiagnostics.ambientLightLevel} / 100</strong>
+              </div>
+            )}
+            {device.hardwareDiagnostics.openthermVoltage !== null && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>{t('settings.ot_bus_voltage', 'OpenTherm Bus Voltage')}</span>
+                <strong>{device.hardwareDiagnostics.openthermVoltage.toFixed(3)} V</strong>
+              </div>
+            )}
+            {device.hardwareDiagnostics.resetReason !== null && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
+                <span style={{ color: 'var(--text-secondary)' }}>{t('settings.reset_reason', 'Last Reset Reason')}</span>
+                <strong>{device.hardwareDiagnostics.resetReason === '2' || device.hardwareDiagnostics.resetReason === 2 ? 'Power-On Reset (POR)' : device.hardwareDiagnostics.resetReason === '1' || device.hardwareDiagnostics.resetReason === 1 ? 'PIN Reset' : device.hardwareDiagnostics.resetReason}</strong>
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
+
       {/* Device Role Card (RU devices) */}
       {isRU && (
         <Card style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>

@@ -246,18 +246,18 @@ This dictionary consolidates all observed TLV fields, mapping their hex codes, t
 | `0x0003` | `reported_rf_key` | `bytes` | 1.0 | - | `/d/rfkey` | `devices` | `field_0155` | 16-byte active AES-128 RF network key reported in GET `/d/rfkey`. |
 | `0x0007` | `client_nonce` | `bytes` | 1.0 | - | `auth/token` | `devices` | `field_0007` | 16-byte client-generated cryptographic nonce for token authentication. |
 | `0x0035` | `fw_version_other_slot` | `u16be` | 1.0 | - | `/d/{id}/fw/state` | `devices` | `field_0035` | Firmware version present in the other/inactive external SPI slot (or previous version). |
-| `0x0036` | `fw_state_aux_0036` | `u8` | 1.0 | - | `/d/{id}/fw/state` | `devices` | `field_0036` | Auxiliary firmware upgrade metric (e.g. partition indicator). |
-| `0x0039` | `fw_version_target_or_reported` | `u16be` | 1.0 | - | `/d/{id}/fw/state` | `devices` | `field_0039` | Second firmware version field (likely target or cloud-reported expected version). |
+| `0x0036` | `hw_family_code` | `u8` | 1.0 | - | `/d/{id}/fw/state` | `devices` | `field_0036` | Hardware family architecture identifier (`0x0A` for VA/RU). |
+| `0x0039` | `fw_version_target` | `u16be` | 1.0 | - | `/d/{id}/fw/state` | `devices` | `field_0039` | Target/expected cloud-reported firmware version. |
 | `0x003a` | `fw_version_active` | `u16be` | 1.0 | - | `/d/{id}/fw/state` | `devices` | `current_fw_version` | Active/running firmware version. |
-| `0x003b` | `fw_state_phase_or_step` | `u8` | 1.0 | - | `/d/{id}/fw/state` | `devices` | `field_003b` | Small state/phase value (update/bootloader phase indicator). |
-| `0x003c` | `fw_state_phase_aux_003c` | `u8` | 1.0 | - | `/d/{id}/fw/state` | `devices` | `field_003c` | Second small state/phase value (update state machine aux indicator). |
+| `0x003b` | `fw_bootloader_phase` | `u8` | 1.0 | - | `/d/{id}/fw/state` | `devices` | `field_003b` | Bootloader sequence execution phase counter. |
+| `0x003c` | `fw_bootloader_verify_code` | `u8` | 1.0 | - | `/d/{id}/fw/state` | `devices` | `field_003c` | Bootloader image integrity check / verification result code. |
 | `0x007a` | `orientation_or_overlay_state` | `u8` | 1.0 | - | `/d/{id}/sen` | `tlv_labels` | - | Device physical orientation or dial overlay state. |
 | `0x0104` | `pair_action` | `empty` | 1.0 | - | `/d/I/{id}/pair` | `tlv_labels` | - | Zero-length pairing transaction action marker during companion binding. |
 | `0x012d` | `temperature_ambient` | `s16be` | 0.01 | °C | `/d/{id}/sen` | `device_measurements` | `field_012d` | Measured room temperature. |
-| `0x012e` | `aux_temperature_1` | `s16be` | 0.01 | °C | `/d/{id}/sen` | `device_measurements` | `field_012e` | Primary reference board thermistor. |
+| `0x012e` | `pcb_temperature` | `s16be` | 0.01 | °C | `/d/{id}/sen` | `device_measurements` | `field_012e` | Onboard MCU/PCB reference NTC thermistor (`FUN_0802bde4(0x27)`). Exposed in API `hardwareDiagnostics.pcbTemperature` and UI. |
 | `0x0135` | `humidity_percent` | `u16be` | 0.1 | % | `/d/{id}/sen` | `device_measurements` | `field_0135` | Room relative humidity level (raw 607 = 60.7%). |
-| `0x0136` | `ambient_light_level` | `u16be` | 1.0 | - | `/d/{id}/sen` | `device_measurements` | `field_0136` | Measured light exposure (0-100). |
-| `0x0137` | `dial_encoder_steps` | `u8` | 1.0 | step | `/d/{id}/sen` | `device_measurements` | `field_0137` | Relative rotary dial encoder movement steps (resets to 0x7f after report). |
+| `0x0136` | `ambient_light_level` | `u16be` | 1.0 | - | `/d/{id}/sen` | `device_measurements` | `field_0136` | Ambient light photodiode level (0-100, `FUN_0802bde4(2)`). Used for display auto-dimming. Exposed in API `hardwareDiagnostics.ambientLightLevel` and UI. |
+| `0x0137` | `dial_encoder_steps` | `u8` | 1.0 | step | `/d/{id}/sen` | `device_measurements` | `field_0137` | Relative rotary dial encoder movement steps (resets to 0x7f after report). Exposed in MQTT `dial_encoder_steps`. |
 | `0x0140` | `temperature_offset` | `s16be` | 0.01 | °C | `/d/{id}/config` | `devices` | `field_0140` | Temperature offset in Celsius. |
 | `0x0143` | `device_flag_0143` | `bool` | 1.0 | - | `/d/{id}/config` | `devices` | `last_config_json->device_flag_0143` | Device setup flag. |
 | `0x0149` | `va_orientation` | `u8` | 1.0 | enum | `/d/{id}/config` | `devices` | `field_0149` | Valve layout: `0`=HORIZONTAL, `1`=VERTICAL. |
@@ -268,15 +268,15 @@ This dictionary consolidates all observed TLV fields, mapping their hex codes, t
 | `0x015c` | `home_id` | `u32be` | 1.0 | - | `/d/{id}/config` | `devices` | `home_id` | Unique 4-byte Home ID. |
 | `0x015d` | `device_type` | `u16be` | 1.0 | - | `/d/{id}/config`, `/codes`| `devices`, `heating_systems` | `field_015d` | Device type / role index (RU Wired=71, RU Wireless Sensor=200, VA Horizontal=112, VA Vertical=113). |
 | `0x015e` | `zone_binding_pairs` | `bytes` | 1.0 | pairs | `/d/{id}/config` | `devices` | `field_015e` | Topology-aware binding role+zone array (2-byte pairs: Role byte + Zone byte). |
-| `0x0160` | `device_reset_reason` | `u8` | 1.0 | enum | `/d/{id}/sen` | `device_measurements` | `field_0160` | Hardware reset/reboot reason code (POR, PIN, software reset, watchdog). |
-| `0x0161` | `opentherm_voltage` | `u16be` | 0.001 | V | `/d/{id}/sen` | `device_measurements` | `field_0161` | OpenTherm loop supply voltage in Volts (mV raw). |
+| `0x0160` | `device_reset_reason` | `u8` | 1.0 | enum | `/d/{id}/sen` | `device_measurements` | `field_0160` | Hardware reset/reboot reason code (POR, PIN, software reset, watchdog). Exposed in API `hardwareDiagnostics.resetReason`. |
+| `0x0161` | `opentherm_voltage` | `u16be` | 0.001 | V | `/d/{id}/sen` | `device_measurements` | `field_0161` | RU 16-bit packed OpenTherm bus status: bits 0-11 = idle voltage (mV), bit 14 = link synchronized, bit 15 = DHW demand active. Exposed in API `hardwareDiagnostics.openthermVoltage` and `hvacLinkStatusFlags`. |
 | `0x0162` | `battery_mv` | `u16be` | 1.0 | mV | `/d/{id}/sen` | `device_measurements` | `field_0162` | Power supply voltage. |
 | `0x0165` | `opentherm_current` | `u16be` | 1.0 | mA | `/d/{id}/sen` | `tlv_labels` | - | OpenTherm loop supply current in milliamperes. |
 | `0x0168` | `ru_opentherm_selftest_supply_mv` | `u32be` | 1.0 | mV | `/d/{id}/selftest/result` | `tlv_labels` | - | RU selftest metrics of OpenTherm docked subsystem reference supply voltage. |
 | `0x016a` | `valve_calibration_state`| `u8` | 1.0 | enum | `/d/{id}/mount` | `devices` | `field_016a` | Calibration steps state index. |
 | `0x016e` | `mounting` | `bytes` | 1.0 | - | `/d/{id}/mount` | `devices` | `last_config_json->mounting` | Motor mounting status metrics. |
 | `0x017d` | `alternative_orientation`| `u8` | 1.0 | enum | `/d/{id}/config` | `devices` | `-` | Alternative orientation code. |
-| `0x0180` | `fw_state_update_result_or_bootcount` | `u8` | 1.0 | - | `/d/{id}/fw/state` | `devices` | `field_0180` | Firmware state update result or boot status flags. |
+| `0x0180` | `fw_update_outcome` | `u8` | 1.0 | - | `/d/{id}/fw/state` | `devices` | `field_0180` | Firmware OTA installation outcome code (e.g. `0x04` = update successfully applied). |
 | `0x0182` | `fallback_active` | `bool` | 1.0 | - | `/d/{id}/config` | `devices` | `field_0182` | Active status for device fallback mode. |
 | `0x0183` | `config_field_0183` | `bytes` | 1.0 | - | `/d/{id}/config` | `tlv_labels` | - | Device configuration payload field. |
 | `0x0197` | `temp_drop_rate_trigger` | `s16be` | 0.01 | °C | `/z/p` | `tlv_labels` | - | Rapid temperature drop trigger threshold in centi-degrees Celsius. |
@@ -293,11 +293,11 @@ This dictionary consolidates all observed TLV fields, mapping their hex codes, t
 | `0x01b5` | `va_mount_reference_steps` | `u16be` | 1.0 | steps | `/d/{id}/mount` | `devices` | `field_01b5` | Valve learned calibration reference/offset steps. |
 | `0x01b6` | `va_mount_seatpoint_steps` | `u16be` | 1.0 | steps | `/d/{id}/mount` | `devices` | `field_01b6` | Valve learned seat/contact point steps. |
 | `0x01b8` | `va_mount_state` | `u8` | 1.0 | enum | `/d/{id}/mount` | `devices` | `field_016a` | Valve calibration mounting state index. |
-| `0x01c8` | `aux_temperature_2` | `s16be` | 0.01 | °C | `/d/{id}/sen` | `device_measurements` | `field_01c8` | Secondary casing reference thermistor. |
+| `0x01c8` | `stem_temperature` | `s16be` | 0.01 | °C | `/d/{id}/sen` | `device_measurements` | `field_01c8` | Radiator valve metallic base mount / stem NTC thermistor on VA (`FUN_0802bde4(0x28)`). Used for plume compensation against room temperature `0x012d`. Exposed in API `hardwareDiagnostics.stemTemperature` and MQTT `stem_temperature`. |
 | `0x01d0` | `neighbor_self_ipv6` | `bytes` | 1.0 | - | `/d/{id}/neighbors` | `tlv_labels` | - | Neighbor table client local IPv6 address. |
 | `0x01d1` | `neighbor_entry` | `bytes` | 1.0 | - | `/d/{id}/neighbors` | `tlv_labels` | - | Nested neighbor entry diagnostic sub-TLV container. |
 | `0x01d2` | `neighbor_ipv6` | `bytes` | 1.0 | - | `/d/{id}/neighbors` | `tlv_labels` | - | Neighbor device IPv6 address (sub-TLV inside 0x01d1). |
-| `0x01d3` | `neighbor_data` | `bytes` | 1.0 | - | `/d/{id}/neighbors` | `tlv_labels` | - | Blockwise alignment padding payload (all zeros) attached on multi-block transfers when more neighbors follow. |
+| `0x01d3` | `neighbor_metrics` | `bytes` | 1.0 | - | `/d/{id}/neighbors` | `tlv_labels` | - | 6LoWPAN / RPL DAG neighbor routing metrics buffer (RSSI, LQI, ETX, DAG rank container). |
 | `0x01fa` | `va_mount_mode` | `u8` | 1.0 | enum | `/d/{id}/mount` | `devices` | `field_01fa` | Actuator mounting mechanism operation mode. |
 | `0x01fb` | `va_mount_flags` | `u8` | 1.0 | - | `/d/{id}/mount` | `devices` | `field_01fb` | Actuator mounting process execution status flags. |
 | `0x01fc` | `pairing_mode` | `bool` | 1.0 | - | `/d/I/{id}/pair` | `devices` | `in_pairing_mode` | Internet Bridge pairing mode toggle switch. |
@@ -383,7 +383,7 @@ This dictionary consolidates all observed TLV fields, mapping their hex codes, t
 | `0x0273` | `va_act_limit_low_steps`| `u16be` | 1.0 | steps | `/d/{id}/act` | `devices` | `field_0273` | Piston closed/zero-level threshold steps. |
 | `0x0275` | `config_field_0275` | `bytes` | 1.0 | - | `/d/{id}/config` | `devices` | `last_config_json->config_field_0275` | Device configuration raw byte field. |
 | `0x0276` | `config_field_0276` | `bytes` | 1.0 | - | `/d/{id}/config` | `devices` | `last_config_json->config_field_0276` | Device configuration raw byte field. |
-| `0x027a` | `dial_interaction_result`| `u8` | 1.0 | enum | `/d/{id}/sen` | `device_measurements` | `field_027a` | Dial interaction result/status code (click/touch action). |
+| `0x027a` | `dial_interaction_result`| `u8` | 1.0 | enum | `/d/{id}/sen` | `device_measurements` | `field_027a` | Dial interaction status code (0 = success/idle, 3 = manual temperature override committed on VA). Exposed in API `hardwareDiagnostics.dialInteractionResult` and MQTT `dial_interaction_result`. |
 | `0x027c` | `va_act_limit_high_steps`| `u16be` | 1.0 | steps | `/d/{id}/act` | `devices` | `field_027c` | Piston fully retracted span limit steps. |
 | `0x0280` | `va_act_drive_cal_const`| `u16be` | 1.0 | - | `/d/{id}/act` | `devices` | `field_0280` | Valve actuator mechanical drive constant. |
 | `0x0283` | `va_act_status_flags_unused` | `s16be` | 1.0 | bits | `/d/{id}/act` | `devices` | `field_0283` | Unused / historical placeholder. VA uses 0x028d. |
@@ -422,18 +422,18 @@ This dictionary consolidates all observed TLV fields, mapping their hex codes, t
 | `0x046d` | `ot_dhw_not_supported`   | `bool` | 1.0 | - | `/h/{id}/hvac/config`| `heating_systems` | `field_046d` | OpenTherm slave configuration: DHW not supported capability. |
 | `0x046f` | `dhw_setpoint`           | `u16be` | 0.01 | °C | `/h/{id}/hvac/config`| `heating_systems` | `field_046f` | OpenTherm Data ID 57 domestic hot water target setpoint. |
 | `0x0471` | `dhw_setpoint_max`       | `u16be` | 0.01 | °C | `/h/{id}/hvac/config`| `heating_systems` | `field_0471` | OpenTherm Data ID 48 DHW setpoint upper limit/boundary. |
-| `0x0481` | `hvac_field_presence_list` | `bytes` | 1.0 | - | `/h/{id}/hvac/mon` | `heating_systems` | `field_0481` | Supported OpenTherm parameter FID/attribute map. |
+| `0x0481` | `hvac_field_presence_list` | `bytes` | 1.0 | - | `/h/{id}/hvac/mon` | `heating_systems` | `field_0481` | Supported OpenTherm parameter FID/attribute map (triplets of `[FID_HI, FID_LO, ATTR]`, attr 0x02 = periodic telemetry). |
 | `0x0c00` | `open_window_state` | `u8` | 1.0 | - | `/z/{id}/ow` | `zones` | `open_window_active` | Controls open window state: `0` = cancel/clear, `1` = active/detected. |
 | `0x0d1c` | `server_marker_0d1c` | `empty` | 1.0 | - | - | `tlv_labels` | - | Server-originated empty marker. |
 | `0x0dd3` | `server_field_0dd3` | `u8` | 1.0 | - | - | `tlv_labels` | - | Server-originated u8 field (typically 0xA3). |
 | `0x0dd8` | `server_marker_0dd8` | `empty` | 1.0 | - | - | `tlv_labels` | - | Server-originated empty marker. |
 | `0x1120` | `telemetry_field_1120` | `bytes` | 1.0 | - | - | `tlv_labels` | - | Telemetry diagnostic payload parameter. |
 | `0x2000` | `circuit_field_2000` | `bytes` | 1.0 | - | - | `tlv_labels` | - | Heating loop diagnostic payload parameter. |
-| `0x2040` | `circuit_dhw_max_flow_temperature`| `u16be` | 0.01 | °C | `/h/{id}/c/{id}/config` | `heating_circuits` | `field_2040` | Maximum flow temperature setpoint constraint. |
-| `0x2090` | `circuit_mode_or_flags_2090`| `u8` | 1.0 | enum | `/h/{id}/c/{id}/act` | `heating_circuits` | `field_2090` | Heating circuit operation mode status. |
-| `0x4000` | `circuit_reference_temp` | `s16be` | 0.01 | °C | `/c/{id}/act` | `heating_circuits` | `field_4000` | Flow pipeline reference temperature setpoint. |
+| `0x2040` | `circuit_max_flow_temperature`| `u16be` | 0.01 | °C | `/h/{id}/c/{id}/config` | `heating_circuits` | `field_2040` | Maximum flow temperature setpoint constraint. |
+| `0x2090` | `circuit_operating_mode`| `u8` | 1.0 | enum | `/h/{id}/c/{id}/act` | `heating_circuits` | `field_2090` | Heating circuit operation mode enum: `0`=STANDBY, `1`=SCHEDULE, `3`=MANUAL_OVERRIDE, `4`=FROST_PROTECTION. Decoded to human-readable strings in API and MQTT `operating_mode`. |
+| `0x4000` | `circuit_target_temp` | `s16be` | 0.01 | °C | `/c/{id}/act` | `heating_circuits` | `field_4000` | Active target temperature / setpoint of heating circuit. |
 | `0x4020` | `zone_target_temp` | `s16be` | 0.01 | °C | `/z/p` | `tlv_labels` | - | Active target temperature / setpoint in `/z/p` pings. |
-| `0x4040` | `circuit_target_temp` | `s16be` | 0.01 | °C | `/c/{id}/act` | `heating_circuits` | `field_4040` | Active target temperature of heating circuit. |
+| `0x4040` | `circuit_reference_temp` | `s16be` | 0.01 | °C | `/c/{id}/act` | `heating_circuits` | `field_4040` | Flow pipeline / measured reference room temperature used by controller. |
 | `0x4060` | `zone_temperature_4060` | `s16be` | 0.01 | °C | `/z/{id}/p` | `tlv_labels` | - | Zone temperature seen in RF sniffed zone program captures. |
 | `0x4080` | `circuit_demand_percent` | `u8` | 1.0 | % | `/c/{id}/act` | `heating_circuits` | `field_4080` | Active heating loop warm water load. |
 | `0x40a0` | `demand_percent` | `u8` | 1.0 | % | `/z/{id}/act` | `zone_measurements` | `field_40a0` | Actuator room heat demand power output. |
@@ -451,14 +451,14 @@ This dictionary consolidates all observed TLV fields, mapping their hex codes, t
 | `0x60c0` | `zone_temperature_baseline` | `s16be` | 0.01 | °C | `/z/{id}/config` | `zones` | `field_60c0` | Zone baseline temperature target setpoint. |
 | `0x60e0` | `zone_open_window_detection_enabled` | `bool` | 1.0 | - | `/z/{id}/config` | `zones` | `open_window_enabled` | Zone Open Window Detection enabled switch. |
 | `0x6160` | `home_away` | `u8` | 1.0 | enum | `/z/{id}/s` | `zone_measurements` | `field_6160` | Home occupancy state: `1`=HOME, `2`=AWAY. |
-| `0x6180` | `zone_state_flag_6180` | `bool` | 1.0 | - | `/z/{id}/s` | `zone_measurements` | `field_6180` | Zone state activity flag. |
+| `0x6180` | `zone_demand_master_latch` | `bool` | 1.0 | - | `/z/{id}/s` | `zone_measurements` | `field_6180` | Zone demand master relay/bus latch; asserted (1) when heating demand in zone engages boiler firing / circuit bus; 0 when idle. |
 | `0x61e0` | `zone_enabled` | `bool` | 1.0 | - | `/z/{id}/s` | `zone_measurements` | `field_61e0` | General toggle state of heating zone loop. |
 | `0x6200` | `schedule_target_temp` | `s16be` | 0.01 | °C | `/z/{id}/s` | `zone_measurements` | `field_6200` | Intended automatic timetable temperature. |
 | `0x6240` | `overlay_mode` | `u8` | 1.0 | enum | `/z/{id}/s` | `zone_measurements` | `field_6240` | Manual override type: `1`=MANUAL, `2`=TIMER. |
 | `0x6260` | `overlay_has_setpoint` | `bool` | 1.0 | - | `/z/{id}/s` | `zone_measurements` | `field_6260` | Indicates manual setpoint is present in overlay. |
 | `0x6280` | `overlay_target_temp` | `s16be` | 0.01 | °C | `/z/{id}/s` | `zone_measurements` | `field_6280` | Active manual overlay override setpoint. |
 | `0x62c0` | `zone_open_window_shutoff_duration` | `u16be` | $0.016\overline{6}$| minutes | `/z/{id}/config` | `tlv_labels` | - | Duration in raw seconds to shut off heating when open window is detected. |
-| `0x62e0` | `overlay_active_aux` | `bool` | 1.0 | - | `/z/{id}/s` | `zone_measurements` | `field_62e0` | Auxiliary indicator that manual overlay is active. |
+| `0x62e0` | `dial_overlay_origin` | `bool` | 1.0 | - | `/z/{id}/s` | `zone_measurements` | `field_62e0` | Local physical dial overlay indicator: 1 when temperature overlay originated from manual physical rotation of hardware dial; 0 when issued via cloud API or app. |
 | `0x6300` | `zone_config_field_6300` | `bytes` | 1.0 | - | `/z/{id}/config` | `tlv_labels` | - | Internal zone configuration metadata parameter. |
 | `0x6320` | `zone_config_field_6320` | `bytes` | 1.0 | - | `/z/{id}/config` | `tlv_labels` | - | Internal zone configuration metadata parameter. |
 | `0x6340` | `owd_nvm_state` | `u8` | 1.0 | - | `/z/{id}/s` | `zones` | `field_6340` | Persistent Open Window Detection state stored in device NVM. |
@@ -633,3 +633,53 @@ Transmitted periodically by Smart Radiator Valves (Valve Actuators) to announce 
     *   **`0x63c0` (`circuit_association`)**: Heating circuit link identifier (u8).
     *   **`0x0298` (`zone_presence`)**: Zone node online/presence registration flag (u8).
 *   **Note**: Room Units (`RU`) do **not** transmit `/z/p`; they report ambient telemetry solely via `/d/{serial}/sen` and receive zone state updates from the server.
+
+---
+
+## 8. Telemetry Ingestion, API & MQTT Exposure
+
+### 8.1 Device Hardware Diagnostics Object
+For all devices reporting via `/d/{serial}/sen`, `/d/{serial}/mount`, or `/d/{serial}/err`, raw TLV telemetry measurements stored in `device_measurements` are aggregated and surfaced via the REST API in `mapDevice` (`GET /api/v2/homes/{homeId}/devices`):
+
+```json
+{
+  "hardwareDiagnostics": {
+    "pcbTemperature": 22.45,
+    "stemTemperature": 41.20,
+    "ambientLightLevel": 85,
+    "dialInteractionResult": 0,
+    "dialEncoderSteps": 127,
+    "hvacLinkStatusFlags": 1,
+    "openthermVoltage": 4.12,
+    "resetReason": "POR/PDR"
+  }
+}
+```
+
+*   **`pcbTemperature` (`0x012e`)**: Onboard MCU/PCB thermistor reading in °C.
+*   **`stemTemperature` (`0x01c8`)**: Radiator valve metallic mount/stem temperature in °C (VA only, used for thermal plume compensation).
+*   **`ambientLightLevel` (`0x0136`)**: Photodiode exposure level (0–100) for automatic display dimming.
+*   **`dialInteractionResult` (`0x027a`)**: Last recorded hardware interaction code (`0` = idle/normal, `3` = manual override committed).
+*   **`dialEncoderSteps` (`0x0137`)**: Relative encoder movement steps from rotary dial (baseline `127`).
+*   **`hvacLinkStatusFlags` (`0x0161` bit 14)**: OpenTherm link physical bus synchronization flag (`1` = synchronized).
+*   **`openthermVoltage` (`0x0161` bits 0–11)**: OpenTherm bus idle voltage in Volts (scaled from mV).
+*   **`resetReason` (`0x0160`)**: Human-readable reset reason decoded from MCU hardware flags (`POR/PDR`, `PIN`, `Software`, `IWDG`, `WWDG`, `Low-Power`).
+
+### 8.2 Heating Circuit & Boiler System Telemetry
+The heating system state endpoint (`GET /api/v2/homes/{homeId}/heatingSystem`) includes live decoded telemetry from `circuit_measurements` and `heating_systems`:
+
+*   **Circuit Operating Mode (`0x2090`)**: Decoded from raw enum to `STANDBY`, `SCHEDULE`, `MANUAL_OVERRIDE`, or `FROST_PROTECTION`.
+*   **DHW Flow Rate (`0x045e`)**: OpenTherm domestic hot water flow rate in litres per minute (`dhw_flow_rate_lpm`).
+*   **CH Burner Starts (`0x0465`)**: OpenTherm central heating burner ignition cycle count (`ch_burner_starts`).
+
+### 8.3 MQTT Telemetry Topics
+When MQTT publishing is active, telemetry is pushed to the following topics:
+
+| Topic Pattern | Source FID | Unit | Description |
+| :--- | :--- | :--- | :--- |
+| `tafaux/{homeId}/device/{serialNo}/stem_temperature` | `0x01c8` | °C | VA radiator valve base stem temperature. |
+| `tafaux/{homeId}/device/{serialNo}/dial_interaction_result` | `0x027a` | int | User dial interaction status code. |
+| `tafaux/{homeId}/device/{serialNo}/dial_encoder_steps` | `0x0137` | steps | Relative dial movement steps (127 baseline). |
+| `tafaux/{homeId}/circuit/{circuitNumber}/operating_mode` | `0x2090` | string | Circuit operating mode name (`SCHEDULE`, `STANDBY`, etc.). |
+| `tafaux/{homeId}/hvac/dhw_flow_rate_lpm` | `0x045e` | L/min | DHW domestic hot water flow rate. |
+| `tafaux/{homeId}/hvac/ch_burner_starts` | `0x0465` | count | CH burner ignition cycle count. |

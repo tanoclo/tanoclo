@@ -26,13 +26,38 @@ router.get('/:homeId/heatingSystem', async (req, res) => {
         const [systems] = await pool.execute('SELECT * FROM heating_systems WHERE home_id = ?', [homeId]);
         const hs = systems[0] || {};
 
+        let parsedConfig = null;
+        if (hs.last_config_json) {
+            try {
+                parsedConfig = typeof hs.last_config_json === 'string' ? JSON.parse(hs.last_config_json) : hs.last_config_json;
+            } catch (e) {}
+        }
+
         res.json({
             boiler: {
                 present: Boolean(hs.boiler_present),
                 id: hs.boiler_id || null,
                 found: Boolean(hs.boiler_found)
             },
-            underfloorHeating: { present: Boolean(hs.underfloor_heating_present) }
+            underfloorHeating: { present: Boolean(hs.underfloor_heating_present) },
+            telemetry: {
+                flowTemperature: hs.field_044c !== null && hs.field_044c !== undefined ? parseFloat(hs.field_044c) : null,
+                returnTemperature: hs.field_044d !== null && hs.field_044d !== undefined ? parseFloat(hs.field_044d) : null,
+                controlSetpoint: hs.field_0450 !== null && hs.field_0450 !== undefined ? parseFloat(hs.field_0450) : null,
+                modulationPercentage: hs.field_0452 !== null && hs.field_0452 !== undefined ? parseInt(hs.field_0452, 10) : null,
+                flameActive: Boolean(hs.field_0457),
+                waterPressureBar: hs.field_0460 !== null && hs.field_0460 !== undefined ? parseFloat(((Number(hs.field_0460) & 0xFFFF) / 1000).toFixed(2)) : null,
+                dhwTargetTemperature: hs.field_045b !== null && hs.field_045b !== undefined ? parseFloat(hs.field_045b) : null,
+                dhwFlowRateLpm: parsedConfig && parsedConfig['0x045e'] !== undefined ? parseFloat(parsedConfig['0x045e']) : null,
+                burnerStarts: hs.field_0463 !== null && hs.field_0463 !== undefined && parseInt(hs.field_0463, 10) !== 65535 ? parseInt(hs.field_0463, 10) : null,
+                chPumpStarts: hs.field_0464 !== null && hs.field_0464 !== undefined && parseInt(hs.field_0464, 10) !== 65535 ? parseInt(hs.field_0464, 10) : null,
+                chBurnerStarts: hs.field_0465 !== null && hs.field_0465 !== undefined && parseInt(hs.field_0465, 10) !== 65535 ? parseInt(hs.field_0465, 10) : null,
+                burnerHoursTotal: hs.field_0466 !== null && hs.field_0466 !== undefined ? parseFloat(hs.field_0466) : null,
+                burnerHoursCh: hs.field_0467 !== null && hs.field_0467 !== undefined ? parseFloat(hs.field_0467) : null,
+                burnerHoursDhw: hs.field_0468 !== null && hs.field_0468 !== undefined ? parseFloat(hs.field_0468) : null,
+                faultFlags: hs.field_0458 !== null && hs.field_0458 !== undefined ? parseInt(hs.field_0458, 10) : 0,
+                updatedAt: hs.hvac_updated_at || null
+            }
         });
     } catch (err) {
         res.status(500).json({ error: 'internal_error' });
