@@ -36,7 +36,7 @@ void RUStateMachine::trigger_telemetry(float temp_c, float hum_pct, uint16_t bat
   ESP_LOGI(TAG, "[%s] Trigger telemetry: temp=%.2fC hum=%.1f%% bat=%dmV",
            config_.serial_no.c_str(), temp_c, hum_pct, battery_mv);
 
-  // Room Units (RU) report ambient telemetry solely via /d/{serial}/sen to the Bridge
+  // 1. Device sensor (/d/{serial}/sen) to Bridge
   std::vector<uint8_t> tlv = protocol::build_d_sen_tlv(temp_c, hum_pct, battery_mv,
                                                       config_.target_ambient_light, 0, 0);
   std::string path = "d/" + config_.serial_no + "/sen";
@@ -46,6 +46,19 @@ void RUStateMachine::trigger_telemetry(float temp_c, float hum_pct, uint16_t bat
     outbound_frames.push_back(std::move(frame));
     config_.last_sen_tx_ts = now_s;
     config_.last_reported_temp = temp_c;
+  }
+
+  // 2. Zone parameters (/z/p) to Bridge coordinator
+  if (config_.is_measuring_leader && config_.ib_mac_known) {
+    std::vector<uint8_t> z_tlv = protocol::build_z_p_tlv(temp_c, hum_pct, config_.current_demand_percent);
+    std::string zp_query = (config_.zone_id > 0) ? ("lid=" + std::to_string(config_.zone_id)) : "";
+    OutboundFrame z_frame = build_encrypted_coap_frame(COAP_TYPE_CON, COAP_CODE_PUT, "z/p",
+                                                      z_tlv.data(), z_tlv.size(), config_.ib_mac,
+                                                      -1, 4, 0, 1800, zp_query);
+    if (!z_frame.empty()) {
+      outbound_frames.push_back(std::move(z_frame));
+      config_.last_zp_tx_ts = now_s;
+    }
   }
 }
 
@@ -107,6 +120,15 @@ void RUStateMachine::tick(uint32_t now_ms, uint32_t now_s, std::vector<OutboundF
       if (it->retries >= PendingCON::MAX_RETRANSMIT) {
         ESP_LOGW(TAG, "[%s] CON MID=0x%04X failed after %d retries",
                  config_.serial_no.c_str(), it->mid, it->retries);
+        if (it->path.find("/config") != std::string::npos && config_.state == STATE_ONBOARD_ZONE_CONFIG) {
+          ESP_LOGI(TAG, "[%s] Zone config settled -> requesting zone state", config_.serial_no.c_str());
+          if (config_.home_id > 0 && config_.zone_id > 0 && config_.ib_mac_known) {
+            std::string zs_path = "h/" + std::to_string(config_.home_id) + "/z/" + std::to_string(config_.zone_id) + "/s";
+            OutboundFrame frame = build_encrypted_coap_frame(COAP_TYPE_CON, COAP_CODE_GET, zs_path, nullptr, 0, config_.ib_mac);
+            if (!frame.empty()) outbound_frames.push_back(std::move(frame));
+          }
+          advance_onboarding(outbound_frames);
+        }
         it = config_.pending_cons.erase(it);
         continue;
       }
@@ -175,6 +197,21 @@ void RUStateMachine::tick(uint32_t now_ms, uint32_t now_s, std::vector<OutboundF
                            (now_s >= config_.last_external_telemetry_ts) &&
                            (now_s - config_.last_external_telemetry_ts < 1800));
 
+
+    // Autonomous z/p broadcast to Bridge coordinator (~600s / 10m)
+    if (config_.is_measuring_leader && config_.ib_mac_known && !external_active) {
+      if (config_.last_zp_tx_ts == 0) {
+        config_.last_zp_tx_ts = now_s;
+      } else if (now_s > config_.last_zp_tx_ts && (now_s - config_.last_zp_tx_ts >= 600)) {
+        config_.last_zp_tx_ts = now_s;
+        std::vector<uint8_t> z_tlv = protocol::build_z_p_tlv(config_.target_temp_celsius, config_.target_humidity_pct, config_.current_demand_percent);
+        std::string zp_query = (config_.zone_id > 0) ? ("lid=" + std::to_string(config_.zone_id)) : "";
+        OutboundFrame z_frame = build_encrypted_coap_frame(COAP_TYPE_CON, COAP_CODE_PUT, "z/p",
+                                                          z_tlv.data(), z_tlv.size(), config_.ib_mac,
+                                                          -1, 4, 0, 1800, zp_query);
+        if (!z_frame.empty()) outbound_frames.push_back(std::move(z_frame));
+      }
+    }
 
     // Autonomous device sensor heartbeat (~1200s / 20m)
     if (config_.last_sen_tx_ts == 0) {
@@ -676,6 +713,24 @@ bool RUStateMachine::is_mac_acked_request(uint16_t mid) const {
   return false;
 }
 
+void RUStateMachine::record_inbound_con(uint16_t mid) {
+  uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000ULL);
+  if (inbound_con_history_.size() >= 32) {
+    inbound_con_history_.erase(inbound_con_history_.begin());
+  }
+  inbound_con_history_.push_back({mid, now_ms});
+}
+
+bool RUStateMachine::is_inbound_con_duplicate(uint16_t mid) const {
+  uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000ULL);
+  for (const auto &item : inbound_con_history_) {
+    if (item.mid == mid && (now_ms - item.timestamp_ms < 60000)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void RUStateMachine::handle_mac_ack(uint8_t seq) {
   for (auto it = config_.pending_cons.begin(); it != config_.pending_cons.end(); ) {
     if (it->seq == seq) {
@@ -725,6 +780,11 @@ void RUStateMachine::handle_coap_message(const ParsedCoAP &coap, const ParsedMac
         break;
       }
     }
+  }
+
+  bool is_con_dup = (coap.type == COAP_TYPE_CON && is_inbound_con_duplicate(coap.mid));
+  if (coap.type == COAP_TYPE_CON) {
+    record_inbound_con(coap.mid);
   }
 
   // Case 1: Inbound POST /d/pair (Bridge pushing network credentials)
@@ -900,6 +960,23 @@ void RUStateMachine::handle_coap_message(const ParsedCoAP &coap, const ParsedMac
         }
       }
 
+      if (!coap.payload.empty()) {
+        auto tlvs = protocol::parse_tlvs(coap.payload.data(), coap.payload.size());
+        for (const auto &t : tlvs) {
+          if (t.tag == TLV_ZONE_PEER_URL_P_8400 || t.tag == TLV_EXTUI_TARGET_URL_P) {
+            std::string url((const char *)t.value.data(), t.value.size());
+            config_.target_url_p = url;
+            if (protocol::parse_mac_from_coap_url(url, config_.peer_va_mac)) {
+              config_.peer_va_known = true;
+              ESP_LOGI(TAG, "[%s] Extracted peer VA MAC from zone config: %02X:%02X:%02X:%02X:%02X:%02X:%02X:%02X",
+                       config_.serial_no.c_str(),
+                       config_.peer_va_mac[7], config_.peer_va_mac[6], config_.peer_va_mac[5], config_.peer_va_mac[4],
+                       config_.peer_va_mac[3], config_.peer_va_mac[2], config_.peer_va_mac[1], config_.peer_va_mac[0]);
+            }
+          }
+        }
+      }
+
       if (has_block2 && b2_more) {
         config_.zone_config_block = b2_num + 1;
         std::string z_cfg_path = "h/" + std::to_string(config_.home_id) + "/z/" + std::to_string(config_.zone_id) + "/config";
@@ -1028,6 +1105,11 @@ void RUStateMachine::handle_coap_message(const ParsedCoAP &coap, const ParsedMac
       }
     }
     emit_coap_ack_response(COAP_CODE_CHANGED, coap, mac, rx_key, nullptr, 0, outbound_frames);
+    if (is_con_dup) {
+      ESP_LOGD(TAG, "[%s] Replayed 2.04 Changed ACK for duplicate PUT /d/config MID=0x%04X",
+               config_.serial_no.c_str(), coap.mid);
+      return;
+    }
     ESP_LOGI(TAG, "[%s] Updated from PUT /d/config: zone_id=%lu, role=0x%02X, home_id=%lu, replied 2.04 Changed",
              config_.serial_no.c_str(), (unsigned long)config_.zone_id, config_.zone_role, (unsigned long)config_.home_id);
 
@@ -1060,6 +1142,9 @@ void RUStateMachine::handle_coap_message(const ParsedCoAP &coap, const ParsedMac
         config_.target_url_s.assign((const char *)t.value.data(), t.value.size());
       } else if (t.tag == TLV_EXTUI_TARGET_URL_P) {
         config_.target_url_p.assign((const char *)t.value.data(), t.value.size());
+        if (protocol::parse_mac_from_coap_url(config_.target_url_p, config_.peer_va_mac)) {
+          config_.peer_va_known = true;
+        }
       }
     }
     emit_coap_ack_response(COAP_CODE_CREATED, coap, mac, rx_key, nullptr, 0, outbound_frames);
@@ -1099,12 +1184,21 @@ void RUStateMachine::handle_coap_message(const ParsedCoAP &coap, const ParsedMac
   if (coap.code == COAP_CODE_GET && (coap.uri_path == "z/s" || coap.uri_path.rfind("z/s", 0) == 0)) {
     std::vector<uint8_t> zs_tlv = protocol::build_z_s_tlv(config_.zone_mode, config_.zone_id, config_.setpoint_temp_celsius);
     emit_coap_ack_response(COAP_CODE_CONTENT, coap, mac, rx_key, zs_tlv.data(), zs_tlv.size(), outbound_frames);
-    ESP_LOGI(TAG, "[%s] Responded to GET /z/s with setpoint=%.2fC", config_.serial_no.c_str(), config_.setpoint_temp_celsius);
+    if (is_con_dup) {
+      ESP_LOGD(TAG, "[%s] Responded to duplicate GET /z/s MID=0x%04X with setpoint=%.2fC",
+               config_.serial_no.c_str(), coap.mid, config_.setpoint_temp_celsius);
+    } else {
+      ESP_LOGI(TAG, "[%s] Responded to GET /z/s with setpoint=%.2fC", config_.serial_no.c_str(), config_.setpoint_temp_celsius);
+    }
     return;
   }
 
   // Case 11: Inbound PUT /z/s (Zone Setpoint Update)
   if (coap.code == COAP_CODE_PUT && (coap.uri_path == "z/s" || coap.uri_path.rfind("z/s", 0) == 0)) {
+    float prev_sp = config_.setpoint_temp_celsius;
+    uint8_t prev_mode = config_.zone_mode;
+    uint8_t prev_demand = config_.current_demand_percent;
+
     auto tlvs = protocol::parse_tlvs(coap.payload.data(), coap.payload.size());
     for (const auto &t : tlvs) {
       if ((t.tag == TLV_ZONE_TARGET_TEMP_6200 || t.tag == TLV_ZONE_OVERLAY_TEMP_6280) && t.value.size() >= 2) {
@@ -1116,6 +1210,13 @@ void RUStateMachine::handle_coap_message(const ParsedCoAP &coap, const ParsedMac
     }
 
     emit_coap_ack_response(COAP_CODE_CHANGED, coap, mac, rx_key, nullptr, 0, outbound_frames);
+
+    if (is_con_dup) {
+      ESP_LOGD(TAG, "[%s] Replayed 2.04 Changed ACK for duplicate PUT /z/s MID=0x%04X (setpoint=%.2fC)",
+               config_.serial_no.c_str(), coap.mid, config_.setpoint_temp_celsius);
+      return;
+    }
+
     ESP_LOGI(TAG, "[%s] Processed PUT /z/s: mode=%d setpoint=%.2fC -> replied 2.04 Changed",
              config_.serial_no.c_str(), config_.zone_mode, config_.setpoint_temp_celsius);
 
@@ -1131,22 +1232,27 @@ void RUStateMachine::handle_coap_message(const ParsedCoAP &coap, const ParsedMac
     }
     config_.current_demand_percent = demand;
 
-    // Trigger immediate updates: /h/{home_id}/z/{zone_id}/act and /z/p
-    if (config_.home_id > 0 && config_.zone_id > 0) {
-      std::string act_path = "h/" + std::to_string(config_.home_id) + "/z/" + std::to_string(config_.zone_id) + "/act";
-      std::vector<uint8_t> act_tlv = protocol::build_z_act_tlv(demand);
-      OutboundFrame act_frame = build_encrypted_coap_frame(COAP_TYPE_CON, COAP_CODE_PUT, act_path,
-                                                          act_tlv.data(), act_tlv.size(), config_.ib_mac);
-      if (!act_frame.empty()) outbound_frames.push_back(std::move(act_frame));
-    }
+    bool sp_changed = (std::abs(config_.setpoint_temp_celsius - prev_sp) > 0.05f) || (config_.zone_mode != prev_mode);
+    bool demand_changed = (demand != prev_demand);
 
-    if (config_.is_measuring_leader) {
-      std::vector<uint8_t> zp_tlv = protocol::build_z_p_tlv(config_.target_temp_celsius, config_.target_humidity_pct, config_.current_demand_percent);
-      std::string zp_query = (config_.zone_id > 0) ? ("lid=" + std::to_string(config_.zone_id)) : "";
-      OutboundFrame zp_frame = build_encrypted_coap_frame(COAP_TYPE_CON, COAP_CODE_PUT, "z/p",
-                                                          zp_tlv.data(), zp_tlv.size(), config_.ib_mac,
-                                                          -1, 4, 0, 1800, zp_query);
-      if (!zp_frame.empty()) outbound_frames.push_back(std::move(zp_frame));
+    // Only trigger immediate updates if setpoint or demand actually changed
+    if (sp_changed || demand_changed) {
+      if (config_.home_id > 0 && config_.zone_id > 0) {
+        std::string act_path = "h/" + std::to_string(config_.home_id) + "/z/" + std::to_string(config_.zone_id) + "/act";
+        std::vector<uint8_t> act_tlv = protocol::build_z_act_tlv(demand);
+        OutboundFrame act_frame = build_encrypted_coap_frame(COAP_TYPE_CON, COAP_CODE_PUT, act_path,
+                                                            act_tlv.data(), act_tlv.size(), config_.ib_mac);
+        if (!act_frame.empty()) outbound_frames.push_back(std::move(act_frame));
+      }
+
+      if (config_.is_measuring_leader) {
+        std::vector<uint8_t> zp_tlv = protocol::build_z_p_tlv(config_.target_temp_celsius, config_.target_humidity_pct, config_.current_demand_percent);
+        std::string zp_query = (config_.zone_id > 0) ? ("lid=" + std::to_string(config_.zone_id)) : "";
+        OutboundFrame zp_frame = build_encrypted_coap_frame(COAP_TYPE_CON, COAP_CODE_PUT, "z/p",
+                                                            zp_tlv.data(), zp_tlv.size(), config_.ib_mac,
+                                                            -1, 4, 0, 1800, zp_query);
+        if (!zp_frame.empty()) outbound_frames.push_back(std::move(zp_frame));
+      }
     }
     return;
   }
@@ -1234,7 +1340,8 @@ OutboundFrame RUStateMachine::build_encrypted_coap_frame(uint8_t type, uint8_t c
                                                              fc, is_op, is_routed);
 
   uint8_t seq = config_.seq_num++;
-  std::vector<uint8_t> hdr = protocol::build_mac_header(seq, config_.mac_addr, dst, (type == COAP_TYPE_CON));
+  const uint8_t *mac_dst = is_routed ? config_.ib_mac : dst;
+  std::vector<uint8_t> hdr = protocol::build_mac_header(seq, config_.mac_addr, mac_dst, (type == COAP_TYPE_CON));
 
   const uint8_t *key = config_.has_op_key ? config_.op_key : PAIRING_KEY;
   std::vector<uint8_t> frame = protocol::encrypt_ccm(hdr.data(), pt.data(), pt.size(), key);

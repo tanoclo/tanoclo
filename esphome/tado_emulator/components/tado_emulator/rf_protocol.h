@@ -114,7 +114,8 @@ enum TLVTag : uint16_t {
   TLV_ZONE_BINDING_015E = 0x015e,
   TLV_DEVICE_UI_FLAGS_0158 = 0x0158,
   TLV_DEVICE_FALLBACK_0182 = 0x0182,
-  TLV_ZONE_FALLBACK_6460 = 0x6460
+  TLV_ZONE_FALLBACK_6460 = 0x6460,
+  TLV_ZONE_PEER_URL_P_8400 = 0x8400
 };
 
 // Decoded Frame Structures
@@ -254,6 +255,7 @@ std::vector<uint8_t> build_d_info_tlv(const std::string &serial_no, uint16_t fw_
 std::vector<uint8_t> build_z_extui_tlv(const std::string &url_s, const std::string &url_p);
 std::vector<uint8_t> build_z_s_tlv(uint8_t mode, uint8_t zone_id, float target_temp_c);
 std::vector<uint8_t> build_d_config_tlv(uint32_t home_id, uint8_t zone_id = 0, uint8_t zone_role = 0x02);
+bool parse_mac_from_coap_url(const std::string &url, uint8_t *out_mac);
 
 } // namespace protocol
 } // namespace tado_emulator

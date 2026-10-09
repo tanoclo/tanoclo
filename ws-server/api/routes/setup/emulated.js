@@ -9,6 +9,7 @@ const crypto = require('crypto');
 const http = require('http');
 const router = express.Router();
 const dbDevices = require('../../../lib/db-devices');
+const dbUtils = require('../../../lib/db-utils');
 const db = require('../../../lib/db');
 const commandApi = require('../../../lib/command-api');
 
@@ -573,26 +574,16 @@ router.get('/devices/:serialNo/state', async (req, res) => {
         let zoneId = null;
         let peers = [];
         const dbDev = await dbDevices.getDeviceByFullSerial(serialNo) || await dbDevices.getDeviceBySerial(serialNo);
-        if (dbDev && dbDev.zone_id) {
+        if (dbDev && dbDev.zone_id && dbDev.home_id) {
             zoneId = parseInt(dbDev.zone_id, 10);
             try {
-                if (db && db.getPool) {
-                    const [peerRows] = await db.getPool().execute(
-                        "SELECT serial_no, ipv6_address FROM devices WHERE home_id = ? AND zone_id = ? AND serial_no != ? AND (device_type LIKE 'VA%' OR device_type LIKE 'RU%' OR device_type LIKE 'WR%')",
-                        [dbDev.home_id, dbDev.zone_id, serialNo]
-                    );
-                    if (peerRows && peerRows.length > 0) {
-                        for (const row of peerRows) {
-                            if (row.ipv6_address) {
-                                let ip = row.ipv6_address;
-                                if (!ip.startsWith('coap://')) ip = `coap://[${ip}]/z/p`;
-                                peers.push(ip);
-                            }
-                        }
-                    }
+                const zoneFields = await dbUtils.buildZoneConfigFields(dbDev.home_id, zoneId);
+                if (zoneFields && zoneFields['0x8400']) {
+                    const zps = zoneFields['0x8400'];
+                    peers = Array.isArray(zps) ? zps : [zps];
                 }
             } catch (pErr) {
-                console.warn(`[Emulated] Error querying peers for ${serialNo}: ${pErr.message}`);
+                console.warn(`[Emulated] Error resolving zone peers for ${serialNo}: ${pErr.message}`);
             }
         }
 
@@ -763,6 +754,34 @@ router.post('/devices/:serialNo/sync', async (req, res) => {
         }
         let resolvedFactoryKey = emDev.factory_key || (dbDev && (dbDev.factory_key || dbDev.field_0007)) || null;
 
+        let peerVaMac = null;
+        if (dbDev && dbDev.zone_id && homeId) {
+            try {
+                const zoneFields = await dbUtils.buildZoneConfigFields(homeId, dbDev.zone_id);
+                if (zoneFields) {
+                    const candidates = [];
+                    if (zoneFields['0x6040'] && typeof zoneFields['0x6040'] === 'string') {
+                        candidates.push(zoneFields['0x6040']);
+                    }
+                    if (zoneFields['0x8400']) {
+                        const zps = Array.isArray(zoneFields['0x8400']) ? zoneFields['0x8400'] : [zoneFields['0x8400']];
+                        for (const u of zps) {
+                            if (typeof u === 'string' && !candidates.includes(u)) candidates.push(u);
+                        }
+                    }
+                    for (const candUrl of candidates) {
+                        const candMac = deriveMacFromIpv6(candUrl);
+                        if (candMac && (!devMac || !candMac.equals(devMac))) {
+                            peerVaMac = candMac.toString('hex');
+                            break;
+                        }
+                    }
+                }
+            } catch (vaErr) {
+                console.warn(`[Emulated] Error querying peer VA for ${serialNo}: ${vaErr.message}`);
+            }
+        }
+
         const syncPayload = {
             cmd: 'sync',
             api_key: apiKey,
@@ -772,6 +791,7 @@ router.post('/devices/:serialNo/sync', async (req, res) => {
             ib_ipv6: ibIpv6,
             ib_mac: ibMacHex,
             ib_pan: ibPanNum,
+            peer_va_mac: peerVaMac,
             factory_key: resolvedFactoryKey,
             op_key: resolvedOpKey,
             home_id: homeId ? parseInt(homeId, 10) : 0,

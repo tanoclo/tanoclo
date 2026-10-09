@@ -154,7 +154,11 @@ async function sendCoAPWithBlock2(ws, coapMsg, fullPayload, etag, contentFormat,
 
     if (more === 0) {
         log('debug', `Finished multi-block session for ${sessionKey}`);
-        downlinkBlockSessions.delete(sessionKey);
+        setTimeout(() => {
+            if (downlinkBlockSessions.get(sessionKey) === session) {
+                downlinkBlockSessions.delete(sessionKey);
+            }
+        }, 15000);
     } else {
         log('debug', `Sent block ${clientBlock.num} for ${sessionKey} (${chunk.length} bytes, more=${more})`);
     }

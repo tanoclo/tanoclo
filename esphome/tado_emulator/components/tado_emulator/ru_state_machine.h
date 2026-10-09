@@ -128,6 +128,8 @@ struct EmulatedDeviceConfig {
   bool child_lock{false};
   std::string target_url_p{"coap://"};
   std::string target_url_s{"coap://"};
+  uint8_t peer_va_mac[8]{0};            // 8-byte MAC of peer Valve Actuator in zone (for routed z/p)
+  bool peer_va_known{false};
   uint8_t zone_mode{1};                 // 1 = heating
   int16_t temp_offset_raw{0};           // 0x0140 temperature offset (s16be, scale 0.01°C)
   uint8_t current_demand_percent{0};    // 0x40a0 calculated heating demand
@@ -187,6 +189,8 @@ class RUStateMachine {
   // Request MAC ACK deduplication helpers
   bool is_mac_acked_request(uint16_t mid) const;
   void record_mac_acked_mid(uint16_t mid);
+  bool is_inbound_con_duplicate(uint16_t mid) const;
+  void record_inbound_con(uint16_t mid);
   void track_outbound_response(uint8_t seq, uint16_t mid);
 
   // Frame building helpers
@@ -208,6 +212,7 @@ class RUStateMachine {
   EmulatedDeviceConfig config_;
   std::vector<PendingResponseAck> pending_response_acks_;
   std::vector<AcknowledgedRequest> mac_acked_requests_;
+  std::vector<AcknowledgedRequest> inbound_con_history_;
   SixLoWPANReassembly fragment_reassembly_;
 
   void handle_fragment(const ParsedMac &mac, const uint8_t *decrypted, size_t len,

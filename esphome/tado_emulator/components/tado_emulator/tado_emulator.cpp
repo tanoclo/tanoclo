@@ -276,8 +276,11 @@ void TadoEmulatorComponent::process_queued_packet(const RxPacket &pkt) {
                      cfg.serial_no.c_str(), (unsigned long)dev.get_config().zone_id, dev.get_config().is_measuring_leader,
                      dev.get_config().setpoint_temp_celsius, dev.get_config().zone_mode);
           }
-          for (const auto &frame : outbound) {
-            transmit_frame(frame);
+          for (size_t i = 0; i < outbound.size(); i++) {
+            if (i > 0) {
+              vTaskDelay(pdMS_TO_TICKS(40));
+            }
+            transmit_frame(outbound[i]);
           }
         }
       }
@@ -708,6 +711,12 @@ void TadoEmulatorComponent::handle_cmd_request(AsyncWebServerRequest *request, c
       cfg.ib_mac_known = true;
     }
 
+    std::string peer_va_hex = json_get_str(body, "peer_va_mac");
+    if (!peer_va_hex.empty()) {
+      hex_to_bytes(peer_va_hex, cfg.peer_va_mac, 8);
+      cfg.peer_va_known = true;
+    }
+
     cfg.setpoint_temp_celsius = (float)json_get_num(body, "setpoint_temp_celsius", cfg.setpoint_temp_celsius);
     cfg.zone_mode = (uint8_t)json_get_num(body, "zone_mode", cfg.zone_mode);
 
@@ -731,6 +740,10 @@ void TadoEmulatorComponent::handle_cmd_request(AsyncWebServerRequest *request, c
           if (!cfg.ib_mac_known && old.ib_mac_known) {
             std::memcpy(cfg.ib_mac, old.ib_mac, 8);
             cfg.ib_mac_known = true;
+          }
+          if (!cfg.peer_va_known && old.peer_va_known) {
+            std::memcpy(cfg.peer_va_mac, old.peer_va_mac, 8);
+            cfg.peer_va_known = true;
           }
           if (cfg.home_id == 0 && old.home_id != 0) {
             cfg.home_id = old.home_id;

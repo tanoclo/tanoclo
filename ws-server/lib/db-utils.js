@@ -291,9 +291,8 @@ function sortZoneConfigFields(fields) {
     return sorted;
 }
 
-async function buildZoneConfigTLV(homeId, zoneId) {
-    if (!homeId) throw new Error('homeId is required for buildZoneConfigTLV');
-    const tlv = require('./tlv');
+async function buildZoneConfigFields(homeId, zoneId) {
+    if (!homeId) throw new Error('homeId is required for buildZoneConfigFields');
     const p = getPool();
     const [rows] = await p.execute(
         'SELECT last_config_json, dazzle_enabled, open_window_enabled, open_window_timeout, field_60a0, field_6080, field_6340, field_60c0, measuring_device_serial, heating_circuit FROM zones WHERE id = ? AND home_id = ?',
@@ -400,7 +399,14 @@ async function buildZoneConfigTLV(homeId, zoneId) {
         fields['0x6340'] = parseInt(rows[0].field_6340, 10);
     }
 
-    fields = cleanFriendlyConfig(fields);
+    return cleanFriendlyConfig(fields);
+}
+
+async function buildZoneConfigTLV(homeId, zoneId) {
+    if (!homeId) throw new Error('homeId is required for buildZoneConfigTLV');
+    const tlv = require('./tlv');
+    const fields = await buildZoneConfigFields(homeId, zoneId);
+    if (!fields) return null;
     const sorted = sortZoneConfigFields(fields);
     return tlv.encodeFromFields(sorted);
 }
@@ -453,6 +459,7 @@ module.exports = {
     buildDeviceConfigTLV,
     buildDeviceSensorTLV,
     buildDeviceActuatorTLV,
+    buildZoneConfigFields,
     buildZoneConfigTLV,
     buildHvacConfigTLV,
     buildCircuitConfigTLV

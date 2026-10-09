@@ -1354,6 +1354,55 @@ std::vector<uint8_t> build_d_config_tlv(uint32_t home_id, uint8_t zone_id, uint8
   return tlv;
 }
 
+bool parse_mac_from_coap_url(const std::string &url, uint8_t *out_mac) {
+  if (!out_mac || url.empty()) return false;
+  size_t start = url.find('[');
+  size_t end = url.find(']');
+  if (start == std::string::npos || end == std::string::npos || end <= start) return false;
+
+  std::string ip = url.substr(start + 1, end - start - 1);
+  std::vector<std::string> parts;
+  std::string token;
+  for (char c : ip) {
+    if (c == ':') {
+      if (!token.empty()) {
+        parts.push_back(token);
+        token.clear();
+      }
+    } else {
+      token.push_back(c);
+    }
+  }
+  if (!token.empty()) parts.push_back(token);
+
+  if (parts.size() < 4) return false;
+
+  uint8_t iid[8];
+  for (int i = 0; i < 4; i++) {
+    const std::string &hex_part = parts[parts.size() - 4 + i];
+    unsigned int val = 0;
+    if (sscanf(hex_part.c_str(), "%x", &val) != 1) return false;
+    iid[i * 2] = (val >> 8) & 0xFF;
+    iid[i * 2 + 1] = val & 0xFF;
+  }
+
+  // Convert Modified EUI-64 IID to wire LE MAC
+  out_mac[0] = iid[7];
+  out_mac[1] = iid[6];
+  out_mac[2] = iid[5];
+  out_mac[3] = iid[4];
+  out_mac[4] = iid[3];
+  out_mac[5] = iid[2];
+  out_mac[6] = iid[1];
+  out_mac[7] = iid[0] ^ 0x02;
+
+  // Validate non-zero
+  for (int i = 0; i < 8; i++) {
+    if (out_mac[i] != 0) return true;
+  }
+  return false;
+}
+
 } // namespace protocol
 } // namespace tado_emulator
 } // namespace esphome
