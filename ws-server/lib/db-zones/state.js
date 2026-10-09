@@ -687,8 +687,8 @@ async function insertCircuitMeasurement(homeId, circuitNumber, circuitFields = {
         if (hRows.length > 0) hRow = hRows[0];
     } catch (e) {}
 
-    const refTemp = (circuitFields['0x4000'] !== undefined ? circuitFields['0x4000'] : (circuitFields.field_4000 !== undefined ? circuitFields.field_4000 : cRow?.field_4000)) ?? null;
-    const targetTemp = (circuitFields['0x4040'] !== undefined ? circuitFields['0x4040'] : (circuitFields.field_4040 !== undefined ? circuitFields.field_4040 : cRow?.field_4040)) ?? null;
+    const targetTemp = (circuitFields['0x4000'] !== undefined ? circuitFields['0x4000'] : (circuitFields.field_4000 !== undefined ? circuitFields.field_4000 : cRow?.field_4000)) ?? null;
+    const refTemp = (circuitFields['0x4040'] !== undefined ? circuitFields['0x4040'] : (circuitFields.field_4040 !== undefined ? circuitFields.field_4040 : cRow?.field_4040)) ?? null;
     const demand = (circuitFields['0x4080'] !== undefined ? circuitFields['0x4080'] : (circuitFields.field_4080 !== undefined ? circuitFields.field_4080 : cRow?.field_4080)) ?? null;
     const mode = (circuitFields['0x2090'] !== undefined ? circuitFields['0x2090'] : (circuitFields.field_2090 !== undefined ? circuitFields.field_2090 : cRow?.field_2090)) ?? null;
     const dhwMaxFlow = (circuitFields['0x2040'] !== undefined ? circuitFields['0x2040'] : (circuitFields.field_2040 !== undefined ? circuitFields.field_2040 : cRow?.field_2040)) ?? null;
@@ -708,7 +708,7 @@ async function insertCircuitMeasurement(homeId, circuitNumber, circuitFields = {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
             homeId, circuitNumber, now,
-            refTemp, targetTemp, demand, mode, dhwMaxFlow,
+            targetTemp, refTemp, demand, mode, dhwMaxFlow,
             chFlowTemp, chReturnTemp, setpoint, modulation, flameActive, waterPressure
         ]
     );

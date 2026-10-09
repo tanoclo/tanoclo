@@ -52,4 +52,5 @@ export const SWR_KEYS = {
   boilerDetails: (homeId) => `/homes/${homeId}/heatingSystem/boiler`,
   heatingCircuits: (homeId) => `/homes/${homeId}/heatingCircuits`,
   supplyTempOptimization: (homeId) => `/homes/${homeId}/supplyTemperatureOptimization`,
+  supplyTempHistory: (homeId) => `/homes/${homeId}/supplyTemperatureHistory`,
 };

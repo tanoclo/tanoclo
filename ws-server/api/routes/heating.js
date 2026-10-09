@@ -44,11 +44,37 @@ const getFlowTempOpt = async (req, res) => {
         const maxTempLimit = settings ? parseInt(settings.max_flow_temperature_limit || 80, 10) : 80;
         const autoAdapt = settings ? Boolean(settings.auto_adaptation_enabled) : false;
 
+        // Fetch live boiler metrics & latest history
+        const [boilerRows] = await pool.execute(
+            'SELECT field_044c, field_044d, field_0452 FROM heating_systems WHERE home_id = ? LIMIT 1',
+            [homeId]
+        );
+        const liveFlowTemp = boilerRows.length > 0 && boilerRows[0].field_044c !== null ? parseFloat(boilerRows[0].field_044c) : null;
+        const liveReturnTemp = boilerRows.length > 0 && boilerRows[0].field_044d !== null ? parseFloat(boilerRows[0].field_044d) : null;
+        const liveModulation = boilerRows.length > 0 && boilerRows[0].field_0452 !== null ? parseInt(boilerRows[0].field_0452, 10) : null;
+
+        const [histRows] = await pool.execute(
+            'SELECT * FROM flow_temperature_history WHERE home_id = ? ORDER BY id DESC LIMIT 1',
+            [homeId]
+        );
+        const latestHist = histRows.length > 0 ? histRows[0] : null;
+
         res.json({
             hasMultipleBoilerControlDevices: false,
             maxFlowTemperature: maxTemp,
+            minFlowTemperature: minTemp,
+            maxFlowTemperatureLimit: maxTempLimit,
             maxFlowTemperatureConstraints: { min: minTemp, max: maxTempLimit },
-            autoAdaptation: { enabled: autoAdapt, maxFlowTemperature: null },
+            autoAdaptation: {
+                enabled: autoAdapt,
+                maxFlowTemperature: autoAdapt ? maxTemp : null,
+                currentActualFlowTemperature: liveFlowTemp,
+                currentReturnTemperature: liveReturnTemp,
+                currentModulation: liveModulation,
+                currentOutsideTemperature: latestHist ? parseFloat(latestHist.outside_temp) : null,
+                lastReason: latestHist ? latestHist.reason : null,
+                lastOptimized: latestHist ? latestHist.timestamp : null
+            },
             openThermDeviceSerialNumber: serialNo
         });
     } catch (err) {
@@ -60,7 +86,7 @@ const getFlowTempOpt = async (req, res) => {
 const putFlowTempOpt = async (req, res) => {
     try {
         const { homeId } = req.params;
-        const data = req.body;
+        const data = req.body || {};
         const pool = db.getPool();
 
         const [existingRows] = await pool.execute('SELECT * FROM flow_temperature_settings WHERE home_id = ?', [homeId]);
@@ -75,13 +101,83 @@ const putFlowTempOpt = async (req, res) => {
             autoAdapt = parseInt(existing.auto_adaptation_enabled, 10);
         }
 
-        if (data.maxFlowTemperature !== undefined) temp = parseInt(data.maxFlowTemperature, 10);
-        if (data.autoAdaptation && data.autoAdaptation.enabled !== undefined) autoAdapt = data.autoAdaptation.enabled ? 1 : 0;
+        if (data.minFlowTemperature !== undefined) {
+            minTemp = parseInt(data.minFlowTemperature, 10);
+        } else if (data.maxFlowTemperatureConstraints && data.maxFlowTemperatureConstraints.min !== undefined) {
+            minTemp = parseInt(data.maxFlowTemperatureConstraints.min, 10);
+        }
+
+        if (data.maxFlowTemperatureLimit !== undefined) {
+            maxLimit = parseInt(data.maxFlowTemperatureLimit, 10);
+        } else if (data.maxFlowTemperatureConstraints && data.maxFlowTemperatureConstraints.max !== undefined) {
+            maxLimit = parseInt(data.maxFlowTemperatureConstraints.max, 10);
+        }
+
+        // Clamp guardrails
+        minTemp = Math.max(20, Math.min(minTemp, 50));
+        maxLimit = Math.max(minTemp, Math.min(maxLimit, 85));
+
+        if (data.maxFlowTemperature !== undefined) {
+            temp = parseInt(data.maxFlowTemperature, 10);
+        }
+        temp = Math.max(minTemp, Math.min(maxLimit, temp));
+
+        if (data.autoAdaptation && data.autoAdaptation.enabled !== undefined) {
+            autoAdapt = data.autoAdaptation.enabled ? 1 : 0;
+        }
 
         await pool.execute(
             'REPLACE INTO flow_temperature_settings (home_id, max_flow_temperature, min_flow_temperature, max_flow_temperature_limit, auto_adaptation_enabled) VALUES (?, ?, ?, ?, ?)',
             [homeId, temp, minTemp, maxLimit, autoAdapt]
         );
+
+        // Dynamically determine target circuit(s) for the home
+        const { circuitId } = req.params;
+        const [circRows] = await pool.execute(
+            'SELECT number, driver_serial_no FROM heating_circuits WHERE home_id = ? ORDER BY number ASC',
+            [homeId]
+        );
+
+        let targetCircuitNumbers = [];
+        const requestedNum = circuitId !== undefined ? parseInt(circuitId, 10) : null;
+
+        if (requestedNum !== null && !isNaN(requestedNum) && requestedNum > 0 && circRows.some(r => r.number === requestedNum)) {
+            targetCircuitNumbers.push(requestedNum);
+        } else if (circRows.length > 0) {
+            const driverCircuit = circRows.find(r => r.driver_serial_no);
+            if (driverCircuit) {
+                targetCircuitNumbers.push(driverCircuit.number);
+            } else {
+                targetCircuitNumbers = circRows.map(r => r.number);
+            }
+        } else {
+            const [devCircRows] = await pool.execute(
+                `SELECT z.heating_circuit 
+                 FROM devices d 
+                 JOIN zones z ON d.zone_id = z.id 
+                 WHERE d.home_id = ? AND d.device_type IN ('RU01', 'RU02', 'BU01') AND z.heating_circuit IS NOT NULL LIMIT 1`,
+                [homeId]
+            );
+            if (devCircRows.length > 0 && devCircRows[0].heating_circuit) {
+                targetCircuitNumbers.push(parseInt(devCircRows[0].heating_circuit, 10));
+            } else {
+                targetCircuitNumbers.push(1);
+            }
+        }
+
+        for (const cNum of targetCircuitNumbers) {
+            await db.updateCircuitConfig(homeId, cNum, { '0x2040': temp });
+        }
+
+        // If auto adaptation is enabled, trigger immediate evaluation
+        if (autoAdapt) {
+            try {
+                const flowOptimizer = require('../../lib/flow-optimizer');
+                flowOptimizer.evaluateHome(homeId).catch(() => {});
+            } catch (optErr) {
+                _log('warn', `Immediate flow optimizer evaluation trigger failed: ${optErr.message}`);
+            }
+        }
 
         res.status(204).end();
     } catch (err) {
@@ -90,19 +186,50 @@ const putFlowTempOpt = async (req, res) => {
     }
 };
 
-// GET /api/v2/homes/{homeId}/heatingCircuits/0/flowTemperatureOptimization
+const getFlowTempHistory = async (req, res) => {
+    try {
+        const { homeId } = req.params;
+        const limit = Math.min(parseInt(req.query.limit || 50, 10), 288);
+        const pool = db.getPool();
+
+        const [rows] = await pool.execute(
+            'SELECT * FROM flow_temperature_history WHERE home_id = ? ORDER BY id DESC LIMIT ?',
+            [homeId, limit]
+        );
+
+        res.json({
+            homeId,
+            history: rows.reverse()
+        });
+    } catch (err) {
+        _log('error', `GET flowTemperatureHistory failed: ${err.message}\n${err.stack}`);
+        res.status(500).json({ error: 'internal_error' });
+    }
+};
+
+// GET flow temperature optimization
+router.get('/:homeId/heatingCircuits/:circuitId/flowTemperatureOptimization', getFlowTempOpt);
+router.get('/:homeId/heatingCircuits/:circuitId/supplyTemperatureOptimization', getFlowTempOpt);
 router.get('/:homeId/heatingCircuits/0/flowTemperatureOptimization', getFlowTempOpt);
 router.get('/:homeId/heatingCircuits/0/supplyTemperatureOptimization', getFlowTempOpt);
-// GET /api/v2/homes/{homeId}/flowTemperatureOptimization
 router.get('/:homeId/flowTemperatureOptimization', getFlowTempOpt);
 router.get('/:homeId/supplyTemperatureOptimization', getFlowTempOpt);
 
-// PUT /api/v2/homes/{homeId}/heatingCircuits/0/flowTemperatureOptimization
+// PUT flow temperature optimization
+router.put('/:homeId/heatingCircuits/:circuitId/flowTemperatureOptimization', putFlowTempOpt);
+router.put('/:homeId/heatingCircuits/:circuitId/supplyTemperatureOptimization', putFlowTempOpt);
 router.put('/:homeId/heatingCircuits/0/flowTemperatureOptimization', putFlowTempOpt);
 router.put('/:homeId/heatingCircuits/0/supplyTemperatureOptimization', putFlowTempOpt);
-// PUT /api/v2/homes/{homeId}/flowTemperatureOptimization
 router.put('/:homeId/flowTemperatureOptimization', putFlowTempOpt);
 router.put('/:homeId/supplyTemperatureOptimization', putFlowTempOpt);
+
+// GET History endpoints
+router.get('/:homeId/heatingCircuits/:circuitId/flowTemperatureHistory', getFlowTempHistory);
+router.get('/:homeId/heatingCircuits/:circuitId/supplyTemperatureHistory', getFlowTempHistory);
+router.get('/:homeId/heatingCircuits/0/flowTemperatureHistory', getFlowTempHistory);
+router.get('/:homeId/heatingCircuits/0/supplyTemperatureHistory', getFlowTempHistory);
+router.get('/:homeId/flowTemperatureHistory', getFlowTempHistory);
+router.get('/:homeId/supplyTemperatureHistory', getFlowTempHistory);
 
 async function getRunningTimes(req, res) {
     try {

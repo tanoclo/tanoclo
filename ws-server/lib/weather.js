@@ -73,12 +73,14 @@ function mapPollenToTado(count) {
     return 'VERY_HIGH';
 }
 
+const _forecastCache = new Map(); // homeId -> { hourly: number[], ts: number }
+
 /**
  * Fetches and updates weather for a specific home
  */
 async function updateHomeWeather(homeId, lat, lon) {
     try {
-        const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,shortwave_radiation&timezone=auto`;
+        const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,shortwave_radiation&hourly=temperature_2m&forecast_hours=6&timezone=auto`;
         const aqiUrl = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=us_aqi,alder_pollen,birch_pollen,grass_pollen,mugwort_pollen,olive_pollen,ragweed_pollen`;
 
         log('debug', `Fetching weather & AQI for Home ${homeId} (${lat}, ${lon})`);
@@ -112,6 +114,13 @@ async function updateHomeWeather(homeId, lat, lon) {
             olive: mapPollenToTado(aData.current.olive_pollen)
         };
 
+        if (wData.hourly && Array.isArray(wData.hourly.temperature_2m)) {
+            _forecastCache.set(homeId, {
+                hourly: wData.hourly.temperature_2m,
+                ts: Date.now()
+            });
+        }
+
         await db.saveHomeWeather(homeId, temp, solarIntensity, state, aqiVal, JSON.stringify(pollen));
         log('info', `Updated data for Home ${homeId}: ${temp}°C, ${state}, AQI: ${aqiLevel} (${aqiVal})`);
 
@@ -120,6 +129,10 @@ async function updateHomeWeather(homeId, lat, lon) {
         log('error', `Update weather error for Home ${homeId}: ${err.message}`);
         return false;
     }
+}
+
+function getHomeForecast(homeId) {
+    return _forecastCache.get(homeId) || null;
 }
 
 let _dailyRequests = 0;
@@ -161,5 +174,6 @@ async function updateAllHomesWeather() {
 
 module.exports = {
     updateHomeWeather,
-    updateAllHomesWeather
+    updateAllHomesWeather,
+    getHomeForecast
 };

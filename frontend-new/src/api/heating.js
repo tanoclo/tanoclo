@@ -29,6 +29,15 @@ export function updateSupplyTemperatureOptimization(homeId, settings) {
 }
 
 /**
+ * Gets supply temperature optimization history
+ * @param {string|number} homeId
+ * @param {number} [limit=50]
+ */
+export function getSupplyTemperatureHistory(homeId, limit = 50) {
+  return apiFetch(`/api/v2/homes/${homeId}/supplyTemperatureHistory?limit=${limit}`);
+}
+
+/**
  * Gets heating running times (boiler operation hours)
  * @param {string|number} homeId
  * @param {object} params - { from: 'YYYY-MM-DD', to: 'YYYY-MM-DD', aggregate: 'day'|'month', summary_only: boolean }

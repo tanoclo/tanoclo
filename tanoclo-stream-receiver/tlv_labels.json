@@ -604,11 +604,11 @@
       "notes": "OpenTherm domestic hot water setpoint upper limit/boundary (Data ID 48)"
     },
     "0x2040": {
-      "name": "circuit_dhw_max_flow_temperature",
+      "name": "circuit_max_flow_temperature",
       "type": "u16be",
       "unit": "C",
       "scale": 0.01,
-      "notes": "DHW Max Flow Temperature | Len: 2 bytes"
+      "notes": "Circuit Max Flow Temperature (CH flow ceiling for heating circuits, DHW temp for DHW circuits) | Seen in: h/*/c/1/config | Len: 2 bytes"
     },
     "0x2090": {
       "name": "circuit_mode_or_flags_2090",

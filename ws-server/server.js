@@ -381,6 +381,10 @@ async function startServer() {
         const owdDetector = require('./lib/owd-detector');
         owdDetector.init(db, commandApi, mqttPublisher, deps.onStateChange);
 
+        // Initialize Flow Temperature Optimizer
+        const flowOptimizer = require('./lib/flow-optimizer');
+        flowOptimizer.init(db, commandApi, mqttPublisher);
+
         mqttClient.onConnect(() => {
             mqttPublisher.publishFullState();
             mqttHaDiscovery.publishAllDiscovery();

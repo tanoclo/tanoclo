@@ -23080,11 +23080,11 @@ CREATE TABLE `circuit_measurements` (
   `home_id` int(11) NOT NULL,
   `circuit_number` int(11) NOT NULL,
   `timestamp` varchar(64) NOT NULL,
-  `field_4000` decimal(5,2) DEFAULT NULL COMMENT 'circuit_reference_temp',
-  `field_4040` decimal(5,2) DEFAULT NULL COMMENT 'circuit_target_temp',
+  `field_4000` decimal(5,2) DEFAULT NULL COMMENT 'circuit_target_temp',
+  `field_4040` decimal(5,2) DEFAULT NULL COMMENT 'circuit_reference_temp',
   `field_4080` int(11) DEFAULT NULL COMMENT 'circuit_demand_percent',
   `field_2090` int(11) DEFAULT NULL COMMENT 'circuit_mode_or_flags_2090',
-  `field_2040` decimal(5,2) DEFAULT NULL COMMENT 'circuit_dhw_max_flow_temperature',
+  `field_2040` decimal(5,2) DEFAULT NULL COMMENT 'circuit_max_flow_temperature',
   `field_044c` decimal(5,2) DEFAULT NULL COMMENT 'ch_flow_temperature',
   `field_044d` decimal(5,2) DEFAULT NULL COMMENT 'ch_return_temperature',
   `field_0450` decimal(5,2) DEFAULT NULL COMMENT 'control_setpoint',
@@ -23117,6 +23117,21 @@ CREATE TABLE `flow_temperature_settings` (
   `min_flow_temperature` int(11) NOT NULL,
   `max_flow_temperature_limit` int(11) NOT NULL,
   `auto_adaptation_enabled` tinyint(1) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `flow_temperature_history` (
+  `id` bigint(20) NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  `home_id` int(11) NOT NULL,
+  `timestamp` varchar(64) NOT NULL,
+  `computed_flow_temp` decimal(5,2) DEFAULT NULL,
+  `actual_flow_temp` decimal(5,2) DEFAULT NULL,
+  `outside_temp` decimal(5,2) DEFAULT NULL,
+  `max_zone_error` decimal(5,2) DEFAULT NULL,
+  `modulation_pct` int(11) DEFAULT NULL,
+  `demand_pct` int(11) DEFAULT NULL,
+  `reason` varchar(64) DEFAULT NULL,
+  KEY `idx_fth_home_ts` (`home_id`,`timestamp`),
+  KEY `idx_fth_ts` (`timestamp`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `heating_circuits` (
@@ -24615,7 +24630,7 @@ INSERT INTO `tlv_labels` (`id`, `hex_id`, `name`, `type`, `unit`, `scale`, `deci
 (100, '0x046d', 'ot_dhw_not_supported', 'bool', 'bool_or_enum', NULL, NULL, NULL, 'HVAC config flag. | Seen in: h/*/hvac/config | Len: 1 bytes', NULL),
 (101, '0x046f', 'dhw_setpoint', 'u16be', '°C', 0.01, 2, NULL, 'OpenTherm domestic hot water target setpoint (Data ID 57)', NULL),
 (102, '0x0471', 'dhw_setpoint_max', 'u16be', '°C', 0.01, NULL, NULL, 'OpenTherm domestic hot water setpoint upper limit/boundary (Data ID 48)', NULL),
-(103, '0x2040', 'circuit_dhw_max_flow_temperature', 'u16be', 'C', 0.01, NULL, NULL, 'DHW Max Flow Temperature | Len: 2 bytes', NULL),
+(103, '0x2040', 'circuit_max_flow_temperature', 'u16be', 'C', 0.01, NULL, NULL, 'Circuit Max Flow Temperature (CH flow ceiling for heating circuits, DHW temp for DHW circuits) | Seen in: h/*/c/1/config | Len: 2 bytes', NULL),
 (104, '0x2090', 'circuit_mode_or_flags_2090', 'u8', 'bitfield_or_enum', NULL, NULL, NULL, 'Circuit mode/flags. | Seen in: h/*/c/1/act | Observed values: 0, 1, 3, 4 | Len: 1 bytes | Bitfield/enum; observed values 0–4 in h/*/c/*/act.', NULL),
 (105, '0x4000', 'circuit_target_temp', 's16be', 'C', 0.01, 2, NULL, 'Circuit target temperature. | Seen in: h/*/c/1/act | Len: 2 bytes | Observed values in h/*/c/*/act consistent with target temp in cC.', NULL),
 (106, '0x4040', 'circuit_reference_temp', 's16be', 'C', 0.01, 2, NULL, 'Circuit reference/measured room temperature used by controller. Typically below/around target when demand>0.', NULL),

@@ -117,6 +117,16 @@ function start({ broadcastTime, broadcastRfKey, pushZoneOverlayDelete, pushSched
     // 9. Auto-presence evaluation (Every 1 minute)
     _intervals.push(setInterval(evaluateAllHomesPresence, 60 * 1000));
 
+    // 10. Flow Temperature Optimization (Every 5 minutes)
+    const flowOptimizer = require('./flow-optimizer');
+    _intervals.push(setInterval(async () => {
+        try {
+            await flowOptimizer.evaluateAllHomes();
+        } catch (err) {
+            log('error', `Flow temperature optimization cycle error: ${err.message}`);
+        }
+    }, 5 * 60 * 1000));
+
     // 10. Mesh Recovery Escalation Check (Every 1 minute)
     _intervals.push(setInterval(() => {
         meshRecovery.checkFallbackEscalation().catch(e => log('debug', `[cron] Fallback escalation error: ${e.message}`));
@@ -528,6 +538,9 @@ async function runCleanup() {
 
         const [res4] = await pool.execute('DELETE FROM home_weather WHERE timestamp < ?', [weatherCutoff]);
         if (res4.affectedRows > 0) log('info', `Cleaned up ${res4.affectedRows} old home weather records`);
+
+        const [resFlow] = await pool.execute('DELETE FROM flow_temperature_history WHERE timestamp < ?', [new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString()]);
+        if (resFlow.affectedRows > 0) log('info', `Cleaned up ${resFlow.affectedRows} old flow temperature history records`);
 
         const [res3] = await pool.execute('DELETE FROM oauth_auth_codes WHERE expires_at < ?', [nowStr]);
         if (res3.affectedRows > 0) log('info', `Cleaned up ${res3.affectedRows} expired OAuth auth codes`);
