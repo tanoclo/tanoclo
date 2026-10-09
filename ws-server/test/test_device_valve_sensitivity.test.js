@@ -61,11 +61,16 @@ test('applyDeviceConfigOverrides - sets 0x4160 for VA devices', async () => {
         await applyDeviceConfigOverrides('VA1234567890', fieldsOverride, { valve_sensitivity: 50 });
         assert.strictEqual(fieldsOverride['0x4160'], 50);
 
-        // Values out of range (< 50 or > 100) are not applied
+        // Values out of range (< 25 or > 250) are not applied
         const fieldsInvalid = {};
-        await applyDeviceConfigOverrides('VA1234567890', fieldsInvalid, { valve_sensitivity: 40 });
+        await applyDeviceConfigOverrides('VA1234567890', fieldsInvalid, { valve_sensitivity: 20 });
         // Falls back to DB value or not applied
         assert.strictEqual(fieldsInvalid['0x4160'], 75);
+
+        // Throttling values > 100 up to 250 are applied
+        const fieldsHigh = {};
+        await applyDeviceConfigOverrides('VA1234567890', fieldsHigh, { valve_sensitivity: 150 });
+        assert.strictEqual(fieldsHigh['0x4160'], 150);
     } finally {
         api._db.getDeviceByFullSerial = originalGetDevice;
         api._db.getZoneBindingsForDevice = originalGetZoneBindings;

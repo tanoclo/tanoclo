@@ -272,8 +272,8 @@ async function setValveSensitivity(req, res) {
 
         const rawVal = req.body.valveSensitivity ?? req.body.sensitivity;
         const val = parseInt(rawVal, 10);
-        if (isNaN(val) || val < 50 || val > 100) {
-            return res.status(400).json({ error: 'invalid_value', message: 'valveSensitivity must be an integer between 50 and 100' });
+        if (isNaN(val) || val < 25 || val > 250) {
+            return res.status(400).json({ error: 'invalid_value', message: 'valveSensitivity must be an integer between 25 and 250' });
         }
 
         const pool = db.getPool();

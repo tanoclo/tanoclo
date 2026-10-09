@@ -84,7 +84,7 @@ router.post('/:homeId/balancing/apply', async (req, res) => {
             const rawVal = item.sensitivity !== undefined ? item.sensitivity : item.valveSensitivity;
             const val = parseInt(rawVal, 10);
 
-            if (!serial || isNaN(val) || val < 50 || val > 100) {
+            if (!serial || isNaN(val) || val < 25 || val > 250) {
                 continue;
             }
 

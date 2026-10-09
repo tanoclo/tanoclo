@@ -45,9 +45,7 @@ router.get('/:homeId/zones/:zoneId/openWindowDetection', async (req, res) => {
         res.json({
             supported: true,
             enabled: Boolean(zones[0].open_window_enabled),
-            timeoutInSeconds: zones[0].open_window_timeout || 900,
-            temperatureDeviationLimit: zones[0].field_6080 !== null && zones[0].field_6080 !== undefined ? parseFloat(zones[0].field_6080) : 0.50,
-            owdNvmState: zones[0].field_6340 !== null && zones[0].field_6340 !== undefined ? parseInt(zones[0].field_6340, 10) : 1
+            timeoutInSeconds: zones[0].open_window_timeout || 900
         });
     } catch (err) {
         res.status(500).json({ error: 'internal_error' });
@@ -70,7 +68,7 @@ router.put('/:homeId/zones/:zoneId/openWindowDetection', async (req, res) => {
 
         const currentEnabled = Boolean(zones[0].open_window_enabled);
         const currentTimeout = zones[0].open_window_timeout || 900;
-        const currentDeviation = zones[0].field_6080 !== null ? parseFloat(zones[0].field_6080) : 0.50;
+        const currentDeviation = zones[0].field_6080 !== null ? parseFloat(zones[0].field_6080) : 10.00;
         const currentNvmState = zones[0].field_6340 !== null ? parseInt(zones[0].field_6340, 10) : 1;
 
         const newEnabled = enabled !== undefined ? enabled : currentEnabled;
@@ -93,9 +91,7 @@ router.put('/:homeId/zones/:zoneId/openWindowDetection', async (req, res) => {
 
         res.json({
             enabled: newEnabled,
-            timeoutInSeconds: newTimeout,
-            temperatureDeviationLimit: newDeviation,
-            owdNvmState: newNvmState
+            timeoutInSeconds: newTimeout
         });
     } catch (err) {
         res.status(500).json({ error: 'internal_error' });

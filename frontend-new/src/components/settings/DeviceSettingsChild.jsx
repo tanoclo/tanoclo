@@ -127,7 +127,11 @@ export default function DeviceSettingsChild({
                     {valveSensitivity === 100 ? '1.00× (100%)' : `${(100 / (valveSensitivity || 100)).toFixed(2)}× (${valveSensitivity}%)`}
                   </span>
                   <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
-                    {valveSensitivity === 100 ? t('settings.valve_sensitivity_standard') : `+${Math.round((100 / (valveSensitivity || 100) - 1) * 100)}% boost`}
+                    {valveSensitivity === 100
+                      ? t('settings.valve_sensitivity_standard')
+                      : valveSensitivity < 100
+                        ? `+${Math.round((100 / (valveSensitivity || 100) - 1) * 100)}% boost`
+                        : `-${Math.round((1 - 100 / valveSensitivity) * 100)}% throttle`}
                   </div>
                 </div>
               </div>
@@ -135,10 +139,13 @@ export default function DeviceSettingsChild({
               {/* Quick Presets */}
               <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                 {[
-                  { label: '100% (1.00×)', val: 100 },
-                  { label: '85% (1.18×)', val: 85 },
-                  { label: '70% (1.43×)', val: 70 },
                   { label: '50% (2.00×)', val: 50 },
+                  { label: '70% (1.43×)', val: 70 },
+                  { label: '85% (1.18×)', val: 85 },
+                  { label: '100% (1.00×)', val: 100 },
+                  { label: '125% (0.80×)', val: 125 },
+                  { label: '150% (0.67×)', val: 150 },
+                  { label: '200% (0.50×)', val: 200 },
                 ].map((p) => (
                   <button
                     key={p.val}
@@ -166,8 +173,8 @@ export default function DeviceSettingsChild({
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                 <input
                   type="range"
-                  min={50}
-                  max={100}
+                  min={25}
+                  max={200}
                   step={1}
                   value={valveSensitivity || 100}
                   disabled={isReadOnly || isSavingValveSensitivity}

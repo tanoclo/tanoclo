@@ -107,12 +107,11 @@ router.get('/:homeId/zones', async (req, res) => {
                 openWindowDetection: zone.type !== 'HOT_WATER' ? {
                     supported: true,
                     enabled: Boolean(zone.open_window_enabled),
-                    timeoutInSeconds: zone.open_window_timeout || 900,
-                    temperatureDeviationLimit: zone.field_6080 !== null && zone.field_6080 !== undefined ? parseFloat(zone.field_6080) : 0.50,
-                    owdNvmState: zone.field_6340 !== null && zone.field_6340 !== undefined ? parseInt(zone.field_6340, 10) : 1
+                    timeoutInSeconds: zone.open_window_timeout || 900
                 } : { supported: false },
                 frostMinTemperature: zone.field_60a0 !== null && zone.field_60a0 !== undefined ? parseFloat(zone.field_60a0) : 5.00,
-                temperatureBaseline: zone.field_60c0 !== null && zone.field_60c0 !== undefined ? parseFloat(zone.field_60c0) : 19.00,
+                temperatureBaseline: zone.field_60c0 !== null && zone.field_60c0 !== undefined ? parseFloat(zone.field_60c0) : 15.00,
+                temperatureDeviationLimit: zone.field_6080 !== null && zone.field_6080 !== undefined ? parseFloat(zone.field_6080) : 10.00,
                 tanocloOwdEnabled: Boolean(zone.tanoclo_owd_enabled),
                 tanocloOwdSource: zone.tanoclo_owd_source || 'device',
                 offlineScheduleEnabled: Boolean(zone.offline_schedule_enabled),
@@ -474,7 +473,7 @@ router.put('/:homeId/zones/:zoneId/dazzle', async (req, res) => {
 router.put('/:homeId/zones/:zoneId/details', async (req, res) => {
     try {
         const { homeId, zoneId } = req.params;
-        const { name, frostMinTemperature, temperatureBaseline } = req.body;
+        const { name, frostMinTemperature, temperatureBaseline, temperatureDeviationLimit } = req.body;
         if (!name) return res.status(400).json({ error: 'Missing name' });
 
         const pool = db.getPool();
@@ -486,6 +485,9 @@ router.put('/:homeId/zones/:zoneId/details', async (req, res) => {
         }
         if (temperatureBaseline !== undefined && temperatureBaseline !== null) {
             configFields['0x60c0'] = parseFloat(temperatureBaseline);
+        }
+        if (temperatureDeviationLimit !== undefined && temperatureDeviationLimit !== null) {
+            configFields['0x6080'] = parseFloat(temperatureDeviationLimit);
         }
 
         if (Object.keys(configFields).length > 0) {

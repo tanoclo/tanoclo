@@ -146,17 +146,17 @@ describe('api/zones.js', () => {
     });
   });
 
-  it('updateOpenWindowDetection → PUT with all params including defaults', async () => {
+  it('updateOpenWindowDetection → PUT with defaults', async () => {
     await updateOpenWindowDetection(1, 2, true);
     expect(apiFetch).toHaveBeenCalledWith('/api/v2/homes/1/zones/2/openWindowDetection', {
-      method: 'PUT', body: { enabled: true, timeoutInSeconds: 900, temperatureDeviationLimit: 0.50, owdNvmState: 1 }
+      method: 'PUT', body: { enabled: true, timeoutInSeconds: 900 }
     });
   });
 
-  it('updateOpenWindowDetection → PUT with custom params', async () => {
-    await updateOpenWindowDetection(1, 2, false, 1800, 1.0, 0);
+  it('updateOpenWindowDetection → PUT with custom timeout', async () => {
+    await updateOpenWindowDetection(1, 2, false, 1800);
     expect(apiFetch).toHaveBeenCalledWith('/api/v2/homes/1/zones/2/openWindowDetection', {
-      method: 'PUT', body: { enabled: false, timeoutInSeconds: 1800, temperatureDeviationLimit: 1.0, owdNvmState: 0 }
+      method: 'PUT', body: { enabled: false, timeoutInSeconds: 1800 }
     });
   });
 

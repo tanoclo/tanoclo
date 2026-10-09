@@ -254,9 +254,9 @@ This dictionary consolidates all observed TLV fields, mapping their hex codes, t
 | `0x007a` | `orientation_or_overlay_state` | `u8` | 1.0 | - | `/d/{id}/sen` | `tlv_labels` | - | Device physical orientation or dial overlay state. |
 | `0x0104` | `pair_action` | `empty` | 1.0 | - | `/d/I/{id}/pair` | `tlv_labels` | - | Zero-length pairing transaction action marker during companion binding. |
 | `0x012d` | `temperature_ambient` | `s16be` | 0.01 | °C | `/d/{id}/sen` | `device_measurements` | `field_012d` | Measured room temperature. |
-| `0x012e` | `pcb_temperature` | `s16be` | 0.01 | °C | `/d/{id}/sen` | `device_measurements` | `field_012e` | Onboard MCU/PCB reference NTC thermistor (`FUN_0802bde4(0x27)`). Exposed in API `hardwareDiagnostics.pcbTemperature` and UI. |
+| `0x012e` | `pcb_temperature` | `s16be` | 0.01 | °C | `/d/{id}/sen` | `device_measurements` | `field_012e` | Onboard MCU/PCB reference NTC thermistor. Exposed in API `hardwareDiagnostics.pcbTemperature` and UI. |
 | `0x0135` | `humidity_percent` | `u16be` | 0.1 | % | `/d/{id}/sen` | `device_measurements` | `field_0135` | Room relative humidity level (raw 607 = 60.7%). |
-| `0x0136` | `ambient_light_level` | `u16be` | 1.0 | - | `/d/{id}/sen` | `device_measurements` | `field_0136` | Ambient light photodiode level (0-100, `FUN_0802bde4(2)`). Used for display auto-dimming. Exposed in API `hardwareDiagnostics.ambientLightLevel` and UI. |
+| `0x0136` | `ambient_light_level` | `u16be` | 1.0 | - | `/d/{id}/sen` | `device_measurements` | `field_0136` | Ambient light photodiode level (0-100). Used for display auto-dimming. Exposed in API `hardwareDiagnostics.ambientLightLevel` and UI. |
 | `0x0137` | `dial_encoder_steps` | `u8` | 1.0 | step | `/d/{id}/sen` | `device_measurements` | `field_0137` | Relative rotary dial encoder movement steps (resets to 0x7f after report). Exposed in MQTT `dial_encoder_steps`. |
 | `0x0140` | `temperature_offset` | `s16be` | 0.01 | °C | `/d/{id}/config` | `devices` | `field_0140` | Temperature offset in Celsius. |
 | `0x0143` | `device_flag_0143` | `bool` | 1.0 | - | `/d/{id}/config` | `devices` | `last_config_json->device_flag_0143` | Device setup flag. |
@@ -293,7 +293,7 @@ This dictionary consolidates all observed TLV fields, mapping their hex codes, t
 | `0x01b5` | `va_mount_reference_steps` | `u16be` | 1.0 | steps | `/d/{id}/mount` | `devices` | `field_01b5` | Valve learned calibration reference/offset steps. |
 | `0x01b6` | `va_mount_seatpoint_steps` | `u16be` | 1.0 | steps | `/d/{id}/mount` | `devices` | `field_01b6` | Valve learned seat/contact point steps. |
 | `0x01b8` | `va_mount_state` | `u8` | 1.0 | enum | `/d/{id}/mount` | `devices` | `field_016a` | Valve calibration mounting state index. |
-| `0x01c8` | `stem_temperature` | `s16be` | 0.01 | °C | `/d/{id}/sen` | `device_measurements` | `field_01c8` | Radiator valve metallic base mount / stem NTC thermistor on VA (`FUN_0802bde4(0x28)`). Used for plume compensation against room temperature `0x012d`. Exposed in API `hardwareDiagnostics.stemTemperature` and MQTT `stem_temperature`. |
+| `0x01c8` | `stem_temperature` | `s16be` | 0.01 | °C | `/d/{id}/sen` | `device_measurements` | `field_01c8` | Radiator valve metallic base mount / stem NTC thermistor on VA. Used for plume compensation against room temperature `0x012d`. Exposed in API `hardwareDiagnostics.stemTemperature` and MQTT `stem_temperature`. |
 | `0x01d0` | `neighbor_self_ipv6` | `bytes` | 1.0 | - | `/d/{id}/neighbors` | `tlv_labels` | - | Neighbor table client local IPv6 address. |
 | `0x01d1` | `neighbor_entry` | `bytes` | 1.0 | - | `/d/{id}/neighbors` | `tlv_labels` | - | Nested neighbor entry diagnostic sub-TLV container. |
 | `0x01d2` | `neighbor_ipv6` | `bytes` | 1.0 | - | `/d/{id}/neighbors` | `tlv_labels` | - | Neighbor device IPv6 address (sub-TLV inside 0x01d1). |
@@ -441,7 +441,7 @@ This dictionary consolidates all observed TLV fields, mapping their hex codes, t
 | `0x40e0` | `heating_active_mode` | `bool` | 1.0 | - | `/z/p` | `tlv_labels` | - | Heating mode state flag (0 or 1) in `/z/p` pings. |
 | `0x4120` | `overlay_active_flag` | `bool` | 1.0 | - | `/z/p` | `tlv_labels` | - | Manual overlay / dial override active indicator in `/z/p` pings. |
 | `0x4140` | `owd_state` | `u8` | 1.0 | - | `/z/p` | `tlv_labels` | - | Open Window Detection state flag in `/z/p` pings. |
-| `0x4160` | `owd_override` | `u8` | 1.0 | - | `/z/p` | `tlv_labels` | - | Open Window active override flag in `/z/p` pings. |
+| `0x4160` | `demand_scale_denominator` | `u8` | 1.0 | - | `/d/{serial}/config` | `devices` | `valve_sensitivity` | Valve demand proportional scaling denominator (default 100). |
 | `0x6000` | `zone_state_base` | `bytes` | 1.0 | - | `/z/{id}/s` | `tlv_labels` | - | Baseline zone state payload block. |
 | `0x6020` | `zone_service_type` | `u8` | 1.0 | enum | `/z/{id}/s` | `zone_measurements` | `field_6020` | Zone classification: `1`=HEATING, `2`=HOT_WATER. |
 | `0x6040` | `zone_program_uri` | `string` | 1.0 | - | `/z/{id}/config` | `tlv_labels` | - | CoAP URI for zone program timetable. |
@@ -628,8 +628,8 @@ Transmitted periodically by Smart Radiator Valves (Valve Actuators) to announce 
     *   **`0x40e0` (`heating_active_mode`)**: Heating mode state flag (u8, boolean `0` or `1`).
     *   **`0x4120` (`overlay_active_flag`)**: Manual overlay / dial override active indicator (u8, boolean).
     *   **`0x4140` (`owd_state`)**: Open Window Detection state flag (u8).
-    *   **`0x4160` (`owd_override`)**: Open Window active override flag (u8).
-    *   **`0x0197` (`temp_drop_rate_trigger`)**: Rapid temperature drop / window trigger value (s16be).
+    *   **`0x4160` (`demand_scale_denominator`)**: Valve demand proportional scaling denominator in VA (default 100: passthrough, <100 amplifies, >100 reduces).
+    *   **`0x0197` (`secondary_temperature`)**: Secondary global temperature measurement (s16be, delta > 5.00°C triggers push, forwarded to per-circuit `0x4060`).
     *   **`0x63c0` (`circuit_association`)**: Heating circuit link identifier (u8).
     *   **`0x0298` (`zone_presence`)**: Zone node online/presence registration flag (u8).
 *   **Note**: Room Units (`RU`) do **not** transmit `/z/p`; they report ambient telemetry solely via `/d/{serial}/sen` and receive zone state updates from the server.

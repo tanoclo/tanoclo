@@ -588,7 +588,7 @@ export default function BalancingSettings({ homeId, devices = [], zones = [], is
         </div>
         <p style={{ margin: '0 0 1rem', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
           {t('balancing.manual_desc', {
-            defaultValue: 'Fine-tune individual valve sensitivities directly (50% = maximum opening boost, 100% = standard gain).'
+            defaultValue: 'Fine-tune individual valve sensitivities directly (25% = maximum opening boost, 100% = standard gain, up to 200% = throttle oversized radiators).'
           })}
         </p>
 
@@ -659,13 +659,18 @@ export default function BalancingSettings({ homeId, devices = [], zones = [], is
                     const isLowBattery = dev.batteryState === 'LOW' || dev.batteryState === 'CRITICAL' || dev.batteryState === 'DEPLETED';
                     const multiplier = (100 / (currentVal || 100)).toFixed(2);
                     const boostPct = Math.round(((100 / (currentVal || 100)) - 1) * 100);
+                    const isThrottle = currentVal > 100;
+                    const throttlePct = isThrottle ? Math.round((1 - (100 / currentVal)) * 100) : 0;
                     const isDefault = currentVal === 100;
 
                     const presets = [
+                      { val: 50, label: '50% (2.00×)' },
+                      { val: 70, label: '70% (1.43×)' },
+                      { val: 85, label: '85% (1.18×)' },
                       { val: 100, label: t('balancing.preset_standard', { defaultValue: '100% (Default)' }) },
-                      { val: 85, label: t('balancing.preset_mild', { defaultValue: '85%' }) },
-                      { val: 70, label: t('balancing.preset_moderate', { defaultValue: '70%' }) },
-                      { val: 50, label: t('balancing.preset_max', { defaultValue: '50% (Max)' }) }
+                      { val: 125, label: '125% (0.80×)' },
+                      { val: 150, label: '150% (0.67×)' },
+                      { val: 200, label: '200% (0.50×)' },
                     ];
 
                     return (
@@ -738,24 +743,30 @@ export default function BalancingSettings({ homeId, devices = [], zones = [], is
 
                           {/* Right Side: Sensitivity Value & Flow Multiplier */}
                           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.2rem' }}>
-                            <span style={{ fontSize: '1rem', fontWeight: 700, fontFamily: 'monospace', color: 'var(--primary-dark, #2563eb)' }}>
+                            <span style={{ fontSize: '1rem', fontWeight: 700, fontFamily: 'monospace', color: isThrottle ? '#ea580c' : 'var(--primary-dark, #2563eb)' }}>
                               {currentVal}%
                             </span>
                             <span style={{
                               fontSize: '0.7rem',
                               padding: '0.15rem 0.45rem',
                               borderRadius: '4px',
-                              backgroundColor: isDefault ? 'rgba(16, 185, 129, 0.1)' : 'rgba(37, 99, 235, 0.1)',
-                              color: isDefault ? '#10b981' : '#2563eb',
+                              backgroundColor: isDefault ? 'rgba(16, 185, 129, 0.1)' : isThrottle ? 'rgba(234, 88, 12, 0.1)' : 'rgba(37, 99, 235, 0.1)',
+                              color: isDefault ? '#10b981' : isThrottle ? '#ea580c' : '#2563eb',
                               fontWeight: 600
                             }}>
                               {isDefault
                                 ? t('balancing.flow_standard', { defaultValue: '1.00× (Standard)' })
-                                : t('balancing.flow_boost', {
-                                    multiplier,
-                                    boost: boostPct,
-                                    defaultValue: `${multiplier}× (+${boostPct}% boost)`
-                                  })}
+                                : isThrottle
+                                  ? t('balancing.flow_throttle', {
+                                      multiplier,
+                                      throttle: throttlePct,
+                                      defaultValue: `${multiplier}× (-${throttlePct}% throttle)`
+                                    })
+                                  : t('balancing.flow_boost', {
+                                      multiplier,
+                                      boost: boostPct,
+                                      defaultValue: `${multiplier}× (+${boostPct}% boost)`
+                                    })}
                             </span>
                           </div>
                         </div>
@@ -763,8 +774,8 @@ export default function BalancingSettings({ homeId, devices = [], zones = [], is
                         {/* Slider Control */}
                         <div style={{ marginTop: '0.25rem' }}>
                           <Slider
-                            min={50}
-                            max={100}
+                            min={25}
+                            max={200}
                             step={5}
                             value={currentVal}
                             disabled={isReadOnly || isSaving}
@@ -779,8 +790,9 @@ export default function BalancingSettings({ homeId, devices = [], zones = [], is
                             color: 'var(--text-muted)',
                             marginTop: '0.2rem'
                           }}>
-                            <span>{t('balancing.slider_max_boost', { defaultValue: '50% (Max Boost)' })}</span>
+                            <span>{t('balancing.slider_max_boost', { defaultValue: '25% (Max Boost)' })}</span>
                             <span>{t('balancing.slider_standard', { defaultValue: '100% (Standard)' })}</span>
+                            <span>{t('balancing.slider_max_throttle', { defaultValue: '200% (Max Throttle)' })}</span>
                           </div>
                         </div>
 

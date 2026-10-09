@@ -139,7 +139,7 @@ describe('Hydraulic Balancing Analyzer', () => {
             expect(suggestion.confidence).toBe('MEDIUM');
         });
 
-        it('suggests max boost (50) for near-zero or cooling rise rates', () => {
+        it('suggests max boost (50) for near-zero or cooling rise rates when starting from 100', () => {
             const suggestion = generateDeviceSuggestion({
                 currentSensitivity: 100,
                 deviceRiseRate: 0.0,
@@ -147,6 +147,29 @@ describe('Hydraulic Balancing Analyzer', () => {
             });
 
             expect(suggestion.suggestedSensitivity).toBe(50);
+            expect(suggestion.changeDirection).toBe('INCREASE_OPENING');
+        });
+
+        it('suggests throttling (>100) for oversized radiators heating significantly faster than median', () => {
+            const suggestion = generateDeviceSuggestion({
+                currentSensitivity: 100,
+                deviceRiseRate: 0.25,
+                houseMedianRiseRate: 0.10
+            });
+
+            expect(suggestion.suggestedSensitivity).toBeGreaterThan(100);
+            expect(suggestion.changeDirection).toBe('DECREASE_OPENING');
+            expect(suggestion.reasoning).toContain('Throttle');
+        });
+
+        it('allows deep boost (<50 down to 25) when starting from already boosted sensitivity', () => {
+            const suggestion = generateDeviceSuggestion({
+                currentSensitivity: 40,
+                deviceRiseRate: 0.0,
+                houseMedianRiseRate: 0.10
+            });
+
+            expect(suggestion.suggestedSensitivity).toBe(25);
             expect(suggestion.changeDirection).toBe('INCREASE_OPENING');
         });
 

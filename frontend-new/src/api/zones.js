@@ -238,10 +238,10 @@ export function updateDazzle(homeId, zoneId, enabled) {
  * @param {number} temperatureDeviationLimit
  * @param {number} owdNvmState
  */
-export function updateOpenWindowDetection(homeId, zoneId, enabled, timeoutInSeconds = 900, temperatureDeviationLimit = 0.50, owdNvmState = 1) {
+export function updateOpenWindowDetection(homeId, zoneId, enabled, timeoutInSeconds = 900) {
   return apiFetch(`/api/v2/homes/${homeId}/zones/${zoneId}/openWindowDetection`, {
     method: 'PUT',
-    body: { enabled, timeoutInSeconds, temperatureDeviationLimit, owdNvmState }
+    body: { enabled, timeoutInSeconds }
   });
 }
 

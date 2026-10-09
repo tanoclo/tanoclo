@@ -150,7 +150,7 @@ async function buildDeviceConfigTLV(deviceId) {
 
     if (deviceId.startsWith('VA')) {
         const sensitivity = dbDev.valve_sensitivity !== null && dbDev.valve_sensitivity !== undefined ? Number(dbDev.valve_sensitivity) : 100;
-        if (sensitivity >= 50 && sensitivity <= 100) {
+        if (sensitivity >= 25 && sensitivity <= 250) {
             fields['0x4160'] = sensitivity;
         }
     } else {

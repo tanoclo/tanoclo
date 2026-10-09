@@ -1287,7 +1287,6 @@ std::vector<uint8_t> build_d_fw_state_tlv(uint16_t fw_version, uint16_t other_sl
   append_tlv_u8(tlv, TLV_FW_STATE_1A0, 8);
   append_tlv_u16(tlv, TLV_FW_VERSION_ACTIVE, fw_version);
   // 0x003B is dual-purpose: timezone offset (s16be) in /time, but boot slot info (u8 value 14) in fw/state.
-  // Verified in VA / IB firmware (FUN_08020cec / fw_state_put).
   append_tlv_u8(tlv, TLV_TIME_TZ_OFFSET, 14);
   append_tlv_u16(tlv, TLV_FW_OTHER_SLOT, other_slot);
   append_tlv_u16(tlv, TLV_FW_TARGET_OR_REPORTED, fw_version);

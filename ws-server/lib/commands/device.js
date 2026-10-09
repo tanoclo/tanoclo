@@ -123,13 +123,13 @@ async function applyDeviceConfigOverrides(deviceId, fields, updates = null) {
             let sensitivity = null;
             if (updates && ('valve_sensitivity' in updates || 'valveSensitivity' in updates || '0x4160' in updates)) {
                 const parsed = Number(updates.valve_sensitivity ?? updates.valveSensitivity ?? updates['0x4160']);
-                if (!isNaN(parsed) && parsed >= 50 && parsed <= 100) {
+                if (!isNaN(parsed) && parsed >= 25 && parsed <= 250) {
                     sensitivity = parsed;
                 }
             }
             if (sensitivity === null && dbDev.valve_sensitivity !== undefined && dbDev.valve_sensitivity !== null) {
                 const parsed = Number(dbDev.valve_sensitivity);
-                if (!isNaN(parsed) && parsed >= 50 && parsed <= 100) {
+                if (!isNaN(parsed) && parsed >= 25 && parsed <= 250) {
                     sensitivity = parsed;
                 }
             }

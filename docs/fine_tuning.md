@@ -76,10 +76,15 @@ In addition to mechanical travel limits, the TaNoClo server supports several hid
 *   **`display_active_timeout` (`0x02b2`)**: Timeout duration in minutes before display panel turns off. Default is `0`.
 
 ### 2.2 Dynamic Open Window Detection (OWD) Tuning
-*   **`zone_open_window_shutoff_duration` (`0x62c0`)**: Shutoff duration in seconds. Represents how long the heating is paused when an open window event triggers.
-*   **`zone_temperature_deviation_limit` (`0x6080`)**: Temperature deviation threshold (`u16be`, scaled by `0.01` °C). Defines how quickly a drop in temperature registers as an open window (default: `0.5°C`).
+*   **`zone_open_window_detection_enabled` (`0x60e0`)**: Boolean toggle enabling hardware open window detection on devices in the zone.
+*   **`zone_open_window_shutoff_duration` (`0x62c0`)**: Shutoff duration in seconds (raw seconds, default `900` / 15 minutes). Represents how long the heating is paused when an open window event triggers.
+*   **`owd_state` (`0x4140`)**: Active detection telemetry status flag reported in `/z/p` pings (1 = open window active, 0 = normal).
 
-### 2.3 Dynamic Temperature Constraints & Offsets
+### 2.3 Dynamic Temperature Constraints & Tuning Triad
+Device configures three coupled temperature tuning parameters that feed the internal heating demand PID calculation:
+*   **`zone_frost_min_temperature` (`0x60a0`)**: Minimum frost protection temperature setpoint (`s16be`, scaled by `0.01` °C, firmware default `5.00°C` / raw `500`). Lower bound clamp preventing freezing even when heating is turned off.
+*   **`zone_temperature_baseline` (`0x60c0`)**: Baseline target temperature setpoint (`s16be`, scaled by `0.01` °C, firmware default `15.00°C` / raw `1500` / `0x5dc`). Serves as the baseline setpoint for control tracking and derivative error calculation.
+*   **`zone_temperature_deviation_limit` (`0x6080`)**: Temperature deviation limit (`s16be`, scaled by `0.01` °C, firmware default `10.00°C` / raw `1000`). Allowed deviation band (±) from baseline; scales proportional error in demand calculation.
 *   **`temperature_offset` (`0x0140`)**: Calibration offset (`s16be`, scaled by `0.01` °C) to adjust readings affected by local draft patterns or heat pockets.
 
 ---

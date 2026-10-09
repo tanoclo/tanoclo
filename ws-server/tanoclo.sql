@@ -24779,7 +24779,7 @@ INSERT INTO `tlv_labels` (`id`, `hex_id`, `name`, `type`, `unit`, `scale`, `deci
 (259, '0x0155', 'rf_key', 'bytes', 'aes128', 1, NULL, NULL, 'Operational network AES-128 RF key.', NULL),
 (260, '0x0266', 'va_act_position2_steps_unused', 'u16be', 'steps', 1, NULL, NULL, 'Unused. VA uses 0x0294 for secondary position steps.', NULL),
 (261, '0x0283', 'va_act_status_flags_unused', 's16be', 'bits', 1, NULL, NULL, 'Unused. VA uses 0x028d for actuator status/flags.', NULL),
-(262, '0x4060', 'circuit_forwarded_temperature', 's16be', '°C', 0.01, 2, 2, 'Per-circuit forwarded temperature received from 0x0197 in VA zone_to_circuit_handler 0x0802f528.', NULL),
+(262, '0x4060', 'circuit_forwarded_temperature', 's16be', '°C', 0.01, 2, 2, 'Per-circuit forwarded temperature received from 0x0197.', NULL),
 (263, '0x01d2', 'neighbor_ipv6', 'bytes', NULL, NULL, NULL, NULL, 'Neighbor IPv6 address (used as sub-TLV inside 0x01d1)', NULL),
 (276, '0x6500', 'zone_param_kp', 'u16be', '', 0.01, NULL, NULL, 'Proportional gain coefficient (Kp) for zone PID controller', NULL),
 (277, '0x6520', 'zone_param_ki', 'u16be', '', 0.01, NULL, NULL, 'Integral gain coefficient (Ki) for zone PID controller', NULL),
@@ -24792,7 +24792,7 @@ INSERT INTO `tlv_labels` (`id`, `hex_id`, `name`, `type`, `unit`, `scale`, `deci
 (284, '0x0001', 'device_serial_number_0001', 'string_ascii', NULL, NULL, NULL, NULL, 'Device serial number string (ASCII, seen in /d/info and commissioning)', NULL),
 (285, '0x0012', 'pairing_raw_op_key', 'bytes', 'aes128', NULL, NULL, NULL, '16-byte raw plaintext operational AES-128 key (seen in POST /d/pair)', NULL),
 (286, '0x0033', 'time_utc', 'u32be', 's', NULL, NULL, NULL, 'UTC timestamp in seconds (seen in /time response)', NULL),
-(287, '0x013f', 'temperature_unit_mode', 'u8', 'enum', NULL, NULL, NULL, 'Temperature display unit mode (0 = Celsius / 5-25°C bounds, 1 = Fahrenheit / 41-77°F bounds). Traced to VA handle_config_dispatch 0x0802610e.', NULL),
+(287, '0x013f', 'temperature_unit_mode', 'u8', 'enum', NULL, NULL, NULL, 'Temperature display unit mode (0 = Celsius / 5-25°C bounds, 1 = Fahrenheit / 41-77°F bounds).', NULL),
 (288, '0x01d4', 'zone_peer_uri_1d4', 'string_ascii', 'uri', NULL, NULL, NULL, 'Zone peer URI S (extui target URL S)', NULL),
 (289, '0x01d5', 'zone_peer_uri_1d5', 'string_ascii', 'uri', NULL, NULL, NULL, 'Zone peer URI P (extui target URL P)', NULL),
 (290, '0x01f5', 'dev_hw_flags_01f5', 'u8', NULL, NULL, NULL, NULL, 'Device hardware capability flag (seen in /d/info)', NULL),
@@ -24800,14 +24800,14 @@ INSERT INTO `tlv_labels` (`id`, `hex_id`, `name`, `type`, `unit`, `scale`, `deci
 (292, '0x01f7', 'dev_hw_flags_01f7', 'u8', NULL, NULL, NULL, NULL, 'Device capabilities: 0 for RU, 0x7F for VA (seen in /d/info)', NULL),
 (293, '0x01f8', 'dev_hw_flags_01f8', 'u8', NULL, NULL, NULL, NULL, 'Device sub-GHz radio type: 13 for RU, 0 for VA (seen in /d/info)', NULL),
 (294, '0x01f9', 'dev_capabilities_01f9', 'u16be', NULL, NULL, NULL, NULL, 'Device capabilities bitmask (seen in /d/info)', NULL),
-(295, '0x0197', 'secondary_temperature', 's16be', '°C', 0.01, 2, 2, 'Auxiliary global temperature reading; forwarded to per-circuit 0x4060 in VA zone_to_circuit_handler 0x0802f528.', NULL),
-(296, '0x01cf', 'auxiliary_temperature', 's16be', '°C', 0.01, 2, 2, 'Global auxiliary temperature reading. Traced to VA handle_heating_circuit_telemetry 0x0801de08 (delta > 5°C dirty trigger).', NULL),
-(297, '0x0298', 'zone_presence_flag', 'u8', 'bool', NULL, NULL, NULL, 'Zone presence boolean flag. Traced to VA zone_to_circuit_handler 0x0802f528.', NULL),
-(298, '0x2060', 'circuit_flow_temperature', 's16be', '°C', 0.01, 2, 2, 'Per-circuit flow temperature reading. Traced to VA handle_heating_circuit_telemetry 0x0801de08.', NULL),
-(299, '0x40c0', 'circuit_pump_active', 'bool', 'bool', NULL, NULL, NULL, 'Pump active boolean flag. Emitted per-circuit in VA heating_circuit_state_dispatch 0x0802f1fc.', NULL),
-(300, '0x4100', 'circuit_heating_active', 'bool', 'bool', NULL, NULL, NULL, 'Heating active boolean flag. Emitted per-circuit in VA heating_circuit_state_dispatch 0x0802f1fc.', NULL),
-(301, '0x4140', 'circuit_owd_demand_cut', 'u8', '%', NULL, NULL, NULL, 'Open window detection active demand cut indicator. Emitted in VA heating_circuit_state_dispatch 0x0802f1fc.', NULL),
-(302, '0x4160', 'demand_scale_denominator', 'u8', 'ratio', NULL, NULL, NULL, 'Valve demand scaling denominator: (demand * 100) / denom clamped to 100%. Denom=100 is 1x gain, <100 amplifies, >100 reduces. Traced to VA heat_demand_scale_and_limit 0x0802f4a4.', NULL);
+(295, '0x0197', 'secondary_temperature', 's16be', '°C', 0.01, 2, 2, 'Auxiliary global temperature reading; forwarded to per-circuit 0x4060.', NULL),
+(296, '0x01cf', 'auxiliary_temperature', 's16be', '°C', 0.01, 2, 2, 'Global auxiliary temperature reading.', NULL),
+(297, '0x0298', 'zone_presence_flag', 'u8', 'bool', NULL, NULL, NULL, 'Zone presence boolean flag.', NULL),
+(298, '0x2060', 'circuit_flow_temperature', 's16be', '°C', 0.01, 2, 2, 'Per-circuit flow temperature reading.', NULL),
+(299, '0x40c0', 'circuit_pump_active', 'bool', 'bool', NULL, NULL, NULL, 'Pump active boolean flag.', NULL),
+(300, '0x4100', 'circuit_heating_active', 'bool', 'bool', NULL, NULL, NULL, 'Heating active boolean flag.', NULL),
+(301, '0x4140', 'circuit_owd_demand_cut', 'u8', '%', NULL, NULL, NULL, 'Open window detection active demand cut indicator.', NULL),
+(302, '0x4160', 'demand_scale_denominator', 'u8', 'ratio', NULL, NULL, NULL, 'Valve demand scaling denominator: (demand * 100) / denom clamped to 100%. Denom=100 is 1x gain, <100 amplifies, >100 reduces.', NULL);
 
 CREATE TABLE `users` (
   `id` varchar(36) NOT NULL,
@@ -24861,9 +24861,9 @@ CREATE TABLE `zones` (
   `last_schedule_change_at` datetime DEFAULT NULL,
   `display_order` int(11) DEFAULT 0,
   `field_60a0` decimal(5,2) DEFAULT 5.00 COMMENT 'zone_frost_min_temperature',
-  `field_6080` decimal(5,2) DEFAULT 0.50 COMMENT 'zone_temperature_deviation_limit',
+  `field_6080` decimal(5,2) DEFAULT 10.00 COMMENT 'zone_temperature_deviation_limit',
   `field_6340` tinyint(3) UNSIGNED DEFAULT 1 COMMENT 'owd_nvm_state',
-  `field_60c0` decimal(5,2) DEFAULT 19.00 COMMENT 'zone_temperature_baseline'
+  `field_60c0` decimal(5,2) DEFAULT 15.00 COMMENT 'zone_temperature_baseline'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `zone_measurements` (
