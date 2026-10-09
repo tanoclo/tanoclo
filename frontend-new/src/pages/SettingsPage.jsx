@@ -330,6 +330,7 @@ export default function SettingsPage() {
       case 'zones':
       case 'devices':
       case 'flow-temp':
+      case 'balancing':
       case 'boiler-circuits':
       case 'raw-explorer':
         return (

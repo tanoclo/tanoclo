@@ -115,7 +115,7 @@ router.get('/:homeId/tanoclo/devices/battery', async (req, res) => {
         const pool = db.getPool();
         const homeId = req.params.homeId;
         const [rows] = await pool.execute(
-            `SELECT d.serial_no as short_serial_no, d.serial_no, d.device_type, d.zone_id, d.current_fw_version, 
+            `SELECT d.serial_no, d.device_type, d.zone_id, d.current_fw_version, 
              d.connection_state, 
              (CASE WHEN ed.serial_no IS NOT NULL THEN 'NORMAL' ELSE d.battery_state END) as battery_state,
              (CASE WHEN ed.serial_no IS NOT NULL THEN 100 ELSE d.battery_percent END) as battery_percent,

@@ -158,7 +158,7 @@ router.get('/tuning/list', adminAuth, async (req, res) => {
         const pool = db.getPool();
         // Get VA devices
         const [devices] = await pool.execute(`
-            SELECT d.serial_no, d.serial_no as short_serial_no, d.device_type, d.home_id, d.zone_id,
+            SELECT d.serial_no, d.device_type, d.home_id, d.zone_id,
                    d.field_0273, d.field_027c, d.field_0280, d.field_0265, d.field_0266, d.field_028c,
                    d.field_0283, d.field_01b5, d.field_01b6, d.field_01fa, d.field_01fb, d.field_016a,
                    h.name as home_name

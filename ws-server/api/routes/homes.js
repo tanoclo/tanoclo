@@ -23,5 +23,6 @@ router.use('/', require('./homes/weather'));
 router.use('/', require('./homes/users'));
 router.use('/', require('./homes/energy'));
 router.use('/', require('./homes/incident'));
+router.use('/', require('./homes/balancing'));
 
 module.exports = router;

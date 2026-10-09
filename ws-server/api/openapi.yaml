@@ -3043,8 +3043,6 @@ paths:
                 items:
                   type: object
                   properties:
-                    short_serial_no:
-                      type: string
                     serial_no:
                       type: string
                     device_type:

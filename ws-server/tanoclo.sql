@@ -23072,7 +23072,17 @@ CREATE TABLE `devices` (
   `field_019e` tinyint(4) DEFAULT 112 COMMENT 'display_brightness',
   `field_019d` tinyint(3) UNSIGNED DEFAULT 128 COMMENT 'display_contrast',
   `field_02b2` int(11) DEFAULT 0 COMMENT 'display_active_timeout',
-  `field_015d` int(11) DEFAULT NULL COMMENT 'device_type/role: 71=Wired Thermostat, 200=Wireless Sensor, 112/113=VA'
+  `field_015d` int(11) DEFAULT NULL COMMENT 'device_type/role: 71=Wired Thermostat, 200=Wireless Sensor, 112/113=VA',
+  `valve_sensitivity` int(11) NOT NULL DEFAULT 100 COMMENT 'Valve demand scale denominator (0x4160): 50-100 (default 100)'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `balancing_snapshots` (
+  `id` bigint(20) NOT NULL,
+  `home_id` int(11) NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `analysis_json` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL CHECK (json_valid(`analysis_json`)),
+  `applied` tinyint(1) NOT NULL DEFAULT 0,
+  `applied_at` timestamp NULL DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `circuit_measurements` (
@@ -24916,6 +24926,10 @@ ALTER TABLE `boiler_model_manufacturers`
 ALTER TABLE `devices`
   ADD PRIMARY KEY (`serial_no`);
 
+ALTER TABLE `balancing_snapshots`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `idx_bs_home` (`home_id`,`created_at` DESC);
+
 ALTER TABLE `circuit_measurements`
   ADD PRIMARY KEY (`id`),
   ADD KEY `idx_cm_home_circuit_ts` (`home_id`,`circuit_number`,`timestamp`),
@@ -25015,6 +25029,9 @@ ALTER TABLE `zone_timetables`
 
 ALTER TABLE `admin_users`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+ALTER TABLE `balancing_snapshots`
+  MODIFY `id` bigint(20) NOT NULL AUTO_INCREMENT;
 
 ALTER TABLE `circuit_measurements`
   MODIFY `id` bigint(20) NOT NULL AUTO_INCREMENT;

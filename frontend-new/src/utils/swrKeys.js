@@ -53,4 +53,5 @@ export const SWR_KEYS = {
   heatingCircuits: (homeId) => `/homes/${homeId}/heatingCircuits`,
   supplyTempOptimization: (homeId) => `/homes/${homeId}/supplyTemperatureOptimization`,
   supplyTempHistory: (homeId) => `/homes/${homeId}/supplyTemperatureHistory`,
+  balancingHistory: (homeId) => `/homes/${homeId}/balancing/history`,
 };
