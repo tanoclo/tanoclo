@@ -9,6 +9,7 @@ const express = require('express');
 const router = express.Router();
 
 // Mount sub-routers
+router.use('/', require('./portal/i18n').router);
 router.use('/', require('./portal/auth'));
 router.use('/', require('./portal/tools'));
 router.use('/', require('./portal/dashboard'));

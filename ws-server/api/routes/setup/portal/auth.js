@@ -13,6 +13,7 @@ const crypto = require('crypto');
 const db = require('../../../../lib/db');
 const config = require('../../../../lib/config');
 const { getLogger } = require('../../../../lib/logger');
+const { renderLanguageSelector } = require('./i18n');
 
 const router = express.Router();
 const _log = getLogger('setup-api');
@@ -69,14 +70,21 @@ router.get('/', (req, res) => {
 
 router.get('/login', (req, res) => {
     const error = req.query.error;
+    const currentLocale = req.cookies?.tado_locale || 'en';
+    let errorI18nKey = '';
+    if (error === 'Invalid credentials') errorI18nKey = 'login.invalid_credentials';
+    else if (error === 'Invalid 2FA code') errorI18nKey = 'login.invalid_totp';
+    else if (error === 'Internal Server Error') errorI18nKey = 'login.server_error';
+
     res.send(`
         <html>
         <head>
-            <title>Setup Login</title>
+            <title data-i18n="login.title">Setup Login</title>
             <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+            <script src="/setup/i18n.js"></script>
             <style>
                 body { background: #121212; color: #e0e0e0; height: 100vh; display: flex; align-items: center; justify-content: center; font-family: sans-serif; }
-                .card { background: #1e1e1e; border: 1px solid #333; width: 400px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+                .card { background: #1e1e1e; border: 1px solid #333; width: 420px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
                 .form-control { background: #2c2c2c; border: 1px solid #444; color: #fff; }
                 .form-control:focus { background: #333; border-color: #0d6efd; color: #fff; box-shadow: none; }
                 .form-label { color: #bbb; font-weight: 500; }
@@ -85,22 +93,25 @@ router.get('/login', (req, res) => {
         </head>
         <body>
             <div class="card p-4">
-                <h3 class="text-center mb-4 text-primary">TaNoClo Setup</h3>
-                ${error ? `<div class="alert alert-danger py-2 small mb-3">${error}</div>` : ''}
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h3 class="mb-0 text-primary" data-i18n="login.title">TaNoClo Setup</h3>
+                    ${renderLanguageSelector(currentLocale, 'portal-lang-select')}
+                </div>
+                ${error ? `<div class="alert alert-danger py-2 small mb-3" ${errorI18nKey ? `data-i18n="${errorI18nKey}"` : ''}>${error}</div>` : ''}
                 <form action="/setup/login" method="POST" id="setup-login-form">
                     <div class="mb-3">
-                        <label for="setup_user" class="form-label small">Username</label>
+                        <label for="setup_user" class="form-label small" data-i18n="login.username">Username</label>
                         <input type="text" id="setup_user" name="username" class="form-control" autocomplete="username" required>
                     </div>
                     <div class="mb-3">
-                        <label for="setup_pass" class="form-label small">Password</label>
+                        <label for="setup_pass" class="form-label small" data-i18n="login.password">Password</label>
                         <input type="password" id="setup_pass" name="password" class="form-control" autocomplete="current-password" required>
                     </div>
                     <div class="mb-4">
-                        <label for="setup_totp" class="form-label small">2FA Code (TOTP)</label>
-                        <input type="text" id="setup_totp" name="totp" class="form-control" placeholder="6-digit code" autocomplete="one-time-code">
+                        <label for="setup_totp" class="form-label small" data-i18n="login.totp">2FA Code (TOTP)</label>
+                        <input type="text" id="setup_totp" name="totp" class="form-control" placeholder="6-digit code" data-i18n-placeholder="login.totp_placeholder" autocomplete="one-time-code">
                     </div>
-                    <button type="submit" class="btn btn-primary w-100">Login</button>
+                    <button type="submit" class="btn btn-primary w-100" data-i18n="login.submit">Login</button>
                 </form>
             </div>
         </body>
