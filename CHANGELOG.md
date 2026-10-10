@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-10-10
+
+- fix: PID/Advanced heating parameters
+- feat: Improve zone advanced page
+- feat: Improve debug device settings
+- feat: Add custom battery curves
+- feat: Add hydraulic balancing
+
 ## [0.7.0] - 2026-10-09
 
 - feat: Improve zone advanced page
