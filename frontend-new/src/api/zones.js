@@ -235,8 +235,6 @@ export function updateDazzle(homeId, zoneId, enabled) {
  * @param {string|number} zoneId
  * @param {boolean} enabled
  * @param {number} timeoutInSeconds
- * @param {number} temperatureDeviationLimit
- * @param {number} owdNvmState
  */
 export function updateOpenWindowDetection(homeId, zoneId, enabled, timeoutInSeconds = 900) {
   return apiFetch(`/api/v2/homes/${homeId}/zones/${zoneId}/openWindowDetection`, {

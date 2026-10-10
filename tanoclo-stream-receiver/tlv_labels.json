@@ -669,28 +669,28 @@
       "notes": "Boolean flag related to zone program/schedule config"
     },
     "0x6080": {
-      "name": "zone_temperature_deviation_limit",
+      "name": "zone_pid_kp",
       "type": "u16be",
-      "unit": "C",
+      "unit": "",
       "scale": 0.01,
       "decimals": 2,
-      "notes": "Allowed deviation from baseline (±). Max likely baseline+this, min likely baseline-this (clamped by frost min). Observed 10.00°C."
+      "notes": "Proportional gain (Kp) for closed-loop heat demand PID calculation (P = ΔT × Kp / 2, default 0.50 / raw 50)"
     },
     "0x60a0": {
-      "name": "zone_frost_min_temperature",
+      "name": "zone_pid_ki",
       "type": "u16be",
-      "unit": "C",
+      "unit": "",
       "scale": 0.01,
       "decimals": 2,
-      "notes": "Hard minimum temperature floor for zone UI/control"
+      "notes": "Integral gain (Ki) for closed-loop heat demand PID calculation with anti-windup (default 5.00 / raw 500)"
     },
     "0x60c0": {
-      "name": "zone_temperature_baseline",
+      "name": "zone_pid_kd",
       "type": "u16be",
-      "unit": "C",
+      "unit": "",
       "scale": 0.01,
       "decimals": 2,
-      "notes": "Baseline/center temperature used for deriving allowed range"
+      "notes": "Derivative gain (Kd) damping factor for closed-loop heat demand PID calculation (default 19.00 / raw 1900 / 0x76c)"
     },
     "0x60e0": {
       "name": "zone_open_window_detection_enabled",

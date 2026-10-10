@@ -385,9 +385,9 @@ async function updateZoneConfig(homeId, zoneId, fields, fullConfigJson) {
     }
 
     const tlvMappings = {
-        '0x60a0': ['field_60a0', 'frost_min_temperature', 'zone_frost_min_temperature', 'frostMinTemperature'],
-        '0x60c0': ['field_60c0', 'temperature_baseline', 'zone_temperature_baseline', 'temperatureBaseline'],
-        '0x6080': ['field_6080', 'temperature_deviation_limit', 'zone_temperature_deviation_limit', 'temperatureDeviationLimit'],
+        '0x6080': ['field_6080', 'kp', 'zone_pid_kp'],
+        '0x60a0': ['field_60a0', 'ki', 'zone_pid_ki'],
+        '0x60c0': ['field_60c0', 'kd', 'zone_pid_kd'],
         '0x6340': ['field_6340', 'owd_nvm_state', 'owdNvmState']
     };
 

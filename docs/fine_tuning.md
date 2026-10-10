@@ -80,11 +80,32 @@ In addition to mechanical travel limits, the TaNoClo server supports several hid
 *   **`zone_open_window_shutoff_duration` (`0x62c0`)**: Shutoff duration in seconds (raw seconds, default `900` / 15 minutes). Represents how long the heating is paused when an open window event triggers.
 *   **`owd_state` (`0x4140`)**: Active detection telemetry status flag reported in `/z/p` pings (1 = open window active, 0 = normal).
 
-### 2.3 Dynamic Temperature Constraints & Tuning Triad
-Device configures three coupled temperature tuning parameters that feed the internal heating demand PID calculation:
-*   **`zone_frost_min_temperature` (`0x60a0`)**: Minimum frost protection temperature setpoint (`s16be`, scaled by `0.01` °C, firmware default `5.00°C` / raw `500`). Lower bound clamp preventing freezing even when heating is turned off.
-*   **`zone_temperature_baseline` (`0x60c0`)**: Baseline target temperature setpoint (`s16be`, scaled by `0.01` °C, firmware default `15.00°C` / raw `1500` / `0x5dc`). Serves as the baseline setpoint for control tracking and derivative error calculation.
-*   **`zone_temperature_deviation_limit` (`0x6080`)**: Temperature deviation limit (`s16be`, scaled by `0.01` °C, firmware default `10.00°C` / raw `1000`). Allowed deviation band (±) from baseline; scales proportional error in demand calculation.
+### 2.3 Closed-Loop PID Heating Demand Control Law & Valve Sensitivity
+The hardware devices execute a closed-loop PID controller to calculate heating demand (0–100%) and scale physical valve stroke:
+
+#### Zone Control Law:
+$$\text{Demand}(0\text{x}40a0) = \text{clamp}(P + I - D, 0, 100)\%$$
+
+1. **$K_p$ Proportional Gain (`0x6080`)**:
+   $$P = (T_{\text{setpoint}} - T_{\text{current}}) \times \frac{\text{raw}(0\text{x}6080)}{2000} = \Delta T \times \frac{K_p}{2}$$
+   - *Default:* `0.50` (raw 50).
+   - *Impact:* Direct proportional response to room temperature deficit. At 0.50, a 1.0°C shortfall produces 25% demand (4.0°C shortfall = 100%).
+2. **$K_i$ Integral Gain (`0x60a0`)**:
+   $$I = \frac{\text{raw}(0\text{x}60a0) \times \text{Accumulator}}{30000} = \frac{\text{Accumulator} \times K_i}{300}$$
+   - *Default:* `5.00` (raw 500).
+   - *Firmware Anti-Windup:* Accumulator clamped to $3\,000\,000 / \text{raw}(0\text{x}60a0)$, capping the integral term contribution strictly at 100%.
+   - *Impact:* Eliminates steady-state error in drafty or high-heat-loss rooms.
+3. **$K_d$ Derivative Gain (`0x60c0`)**:
+   $$D = \frac{\text{raw}(0\text{x}60c0) \times (T_{\text{current}} - T_{\text{previous}})}{2000} = \frac{K_d \times \Delta\dot{T}}{20}$$
+   - *Default:* `19.00` (raw 1900 / `0x76c`; default fallback 15.00). Subtracted from demand ($P + I - D$).
+   - *Impact:* Dynamic braking factor based on rate of temperature rise. Suppresses demand before reaching setpoint to prevent overshoot in high-inertia radiator systems.
+
+#### Device Valve Stroke Sensitivity (`0x4160`):
+$$\text{Physical Valve Opening} = \text{clamp}\left(\frac{\text{Demand} \times 100}{\text{raw}(0\text{x}4160)}, 0, 100\right)\%$$
+- Denominator `100` = 1.00× standard passthrough
+- Denominator `50` = 2.00× (+100% boost for slow/undersized radiators)
+- Denominator `150` = 0.67× (-33% throttle for oversized radiators)
+
 *   **`temperature_offset` (`0x0140`)**: Calibration offset (`s16be`, scaled by `0.01` °C) to adjust readings affected by local draft patterns or heat pockets.
 
 ---

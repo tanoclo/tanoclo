@@ -109,9 +109,14 @@ router.get('/:homeId/zones', async (req, res) => {
                     enabled: Boolean(zone.open_window_enabled),
                     timeoutInSeconds: zone.open_window_timeout || 900
                 } : { supported: false },
-                frostMinTemperature: zone.field_60a0 !== null && zone.field_60a0 !== undefined ? parseFloat(zone.field_60a0) : 5.00,
-                temperatureBaseline: zone.field_60c0 !== null && zone.field_60c0 !== undefined ? parseFloat(zone.field_60c0) : 15.00,
-                temperatureDeviationLimit: zone.field_6080 !== null && zone.field_6080 !== undefined ? parseFloat(zone.field_6080) : 10.00,
+                kp: zone.field_6080 !== null && zone.field_6080 !== undefined ? parseFloat(zone.field_6080) : 0.50,
+                ki: zone.field_60a0 !== null && zone.field_60a0 !== undefined ? parseFloat(zone.field_60a0) : 5.00,
+                kd: zone.field_60c0 !== null && zone.field_60c0 !== undefined ? parseFloat(zone.field_60c0) : 19.00,
+                pidTuning: {
+                    kp: zone.field_6080 !== null && zone.field_6080 !== undefined ? parseFloat(zone.field_6080) : 0.50,
+                    ki: zone.field_60a0 !== null && zone.field_60a0 !== undefined ? parseFloat(zone.field_60a0) : 5.00,
+                    kd: zone.field_60c0 !== null && zone.field_60c0 !== undefined ? parseFloat(zone.field_60c0) : 19.00
+                },
                 tanocloOwdEnabled: Boolean(zone.tanoclo_owd_enabled),
                 tanocloOwdSource: zone.tanoclo_owd_source || 'device',
                 offlineScheduleEnabled: Boolean(zone.offline_schedule_enabled),
@@ -473,21 +478,31 @@ router.put('/:homeId/zones/:zoneId/dazzle', async (req, res) => {
 router.put('/:homeId/zones/:zoneId/details', async (req, res) => {
     try {
         const { homeId, zoneId } = req.params;
-        const { name, frostMinTemperature, temperatureBaseline, temperatureDeviationLimit } = req.body;
-        if (!name) return res.status(400).json({ error: 'Missing name' });
+        let { name, kp, ki, kd, pidTuning } = req.body;
+
+        if (pidTuning) {
+            if (pidTuning.kp !== undefined) kp = pidTuning.kp;
+            if (pidTuning.ki !== undefined) ki = pidTuning.ki;
+            if (pidTuning.kd !== undefined) kd = pidTuning.kd;
+        }
 
         const pool = db.getPool();
-        await pool.execute('UPDATE zones SET name = ? WHERE id = ? AND home_id = ?', [name, zoneId, homeId]);
+        const [existingZones] = await pool.execute('SELECT id, name FROM zones WHERE id = ? AND home_id = ?', [zoneId, homeId]);
+        if (existingZones.length === 0) return res.status(404).json({ error: 'Zone not found' });
+
+        if (name && typeof name === 'string' && name.trim()) {
+            await pool.execute('UPDATE zones SET name = ? WHERE id = ? AND home_id = ?', [name.trim(), zoneId, homeId]);
+        }
 
         const configFields = {};
-        if (frostMinTemperature !== undefined && frostMinTemperature !== null) {
-            configFields['0x60a0'] = parseFloat(frostMinTemperature);
+        if (kp !== undefined && kp !== null) {
+            configFields['0x6080'] = parseFloat(kp);
         }
-        if (temperatureBaseline !== undefined && temperatureBaseline !== null) {
-            configFields['0x60c0'] = parseFloat(temperatureBaseline);
+        if (ki !== undefined && ki !== null) {
+            configFields['0x60a0'] = parseFloat(ki);
         }
-        if (temperatureDeviationLimit !== undefined && temperatureDeviationLimit !== null) {
-            configFields['0x6080'] = parseFloat(temperatureDeviationLimit);
+        if (kd !== undefined && kd !== null) {
+            configFields['0x60c0'] = parseFloat(kd);
         }
 
         if (Object.keys(configFields).length > 0) {

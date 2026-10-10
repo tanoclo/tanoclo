@@ -18,20 +18,20 @@ describe('ZoneAdvancedSettings Component', () => {
       id: 1,
       name: 'Living Room',
       type: 'HEATING',
-      frostMinTemperature: 5.0,
-      temperatureBaseline: 15.0,
-      temperatureDeviationLimit: 10.0,
+      kp: 0.50,
+      ki: 5.00,
+      kd: 19.00,
       open_window_active: 0,
       open_window_timeout: 900
     },
     isDhw: false,
     isReadOnly: false,
-    frostMinTemperature: 5.0,
-    setFrostMinTemperature: vi.fn(),
-    temperatureBaseline: 15.0,
-    setTemperatureBaseline: vi.fn(),
-    temperatureDeviationLimit: 10.0,
-    setTemperatureDeviationLimit: vi.fn(),
+    kp: 0.50,
+    setKp: vi.fn(),
+    ki: 5.00,
+    setKi: vi.fn(),
+    kd: 19.00,
+    setKd: vi.fn(),
     handleSaveAdvancedDetails: vi.fn(),
     isSavingAdvancedDetails: false,
     offlineScheduleEnabled: false,
@@ -51,11 +51,11 @@ describe('ZoneAdvancedSettings Component', () => {
     t: (key, def) => def || key
   };
 
-  it('renders firmware tuning temperatures (0x60a0, 0x60c0, 0x6080) accurately', () => {
+  it('renders firmware PID tuning parameters (0x6080, 0x60a0, 0x60c0) accurately', () => {
     const html = renderToString(<ZoneAdvancedSettings {...defaultProps} />);
 
     // Check title & firmware reference
-    expect(html).toContain('settings.zone_advanced.tuning_temps_title');
+    expect(html).toContain('PID Heating Demand Tuning');
 
     // Check FID badges
     expect(html).toContain('FID 0x60a0');
@@ -63,9 +63,13 @@ describe('ZoneAdvancedSettings Component', () => {
     expect(html).toContain('FID 0x6080');
 
     // Check values
-    expect(html).toContain('5.0°C');
-    expect(html).toContain('15.0°C');
-    expect(html).toContain('10.0°C');
+    expect(html).toContain('5.00');
+    expect(html).toContain('19.00');
+    expect(html).toContain('0.50');
+
+    // Check PID formula & interplay
+    expect(html).toContain('How Zone PID and Valve Sensitivity (0x4160) Interplay');
+    expect(html).toContain('Reset PID Defaults (0.50 / 5.00 / 19.00)');
   });
 
   it('renders Advanced OWD hardware protocol grounding and status', () => {
@@ -98,18 +102,18 @@ describe('ZoneAdvancedSettings Component', () => {
     expect(html).toContain('disabled=""');
   });
 
-  it('disables save button when tuning temperatures match zone current values', () => {
+  it('disables save button when PID tuning values match zone current values', () => {
     const html = renderToString(<ZoneAdvancedSettings {...defaultProps} />);
     expect(html).toContain('disabled=""');
   });
 
-  it('enables save button when tuning temperatures are dirty', () => {
+  it('enables save button when PID tuning values are dirty', () => {
     const dirtyProps = {
       ...defaultProps,
-      frostMinTemperature: 6.5
+      kp: 0.80
     };
     const html = renderToString(<ZoneAdvancedSettings {...dirtyProps} />);
     // Save button should NOT have disabled=""
-    expect(html).toContain('common.save');
+    expect(html).toContain('>Save</button>');
   });
 });

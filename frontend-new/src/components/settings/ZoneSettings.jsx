@@ -62,9 +62,9 @@ export default function ZoneSettings({ homeId, zoneId, zone, onBack, mutateZones
       await updateZoneDetails(homeId, zoneId, {
         name: zone?.name || name,
         type: zone?.type,
-        frostMinTemperature: parseFloat(frostMinTemperature),
-        temperatureBaseline: parseFloat(temperatureBaseline),
-        temperatureDeviationLimit: parseFloat(temperatureDeviationLimit)
+        kp: parseFloat(kp),
+        ki: parseFloat(ki),
+        kd: parseFloat(kd)
       });
       if (mutateZones) await mutateZones();
       triggerToast(t('settings.zone_updated_success'), 'success');
@@ -91,10 +91,10 @@ export default function ZoneSettings({ homeId, zoneId, zone, onBack, mutateZones
   const [offlineScheduleEnabled, setOfflineScheduleEnabled] = useState(zone?.offlineScheduleEnabled || false);
   const [openWindow, setOpenWindow] = useState(zone?.openWindowDetection?.enabled ?? true);
   const [owdTimeout, setOwdTimeout] = useState(900); // 15 mins default
-  const [temperatureDeviationLimit, setTemperatureDeviationLimit] = useState(10.00);
+  const [kp, setKp] = useState(0.50);
+  const [ki, setKi] = useState(5.00);
+  const [kd, setKd] = useState(19.00);
   const [owdNvmState, setOwdNvmState] = useState(1);
-  const [frostMinTemperature, setFrostMinTemperature] = useState(5.00);
-  const [temperatureBaseline, setTemperatureBaseline] = useState(15.00);
   const [tanocloOwdEnabled, setTaNoCloOwdEnabled] = useState(zone?.tanocloOwdEnabled || false);
   const [owdSource, setOwdSource] = useState(zone?.tanocloOwdSource || 'device');
 
@@ -138,10 +138,10 @@ export default function ZoneSettings({ homeId, zoneId, zone, onBack, mutateZones
       setDazzle(prev => prev !== (zone.dazzleEnabled || false) ? (zone.dazzleEnabled || false) : prev);
       setOpenWindow(prev => prev !== (zone.openWindowDetection?.enabled ?? true) ? (zone.openWindowDetection?.enabled ?? true) : prev);
       setOwdTimeout(prev => prev !== (zone.openWindowDetection?.timeoutInSeconds || 900) ? (zone.openWindowDetection?.timeoutInSeconds || 900) : prev);
-      setTemperatureDeviationLimit(prev => prev !== (zone.temperatureDeviationLimit ?? zone.openWindowDetection?.temperatureDeviationLimit ?? 10.00) ? (zone.temperatureDeviationLimit ?? zone.openWindowDetection?.temperatureDeviationLimit ?? 10.00) : prev);
+      setKp(prev => prev !== (zone.kp ?? zone.pidTuning?.kp ?? 0.50) ? (zone.kp ?? zone.pidTuning?.kp ?? 0.50) : prev);
+      setKi(prev => prev !== (zone.ki ?? zone.pidTuning?.ki ?? 5.00) ? (zone.ki ?? zone.pidTuning?.ki ?? 5.00) : prev);
+      setKd(prev => prev !== (zone.kd ?? zone.pidTuning?.kd ?? 19.00) ? (zone.kd ?? zone.pidTuning?.kd ?? 19.00) : prev);
       setOwdNvmState(prev => prev !== (zone.openWindowDetection?.owdNvmState ?? 1) ? (zone.openWindowDetection?.owdNvmState ?? 1) : prev);
-      setFrostMinTemperature(prev => prev !== (zone.frostMinTemperature ?? 5.00) ? (zone.frostMinTemperature ?? 5.00) : prev);
-      setTemperatureBaseline(prev => prev !== (zone.temperatureBaseline ?? 15.00) ? (zone.temperatureBaseline ?? 15.00) : prev);
       setTaNoCloOwdEnabled(prev => prev !== (zone.tanocloOwdEnabled || false) ? (zone.tanocloOwdEnabled || false) : prev);
       setOwdSource(prev => prev !== (zone.tanocloOwdSource || 'device') ? (zone.tanocloOwdSource || 'device') : prev);
       setOfflineScheduleEnabled(prev => prev !== (zone.offlineScheduleEnabled || false) ? (zone.offlineScheduleEnabled || false) : prev);
@@ -208,51 +208,12 @@ export default function ZoneSettings({ homeId, zoneId, zone, onBack, mutateZones
     }
   };
 
-  const [_isSavingDetails, setIsSavingDetails] = useState(false);
-
-  const _handleSaveDetails = async () => {
-    if (!name || name.trim() === '') return;
-    try {
-      setIsSavingDetails(true);
-      await updateZoneDetails(homeId, zoneId, {
-        name: name.trim(),
-        type: zone.type,
-        frostMinTemperature: parseFloat(frostMinTemperature),
-        temperatureBaseline: parseFloat(temperatureBaseline)
-      });
-      if (mutateZones) await mutateZones();
-      triggerToast(t('settings.zone_updated_success'), 'success');
-    } catch (err) {
-      logger.error(err);
-      triggerToast(err.message || t('settings.failed_save_settings'), 'error');
-    } finally {
-      setIsSavingDetails(false);
-    }
-  };
-
-  const handleOwdDeviationChange = async (val) => {
-    const prev = temperatureDeviationLimit;
-    setTemperatureDeviationLimit(val);
-    try {
-      setIsSaving(true);
-      await updateOpenWindowDetection(homeId, zoneId, openWindow, owdTimeout, val, owdNvmState);
-      if (mutateZones) await mutateZones();
-      triggerToast(t('settings.zone_updated_success'), 'success');
-    } catch (err) {
-      logger.error(err);
-      setTemperatureDeviationLimit(prev);
-      triggerToast(err.message || t('settings.failed_save_settings'), 'error');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
   const handleOwdNvmStateToggle = async (val) => {
     const prev = owdNvmState;
     setOwdNvmState(val);
     try {
       setIsSaving(true);
-      await updateOpenWindowDetection(homeId, zoneId, openWindow, owdTimeout, temperatureDeviationLimit, val);
+      await updateOpenWindowDetection(homeId, zoneId, openWindow, owdTimeout);
       if (mutateZones) await mutateZones();
       triggerToast(t('settings.zone_updated_success'), 'success');
     } catch (err) {
@@ -578,10 +539,12 @@ export default function ZoneSettings({ homeId, zoneId, zone, onBack, mutateZones
           zone={zone}
           isDhw={isDhw}
           isReadOnly={isReadOnly}
-          frostMinTemperature={frostMinTemperature}
-          setFrostMinTemperature={setFrostMinTemperature}
-          temperatureBaseline={temperatureBaseline}
-          setTemperatureBaseline={setTemperatureBaseline}
+          kp={kp}
+          setKp={setKp}
+          ki={ki}
+          setKi={setKi}
+          kd={kd}
+          setKd={setKd}
           handleSaveAdvancedDetails={handleSaveAdvancedDetails}
           isSavingAdvancedDetails={isSavingAdvancedDetails}
           offlineScheduleEnabled={offlineScheduleEnabled}
@@ -594,9 +557,6 @@ export default function ZoneSettings({ homeId, zoneId, zone, onBack, mutateZones
           triggerToast={triggerToast}
           openWindow={openWindow}
           owdTimeout={owdTimeout}
-          temperatureDeviationLimit={temperatureDeviationLimit}
-          setTemperatureDeviationLimit={setTemperatureDeviationLimit}
-          handleOwdDeviationChange={handleOwdDeviationChange}
           owdNvmState={owdNvmState}
           handleOwdNvmStateToggle={handleOwdNvmStateToggle}
           tanocloOwdEnabled={tanocloOwdEnabled}

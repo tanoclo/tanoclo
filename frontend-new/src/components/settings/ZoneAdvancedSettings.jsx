@@ -2,16 +2,17 @@
  * @file src/components/settings/ZoneAdvancedSettings.jsx
  * @brief Renders advanced tuning controls for heating zones.
  * 
- * Configures sensitive micro-adjustments:
- * - Tuning Temperatures triad:
- *     * FID 0x60a0 (zone_frost_min_temperature, default 5.00°C)
- *     * FID 0x60c0 (zone_temperature_baseline, default 15.00°C)
- *     * FID 0x6080 (zone_temperature_deviation_limit, default 10.00°C)
+ * Exposes hardware-calibrated parameters for heating zones:
+ * - Closed-loop PID heating demand controller:
+ *     * Demand (0x40a0) = clamp(P + I - D, 0, 100)%
+ *     * FID 0x6080: Kp (proportional gain, default 0.50 / raw 50)
+ *     * FID 0x60a0: Ki (integral gain with anti-windup cap, default 5.00 / raw 500)
+ *     * FID 0x60c0: Kd (derivative damping factor, default 19.00 / raw 1900)
+ * - Interplay with device valve sensitivity (FID 0x4160 stroke denominator).
  * - Advanced Open Window Detection (OWD):
- *     * FID 0x60e0 (zone_open_window_detection_enabled)
- *     * FID 0x62c0 (zone_open_window_shutoff_duration, default 900s / 15m)
- *     * FID 0x4140 (owd_state telemetry flag in /z/p pings)
- *     * TaNoClo server-side drop rate heuristics & external sensor routing.
+ *     * FID 0x60e0: Hardware switch
+ *     * FID 0x62c0: Shutoff duration (default 900s / 15m)
+ *     * FID 0x4140: Active OWD state telemetry in /z/p
  * - Offline local scheduling syncs.
  */
 
@@ -19,48 +20,22 @@ import React from 'react';
 import Card from '../common/Card';
 import Button from '../common/Button';
 import Toggle from '../common/Toggle';
-import { ShieldAlert, Thermometer, Wind, CheckCircle2, AlertTriangle, Activity } from 'lucide-react';
+import { ShieldAlert, Activity, Wind, CheckCircle2, AlertTriangle, RotateCcw } from 'lucide-react';
 import ZoneSettingsSchedule from './ZoneSettingsSchedule';
 
 /**
  * @brief Advanced zone settings controller sub-panel.
- * @param {object} props.zone - Target zone details.
- * @param {boolean} props.isDhw - Whether target zone is Domestic Hot Water.
- * @param {boolean} props.isReadOnly - Whether view is read-only.
- * @param {number} props.frostMinTemperature - Frost protection minimum temperature limit (FID 0x60a0).
- * @param {function} props.setFrostMinTemperature - Frost min temperature state setter.
- * @param {number} props.temperatureBaseline - Temperature baseline setpoint (FID 0x60c0).
- * @param {function} props.setTemperatureBaseline - Temperature baseline state setter.
- * @param {number} props.temperatureDeviationLimit - Temperature deviation limit (FID 0x6080).
- * @param {function} props.setTemperatureDeviationLimit - Temperature deviation limit state setter.
- * @param {function} props.handleSaveAdvancedDetails - Save advanced calibration details dispatcher.
- * @param {boolean} props.isSavingAdvancedDetails - Progress indicator for tuning adjustments.
- * @param {boolean} props.offlineScheduleEnabled - Active offline schedule state.
- * @param {function} props.handleOfflineScheduleToggle - Offline schedule toggle callback.
- * @param {boolean} props.isSaving - Offline schedule saving progress indicator.
- * @param {function} props.syncOfflineSchedule - Push offline rules to physical valve memory callback.
- * @param {number} props.homeId - Active home identifier.
- * @param {number} props.zoneId - Active zone identifier.
- * @param {function} props.mutateZones - SWR mutate callback to reload zones metadata.
- * @param {function} props.triggerToast - Callback function to show notification toast.
- * @param {boolean} props.openWindow - Active open window setting (FID 0x60e0).
- * @param {number} props.owdTimeout - OWD shutoff duration in seconds (FID 0x62c0).
- * @param {boolean} props.tanocloOwdEnabled - Custom backend software OWD feature state.
- * @param {function} props.handleTaNoCloOwdToggle - Software OWD toggle callback.
- * @param {string} props.owdSource - Active OWD evaluation source ('device', 'server', 'both', 'external').
- * @param {function} props.handleOwdSourceChange - OWD evaluation source selector callback.
- * @param {function} props.t - Translation resolver hook.
  */
 export default function ZoneAdvancedSettings({
   zone,
   isDhw,
   isReadOnly,
-  frostMinTemperature,
-  setFrostMinTemperature,
-  temperatureBaseline,
-  setTemperatureBaseline,
-  temperatureDeviationLimit,
-  setTemperatureDeviationLimit,
+  kp = 0.50,
+  setKp,
+  ki = 5.00,
+  setKi,
+  kd = 19.00,
+  setKd,
   handleSaveAdvancedDetails,
   isSavingAdvancedDetails,
   offlineScheduleEnabled,
@@ -79,18 +54,27 @@ export default function ZoneAdvancedSettings({
   handleOwdSourceChange,
   t
 }) {
-  const currentFrost = zone?.frostMinTemperature ?? 5.00;
-  const currentBaseline = zone?.temperatureBaseline ?? 15.00;
-  const currentDeviation = zone?.temperatureDeviationLimit ?? zone?.openWindowDetection?.temperatureDeviationLimit ?? 10.00;
+  const currentKp = zone?.kp ?? zone?.pidTuning?.kp ?? 0.50;
+  const currentKi = zone?.ki ?? zone?.pidTuning?.ki ?? 5.00;
+  const currentKd = zone?.kd ?? zone?.pidTuning?.kd ?? 19.00;
 
   const isTuningDirty = (
-    frostMinTemperature !== currentFrost ||
-    temperatureBaseline !== currentBaseline ||
-    temperatureDeviationLimit !== currentDeviation
+    kp !== currentKp ||
+    ki !== currentKi ||
+    kd !== currentKd
   );
 
   const isOpenWindowActive = Boolean(zone?.open_window_active);
   const activeDurationMinutes = Math.round(owdTimeout / 60);
+
+  const handleResetPidDefaults = () => {
+    if (setKp) setKp(0.50);
+    if (setKi) setKi(5.00);
+    if (setKd) setKd(19.00);
+    if (triggerToast) {
+      triggerToast(t('settings.zone_advanced.pid_reset', 'PID parameters reset to default (0.50 / 5.00 / 19.00)'), 'info');
+    }
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
@@ -113,102 +97,52 @@ export default function ZoneAdvancedSettings({
         </p>
       </Card>
 
-      {/* Firmware Tuning Temperatures Card (FID 0x6080, 0x60a0, 0x60c0) */}
+      {/* PID Loop Heating Demand Calibration Card (FID 0x6080, 0x60a0, 0x60c0) */}
       <Card style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.5rem' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <Thermometer size={18} style={{ color: 'var(--primary)' }} />
+              <Activity size={18} style={{ color: 'var(--primary)' }} />
               <h3 style={{ fontSize: '1rem', fontWeight: 700, margin: 0 }}>
-                {t('settings.zone_advanced.tuning_temps_title')}
+                {t('settings.zone_advanced.tuning_temps_title', 'PID Heating Demand Tuning')}
               </h3>
             </div>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '4px 0 0', lineHeight: '1.4' }}>
-              {t('settings.zone_advanced.tuning_temps_desc')}
+              {t('settings.zone_advanced.tuning_temps_desc', 'Configures closed-loop PID controller parameters in firmware to calculate heating demand (0–100%): Demand = clamp(P + I − D, 0, 100)%.')}
             </p>
           </div>
         </div>
 
+        {/* Firmware Formula Badge */}
+        <div style={{
+          padding: '0.75rem 1rem',
+          backgroundColor: 'var(--bg-input, rgba(0,0,0,0.2))',
+          border: '1px solid var(--border-color)',
+          borderRadius: 'var(--radius-sm, 6px)',
+          fontFamily: 'monospace',
+          fontSize: '0.85rem',
+          color: 'var(--text-primary)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '0.5rem'
+        }}>
+          <div>
+            <span style={{ color: 'var(--text-secondary)' }}>{t('settings.zone_advanced.pid_formula_title', 'Firmware Control Law')}: </span>
+            <strong style={{ color: 'var(--primary-light, #3b82f6)' }}>{t('settings.zone_advanced.pid_formula_badge', 'Demand = clamp(P + I − D, 0, 100)%')}</strong>
+          </div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+            {t('settings.zone_advanced.pid_formula_sub', 'P = ΔT × (Kp / 2) | I = acc × Ki / 300 | D = Kd × ΔṪ / 20')}
+          </div>
+        </div>
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-          {/* Frost Protection Minimum (FID 0x60a0) */}
+          {/* Proportional Gain Kp (FID 0x6080) */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <strong>{t('settings.zone_advanced.frost_protection_title')}</strong>
-                <span style={{
-                  fontSize: '0.65rem',
-                  padding: '1px 6px',
-                  borderRadius: '4px',
-                  backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                  color: '#3b82f6',
-                  fontWeight: 700
-                }}>
-                  FID 0x60a0
-                </span>
-              </div>
-              <span style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--primary)' }}>
-                {Number(frostMinTemperature).toFixed(1)}°C
-              </span>
-            </div>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.4' }}>
-              {t('settings.zone_advanced.frost_protection_desc')} <strong>5.0°C</strong>.
-              <br />
-              • <em>{t('common.interpretation')}</em>: {t('settings.zone_advanced.frost_protection_interpretation')}
-            </p>
-            <input
-              type="range"
-              min="0"
-              max="15"
-              step="0.5"
-              value={frostMinTemperature}
-              onChange={(e) => setFrostMinTemperature(Number(e.target.value))}
-              disabled={isReadOnly}
-              style={{ cursor: isReadOnly ? 'not-allowed' : 'pointer', width: '100%', marginTop: '0.25rem' }}
-            />
-          </div>
-
-          {/* Baseline Target Temperature (FID 0x60c0) */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', borderTop: '1px solid var(--border-color)', paddingTop: '1.25rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <strong>{t('settings.zone_advanced.baseline_temp_title')}</strong>
-                <span style={{
-                  fontSize: '0.65rem',
-                  padding: '1px 6px',
-                  borderRadius: '4px',
-                  backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                  color: '#10b981',
-                  fontWeight: 700
-                }}>
-                  FID 0x60c0
-                </span>
-              </div>
-              <span style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--primary)' }}>
-                {Number(temperatureBaseline).toFixed(1)}°C
-              </span>
-            </div>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.4' }}>
-              {t('settings.zone_advanced.baseline_temp_desc')}
-              <br />
-              • <em>{t('common.interpretation')}</em>: {t('settings.zone_advanced.baseline_temp_interpretation')} <strong>15.0°C</strong>.
-            </p>
-            <input
-              type="range"
-              min="5"
-              max="25"
-              step="0.5"
-              value={temperatureBaseline}
-              onChange={(e) => setTemperatureBaseline(Number(e.target.value))}
-              disabled={isReadOnly}
-              style={{ cursor: isReadOnly ? 'not-allowed' : 'pointer', width: '100%', marginTop: '0.25rem' }}
-            />
-          </div>
-
-          {/* Temperature Deviation Limit (FID 0x6080) */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', borderTop: '1px solid var(--border-color)', paddingTop: '1.25rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <strong>{t('settings.zone_advanced.deviation_limit_title')}</strong>
+                <strong>{t('settings.zone_advanced.deviation_limit_title', 'Proportional Gain (Kp)')}</strong>
                 <span style={{
                   fontSize: '0.65rem',
                   padding: '1px 6px',
@@ -221,35 +155,141 @@ export default function ZoneAdvancedSettings({
                 </span>
               </div>
               <span style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--primary)' }}>
-                {Number(temperatureDeviationLimit).toFixed(1)}°C
+                {Number(kp).toFixed(2)}
               </span>
             </div>
             <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.4' }}>
-              {t('settings.zone_advanced.deviation_limit_desc')}
+              {t('settings.zone_advanced.deviation_limit_desc')} <strong>0.50</strong>.
               <br />
-              • <em>{t('common.interpretation')}</em>: {t('settings.zone_advanced.deviation_limit_interpretation')} <strong>10.0°C</strong>.
+              • <em>{t('common.interpretation', 'Interpretation')}</em>: {t('settings.zone_advanced.deviation_limit_interpretation')}
             </p>
             <input
               type="range"
-              min="1"
-              max="20"
-              step="0.5"
-              value={temperatureDeviationLimit}
-              onChange={(e) => setTemperatureDeviationLimit(Number(e.target.value))}
+              min="0.05"
+              max="2.00"
+              step="0.05"
+              value={kp}
+              onChange={(e) => setKp && setKp(Number(e.target.value))}
+              disabled={isReadOnly}
+              style={{ cursor: isReadOnly ? 'not-allowed' : 'pointer', width: '100%', marginTop: '0.25rem' }}
+            />
+          </div>
+
+          {/* Integral Gain Ki (FID 0x60a0) */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', borderTop: '1px solid var(--border-color)', paddingTop: '1.25rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <strong>{t('settings.zone_advanced.frost_protection_title', 'Integral Gain (Ki)')}</strong>
+                <span style={{
+                  fontSize: '0.65rem',
+                  padding: '1px 6px',
+                  borderRadius: '4px',
+                  backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                  color: '#3b82f6',
+                  fontWeight: 700
+                }}>
+                  FID 0x60a0
+                </span>
+              </div>
+              <span style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--primary)' }}>
+                {Number(ki).toFixed(2)}
+              </span>
+            </div>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.4' }}>
+              {t('settings.zone_advanced.frost_protection_desc')} <strong>5.00</strong>.
+              <br />
+              • <em>{t('common.interpretation', 'Interpretation')}</em>: {t('settings.zone_advanced.frost_protection_interpretation')}
+            </p>
+            <input
+              type="range"
+              min="0.50"
+              max="20.00"
+              step="0.50"
+              value={ki}
+              onChange={(e) => setKi && setKi(Number(e.target.value))}
+              disabled={isReadOnly}
+              style={{ cursor: isReadOnly ? 'not-allowed' : 'pointer', width: '100%', marginTop: '0.25rem' }}
+            />
+          </div>
+
+          {/* Derivative Gain Kd (FID 0x60c0) */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', borderTop: '1px solid var(--border-color)', paddingTop: '1.25rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <strong>{t('settings.zone_advanced.baseline_temp_title', 'Derivative Gain (Kd)')}</strong>
+                <span style={{
+                  fontSize: '0.65rem',
+                  padding: '1px 6px',
+                  borderRadius: '4px',
+                  backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                  color: '#10b981',
+                  fontWeight: 700
+                }}>
+                  FID 0x60c0
+                </span>
+              </div>
+              <span style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--primary)' }}>
+                {Number(kd).toFixed(2)}
+              </span>
+            </div>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.4' }}>
+              {t('settings.zone_advanced.baseline_temp_desc')}
+              <br />
+              • <em>{t('common.interpretation', 'Interpretation')}</em>: {t('settings.zone_advanced.baseline_temp_interpretation')} <strong>19.00</strong>.
+            </p>
+            <input
+              type="range"
+              min="0.00"
+              max="40.00"
+              step="0.50"
+              value={kd}
+              onChange={(e) => setKd && setKd(Number(e.target.value))}
               disabled={isReadOnly}
               style={{ cursor: isReadOnly ? 'not-allowed' : 'pointer', width: '100%', marginTop: '0.25rem' }}
             />
           </div>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
+        {/* Interplay with Valve Sensitivity Callout */}
+        <div style={{
+          padding: '1rem',
+          borderRadius: 'var(--radius-sm, 6px)',
+          backgroundColor: 'rgba(59, 130, 246, 0.06)',
+          border: '1px solid rgba(59, 130, 246, 0.25)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '0.5rem'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--primary)' }}>
+            <Activity size={16} />
+            <strong style={{ fontSize: '0.85rem' }}>
+              {t('settings.zone_advanced.pid_vs_valve_title', 'How Zone PID and Valve Sensitivity (0x4160) Interplay')}
+            </strong>
+          </div>
+          <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.5' }}>
+            {t('settings.zone_advanced.pid_vs_valve_desc')}
+          </p>
+        </div>
+
+        {/* Card Actions */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-color)', paddingTop: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+          <Button
+            variant="secondary"
+            onClick={handleResetPidDefaults}
+            disabled={isReadOnly}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem' }}
+          >
+            <RotateCcw size={14} />
+            {t('settings.zone_advanced.reset_pid_defaults', 'Reset PID Defaults (0.50 / 5.00 / 19.00)')}
+          </Button>
+
           <Button
             variant="primary"
             onClick={handleSaveAdvancedDetails}
             disabled={isSavingAdvancedDetails || !isTuningDirty || isReadOnly}
             style={{ justifyContent: 'center', minWidth: '120px' }}
           >
-            {isSavingAdvancedDetails ? t('settings.saving') : t('common.save')}
+            {isSavingAdvancedDetails ? t('settings.saving', 'Saving...') : t('common.save', 'Save')}
           </Button>
         </div>
       </Card>

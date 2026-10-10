@@ -60,15 +60,14 @@ router.put('/:homeId/zones/:zoneId/openWindowDetection', async (req, res) => {
         if (isReadOnly && !devBypass) {
             return res.status(403).json({ error: 'zone_config_readonly', message: 'Zone configuration is read-only' });
         }
-        const { enabled, timeoutInSeconds, temperatureDeviationLimit, owdNvmState } = req.body;
+        const { enabled, timeoutInSeconds, owdNvmState } = req.body;
         const pool = db.getPool();
 
-        const [zones] = await pool.execute('SELECT open_window_enabled, open_window_timeout, field_6080, field_6340 FROM zones WHERE id = ? AND home_id = ?', [zoneId, homeId]);
+        const [zones] = await pool.execute('SELECT open_window_enabled, open_window_timeout, field_6340 FROM zones WHERE id = ? AND home_id = ?', [zoneId, homeId]);
         if (zones.length === 0) return res.status(404).json({ error: 'Zone not found' });
 
         const currentEnabled = Boolean(zones[0].open_window_enabled);
         const currentTimeout = zones[0].open_window_timeout || 900;
-        const currentDeviation = zones[0].field_6080 !== null ? parseFloat(zones[0].field_6080) : 10.00;
         const currentNvmState = zones[0].field_6340 !== null ? parseInt(zones[0].field_6340, 10) : 1;
 
         const newEnabled = enabled !== undefined ? enabled : currentEnabled;
@@ -77,10 +76,9 @@ router.put('/:homeId/zones/:zoneId/openWindowDetection', async (req, res) => {
         if (isNaN(newTimeout) || newTimeout < 60) newTimeout = 60;
         if (newTimeout > 3600) newTimeout = 3600;
 
-        const newDeviation = temperatureDeviationLimit !== undefined && temperatureDeviationLimit !== null ? parseFloat(temperatureDeviationLimit) : currentDeviation;
         const newNvmState = owdNvmState !== undefined && owdNvmState !== null ? parseInt(owdNvmState, 10) : currentNvmState;
 
-        await db.updateZoneOpenWindowSettings(homeId, zoneId, newEnabled, newTimeout, newDeviation, newNvmState);
+        await db.updateZoneOpenWindowSettings(homeId, zoneId, newEnabled, newTimeout, null, newNvmState);
 
         const [devices] = await pool.execute('SELECT serial_no FROM devices WHERE zone_id = ? AND home_id = ?', [zoneId, homeId]);
         for (const dev of devices) {

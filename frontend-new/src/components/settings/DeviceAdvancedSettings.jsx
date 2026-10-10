@@ -3,7 +3,7 @@
  * @brief Renders hardware actuator limits, display settings, CoAP memory dumper,
  * live diagnostic RAM state (/d/dbg/st), and NVM persistent storage (/d/dbg2/tlvs).
  * 
- * Exposes firmware-level parameters verified against Ghidra firmware binaries
+ * Exposes low-level hardware parameters and registers
  * for IB01, RU02, and VA02 devices.
  */
 
@@ -31,6 +31,18 @@ export const DIAG_FIDS = [
     desc: 'Actuator linear target step position override (0 = closed seat, ~2400 = fully open modulation limit).',
     access: 'rw',
     type: 'steps',
+    category: 'actuator',
+    deviceScope: 'va'
+  },
+  {
+    fid: '0x4160',
+    len: 2,
+    name: 'va_heat_demand_scaling',
+    label: '0x4160 - Valve Demand Scaling / Stroke Denominator (u16)',
+    shortLabel: 'Valve Demand Scaling',
+    desc: 'Actuator valve demand stroke denominator in percent (100 = 1.00× standard, 50 = 2.00× boost, 150 = 0.67× throttle). Scales physical valve stroke relative to zone heat demand.',
+    access: 'rw',
+    type: 'u16',
     category: 'actuator',
     deviceScope: 'va'
   },

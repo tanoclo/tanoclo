@@ -446,9 +446,9 @@ This dictionary consolidates all observed TLV fields, mapping their hex codes, t
 | `0x6020` | `zone_service_type` | `u8` | 1.0 | enum | `/z/{id}/s` | `zone_measurements` | `field_6020` | Zone classification: `1`=HEATING, `2`=HOT_WATER. |
 | `0x6040` | `zone_program_uri` | `string` | 1.0 | - | `/z/{id}/config` | `tlv_labels` | - | CoAP URI for zone program timetable. |
 | `0x6060` | `zone_program_enabled` | `bool` | 1.0 | - | `/z/{id}/config` | `tlv_labels` | - | Boolean flag indicating schedule active. |
-| `0x6080` | `zone_temperature_deviation_limit` | `s16be` | 0.01 | °C | `/z/{id}/config` | `zones` | `field_6080` | OWD trigger temperature deviation sensitivity limit. |
-| `0x60a0` | `zone_frost_min_temperature` | `s16be` | 0.01 | °C | `/z/{id}/config` | `zones` | `field_60a0` | Zone minimum frost protection temperature setpoint. |
-| `0x60c0` | `zone_temperature_baseline` | `s16be` | 0.01 | °C | `/z/{id}/config` | `zones` | `field_60c0` | Zone baseline temperature target setpoint. |
+| `0x6080` | `zone_pid_kp` | `s16be` | 0.01 | - | `/z/{id}/config` | `zones` | `field_6080` | Proportional gain (Kp) for closed-loop heat demand PID calculation (P = ΔT × Kp / 2, default 0.50). |
+| `0x60a0` | `zone_pid_ki` | `s16be` | 0.01 | - | `/z/{id}/config` | `zones` | `field_60a0` | Integral gain (Ki) for closed-loop heat demand PID calculation with anti-windup (default 5.00). |
+| `0x60c0` | `zone_pid_kd` | `s16be` | 0.01 | - | `/z/{id}/config` | `zones` | `field_60c0` | Derivative gain (Kd) damping factor for closed-loop heat demand PID calculation (default 19.00 / 0x76c). |
 | `0x60e0` | `zone_open_window_detection_enabled` | `bool` | 1.0 | - | `/z/{id}/config` | `zones` | `open_window_enabled` | Zone Open Window Detection enabled switch. |
 | `0x6160` | `home_away` | `u8` | 1.0 | enum | `/z/{id}/s` | `zone_measurements` | `field_6160` | Home occupancy state: `1`=HOME, `2`=AWAY. |
 | `0x6180` | `zone_demand_master_latch` | `bool` | 1.0 | - | `/z/{id}/s` | `zone_measurements` | `field_6180` | Zone demand master relay/bus latch; asserted (1) when heating demand in zone engages boiler firing / circuit bus; 0 when idle. |
