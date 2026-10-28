@@ -91,7 +91,7 @@ struct ExposeInternalPin : public InternalGPIOPin {
  * @brief Handles low-level SPI operations, state-machine transitions, cryptography (CCM),
  * and FreeRTOS task coordination.
  */
-class TadoPairing : public Component, public spi::SPIDevice<spi::BIT_ORDER_MSB_FIRST, spi::CLOCK_POLARITY_LOW, spi::CLOCK_PHASE_LEADING, spi::DATA_RATE_8MHZ> {
+class TadoPairing : public Component, public spi::SPIDevice<spi::BIT_ORDER_MSB_FIRST, spi::CLOCK_POLARITY_LOW, spi::CLOCK_PHASE_LEADING, spi::DATA_RATE_2MHZ> {
  public:
   static constexpr const char *const TAG = "tado_pairing";
 

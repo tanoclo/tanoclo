@@ -77,7 +77,7 @@ struct RxPacket {
 };
 
 using TadoSPIDevice = spi::SPIDevice<spi::BIT_ORDER_MSB_FIRST, spi::CLOCK_POLARITY_LOW,
-                                       spi::CLOCK_PHASE_LEADING, spi::DATA_RATE_8MHZ>;
+                                       spi::CLOCK_PHASE_LEADING, spi::DATA_RATE_2MHZ>;
 
 class SX1276Radio {
  public:
