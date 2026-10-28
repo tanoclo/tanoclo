@@ -23,6 +23,7 @@ const mqttPublisher = require('./lib/mqtt-publisher');
 const messageProcessor = require('./lib/message-processor');
 const csl = require('./lib/csl');
 const icmpv6 = require('./lib/icmpv6');
+const decryptStats = require('./lib/decrypt-stats');
 
 // Global state variables
 let tcpServer = null;
@@ -223,6 +224,19 @@ let statsIcmpv6Other = 0;
 // Duplicate raw packet sliding window
 const processedPackets = new Map();
 
+function receiverStats() {
+    return {
+        statsTcpReceived,
+        statsCrcFailed,
+        statsDuplicateRaw,
+        statsDecryptionFailed,
+        statsDecryptionSucceeded: decryptStats.getSuccessCount(),
+        statsExcludedPan: decryptStats.getExcludedCount(),
+        statsDecodedCoap,
+        whitelistedPanIdsSize: whitelistedPanIds.size
+    };
+}
+
 function logToFile(msg) {
     if (!config.fileLogging) return;
     const time = new Date().toISOString();
@@ -417,6 +431,21 @@ function processDecryptedPayload(payload, macInfo, innerProto, seq, type, meta, 
     logToFile(`Decryption ignored: No CoAP, len=${payload.length}`);
 }
 
+function printDecryptStats() {
+    const snap = decryptStats.snapshot();
+    const pct = (r) => r === null ? '   -' : `${(r * 100).toFixed(0).padStart(3)}%`;
+    const dbm = (v) => v === null ? '    -' : `${v}`.padStart(5);
+    console.log(`  * Decryption by source (fail rate ${pct(snap.fail_rate).trim()} of ${snap.ok + snap.fail} secured frames):`);
+    console.log('    source            ok   fail  rate  rssi_ok rssi_fail  shapes (fcf/len ok:fail)');
+    for (const s of snap.sources) {
+        const shapes = Object.entries(s.shapes).map(([k, v]) => `${k} ${v.ok}:${v.fail}`).join(', ');
+        console.log(`    ${s.src.padEnd(16)} ${String(s.ok).padStart(5)} ${String(s.fail).padStart(5)} ${pct(s.fail_rate)}   ${dbm(s.rssi_ok_avg)}     ${dbm(s.rssi_fail_avg)}  ${shapes}`);
+    }
+    if (snap.excluded_drops > 0) {
+        console.log(`  * Auto-excluded PAN drops: ${JSON.stringify(snap.excluded_by_pan)}`);
+    }
+}
+
 async function start() {
     try {
         console.log('==================================================================');
@@ -446,14 +475,8 @@ async function start() {
             if (client) {
                 client.on('connect', () => {
                     haDiscovery.publishReceiverDiscovery();
-                    mqttPublisher.publishReceiverStats({
-                        statsTcpReceived,
-                        statsCrcFailed,
-                        statsDuplicateRaw,
-                        statsDecryptionFailed,
-                        statsDecodedCoap,
-                        whitelistedPanIdsSize: whitelistedPanIds.size
-                    });
+                    mqttPublisher.publishReceiverStats(receiverStats());
+                    mqttPublisher.publishDecryptStats(decryptStats.snapshot());
                 });
             }
         } else {
@@ -489,6 +512,7 @@ async function start() {
             const pan = rfCrypto.getPanId(rawBytes);
 
             if (pan !== null && excludedPanIds.has(pan)) {
+                decryptStats.recordExcluded(pan);
                 return;
             }
             const panStr = pan !== null ? `0x${pan.toString(16).toUpperCase()}` : 'UNKNOWN';
@@ -515,6 +539,8 @@ async function start() {
                     }
                     if (!decrypted) {
                         statsDecryptionFailed++;
+                        const failSrc = rfCrypto.decodeMAC(frame, null).srcClean;
+                        decryptStats.recordAttempt(false, frame, failSrc, rssi, data.hex);
                         if (config.autoExclusion && pan !== null && !discoveredPanIds.has(pan)) {
                             excludedPanIds.add(pan);
                             if (config.consoleLogging) {
@@ -522,7 +548,7 @@ async function start() {
                             }
                         }
                         if (isWhitelisted) {
-                            logToFile(`Decryption failed: signature=0x09, len=${len}, PAN=${panStr}`);
+                            logToFile(`Decryption failed: signature=0x09, len=${len}, PAN=${panStr}, src=${failSrc}, rssi=${rssi}`);
                         }
                         return;
                     }
@@ -588,6 +614,7 @@ async function start() {
 
             const keyName = KEY_NAMES.get(keyUsed.toString('hex').toLowerCase()) || 'UNKNOWN_KEY';
             const macInfo = rfCrypto.decodeMAC(frame, decrypted);
+            decryptStats.recordAttempt(true, frame, macInfo.srcClean, rssi, data.hex);
             const innerProto = decrypted[3];
             const seq = decrypted[4];
             const timestamp = new Date().toLocaleTimeString();
@@ -746,7 +773,7 @@ async function start() {
 
                 const sumHandled = statsTooShort + statsCrcFailed + statsDuplicateRaw + statsShortFrame +
                     statsNotEncrypted + statsDecryptionFailed + statsNonOperational +
-                    statsNoCoap + statsIncompleteFragment + statsDecodedCoap;
+                    statsNoCoap + statsIncompleteFragment + statsDecodedCoap + decryptStats.getExcludedCount();
                 const matches = (sumHandled === currentTcp);
 
                 console.log('==================================================================');
@@ -759,6 +786,7 @@ async function start() {
                 console.log(`    - Short IEEE 802.15.4 Frames: ${statsShortFrame}`);
                 console.log(`    - Unencrypted/Control Frames: ${statsNotEncrypted}`);
                 console.log(`    - Decryption Failures:        ${statsDecryptionFailed}`);
+                console.log(`    - Auto-Excluded PAN Drops:    ${decryptStats.getExcludedCount()}`);
                 console.log(`    - Non-Operational Protocol:   ${statsNonOperational}`);
                 console.log(`    - Operational but No CoAP:    ${statsNoCoap}`);
                 console.log(`    - Incomplete 6LoWPAN Frags:   ${statsIncompleteFragment}`);
@@ -769,6 +797,7 @@ async function start() {
                 console.log(`  * Active Whitelisted PANs:      ${whitelistedPanIds.size}`);
                 console.log(`  * Auto-Excluded PANs:           ${excludedPanIds.size}`);
                 console.log(`  * Reassembled Complete count:   ${statsReassembledComplete}`);
+                printDecryptStats();
                 console.log('==================================================================');
             }, 60000);
             statsInterval.unref();
@@ -792,14 +821,8 @@ const cleanupInterval = setInterval(() => {
     }
     deviceRegistry.saveCache();
 
-    mqttPublisher.publishReceiverStats({
-        statsTcpReceived,
-        statsCrcFailed,
-        statsDuplicateRaw,
-        statsDecryptionFailed,
-        statsDecodedCoap,
-        whitelistedPanIdsSize: whitelistedPanIds.size
-    });
+    mqttPublisher.publishReceiverStats(receiverStats());
+    mqttPublisher.publishDecryptStats(decryptStats.snapshot());
 }, 30000);
 cleanupInterval.unref();
 

@@ -165,10 +165,20 @@ function publishReceiverStats(stats) {
         bad_crc_packets: stats.statsCrcFailed,
         duplicate_raw_packets: stats.statsDuplicateRaw,
         decryption_failures: stats.statsDecryptionFailed,
+        decryption_successes: stats.statsDecryptionSucceeded,
+        excluded_pan_drops: stats.statsExcludedPan,
         successfully_decoded_coap: stats.statsDecodedCoap,
         active_whitelisted_pans: stats.whitelistedPanIdsSize
     };
     batchPublish(statsTopic, JSON.stringify(payload), { retain: false, qos: 0 });
+}
+
+function publishDecryptStats(snapshot) {
+    if (!isConnected()) return;
+    // Shapes and raw samples stay in --stats; with them each 30 s publish can reach tens of kilobytes.
+    const { fail_samples: _samples, sources, ...totals } = snapshot;
+    const summary = { ...totals, sources: sources.map(({ shapes: _shapes, ...counts }) => counts) };
+    batchPublish('tado/sniffer/receiver/decrypt_stats', JSON.stringify(summary), { retain: false, qos: 0 });
 }
 
 function close() {
@@ -192,5 +202,6 @@ module.exports = {
     publishDeviceTelemetry,
     publishRawTelemetry,
     publishReceiverStats,
+    publishDecryptStats,
     close
 };

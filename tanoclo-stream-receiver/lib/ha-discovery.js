@@ -86,6 +86,8 @@ function publishReceiverDiscovery() {
         { key: 'bad_crc_packets', name: 'Bad CRC Packets', icon: 'mdi:alert-outline', unit: 'pkts' },
         { key: 'duplicate_raw_packets', name: 'Duplicate Packets', icon: 'mdi:content-copy', unit: 'pkts' },
         { key: 'decryption_failures', name: 'Decryption Failures', icon: 'mdi:lock-open-alert', unit: 'pkts' },
+        { key: 'decryption_successes', name: 'Decryption Successes', icon: 'mdi:lock-open-check', unit: 'pkts', stateClass: 'total_increasing' },
+        { key: 'excluded_pan_drops', name: 'Auto-Excluded PAN Drops', icon: 'mdi:cancel', unit: 'pkts', stateClass: 'total_increasing' },
         { key: 'successfully_decoded_coap', name: 'Decoded CoAP Packets', icon: 'mdi:message-text-outline', unit: 'pkts' },
         { key: 'active_whitelisted_pans', name: 'Active PANs', icon: 'mdi:radio-tower', unit: 'PANs' }
     ];
@@ -102,7 +104,7 @@ function publishReceiverDiscovery() {
                 value_template: `{{ value_json.${sensor.key} }}`,
                 icon: sensor.icon,
                 unit_of_measurement: sensor.unit,
-                state_class: 'measurement',
+                state_class: sensor.stateClass || 'measurement',
                 device: receiverDev
             });
             saveRegisteredEntity(configKey);

@@ -15,6 +15,7 @@ import * as messageProcessor from '../lib/message-processor.js';
 import * as mqttPublisher from '../lib/mqtt-publisher.js';
 import * as csl from '../lib/csl.js';
 import * as icmpv6 from '../lib/icmpv6.js';
+import decryptStats from '../lib/decrypt-stats.js';
 
 describe('rf-crypto module', () => {
     const testKey = Buffer.from('0123456789abcdef0123456789abcdef', 'hex');
@@ -426,3 +427,58 @@ describe('Deterministic CoAP offset and CRC16 stripping', () => {
     });
 });
 
+
+describe('decrypt-stats module', () => {
+    beforeEach(() => decryptStats.reset());
+
+    it('buckets outcomes by source and frame shape', () => {
+        const longFrame = Buffer.from('69ec01d7e40000000000000000000000aabbccddeeff', 'hex');
+        const shortFrame = Buffer.from('6988010000aaaa', 'hex');
+        decryptStats.recordAttempt(true, longFrame, 'A', -60, 'x1');
+        decryptStats.recordAttempt(false, longFrame, 'A', -80, 'x2');
+        decryptStats.recordAttempt(false, shortFrame, 'B', -50, 'x3');
+        decryptStats.recordAttempt(false, shortFrame, 'B', -52, 'x4');
+
+        const snap = decryptStats.snapshot();
+        expect(snap.ok).toBe(1);
+        expect(snap.fail).toBe(3);
+        expect(snap.fail_rate).toBe(0.75);
+        expect(snap.sources[0].src).toBe('B');
+        expect(snap.sources[0].fail_rate).toBe(1);
+        expect(snap.sources[0].rssi_fail_avg).toBe(-51);
+        expect(snap.sources[0].shapes).toEqual({ '6988/7': { ok: 0, fail: 2 } });
+        const a = snap.sources.find(s => s.src === 'A');
+        expect(a.rssi_ok_avg).toBe(-60);
+        expect(a.rssi_fail_avg).toBe(-80);
+        expect(snap.fail_samples['6988/7'].map(x => x.hex)).toEqual(['x3', 'x4']);
+    });
+
+    it('caps samples per shape and lumps sources beyond the limit', () => {
+        const frame = Buffer.from('69ec01', 'hex');
+        for (let i = 0; i < 70; i++) decryptStats.recordAttempt(false, frame, `S${i}`, -70, `h${i}`);
+        const snap = decryptStats.snapshot();
+        expect(snap.fail_samples['69ec/3']).toHaveLength(3);
+        expect(snap.sources).toHaveLength(65);
+        expect(snap.sources.find(s => s.src === 'OTHER').fail).toBe(6);
+    });
+
+    it('counts auto-excluded drops per PAN', () => {
+        decryptStats.recordExcluded(0xE4D7);
+        decryptStats.recordExcluded(0xE4D7);
+        decryptStats.recordExcluded(0x0102);
+        const snap = decryptStats.snapshot();
+        expect(snap.excluded_drops).toBe(3);
+        expect(snap.excluded_by_pan).toEqual({ '0xE4D7': 2, '0x0102': 1 });
+    });
+
+    it('caps shapes per source and excluded PANs', () => {
+        for (let len = 3; len < 23; len++) decryptStats.recordAttempt(false, Buffer.alloc(len, 0x69), 'A', -70, 'h');
+        for (let pan = 0; pan < 70; pan++) decryptStats.recordExcluded(pan);
+        const snap = decryptStats.snapshot();
+        const shapes = snap.sources.find(s => s.src === 'A').shapes;
+        expect(Object.keys(shapes)).toHaveLength(17);
+        expect(shapes.other.fail).toBe(4);
+        expect(Object.keys(snap.excluded_by_pan)).toHaveLength(65);
+        expect(snap.excluded_by_pan.other).toBe(6);
+    });
+});
