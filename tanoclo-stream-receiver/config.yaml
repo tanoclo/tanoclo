@@ -24,6 +24,7 @@ options:
   tcp_port: 9999
   tado_keys: "PAIRING=7461646f2070616972696e67206b6579"
   tado_pan_ids: ""
+  tado_bridge_macs: ""
   mqtt_enabled: true
   mqtt_host: "mqtt://core-mosquitto:1883"
   mqtt_username: ""
@@ -40,6 +41,7 @@ schema:
   tcp_port: "int"
   tado_keys: "str?"
   tado_pan_ids: "str?"
+  tado_bridge_macs: "str?"
   mqtt_enabled: "bool"
   mqtt_host: "str?"
   mqtt_username: "str?"

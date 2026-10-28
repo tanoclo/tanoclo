@@ -57,6 +57,38 @@ describe('rf-crypto module', () => {
         expect(macInfo.isSrcVa).toBe(true);
         expect(macInfo.direction).toBe('CLIENT_TO_SERVER');
     });
+
+    it('recognises a configured bridge MAC as the IB', () => {
+        // Data frame, dest short 0x1234, src extended 00:1B:C5:07:31:2A:E4:D7 (5 bytes in header + 3 from payload)
+        const frame = Buffer.from([0x69, 0xC8, 0x01, 0xD7, 0xE4, 0x34, 0x12, 0xD7, 0xE4, 0x2A, 0x31, 0x07]);
+        const decrypted = Buffer.from([0xC5, 0x1B, 0x00]);
+
+        expect(rfCrypto.decodeMAC(frame, decrypted).isSrcIb).toBe(false);
+
+        rfCrypto.setBridgeMacs(['00:1B:C5:07:31:2A:E4:D7']);
+        try {
+            const macInfo = rfCrypto.decodeMAC(frame, decrypted);
+            expect(macInfo.srcMac).toBe('00:1B:C5:07:31:2A:E4:D7');
+            expect(macInfo.isSrcIb).toBe(true);
+            expect(macInfo.direction).toBe('SERVER_TO_CLIENT');
+        } finally {
+            rfCrypto.setBridgeMacs([]);
+        }
+    });
+
+    it('accepts bridge MACs in common formats and reports invalid ones', () => {
+        try {
+            const res = rfCrypto.setBridgeMacs('00:1b:c5:07:31:2a:e4:d7, 001BC507312AE4D8,0x001BC507312AE4D9, 00-1B-C5-07-31-2A-E4-DA, 1234');
+            expect(res.valid).toHaveLength(4);
+            expect(res.invalid).toEqual(['1234']);
+            expect(rfCrypto.isBridgeMac('00:1B:C5:07:31:2A:E4:D7')).toBe(true);
+            expect(rfCrypto.isBridgeMac('00:1B:C5:07:31:2A:E4:D9')).toBe(true);
+            expect(rfCrypto.isBridgeMac('00:1B:C5:07:31:2A:E4:DB')).toBe(false);
+            expect(rfCrypto.isBridgeMac('00:1B:C5:07:31:55:00:00')).toBe(true);
+        } finally {
+            rfCrypto.setBridgeMacs([]);
+        }
+    });
 });
 
 describe('6LoWPAN Reassembler module', () => {

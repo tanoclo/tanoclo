@@ -42,6 +42,7 @@ const config = {
         "PAIRING": rfCrypto.PAIRING_KEY_HEX
     },
     whitelistedPanIds: [],
+    bridgeMacs: [],
     mqtt: {
         enabled: false,
         host: "mqtt://localhost",
@@ -77,6 +78,7 @@ if (fs.existsSync(configPath)) {
         if (fileConfig.bindAddress !== undefined) config.tcpHost = fileConfig.bindAddress;
         if (fileConfig.keys) Object.assign(config.keys, fileConfig.keys);
         if (fileConfig.whitelistedPanIds) config.whitelistedPanIds = fileConfig.whitelistedPanIds;
+        if (fileConfig.bridgeMacs) config.bridgeMacs = fileConfig.bridgeMacs;
         if (fileConfig.mqtt) Object.assign(config.mqtt, fileConfig.mqtt);
     } catch (err) {
         console.error(`[Config] Error parsing config.json: ${err.message}`);
@@ -99,6 +101,7 @@ if (process.env.TADO_PAN_IDS) {
         return trimmed.startsWith('0x') ? parseInt(trimmed, 16) : parseInt(trimmed, 10);
     });
 }
+if (process.env.TADO_BRIDGE_MACS) config.bridgeMacs = process.env.TADO_BRIDGE_MACS.split(',').map(m => m.trim());
 if (process.env.MQTT_ENABLED) config.mqtt.enabled = process.env.MQTT_ENABLED === 'true';
 if (process.env.MQTT_HOST) config.mqtt.host = process.env.MQTT_HOST;
 if (process.env.MQTT_TOPIC) config.mqtt.topic = process.env.MQTT_TOPIC;
@@ -134,6 +137,8 @@ for (let i = 0; i < args.length; i++) {
             const trimmed = id.trim();
             return trimmed.startsWith('0x') ? parseInt(trimmed, 16) : parseInt(trimmed, 10);
         });
+    } else if (args[i] === '--bridge-macs' && args[i + 1]) {
+        config.bridgeMacs = args[i + 1].split(',').map(m => m.trim());
     } else if (args[i] === '--mqtt-host' && args[i + 1]) {
         config.mqtt.enabled = true;
         config.mqtt.host = args[i + 1];
@@ -154,6 +159,10 @@ for (let i = 0; i < args.length; i++) {
     else if (args[i] === '--no-console-logging') config.consoleLogging = false;
     else if (args[i] === '--console-logging') config.consoleLogging = true;
 }
+
+const bridgeMacResult = rfCrypto.setBridgeMacs(config.bridgeMacs);
+if (bridgeMacResult.valid.length > 0) console.log(`Bridge MACs: ${bridgeMacResult.valid.join(', ')}`);
+if (bridgeMacResult.invalid.length > 0) console.warn(`Ignoring bridge MACs that aren't 16 hex digits: ${bridgeMacResult.invalid.join(', ')}`);
 
 // Prepare encryption keys
 const KEYS = [];

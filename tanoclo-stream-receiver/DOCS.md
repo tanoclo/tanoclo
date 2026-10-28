@@ -109,6 +109,7 @@ Install and configure the receiver daemon:
    * **TCP Port:** `9999` (Port matching the ESP32 sniffer firmware)
    * **Tado Keys:** Comma-separated key pairs. Always include the static pairing key and your captured operational key:
      `PAIRING=7461646f2070616972696e67206b6579,OPERATIONAL=YOUR_16BYTE_OPERATIONAL_HEX_KEY`
+   * **Tado Bridge MACs:** Comma-separated RF EUI-64 of your Internet Bridge(s), e.g. `001BC507312AE4D7` (not the Ethernet MAC on the label; it is the address with many distinct peers in the sniffer's traffic). Without it, traffic sent by the bridge is attributed to a device. Also settable as `TADO_BRIDGE_MACS`, `--bridge-macs` or `bridgeMacs` in `config.json`.
    * **MQTT Host:** `mqtt://core-mosquitto:1883`
    * **MQTT Topic:** `tado/sniffer` (Base topic for discrete states)
    * **MQTT HA Path:** `homeassistant` (Base prefix for Home Assistant Auto-Discovery)

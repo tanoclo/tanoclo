@@ -24,6 +24,9 @@
     "0x4444",
     "0x5555"
   ],
+  "bridgeMacs": [
+    "001BC507312AE4D7"
+  ],
   "mqtt": {
     "enabled": false,
     "host": "mqtt://localhost",

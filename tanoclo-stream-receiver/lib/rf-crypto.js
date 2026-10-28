@@ -10,6 +10,30 @@ const crypto = require('crypto');
 // Standard static Tado bootstrap pairing key
 const PAIRING_KEY_HEX = '7461646f2070616972696e67206b6579';
 
+// Bridges are assumed to have ':31:55:' in their EUI-64, which isn't true of every bridge; others are configured here.
+let bridgeMacs = new Set();
+
+function cleanMacHex(mac) {
+    return String(mac || '').trim().replace(/^0x/i, '').replace(/[^A-Fa-f0-9]/g, '').toUpperCase();
+}
+
+/**
+ * Set the bridge EUI-64s. Accepts an array or a comma-separated string, in any common MAC format.
+ * @returns {{ valid: string[], invalid: string[] }} accepted MACs (16 hex digits) and rejected entries as given
+ */
+function setBridgeMacs(macs) {
+    const entries = (Array.isArray(macs) ? macs : String(macs || '').split(','))
+        .map(m => String(m).trim()).filter(Boolean);
+    const invalid = entries.filter(m => cleanMacHex(m).length !== 16);
+    bridgeMacs = new Set(entries.map(cleanMacHex).filter(m => m.length === 16));
+    return { valid: [...bridgeMacs], invalid };
+}
+
+function isBridgeMac(mac) {
+    if (!mac) return false;
+    return String(mac).toUpperCase().includes(':31:55:') || bridgeMacs.has(cleanMacHex(mac));
+}
+
 /**
  * Extract PAN ID from raw packet if available.
  * @param {Buffer} rawBytes 
@@ -206,9 +230,9 @@ function decodeMAC(frame, decrypted) {
         }
     }
 
-    const isDstIb = dstMac.includes(':31:55:') || destShort === 0x0000;
+    const isDstIb = isBridgeMac(dstMac) || destShort === 0x0000;
     const isDstVa = dstMac.includes(':31:56:') || (destShort !== null && !isDstIb && destShort !== 0xFFFF);
-    const isSrcIb = srcMac.includes(':31:55:') || srcShort === 0x0000;
+    const isSrcIb = isBridgeMac(srcMac) || srcShort === 0x0000;
     const isSrcVa = srcMac.includes(':31:56:') || (srcShort !== null && !isSrcIb);
 
     let direction = 'UNKNOWN';
@@ -280,6 +304,8 @@ function verifyKermitCrc(frameHeader, plaintextWithTrailer) {
 
 module.exports = {
     PAIRING_KEY_HEX,
+    setBridgeMacs,
+    isBridgeMac,
     getPanId,
     decryptCCM,
     decryptAES128ECB,

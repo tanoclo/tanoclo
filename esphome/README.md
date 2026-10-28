@@ -143,6 +143,9 @@ You can create a `config.json` in the `tanoclo-stream-receiver/` directory (base
     "0x1234",
     "0x5678"
   ],
+  "bridgeMacs": [
+    "001BC507312AE4D7"
+  ],
   "mqtt": {
     "enabled": true,
     "host": "mqtt://localhost",
@@ -154,6 +157,8 @@ You can create a `config.json` in the `tanoclo-stream-receiver/` directory (base
 ```
 
 You should add whitelisted PAN IDs (short) to the `whitelistedPanIds` array in `config.json` based on the (short) PAN IDs of your devices (you can see these in the sniffer logs).
+
+Set `bridgeMacs` to the RF EUI-64 of your Internet Bridge (not the Ethernet MAC on its label). Without it, only bridges whose address contains `31:55` are recognised, and any other bridge's traffic is attributed to whichever device it addresses. The bridge is the address with many distinct peers in the sniffer's traffic.
 
 ### 5.4 Invocation
 Run the receiver daemon:
@@ -167,6 +172,7 @@ node tanoclo-stream-receiver/stream_receiver.js [--stats]
 - `--host <ip>`: Overrides the TCP listening bind address (default: `0.0.0.0`).
 - `--keys <name=hex,name2=hex...>`: Provides comma-separated name-key pairs for AES decryption.
 - `--panids <id1,id2...>`: Provides comma-separated whitelisted PAN IDs.
+- `--bridge-macs <mac1,mac2...>`: Comma-separated RF EUI-64s of your Internet Bridge(s).
 - `--mqtt-host <url>`: Configures/enables MQTT connection (e.g., `mqtt://192.168.1.100`).
 - `--mqtt-topic <topic>`: Configures base MQTT topic.
 - `--mqtt-user <username>`: Configures MQTT username.
@@ -188,6 +194,7 @@ You can also set the following environment variables:
 * `AUTO_EXCLUSION`: Toggle foreign PAN auto-exclusion (`true`/`false`).
 * `TADO_KEYS`: Comma-separated `name=hex` keys.
 * `TADO_PAN_IDS`: Comma-separated whitelisted PAN IDs.
+* `TADO_BRIDGE_MACS`: Comma-separated RF EUI-64s of your Internet Bridge(s).
 * `MQTT_ENABLED`: Enable MQTT pushes (`true`/`false`).
 * `MQTT_HOST`: Broker URL.
 * `MQTT_TOPIC`: Base topic.

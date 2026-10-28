@@ -7,6 +7,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const rfCrypto = require('./rf-crypto');
 
 class DeviceRegistry {
     constructor() {
@@ -54,7 +55,7 @@ class DeviceRegistry {
         }
         if (mac) {
             const m = String(mac).toUpperCase();
-            if (m.includes(':31:55:') || m.endsWith(':0E:82') || m.endsWith(':00:1E')) return 'IB01';
+            if (rfCrypto.isBridgeMac(m) || m.endsWith(':0E:82') || m.endsWith(':00:1E')) return 'IB01';
             if (m.includes(':31:56:')) return 'VA02';
         }
         return 'UNKNOWN';

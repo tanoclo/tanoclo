@@ -25,6 +25,7 @@ const env = { ...process.env };
 if (options.tcp_port) env.TCP_PORT = String(options.tcp_port);
 if (options.tado_keys) env.TADO_KEYS = options.tado_keys;
 if (options.tado_pan_ids) env.TADO_PAN_IDS = options.tado_pan_ids;
+if (options.tado_bridge_macs) env.TADO_BRIDGE_MACS = options.tado_bridge_macs;
 env.MQTT_ENABLED = options.mqtt_enabled !== false ? 'true' : 'false';
 if (options.mqtt_host) env.MQTT_HOST = options.mqtt_host;
 if (options.mqtt_topic) env.MQTT_TOPIC = options.mqtt_topic;
