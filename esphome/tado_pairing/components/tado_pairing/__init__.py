@@ -7,7 +7,7 @@ validates user input in YAML, and generates the necessary C++ code for compilati
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome import pins
-from esphome.components import spi
+from esphome.components import esp32, spi
 from esphome.const import CONF_ID
 
 # Indicate to ESPHome that this component depends on the SPI bus being configured
@@ -44,6 +44,9 @@ async def to_code(config):
     # Create the C++ component variable
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
+    # ESPHome 2026.10 leaves AES-CCM out of mbedTLS unless a component asks for it.
+    if hasattr(esp32, "require_mbedtls_tls_extras"):
+        esp32.require_mbedtls_tls_extras(("CONFIG_MBEDTLS_CCM_C",))
     # Register this component as a device on the SPI bus
     await spi.register_spi_device(var, config)
     

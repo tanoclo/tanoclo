@@ -1,7 +1,7 @@
 import esphome.codegen as cg
 import esphome.config_validation as cv
 from esphome import pins
-from esphome.components import spi
+from esphome.components import esp32, spi
 from esphome.const import CONF_ID
 from esphome.components import web_server_base
 
@@ -33,6 +33,9 @@ CONFIG_SCHEMA = cv.Schema({
 async def to_code(config):
     var = cg.new_Pvariable(config[CONF_ID])
     await cg.register_component(var, config)
+    # ESPHome 2026.10 leaves AES-CCM out of mbedTLS unless a component asks for it.
+    if hasattr(esp32, "require_mbedtls_tls_extras"):
+        esp32.require_mbedtls_tls_extras(("CONFIG_MBEDTLS_CCM_C",))
     await spi.register_spi_device(var, config)
     
     dio0_pin = await cg.gpio_pin_expression(config[CONF_DIO0_PIN])
