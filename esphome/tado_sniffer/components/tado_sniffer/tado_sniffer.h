@@ -55,7 +55,7 @@ struct ExposeInternalPin : public InternalGPIOPin {
  * @brief Manages the SPI connection to the SX1276 transceiver, parses packets,
  * and schedules background RTOS tasks for radio handling and packet processing.
  */
-class TadoSniffer : public Component, public spi::SPIDevice<spi::BIT_ORDER_MSB_FIRST, spi::CLOCK_POLARITY_LOW, spi::CLOCK_PHASE_LEADING, spi::DATA_RATE_8MHZ> {
+class TadoSniffer : public Component, public spi::SPIDevice<spi::BIT_ORDER_MSB_FIRST, spi::CLOCK_POLARITY_LOW, spi::CLOCK_PHASE_LEADING, spi::DATA_RATE_2MHZ> {
  public:
   static constexpr const char *const TAG = "tado_sniffer";
 
