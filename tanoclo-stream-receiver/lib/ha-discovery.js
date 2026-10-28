@@ -203,6 +203,11 @@ function publishDeviceDiscovery(deviceRecord) {
             unit_of_measurement: '°C',
             state_class: 'measurement'
         });
+        registerSensor('zone_call_for_heat', 'binary_sensor', 'Zone Call for Heat', {
+            device_class: 'heat',
+            payload_on: 'ON',
+            payload_off: 'OFF'
+        });
 
         // Battery Sensors (suppressed only if explicitly emulated)
         if (!deviceRecord.isEmulated) {
@@ -233,6 +238,11 @@ function publishDeviceDiscovery(deviceRecord) {
 
     // 3. Valve Actuator specific read-only sensors
     if (isVA) {
+        registerSensor('demand_percent', 'sensor', 'Heat Demand', {
+            unit_of_measurement: '%',
+            icon: 'mdi:radiator',
+            state_class: 'measurement'
+        });
         registerSensor('valve_position_pct', 'sensor', 'Valve Position', {
             unit_of_measurement: '%',
             icon: 'mdi:valve',
@@ -311,10 +321,56 @@ function publishDeviceDiscovery(deviceRecord) {
     }
 }
 
+/**
+ * Publishes read-only discovery for a heating circuit seen in /c/{n}/act traffic.
+ *
+ * @param {number} circuitNumber - Circuit number from the CoAP path
+ */
+function publishCircuitDiscovery(circuitNumber) {
+    const client = explicitMqttClient || mqttPublisher.getClient();
+    if (!client || !client.connected || circuitNumber === null || circuitNumber === undefined) return;
+
+    const prefix = mqttPublisher.getCircuitTopicPrefix(circuitNumber);
+    const circuitId = `circuit_${circuitNumber}`;
+    const devHw = {
+        identifiers: [`tanoclo_sniffer_${circuitId}`],
+        name: `Sniffed Heating Circuit ${circuitNumber}`,
+        manufacturer: 'TaNoClo (Sniffed)',
+        model: 'Heating Circuit (Sniffed RF)',
+        via_device: 'tanoclo_sniffer_receiver'
+    };
+
+    const sensors = [
+        { key: 'demand_percent', name: 'Heat Demand', extra: { unit_of_measurement: '%', icon: 'mdi:radiator', state_class: 'measurement' } },
+        { key: 'call_for_heat', name: 'Call for Heat', domain: 'binary_sensor', extra: { device_class: 'heat', payload_on: 'ON', payload_off: 'OFF' } },
+        { key: 'heating_active', name: 'Heating Active', domain: 'binary_sensor', extra: { device_class: 'running', payload_on: 'ON', payload_off: 'OFF' } },
+        { key: 'pump_active', name: 'Pump Active', domain: 'binary_sensor', extra: { device_class: 'running', payload_on: 'ON', payload_off: 'OFF' } },
+        { key: 'target_temperature', name: 'Target Temperature', extra: { device_class: 'temperature', unit_of_measurement: '°C', state_class: 'measurement' } },
+        { key: 'reference_temperature', name: 'Reference Temperature', extra: { device_class: 'temperature', unit_of_measurement: '°C', state_class: 'measurement' } },
+        { key: 'operating_mode', name: 'Operating Mode', extra: { icon: 'mdi:thermostat' } }
+    ];
+
+    sensors.forEach(s => {
+        const entityId = `tanoclo_sniffer_${circuitId}_${s.key}`;
+        const registryKey = `${circuitId}:${s.key}`;
+        if (registeredEntities.has(registryKey)) return;
+        publishEntity(s.domain || 'sensor', entityId, {
+            unique_id: entityId,
+            name: s.name,
+            state_topic: `${prefix}/${s.key}`,
+            availability_topic: `${prefix}/availability`,
+            device: devHw,
+            ...s.extra
+        });
+        saveRegisteredEntity(registryKey);
+    });
+}
+
 module.exports = {
     init,
     setMqttClient,
     clearCache,
     publishReceiverDiscovery,
-    publishDeviceDiscovery
+    publishDeviceDiscovery,
+    publishCircuitDiscovery
 };

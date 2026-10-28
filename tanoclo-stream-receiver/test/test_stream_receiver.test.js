@@ -265,6 +265,133 @@ describe('Device Registry & Message Processor', () => {
     });
 });
 
+describe('Heat demand & call for heat', () => {
+    const makePacket = ({ mid, path, fields, isSrcIb = false, code = coapParser.CODE_PUT, srcMac = '00:1B:C5:07:31:56:44:01' }) => ({
+        coap: {
+            type: coapParser.TYPE_CON,
+            code,
+            mid,
+            token: Buffer.alloc(0),
+            options: path.split('/').map(seg => ({ num: coapParser.OPT_URI_PATH, value: Buffer.from(seg) })),
+            payload: Buffer.from('00', 'hex')
+        },
+        macInfo: {
+            srcMac,
+            dstMac: '00:1B:C5:07:31:55:00:00',
+            srcClean: srcMac.replace(/:/g, ''),
+            isSrcIb
+        },
+        tlv: { fields }
+    });
+
+    it('decodes 0x4020 zone target temperature from /z/p', () => {
+        const decoded = tlvDecoder.decode(Buffer.from('4020020834', 'hex'));
+        expect(decoded.fields['0x4020']).toBe(21.00);
+    });
+
+    it('takes 0x4020 as the target only from /z/p', () => {
+        const ping = messageProcessor.processCoapPacket(makePacket({
+            mid: 0x7009, path: 'z/p', fields: { '0x0001': 'VA0000000078', '0x4060': 19.5, '0x4020': 21 }
+        }), 'unfragmented');
+        expect(ping.updates.target_temperature).toBe(21);
+
+        const config = messageProcessor.processCoapPacket(makePacket({
+            mid: 0x700a, path: 'd/config', isSrcIb: true, fields: { '0x4020': 0 }
+        }), 'unfragmented');
+        expect(config.updates?.target_temperature).toBeUndefined();
+    });
+
+    it('publishes valve demand from 0x40a0 and infers 0% from a /z/p ping without it', () => {
+        const withDemand = messageProcessor.processCoapPacket(makePacket({
+            mid: 0x7001, path: 'z/p', fields: { '0x0001': 'VA0000000077', '0x4060': 19.5, '0x40a0': 42 }
+        }), 'unfragmented');
+        expect(withDemand.updates.demand_percent).toBe(42);
+        expect(withDemand.deviceRecord.state.demand_percent).toBe(42);
+
+        const noDemand = messageProcessor.processCoapPacket(makePacket({
+            mid: 0x7002, path: 'z/3/p', fields: { '0x0001': 'VA0000000077', '0x4060': 20.5 }
+        }), 'unfragmented');
+        expect(noDemand.updates.demand_percent).toBe(0);
+    });
+
+    it('does not infer demand from non-ping paths or bridge-originated frames', () => {
+        const sen = messageProcessor.processCoapPacket(makePacket({
+            mid: 0x7003, path: 'd/VA0000000078/sen', fields: { '0x012d': 20.1 }
+        }), 'unfragmented');
+        expect(sen.updates.demand_percent).toBeUndefined();
+
+        const fromIb = messageProcessor.processCoapPacket(makePacket({
+            mid: 0x7004, path: 'z/p', fields: { '0x4060': 20.1 }, isSrcIb: true, srcMac: '00:1B:C5:07:31:55:00:00'
+        }), 'unfragmented');
+        expect(fromIb.updates.demand_percent).toBeUndefined();
+    });
+
+    it('maps the 0x6180 zone latch to zone_call_for_heat', () => {
+        const res = messageProcessor.processCoapPacket(makePacket({
+            mid: 0x7005, path: 'z/1/s', fields: { '0x6180': true, '0x6200': 21 }, isSrcIb: true,
+            srcMac: '00:1B:C5:07:31:55:00:00'
+        }), 'unfragmented');
+        expect(res.updates.zone_call_for_heat).toBe(true);
+    });
+
+    it('extracts circuit demand and call for heat from /c/{n}/act', () => {
+        expect(messageProcessor.extractCircuitFromPath('h/12/c/2/act')).toBe(2);
+        expect(messageProcessor.extractCircuitFromPath('c/1/act')).toBe(1);
+        expect(messageProcessor.extractCircuitFromPath('c/1/config')).toBeNull();
+
+        const active = messageProcessor.processCoapPacket(makePacket({
+            mid: 0x7006, path: 'h/12/c/1/act', srcMac: '00:1B:C5:07:31:56:44:02',
+            fields: { '0x4080': 65, '0x4100': true, '0x40c0': true, '0x4000': 21.5, '0x2090': 1 }
+        }), 'unfragmented');
+        expect(active.circuitNumber).toBe(1);
+        expect(active.circuitUpdates).toEqual({
+            demand_percent: 65,
+            heating_active: true,
+            pump_active: true,
+            target_temperature: 21.5,
+            operating_mode: 'SCHEDULE',
+            call_for_heat: true
+        });
+
+        // Once a circuit reports the heating-active flag, demand alone doesn't change its call for heat
+        const demandOnly = messageProcessor.processCoapPacket(makePacket({
+            mid: 0x7007, path: 'c/1/act', srcMac: '00:1B:C5:07:31:56:44:02', fields: { '0x4080': 0 }
+        }), 'unfragmented');
+        expect(demandOnly.circuitUpdates.call_for_heat).toBeUndefined();
+
+        // A circuit that never reports it falls back to demand > 0
+        const idle = messageProcessor.processCoapPacket(makePacket({
+            mid: 0x7008, path: 'c/7/act', srcMac: '00:1B:C5:07:31:56:44:02', fields: { '0x4080': 0 }
+        }), 'unfragmented');
+        expect(idle.circuitUpdates.call_for_heat).toBe(false);
+    });
+
+    it('publishes circuit state and read-only discovery over MQTT', () => {
+        const published = [];
+        const mockClient = {
+            connected: true,
+            publish: (topic, payload) => published.push({ topic, payload })
+        };
+        mqttPublisher.setClient(mockClient);
+        haDiscovery.setMqttClient(mockClient);
+        haDiscovery.init({ mqtt: { enabled: true, haPath: 'homeassistant' } });
+        haDiscovery.clearCache();
+
+        haDiscovery.publishCircuitDiscovery(1);
+        const discovery = published.filter(p => p.topic.startsWith('homeassistant/'));
+        expect(discovery.length).toBe(7);
+        for (const d of discovery) {
+            const payload = JSON.parse(d.payload);
+            expect(payload.unique_id.startsWith('tanoclo_sniffer_circuit_1_')).toBe(true);
+            expect(payload.command_topic).toBeUndefined();
+            expect(['sensor', 'binary_sensor']).toContain(d.topic.split('/')[1]);
+        }
+
+        haDiscovery.setMqttClient(null);
+        mqttPublisher.setClient(null);
+    });
+});
+
 describe('Home Assistant Passive Discovery constraints', () => {
     it('ensures all generated entities are read-only and prefixed with tanoclo_sniffer_', () => {
         const published = [];

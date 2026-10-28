@@ -64,6 +64,59 @@ function extractSerialFromPath(pathStr) {
 }
 
 /**
+ * True for valve zone pings: /z/p or /z/{id}/p
+ */
+function isZonePing(pathStr) {
+    return /^(?:h\/\d+\/)?z\/(?:\d+\/)?p$/.test(pathStr || '');
+}
+
+/**
+ * Extract the heating circuit number from /c/{n}/act or /h/{id}/c/{n}/act
+ */
+function extractCircuitFromPath(pathStr) {
+    const m = /^(?:h\/\d+\/)?c\/(\d+)\/act$/.exec(pathStr || '');
+    return m ? Number(m[1]) : null;
+}
+
+// Circuits that have reported 0x4100; from then on demand alone doesn't set their call for heat.
+const circuitsReportingHeating = new Set();
+
+/**
+ * Circuit-level state from /c/{n}/act: demand, heating/pump flags and setpoints.
+ * call_for_heat follows the heating-active flag once the circuit reports it, otherwise demand > 0.
+ */
+function extractCircuitUpdates(f, circuitNumber) {
+    const updates = {};
+    const num = (v) => (typeof v === 'number' ? v : undefined);
+    const flag = (v) => (v === undefined || v === null || typeof v === 'string' ? undefined : Boolean(v));
+
+    const demand = num(f['0x4080']);
+    const heatingActive = flag(f['0x4100']);
+    const pumpActive = flag(f['0x40c0']);
+    const target = num(f['0x4000']);
+    const reference = num(f['0x4040']);
+    const mode = num(f['0x2090']);
+
+    if (demand !== undefined) updates.demand_percent = demand;
+    if (heatingActive !== undefined) updates.heating_active = heatingActive;
+    if (pumpActive !== undefined) updates.pump_active = pumpActive;
+    if (target !== undefined) updates.target_temperature = target;
+    if (reference !== undefined) updates.reference_temperature = reference;
+    if (mode !== undefined) {
+        updates.operating_mode = { 0: 'STANDBY', 1: 'SCHEDULE', 3: 'MANUAL_OVERRIDE', 4: 'FROST_PROTECTION' }[mode] || `UNKNOWN_${mode}`;
+    }
+
+    if (heatingActive !== undefined) {
+        circuitsReportingHeating.add(circuitNumber);
+        updates.call_for_heat = heatingActive;
+    } else if (demand !== undefined && !circuitsReportingHeating.has(circuitNumber)) {
+        updates.call_for_heat = demand > 0;
+    }
+
+    return updates;
+}
+
+/**
  * Main processor entry point for decoded CoAP datagrams.
  */
 function processCoapPacket(packet, type, meta = {}) {
@@ -148,7 +201,9 @@ function processCoapPacket(packet, type, meta = {}) {
         const auxTemp = f['0x012e'] ?? f.aux_temperature_1;
         const hum = f['0x0135'] ?? f.humidity_percent;
         const light = f['0x0136'] ?? f.ambient_light_level;
-        const targetTemp = f['0x6200'] ?? f['0x012c'] ?? f.schedule_target_temp ?? f.temperature_setpoint;
+        // 0x4020 is the zone target only in /z/p; in d/config it carries a role code.
+        const zoneTarget = isZonePing(pathStr) ? f['0x4020'] : undefined;
+        const targetTemp = f['0x6200'] ?? f['0x012c'] ?? zoneTarget ?? f.schedule_target_temp ?? f.temperature_setpoint;
         const tempOffset = f['0x0140'] ?? f.temp_offset;
 
         if (temp !== undefined) updates.temperature = temp;
@@ -157,6 +212,23 @@ function processCoapPacket(packet, type, meta = {}) {
         if (light !== undefined) updates.light_level = light;
         if (targetTemp !== undefined) updates.target_temperature = targetTemp;
         if (tempOffset !== undefined) updates.temperature_offset = tempOffset;
+
+        // Room heat demand (0-100%) reported by valves in /z/p and /z/{id}/act.
+        // Valves only append 0x40a0 to /z/p pings when demand is non-zero or changing,
+        // so a /z/p ping without it means the valve is not calling for heat.
+        const demand = f['0x40a0'];
+        if (typeof demand === 'number') {
+            updates.demand_percent = demand;
+        } else if (isRequest && isZonePing(pathStr) && !macInfo.isSrcIb) {
+            updates.demand_percent = 0;
+        }
+
+        // Zone demand latch (0x6180) in zone state pushed to devices: set while the
+        // zone is engaging the heat source.
+        const zoneLatch = f['0x6180'];
+        if (zoneLatch !== undefined && zoneLatch !== null && typeof zoneLatch !== 'string') {
+            updates.zone_call_for_heat = Boolean(zoneLatch);
+        }
 
         // Battery fields
         const batMv = f['0x0162'] ?? f['0x021c'] ?? f['0x021b'] ?? f.battery_mv;
@@ -266,6 +338,19 @@ function processCoapPacket(packet, type, meta = {}) {
     // 2. Publish Discrete MQTT Telemetry (tado/sniffer/d/{serial}/...)
     mqttPublisher.publishDeviceTelemetry(deviceRecord, updates);
 
+    // Circuit-level demand / call for heat (reported by the circuit driver, e.g. Extension Kit)
+    let circuitUpdates = null;
+    const circuitNumber = extractCircuitFromPath(pathStr);
+    if (circuitNumber !== null && tlv && tlv.fields) {
+        circuitUpdates = extractCircuitUpdates(tlv.fields, circuitNumber);
+        if (Object.keys(circuitUpdates).length > 0) {
+            haDiscovery.publishCircuitDiscovery(circuitNumber);
+            mqttPublisher.publishCircuitTelemetry(circuitNumber, circuitUpdates);
+        } else {
+            circuitUpdates = null;
+        }
+    }
+
     // 3. Publish Raw Sniffer Packet (tado/sniffer/{mac}/{path})
     const tlvFriendly = {};
     if (tlv && tlv.items) {
@@ -296,12 +381,16 @@ function processCoapPacket(packet, type, meta = {}) {
         isDuplicate: false,
         pathStr,
         deviceRecord,
-        updates
+        updates,
+        circuitNumber,
+        circuitUpdates
     };
 }
 
 module.exports = {
     processCoapPacket,
     resolvePath,
-    extractSerialFromPath
+    extractSerialFromPath,
+    extractCircuitFromPath,
+    isZonePing
 };
