@@ -20,8 +20,9 @@ import React from 'react';
 import Card from '../common/Card';
 import Button from '../common/Button';
 import Toggle from '../common/Toggle';
-import { ShieldAlert, Activity, Wind, CheckCircle2, AlertTriangle, RotateCcw } from 'lucide-react';
+import { ShieldAlert, Activity, Wind, CheckCircle2, AlertTriangle, RotateCcw, Sparkles } from 'lucide-react';
 import ZoneSettingsSchedule from './ZoneSettingsSchedule';
+import { calculatePidPreset } from '../../utils/pidPresets';
 
 /**
  * @brief Advanced zone settings controller sub-panel.
@@ -52,6 +53,9 @@ export default function ZoneAdvancedSettings({
   handleTaNoCloOwdToggle,
   owdSource = 'device',
   handleOwdSourceChange,
+  heatingType = 'RADIATOR',
+  underfloorMass = 'SCREED',
+  roomSize = null,
   t
 }) {
   const currentKp = zone?.kp ?? zone?.pidTuning?.kp ?? 10.00;
@@ -66,6 +70,25 @@ export default function ZoneAdvancedSettings({
 
   const isOpenWindowActive = Boolean(zone?.open_window_active);
   const activeDurationMinutes = Math.round(owdTimeout / 60);
+
+  const effectiveSize = roomSize !== null && roomSize !== undefined ? Number(roomSize) : (zone?.roomSize ? Number(zone.roomSize) : 20.0);
+  const effectiveHeatingType = heatingType || zone?.heatingType || 'RADIATOR';
+  const effectiveMass = underfloorMass || zone?.underfloorMass || 'SCREED';
+
+  const sizePreset = calculatePidPreset({
+    roomSizeSqm: effectiveSize,
+    heatingType: effectiveHeatingType,
+    underfloorMass: effectiveMass
+  });
+
+  const handleApplySizePreset = () => {
+    if (setKp) setKp(sizePreset.kp);
+    if (setKi) setKi(sizePreset.ki);
+    if (setKd) setKd(sizePreset.kd);
+    if (triggerToast) {
+      triggerToast(t('settings.zone_advanced.pid_size_preset_applied', `Applied size-based PID preset (${sizePreset.kp.toFixed(2)} / ${sizePreset.ki.toFixed(2)} / ${sizePreset.kd.toFixed(2)})`), 'info');
+    }
+  };
 
   const handleResetPidDefaults = () => {
     if (setKp) setKp(10.00);
@@ -144,6 +167,38 @@ export default function ZoneAdvancedSettings({
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
             {t('settings.zone_advanced.pid_formula_sub', 'P = ΔT × (Kp × 5) | I = acc × Ki / 300 | D = Kd × ΔṪ / 20')}
           </div>
+        </div>
+
+        {/* Instant Size-Based PID Suggestion Box */}
+        <div style={{
+          padding: '0.85rem 1rem',
+          backgroundColor: 'rgba(59, 130, 246, 0.08)',
+          border: '1px solid rgba(59, 130, 246, 0.25)',
+          borderRadius: 'var(--radius-sm, 6px)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '0.5rem'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--primary)' }}>
+              <Sparkles size={16} />
+              <strong style={{ fontSize: '0.85rem' }}>
+                {t('settings.zone_advanced.size_preset_box_title', `Size-Based Recommendation (${effectiveSize.toFixed(0)} m² • ${effectiveHeatingType === 'UNDERFLOOR' ? 'Underfloor' : 'Radiators'})`)}
+              </strong>
+            </div>
+            <Button
+              variant="secondary"
+              onClick={handleApplySizePreset}
+              disabled={isReadOnly}
+              style={{ fontSize: '0.75rem', padding: '0.3rem 0.65rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+            >
+              <Sparkles size={12} />
+              {t('settings.zone_advanced.apply_size_preset_btn', `Apply Size Preset (${sizePreset.kp.toFixed(2)} / ${sizePreset.ki.toFixed(2)} / ${sizePreset.kd.toFixed(2)})`)}
+            </Button>
+          </div>
+          <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.4' }}>
+            {t(sizePreset.explanationKey, sizePreset.defaultExplanation)}
+          </p>
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
@@ -283,6 +338,16 @@ export default function ZoneAdvancedSettings({
         {/* Card Actions */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-color)', paddingTop: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <Button
+              variant="secondary"
+              onClick={handleApplySizePreset}
+              disabled={isReadOnly}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem' }}
+            >
+              <Sparkles size={14} />
+              {t('settings.zone_advanced.pid_size_preset_btn_short', `Size Preset (${sizePreset.kp.toFixed(2)} / ${sizePreset.ki.toFixed(2)} / ${sizePreset.kd.toFixed(2)})`)}
+            </Button>
+
             <Button
               variant="secondary"
               onClick={handleResetPidDefaults}

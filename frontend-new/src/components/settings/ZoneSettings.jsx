@@ -101,6 +101,7 @@ export default function ZoneSettings({ homeId, zoneId, zone, onBack, mutateZones
   const [insulationFactor, setInsulationFactor] = useState(zone?.insulationFactor ?? null);
   const [heatingType, setHeatingType] = useState(zone?.heatingType || 'RADIATOR');
   const [underfloorMass, setUnderfloorMass] = useState(zone?.underfloorMass || 'SCREED');
+  const [roomSize, setRoomSize] = useState(zone?.roomSize ?? null);
 
   const [overlayType, setOverlayType] = useState('TADO_MODE'); // TADO_MODE | TIMER | MANUAL
   const [overlayDuration, setOverlayDuration] = useState(1800); // 30 mins default
@@ -152,6 +153,7 @@ export default function ZoneSettings({ homeId, zoneId, zone, onBack, mutateZones
       setOfflineScheduleEnabled(prev => prev !== (zone.offlineScheduleEnabled || false) ? (zone.offlineScheduleEnabled || false) : prev);
       setHeatingType(prev => prev !== (zone.heatingType || 'RADIATOR') ? (zone.heatingType || 'RADIATOR') : prev);
       setUnderfloorMass(prev => prev !== (zone.underfloorMass || 'SCREED') ? (zone.underfloorMass || 'SCREED') : prev);
+      setRoomSize(zone.roomSize !== undefined ? zone.roomSize : null);
     }
   }, [zone]);
 
@@ -330,6 +332,26 @@ export default function ZoneSettings({ homeId, zoneId, zone, onBack, mutateZones
       triggerToast(err.message || t('settings.failed_save_settings'), 'error');
       setHeatingType(zone?.heatingType || 'RADIATOR');
       setUnderfloorMass(zone?.underfloorMass || 'SCREED');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleRoomSizeChange = async (val) => {
+    setRoomSize(val);
+    try {
+      setIsSaving(true);
+      await updateZoneDetails(homeId, zoneId, {
+        name: zone?.name || name,
+        type: zone?.type,
+        roomSize: val
+      });
+      if (mutateZones) await mutateZones();
+      triggerToast(t('settings.zone_updated_success'), 'success');
+    } catch (err) {
+      logger.error(err);
+      triggerToast(err.message || t('settings.failed_save_settings'), 'error');
+      setRoomSize(zone?.roomSize ?? null);
     } finally {
       setIsSaving(false);
     }
@@ -610,6 +632,8 @@ export default function ZoneSettings({ homeId, zoneId, zone, onBack, mutateZones
           owdSource={owdSource}
           handleOwdSourceChange={handleOwdSourceChange}
           heatingType={heatingType}
+          underfloorMass={underfloorMass}
+          roomSize={roomSize}
           t={t}
         />
       ) : (
@@ -639,6 +663,12 @@ export default function ZoneSettings({ homeId, zoneId, zone, onBack, mutateZones
             heatingType={heatingType}
             handleHeatingTypeChange={handleHeatingTypeChange}
             underfloorMass={underfloorMass}
+            roomSize={roomSize}
+            handleRoomSizeChange={handleRoomSizeChange}
+            setKp={setKp}
+            setKi={setKi}
+            setKd={setKd}
+            handleSaveAdvancedDetails={handleSaveAdvancedDetails}
             t={t}
           />
 

@@ -262,16 +262,116 @@ function evaluateZoneTransients(windows) {
 }
 
 /**
+ * Calculates physics-grounded PID preset values based on room floor area (m²) and heat emitter type.
+ * 
+ * Physics rationale:
+ * - Small rooms (< 15 m², e.g., 10 m²): Low thermal mass & small air volume. High radiator gain
+ *   causes rapid temperature overshoot. Lower Kp softens heat surge; elevated Kd brakes before exceeding setpoint.
+ * - Medium rooms (15–28 m², e.g., 20 m²): Reference room. Standard baseline (10.00 / 5.00 / 15.00 for radiators,
+ *   4.00 / 1.50 / 25.00 for underfloor screed).
+ * - Large rooms (28–45 m², e.g., 35 m²): High thermal mass and air volume. Needs stronger Kp to open valve wider
+ *   and deliver adequate thermal flux; lower Kd avoids premature throttling.
+ * - Extra large / Open plan (> 45 m², e.g., 55 m²): Massive thermal inertia. Highest Kp and sustained Ki to prevent
+ *   sluggish underheating; minimum Kd damping.
+ * 
+ * @param {Object} [params]
+ * @param {number|null} [params.roomSizeSqm=20] - Floor area in m²
+ * @param {string} [params.heatingType='RADIATOR'] - 'RADIATOR' | 'UNDERFLOOR'
+ * @param {string} [params.underfloorMass='SCREED'] - 'SCREED' | 'DRY_SYSTEM'
+ * @returns {Object} { kp, ki, kd, tier, roomSizeSqm, heatingType, underfloorMass }
+ */
+function calculatePidPreset({ roomSizeSqm = 20, heatingType = 'RADIATOR', underfloorMass = 'SCREED' } = {}) {
+    const size = typeof roomSizeSqm === 'number' && !isNaN(roomSizeSqm) && roomSizeSqm > 0 ? roomSizeSqm : 20.0;
+    const isUfh = heatingType === 'UNDERFLOOR';
+    const isDrySystem = isUfh && underfloorMass === 'DRY_SYSTEM';
+
+    let tier = 'MEDIUM';
+    if (size < 15) {
+        tier = 'SMALL';
+    } else if (size <= 28) {
+        tier = 'MEDIUM';
+    } else if (size <= 45) {
+        tier = 'LARGE';
+    } else {
+        tier = 'XL';
+    }
+
+    let kp, ki, kd;
+
+    if (isUfh) {
+        if (isDrySystem) {
+            // Dry system: faster response than screed (45–90 min vs 2–4 h), intermediate inertia
+            if (tier === 'SMALL') {
+                kp = 5.00; ki = 2.00; kd = 24.00;
+            } else if (tier === 'MEDIUM') {
+                kp = 6.50; ki = 2.50; kd = 20.00;
+            } else if (tier === 'LARGE') {
+                kp = 8.00; ki = 3.00; kd = 16.00;
+            } else {
+                kp = 9.50; ki = 3.50; kd = 14.00;
+            }
+        } else {
+            // Concrete slab / screed: high thermal capacitance, long lag (2–4 h)
+            if (tier === 'SMALL') {
+                kp = 3.00; ki = 1.00; kd = 32.00;
+            } else if (tier === 'MEDIUM') {
+                kp = 4.00; ki = 1.50; kd = 25.00;
+            } else if (tier === 'LARGE') {
+                kp = 4.80; ki = 1.80; kd = 22.00;
+            } else {
+                kp = 5.50; ki = 2.20; kd = 18.00;
+            }
+        }
+    } else {
+        // Conventional Radiators (convection + radiant, fast response)
+        if (tier === 'SMALL') {
+            kp = 7.50; ki = 4.00; kd = 20.00;
+        } else if (tier === 'MEDIUM') {
+            kp = 10.00; ki = 5.00; kd = 15.00;
+        } else if (tier === 'LARGE') {
+            kp = 13.50; ki = 6.00; kd = 12.00;
+        } else {
+            kp = 16.50; ki = 7.50; kd = 10.00;
+        }
+    }
+
+    // Ensure within firmware boundaries
+    kp = Math.min(30.0, Math.max(2.0, kp));
+    ki = Math.min(20.0, Math.max(0.5, ki));
+    kd = Math.min(40.0, Math.max(5.0, kd));
+
+    return {
+        kp,
+        ki,
+        kd,
+        tier,
+        roomSizeSqm: size,
+        heatingType,
+        underfloorMass
+    };
+}
+
+/**
  * @param {Object} metrics - Zone transient metrics
  * @param {Object} currentGains - { kp, ki, kd }
  * @param {string} [heatingType='RADIATOR'] - 'RADIATOR' | 'UNDERFLOOR'
+ * @param {Object} [options] - Optional context { roomSizeSqm, underfloorMass }
  * @returns {Object} Suggested gains, diagnosis, reason
  */
-function derivePidSuggestions(metrics, currentGains, heatingType = 'RADIATOR') {
+function derivePidSuggestions(metrics, currentGains, heatingType = 'RADIATOR', options = {}) {
     const isUfh = heatingType === 'UNDERFLOOR';
-    const curKp = Number(currentGains.kp || (isUfh ? 4.00 : 10.00));
-    const curKi = Number(currentGains.ki || (isUfh ? 1.50 : 5.00));
-    const curKd = Number(currentGains.kd || (isUfh ? 25.00 : 15.00));
+    const underfloorMass = options.underfloorMass || 'SCREED';
+    const roomSizeSqm = options.roomSizeSqm !== undefined ? options.roomSizeSqm : null;
+
+    const sizePreset = calculatePidPreset({
+        roomSizeSqm: roomSizeSqm || 20,
+        heatingType,
+        underfloorMass
+    });
+
+    const curKp = Number(currentGains.kp || sizePreset.kp);
+    const curKi = Number(currentGains.ki || sizePreset.ki);
+    const curKd = Number(currentGains.kd || sizePreset.kd);
 
     let suggestedKp = curKp;
     let suggestedKi = curKi;
@@ -286,12 +386,16 @@ function derivePidSuggestions(metrics, currentGains, heatingType = 'RADIATOR') {
             currentKp: curKp,
             currentKi: curKi,
             currentKd: curKd,
-            suggestedKp: curKp,
-            suggestedKi: curKi,
-            suggestedKd: curKd,
+            suggestedKp: sizePreset.kp,
+            suggestedKi: sizePreset.ki,
+            suggestedKd: sizePreset.kd,
             diagnosis: 'INSUFFICIENT_DATA',
-            reason: 'Insufficient transient measurement windows. Continue normal heating to collect tuning data.',
-            confidence: 'LOW'
+            reason: roomSizeSqm 
+                ? `Insufficient heating transient history. Recommended cold-start preset based on ${roomSizeSqm} m² (${sizePreset.tier}) ${heatingType.toLowerCase()} heating.`
+                : 'Insufficient transient measurement windows. Continue normal heating to collect tuning data, or configure room size for instant preset.',
+            confidence: 'LOW',
+            heatingType,
+            sizePreset
         };
     }
 
@@ -395,7 +499,7 @@ async function analyzePidTuning(homeId, options = {}) {
 
     // 1. Fetch heating zones
     const [zones] = await pool.execute(
-        `SELECT id, name, heating_circuit, heating_type, underfloor_mass, field_6080, field_60a0, field_60c0 
+        `SELECT id, name, heating_circuit, heating_type, underfloor_mass, field_6080, field_60a0, field_60c0, room_size_sqm 
          FROM zones 
          WHERE home_id = ? AND type = 'HEATING' 
          ORDER BY id ASC`,
@@ -497,6 +601,7 @@ async function analyzePidTuning(homeId, options = {}) {
         totalWindows += windows.length;
 
         const metrics = evaluateZoneTransients(windows);
+        const roomSizeSqm = zone.room_size_sqm !== null && zone.room_size_sqm !== undefined ? parseFloat(zone.room_size_sqm) : null;
         const defaultKp = heatingType === 'UNDERFLOOR' ? 4.00 : 10.00;
         const defaultKi = heatingType === 'UNDERFLOOR' ? 1.50 : 5.00;
         const defaultKd = heatingType === 'UNDERFLOOR' ? 25.00 : 15.00;
@@ -507,13 +612,24 @@ async function analyzePidTuning(homeId, options = {}) {
             kd: zone.field_60c0 !== null ? parseFloat(zone.field_60c0) : defaultKd
         };
 
-        const suggestions = derivePidSuggestions(metrics, currentGains, heatingType);
+        const sizePreset = calculatePidPreset({
+            roomSizeSqm: roomSizeSqm || 20,
+            heatingType,
+            underfloorMass
+        });
+
+        const suggestions = derivePidSuggestions(metrics, currentGains, heatingType, {
+            roomSizeSqm,
+            underfloorMass
+        });
 
         zoneResults.push({
             zoneId: zId,
             zoneName: zone.name,
             heatingType,
             underfloorMass,
+            roomSize: roomSizeSqm,
+            sizePreset,
             metrics,
             ...suggestions
         });
@@ -537,6 +653,7 @@ async function analyzePidTuning(homeId, options = {}) {
 module.exports = {
     extractTransientWindows,
     evaluateZoneTransients,
+    calculatePidPreset,
     derivePidSuggestions,
     analyzePidTuning
 };

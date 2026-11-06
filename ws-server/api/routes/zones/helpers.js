@@ -141,7 +141,8 @@ async function getZoneDetails(homeId, zoneId, pool) {
         heatingCircuit: zone.heating_circuit !== null && zone.heating_circuit !== undefined && zone.heating_circuit !== '' ? parseInt(zone.heating_circuit, 10) : null,
         heatingType: zone.heating_type || 'RADIATOR',
         underfloorMass: zone.underfloor_mass || 'SCREED',
-        insulationFactor: zone.insulation_factor !== null && zone.insulation_factor !== undefined ? parseFloat(zone.insulation_factor) : null
+        insulationFactor: zone.insulation_factor !== null && zone.insulation_factor !== undefined ? parseFloat(zone.insulation_factor) : null,
+        roomSize: zone.room_size_sqm !== null && zone.room_size_sqm !== undefined ? parseFloat(zone.room_size_sqm) : null
     };
 }
 

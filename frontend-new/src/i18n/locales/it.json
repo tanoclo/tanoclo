@@ -1116,7 +1116,11 @@
       "source_both_desc": "Il riscaldamento si spegne se il dispositivo o il server rilevano un calo.",
       "source_external_api_desc": "Disabilita il rilevamento automatico sia sul termostato che sul server. Si affida esclusivamente a contatti porta/finestra esterni (es. sensori Zigbee integrati tramite API Home Assistant).",
       "pid_ufh_preset": "Applica PID riscaldamento a pavimento (4.00 / 1.50 / 25.00)",
-      "pid_ufh_preset_applied": "Preimpostazione PID pavimento applicata (4.00 / 1.50 / 25.00)"
+      "pid_ufh_preset_applied": "Preimpostazione PID pavimento applicata (4.00 / 1.50 / 25.00)",
+      "size_preset_box_title": "Raccomandazione basata sulla dimensione ({{size}} m² • {{emitter}})",
+      "apply_size_preset_btn": "Applica preimpostazione per dimensione ({{kp}} / {{ki}} / {{kd}})",
+      "pid_size_preset_btn_short": "Preset dimensione ({{kp}} / {{ki}} / {{kd}})",
+      "pid_size_preset_applied": "Applicato preset PID basato sulla dimensione ({{kp}} / {{ki}} / {{kd}})"
     },
     "display_saved_success": "Impostazioni del display salvate con successo!",
     "display_saved_error": "Impossibile salvare le impostazioni del display.",
@@ -1189,7 +1193,32 @@
     "emitter_underfloor_sub": "Pannelli radianti a pavimento a bassa temperatura su massetto o a secco",
     "underfloor_mass_title": "Massa termica del pavimento",
     "underfloor_mass_screed": "Massetto tradizionale in cemento (~2 ore di inerzia)",
-    "underfloor_mass_dry": "Sistema a secco / a basso spessore (~45 min di inerzia)"
+    "underfloor_mass_dry": "Sistema a secco / a basso spessore (~45 min di inerzia)",
+    "room_size_title": "Dimensione stanza / Superficie",
+    "room_size_desc": "Configura la superficie (m²) per determinare il volume termico dell'aria e l'inerzia per un controllo PID fisico istantaneo.",
+    "room_size_not_set": "Non impostato (20 m² predefinito)",
+    "room_size_small": "Piccola (~10 m²)",
+    "room_size_small_desc": "Bagni, corridoi, stanze piccole",
+    "room_size_medium": "Media (~20 m²)",
+    "room_size_medium_desc": "Camere da letto, cucine, uffici",
+    "room_size_large": "Grande (~35 m²)",
+    "room_size_large_desc": "Soggiorni, camere da letto principali",
+    "room_size_xl": "Molto grande (~55 m²)",
+    "room_size_xl_desc": "Aree open space, mansarde",
+    "pid_size_suggestion_title": "Raccomandazione PID termodinamica",
+    "apply_size_pid": "Applica PID consigliato ({{kp}} / {{ki}} / {{kd}})",
+    "pid_explain_ufh_dry_small": "Piccola stanza con pavimento radiante a secco: guadagno proporzionale moderato e smorzamento derivativo elevato per prevenire oscillazioni rapide.",
+    "pid_explain_ufh_dry_medium": "Stanza media con pavimento radiante a secco: risposta bilanciata per tempi di risposta tipici (45–90m).",
+    "pid_explain_ufh_dry_large": "Grande stanza con pavimento radiante a secco: maggiore guadagno proporzionale per un adeguato flusso termico su ampie superfici.",
+    "pid_explain_ufh_dry_xl": "Ampio open space con pavimento a secco: massimo guadagno radiante per compensare il grande volume d'aria con regolazione integrale stabile.",
+    "pid_explain_ufh_screed_small": "Piccola stanza con massetto in calcestruzzo: Kp prudente e forte frenata derivativa Kd per evitare inerzia termica eccessiva.",
+    "pid_explain_ufh_screed_medium": "Pavimento radiante su massetto standard: guadagni base calibrati per un ritardo termico di 2-4 ore del calcestruzzo.",
+    "pid_explain_ufh_screed_large": "Ampia zona su massetto: Kp e Ki elevati superano la forte inerzia termica senza provocare surriscaldamento superficiale.",
+    "pid_explain_ufh_screed_xl": "Zona molto ampia su massetto: integrazione termica costante per superare la notevole massa termica smorzando le oscillazioni.",
+    "pid_explain_rad_small": "Piccola stanza con radiatore: riscaldamento rapido del basso volume d'aria. Kp ridotto attenua aperture brusche; Kd elevato frena in anticipo.",
+    "pid_explain_rad_medium": "Stanza media con radiatore: impostazioni predefinite bilanciate (10.00 / 5.00 / 15.00) per un equilibrio stabile.",
+    "pid_explain_rad_large": "Grande stanza con radiatori: maggiore massa termica e volume d'aria. Kp aumentato apre di più le valvole; Kd ridotto evita risposte lente.",
+    "pid_explain_rad_xl": "Stanza molto grande con radiatori: elevata spinta proporzionale e integrale supera la notevole inerzia senza rimanere sotto il setpoint."
   },
   "tanoclo_ex": {
     "title": "Pannello Avanzato TaNoClo",
@@ -1462,6 +1491,9 @@
     "apply_all": "Applica guadagni suggeriti",
     "history_title": "Cronologia ottimizzazione",
     "applied": "Applicato",
-    "not_applied": "Solo indicativo"
+    "not_applied": "Solo indicativo",
+    "apply_zone_btn": "Applica",
+    "zone_applied_success": "Impostazioni PID aggiornate per {{name}}!",
+    "apply_failed": "Impossibile applicare le impostazioni PID"
   }
 }

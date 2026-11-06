@@ -70,7 +70,7 @@ export default function PidTuningSettings({ homeId, zones = [], isReadOnly = fal
     setIsApplying(true);
     try {
       const zonesToApply = analysisResult.zones
-        .filter(z => z.diagnosis !== 'INSUFFICIENT_DATA')
+        .filter(z => z.suggestedKp !== undefined && z.suggestedKi !== undefined && z.suggestedKd !== undefined)
         .map(z => ({
           zoneId: z.zoneId,
           kp: z.suggestedKp,
@@ -88,6 +88,26 @@ export default function PidTuningSettings({ homeId, zones = [], isReadOnly = fal
       mutateHistory();
     } catch (err) {
       logger.error('Failed to apply PID tuning suggestions', err);
+      showToast(err.message || t('pid_tuning.apply_failed', { defaultValue: 'Failed to apply PID settings' }), 'error');
+    } finally {
+      setIsApplying(false);
+    }
+  };
+
+  const handleApplySingleZone = async (z) => {
+    if (!homeId || !z) return;
+    setIsApplying(true);
+    try {
+      await applyPidTuningSuggestions(homeId, [{
+        zoneId: z.zoneId,
+        kp: z.suggestedKp,
+        ki: z.suggestedKi,
+        kd: z.suggestedKd
+      }], analysisResult?.snapshotId);
+      showToast(t('pid_tuning.zone_applied_success', { defaultValue: 'Updated PID settings for {{name}}!', name: z.zoneName }), 'success');
+      mutateHistory();
+    } catch (err) {
+      logger.error('Failed to apply PID settings for zone', err);
       showToast(err.message || t('pid_tuning.apply_failed', { defaultValue: 'Failed to apply PID settings' }), 'error');
     } finally {
       setIsApplying(false);
@@ -280,6 +300,18 @@ export default function PidTuningSettings({ homeId, zones = [], isReadOnly = fal
                     <span style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-primary)' }}>
                       {zone.zoneName}
                     </span>
+                    {zone.roomSize && (
+                      <span style={{
+                        fontSize: '0.65rem',
+                        fontWeight: 700,
+                        padding: '1px 6px',
+                        borderRadius: '4px',
+                        backgroundColor: 'rgba(59, 130, 246, 0.12)',
+                        color: 'var(--primary, #3b82f6)'
+                      }}>
+                        {zone.roomSize} m²
+                      </span>
+                    )}
                     {(zone.heatingType === 'UNDERFLOOR' || zone.heating_type === 'UNDERFLOOR') && (
                       <span style={{
                         fontSize: '0.65rem',
@@ -295,9 +327,19 @@ export default function PidTuningSettings({ homeId, zones = [], isReadOnly = fal
                     )}
                     {getDiagnosisBadge(zone.diagnosis)}
                   </div>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                    Confidence: <strong>{zone.confidence}</strong> ({zone.metrics.validWindowsCount} windows)
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                      Confidence: <strong>{zone.confidence}</strong> ({zone.metrics.validWindowsCount} windows)
+                    </span>
+                    <Button
+                      variant="secondary"
+                      onClick={() => handleApplySingleZone(zone)}
+                      disabled={isApplying || isReadOnly}
+                      style={{ fontSize: '0.75rem', padding: '0.25rem 0.65rem' }}
+                    >
+                      {t('pid_tuning.apply_zone_btn', { defaultValue: 'Apply' })}
+                    </Button>
+                  </div>
                 </div>
 
                 {/* Metrics row */}

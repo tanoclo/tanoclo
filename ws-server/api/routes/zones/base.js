@@ -125,7 +125,8 @@ router.get('/:homeId/zones', async (req, res) => {
                 heatingCircuit: zone.heating_circuit !== null && zone.heating_circuit !== undefined && zone.heating_circuit !== '' ? parseInt(zone.heating_circuit, 10) : null,
                 heatingType: zone.heating_type || 'RADIATOR',
                 underfloorMass: zone.underfloor_mass || 'SCREED',
-                insulationFactor: zone.insulation_factor !== null && zone.insulation_factor !== undefined ? parseFloat(zone.insulation_factor) : null
+                insulationFactor: zone.insulation_factor !== null && zone.insulation_factor !== undefined ? parseFloat(zone.insulation_factor) : null,
+                roomSize: zone.room_size_sqm !== null && zone.room_size_sqm !== undefined ? parseFloat(zone.room_size_sqm) : null
             };
         });
 
@@ -188,14 +189,18 @@ router.post('/:homeId/zones', async (req, res) => {
 
         const heatingType = req.body.heatingType === 'UNDERFLOOR' ? 'UNDERFLOOR' : 'RADIATOR';
         const underfloorMass = req.body.underfloorMass === 'DRY_SYSTEM' ? 'DRY_SYSTEM' : 'SCREED';
+        const inputSize = req.body.roomSize !== undefined ? req.body.roomSize : req.body.roomSizeSqm;
+        const roomSizeVal = (inputSize !== undefined && inputSize !== null && inputSize !== '' && !isNaN(Number(inputSize)))
+            ? Math.max(1.0, Math.min(500.0, parseFloat(inputSize)))
+            : null;
 
         await pool.execute(
             `INSERT INTO zones (
                 id, home_id, name, type, date_created, open_window_enabled, open_window_timeout, 
                 dazzle_enabled, early_start_enabled, min_temp, max_temp, step_temp, 
                 default_overlay_type, default_overlay_duration, heating_circuit, display_order,
-                heating_type, underfloor_mass
-            ) VALUES (?, ?, ?, ?, ?, 1, 900, 1, 0, ?, ?, ?, 'MANUAL', null, ?, ?, ?, ?)`,
+                heating_type, underfloor_mass, room_size_sqm
+            ) VALUES (?, ?, ?, ?, ?, 1, 900, 1, 0, ?, ?, ?, 'MANUAL', null, ?, ?, ?, ?, ?)`,
             [
                 newZoneId,
                 homeId, name, type, now,
@@ -205,7 +210,8 @@ router.post('/:homeId/zones', async (req, res) => {
                 defaultHeatingCircuit,
                 nextOrder,
                 heatingType,
-                underfloorMass
+                underfloorMass,
+                roomSizeVal
             ]
         );
 
@@ -319,7 +325,8 @@ router.post('/:homeId/zones', async (req, res) => {
             offlineScheduleSyncedAt: null,
             earlyStartEnabled: false,
             heatingType,
-            underfloorMass
+            underfloorMass,
+            roomSize: roomSizeVal
         });
     } catch (err) {
         _log('error', `Error creating zone: ${err.message}\n${err.stack}`);
@@ -553,6 +560,16 @@ router.put('/:homeId/zones/:zoneId/details', async (req, res) => {
         if (req.body.underfloorMass !== undefined) {
             const uMass = req.body.underfloorMass === 'DRY_SYSTEM' ? 'DRY_SYSTEM' : 'SCREED';
             await pool.execute('UPDATE zones SET underfloor_mass = ? WHERE id = ? AND home_id = ?', [uMass, zoneId, homeId]);
+        }
+
+        const inputSize = req.body.roomSize !== undefined ? req.body.roomSize : req.body.roomSizeSqm;
+        if (inputSize !== undefined) {
+            if (inputSize === null || inputSize === '' || isNaN(Number(inputSize))) {
+                await pool.execute('UPDATE zones SET room_size_sqm = NULL WHERE id = ? AND home_id = ?', [zoneId, homeId]);
+            } else {
+                const sizeVal = Math.max(1.0, Math.min(500.0, parseFloat(inputSize)));
+                await pool.execute('UPDATE zones SET room_size_sqm = ? WHERE id = ? AND home_id = ?', [sizeVal, zoneId, homeId]);
+            }
         }
 
         const configFields = {};

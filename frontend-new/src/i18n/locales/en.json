@@ -1105,7 +1105,11 @@
       "source_both_desc": "Heating turns off if either the device or server detects a drop.",
       "source_external_api_desc": "Disables auto-detection on both thermostat and server. Relies strictly on external door/window contacts (e.g. Zigbee contacts integrated via Home Assistant API calls).",
       "pid_ufh_preset": "Apply Underfloor Heating PID (4.00 / 1.50 / 25.00)",
-      "pid_ufh_preset_applied": "Underfloor heating PID preset applied (4.00 / 1.50 / 25.00)"
+      "pid_ufh_preset_applied": "Underfloor heating PID preset applied (4.00 / 1.50 / 25.00)",
+      "size_preset_box_title": "Size-Based Recommendation ({{size}} m² • {{emitter}})",
+      "apply_size_preset_btn": "Apply Size Preset ({{kp}} / {{ki}} / {{kd}})",
+      "pid_size_preset_btn_short": "Size Preset ({{kp}} / {{ki}} / {{kd}})",
+      "pid_size_preset_applied": "Applied size-based PID preset ({{kp}} / {{ki}} / {{kd}})"
     },
     "display_saved_success": "Display settings saved successfully!",
     "display_saved_error": "Failed to save display settings.",
@@ -1189,7 +1193,32 @@
     "emitter_underfloor_sub": "Low-temperature radiant floor slab or dry system",
     "underfloor_mass_title": "Floor Thermal Mass",
     "underfloor_mass_screed": "Wet Screed / Concrete Slab (~2h thermal lag)",
-    "underfloor_mass_dry": "Dry System / Thin Board (~45m thermal lag)"
+    "underfloor_mass_dry": "Dry System / Thin Board (~45m thermal lag)",
+    "room_size_title": "Room Size / Floor Area",
+    "room_size_desc": "Configure room floor area (m²) to determine thermal air volume and inertia for instant, physics-grounded PID heating demand control.",
+    "room_size_not_set": "Not set (20 m² default)",
+    "room_size_small": "Small (~10 m²)",
+    "room_size_small_desc": "Bathrooms, hallways, box rooms",
+    "room_size_medium": "Medium (~20 m²)",
+    "room_size_medium_desc": "Standard bedrooms, kitchens, offices",
+    "room_size_large": "Large (~35 m²)",
+    "room_size_large_desc": "Living rooms, master bedrooms",
+    "room_size_xl": "Extra Large (~55 m²)",
+    "room_size_xl_desc": "Open plan living areas, lofts",
+    "pid_size_suggestion_title": "Thermodynamic PID Tuning Recommendation",
+    "apply_size_pid": "Apply Suggested PID ({{kp}} / {{ki}} / {{kd}})",
+    "pid_explain_ufh_dry_small": "Small room with dry underfloor panels: moderate proportional gain and heightened derivative damping prevent rapid overshoot.",
+    "pid_explain_ufh_dry_medium": "Medium room with dry underfloor panels: balanced response tuned for standard panel response times (45–90m).",
+    "pid_explain_ufh_dry_large": "Large room with dry underfloor panels: boosted proportional gain delivers sufficient thermal flow across extended floor runs.",
+    "pid_explain_ufh_dry_xl": "Open-plan dry underfloor space: maximum radiant gain to counteract large air volume while maintaining stable integral tracking.",
+    "pid_explain_ufh_screed_small": "Small room with concrete slab screed: conservative Kp and strong Kd derivative braking prevent massive slab thermal overshoot.",
+    "pid_explain_ufh_screed_medium": "Standard screed slab underfloor heating: baseline gains tailored for 2–4h concrete thermal lag.",
+    "pid_explain_ufh_screed_large": "Large screed zone: elevated Kp and Ki overcome heavy slab thermal inertia without causing surface temperature runaway.",
+    "pid_explain_ufh_screed_xl": "Extra-large screed open space: sustained heat integration to overcome extensive thermal mass while damping oscillations.",
+    "pid_explain_rad_small": "Small room with radiator: low air volume heats fast. Reduced Kp softens valve surges; elevated Kd brakes heat early before overshoot.",
+    "pid_explain_rad_medium": "Standard medium room with radiator: balanced factory baseline (10.00 / 5.00 / 15.00) providing stable equilibrium.",
+    "pid_explain_rad_large": "Large room with radiators: higher thermal mass and air volume. Increased Kp opens valves wider; reduced Kd prevents sluggish response.",
+    "pid_explain_rad_xl": "Extra-large / open-plan radiator space: high proportional and integral drive overcomes heavy thermal inertia without settling below target."
   },
   "tanoclo_ex": {
     "title": "TaNoClo Advanced Dashboard",
@@ -1462,6 +1491,9 @@
     "apply_all": "Apply Suggested Gains",
     "history_title": "Tuning History",
     "applied": "Applied",
-    "not_applied": "Advisory only"
+    "not_applied": "Advisory only",
+    "apply_zone_btn": "Apply",
+    "zone_applied_success": "Updated PID settings for {{name}}!",
+    "apply_failed": "Failed to apply PID settings"
   }
 }

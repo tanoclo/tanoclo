@@ -48,7 +48,7 @@ describe('ZoneAdvancedSettings Component', () => {
     handleTaNoCloOwdToggle: vi.fn(),
     owdSource: 'device',
     handleOwdSourceChange: vi.fn(),
-    t: (key, def) => def || key
+    t: (key, def) => (typeof def === 'object' && def !== null ? (def.defaultValue || key) : (def || key))
   };
 
   it('renders PID tuning parameters (0x6080, 0x60a0, 0x60c0) accurately', () => {
@@ -115,5 +115,16 @@ describe('ZoneAdvancedSettings Component', () => {
     const html = renderToString(<ZoneAdvancedSettings {...dirtyProps} />);
     // Save button should NOT have disabled=""
     expect(html).toContain('>Save</button>');
+  });
+
+  it('renders size-based PID recommendation box and apply preset button', () => {
+    const sizeProps = {
+      ...defaultProps,
+      roomSize: 10,
+      heatingType: 'RADIATOR'
+    };
+    const html = renderToString(<ZoneAdvancedSettings {...sizeProps} />);
+    expect(html).toContain('Size-Based Recommendation (10 m² • Radiators)');
+    expect(html).toContain('Apply Size Preset (7.50 / 4.00 / 20.00)');
   });
 });

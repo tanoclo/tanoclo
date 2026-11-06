@@ -7,6 +7,7 @@ import { describe, it, expect } from 'vitest';
 import {
     extractTransientWindows,
     evaluateZoneTransients,
+    calculatePidPreset,
     derivePidSuggestions
 } from '../lib/pid-analyzer';
 
@@ -175,6 +176,78 @@ describe('Thermodynamic PID Analyzer', () => {
             expect(res.suggestedKd).toBeGreaterThanOrEqual(20.0);
             expect(res.suggestedKp).toBeLessThanOrEqual(6.0); // clamped to UFH safety ceiling
             expect(res.reason).toContain('Underfloor slab');
+        });
+
+        it('returns size-based cold-start preset when data is insufficient', () => {
+            const metrics = { validWindowsCount: 0, avgOvershoot: 0, maxOvershoot: 0, avgSteadyStateError: 0, oscillationScore: 0, avgRiseTimeMinutes: 0 };
+            const res = derivePidSuggestions(metrics, defaultGains, 'RADIATOR', { roomSizeSqm: 10 });
+            expect(res.diagnosis).toBe('INSUFFICIENT_DATA');
+            expect(res.suggestedKp).toBe(7.5);
+            expect(res.suggestedKi).toBe(4.0);
+            expect(res.suggestedKd).toBe(20.0);
+            expect(res.sizePreset.tier).toBe('SMALL');
+            expect(res.reason).toContain('10 m² (SMALL)');
+        });
+    });
+
+    describe('calculatePidPreset', () => {
+        it('calculates radiator PID presets by room size tiers', () => {
+            // Small (< 15 m²)
+            const small = calculatePidPreset({ roomSizeSqm: 10, heatingType: 'RADIATOR' });
+            expect(small.tier).toBe('SMALL');
+            expect(small.kp).toBe(7.5);
+            expect(small.ki).toBe(4.0);
+            expect(small.kd).toBe(20.0);
+
+            // Medium (15-28 m²)
+            const medium = calculatePidPreset({ roomSizeSqm: 20, heatingType: 'RADIATOR' });
+            expect(medium.tier).toBe('MEDIUM');
+            expect(medium.kp).toBe(10.0);
+            expect(medium.ki).toBe(5.0);
+            expect(medium.kd).toBe(15.0);
+
+            // Large (28-45 m²)
+            const large = calculatePidPreset({ roomSizeSqm: 35, heatingType: 'RADIATOR' });
+            expect(large.tier).toBe('LARGE');
+            expect(large.kp).toBe(13.5);
+            expect(large.ki).toBe(6.0);
+            expect(large.kd).toBe(12.0);
+
+            // Extra Large (> 45 m²)
+            const xl = calculatePidPreset({ roomSizeSqm: 55, heatingType: 'RADIATOR' });
+            expect(xl.tier).toBe('XL');
+            expect(xl.kp).toBe(16.5);
+            expect(xl.ki).toBe(7.5);
+            expect(xl.kd).toBe(10.0);
+        });
+
+        it('calculates underfloor screed PID presets by room size tiers', () => {
+            const smallUfh = calculatePidPreset({ roomSizeSqm: 12, heatingType: 'UNDERFLOOR', underfloorMass: 'SCREED' });
+            expect(smallUfh.tier).toBe('SMALL');
+            expect(smallUfh.kp).toBe(3.0);
+            expect(smallUfh.ki).toBe(1.0);
+            expect(smallUfh.kd).toBe(32.0);
+
+            const xlUfh = calculatePidPreset({ roomSizeSqm: 60, heatingType: 'UNDERFLOOR', underfloorMass: 'SCREED' });
+            expect(xlUfh.tier).toBe('XL');
+            expect(xlUfh.kp).toBe(5.5);
+            expect(xlUfh.ki).toBe(2.2);
+            expect(xlUfh.kd).toBe(18.0);
+        });
+
+        it('calculates underfloor dry system PID presets', () => {
+            const dryMedium = calculatePidPreset({ roomSizeSqm: 25, heatingType: 'UNDERFLOOR', underfloorMass: 'DRY_SYSTEM' });
+            expect(dryMedium.tier).toBe('MEDIUM');
+            expect(dryMedium.kp).toBe(6.5);
+            expect(dryMedium.ki).toBe(2.5);
+            expect(dryMedium.kd).toBe(20.0);
+        });
+
+        it('clamps all gains to firmware boundaries', () => {
+            const result = calculatePidPreset({ roomSizeSqm: 1000, heatingType: 'RADIATOR' });
+            expect(result.kp).toBeLessThanOrEqual(30.0);
+            expect(result.ki).toBeLessThanOrEqual(20.0);
+            expect(result.kd).toBeGreaterThanOrEqual(5.0);
         });
     });
 });

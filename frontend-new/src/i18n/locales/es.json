@@ -1116,7 +1116,11 @@
       "source_both_desc": "La calefacción se apaga si el dispositivo o el servidor detectan una caída.",
       "source_external_api_desc": "Deshabilita la detección automática en el termostato y el servidor. Depende estrictamente de contactos externos de puertas/ventanas (p. ej. contactos Zigbee mediante llamadas a la API de Home Assistant).",
       "pid_ufh_preset": "Aplicar PID de suelo radiante (4.00 / 1.50 / 25.00)",
-      "pid_ufh_preset_applied": "Preajuste PID de suelo radiante aplicado (4.00 / 1.50 / 25.00)"
+      "pid_ufh_preset_applied": "Preajuste PID de suelo radiante aplicado (4.00 / 1.50 / 25.00)",
+      "size_preset_box_title": "Recomendación basada en tamaño ({{size}} m² • {{emitter}})",
+      "apply_size_preset_btn": "Aplicar ajuste por tamaño ({{kp}} / {{ki}} / {{kd}})",
+      "pid_size_preset_btn_short": "Ajuste por tamaño ({{kp}} / {{ki}} / {{kd}})",
+      "pid_size_preset_applied": "Ajuste PID basado en tamaño aplicado ({{kp}} / {{ki}} / {{kd}})"
     },
     "display_saved_success": "¡Configuración de pantalla guardada con éxito!",
     "display_saved_error": "Error al guardar la configuración de la pantalla.",
@@ -1189,7 +1193,32 @@
     "emitter_underfloor_sub": "Suelo radiante de baja temperatura sobre solera o sistema seco",
     "underfloor_mass_title": "Masa térmica del suelo",
     "underfloor_mass_screed": "Solera de mortero / hormigón (~2h de inercia)",
-    "underfloor_mass_dry": "Sistema en seco / placa fina (~45 min de inercia)"
+    "underfloor_mass_dry": "Sistema en seco / placa fina (~45 min de inercia)",
+    "room_size_title": "Tamaño de la habitación / Superficie",
+    "room_size_desc": "Configure la superficie (m²) para determinar el volumen térmico del aire y la inercia para un control PID físico instantáneo.",
+    "room_size_not_set": "No configurado (20 m² por defecto)",
+    "room_size_small": "Pequeña (~10 m²)",
+    "room_size_small_desc": "Baños, pasillos, habitaciones pequeñas",
+    "room_size_medium": "Mediana (~20 m²)",
+    "room_size_medium_desc": "Dormitorios estándar, cocinas, despachos",
+    "room_size_large": "Grande (~35 m²)",
+    "room_size_large_desc": "Salones, dormitorios principales",
+    "room_size_xl": "Extra grande (~55 m²)",
+    "room_size_xl_desc": "Espacios abiertos, lofts",
+    "pid_size_suggestion_title": "Recomendación PID termodinámica",
+    "apply_size_pid": "Aplicar PID recomendado ({{kp}} / {{ki}} / {{kd}})",
+    "pid_explain_ufh_dry_small": "Habitación pequeña con suelo radiante seco: ganancia proporcional moderada y mayor amortiguación derivativa para evitar sobreimpulsos.",
+    "pid_explain_ufh_dry_medium": "Habitación mediana con suelo radiante seco: respuesta equilibrada adaptada a tiempos de respuesta estándar (45–90m).",
+    "pid_explain_ufh_dry_large": "Habitación grande con suelo radiante seco: mayor ganancia proporcional para proporcionar suficiente flujo térmico en circuitos largos.",
+    "pid_explain_ufh_dry_xl": "Espacio abierto con suelo radiante seco: ganancia radiante máxima para compensar el gran volumen de aire con seguimiento integral estable.",
+    "pid_explain_ufh_screed_small": "Habitación pequeña con solera de hormigón: Kp conservador y fuerte frenado derivativo Kd para evitar sobrecalentamiento por inercia.",
+    "pid_explain_ufh_screed_medium": "Suelo radiante estándar en solera: ganancias base adaptadas a la inercia térmica de 2 a 4 horas del hormigón.",
+    "pid_explain_ufh_screed_large": "Zona grande sobre solera: Kp y Ki elevados vencen la inercia térmica pesada sin provocar descontrol de temperatura superficial.",
+    "pid_explain_ufh_screed_xl": "Espacio abierto muy grande sobre solera: integración continua de calor para vencer la gran masa térmica amortiguando oscilaciones.",
+    "pid_explain_rad_small": "Habitación pequeña con radiador: poco volumen de aire calienta rápido. Kp reducido suaviza aperturas; Kd elevado frena a tiempo evitando sobreimpulsos.",
+    "pid_explain_rad_medium": "Habitación mediana con radiador: valores de fábrica equilibrados (10.00 / 5.00 / 15.00) que ofrecen estabilidad.",
+    "pid_explain_rad_large": "Habitación grande con radiadores: mayor masa térmica y volumen de aire. Kp mayor abre más las válvulas; Kd menor evita respuestas lentas.",
+    "pid_explain_rad_xl": "Espacio muy grande con radiadores: alto empuje proporcional e integral vence la gran inercia sin quedarse por debajo de la consigna."
   },
   "tanoclo_ex": {
     "title": "Tablero Avanzado TaNoClo",
@@ -1462,6 +1491,9 @@
     "apply_all": "Aplicar ganancias sugeridas",
     "history_title": "Historial de ajustes",
     "applied": "Aplicado",
-    "not_applied": "Solo informativo"
+    "not_applied": "Solo informativo",
+    "apply_zone_btn": "Aplicar",
+    "zone_applied_success": "¡Ajustes PID actualizados para {{name}}!",
+    "apply_failed": "No se pudieron aplicar los ajustes PID"
   }
 }

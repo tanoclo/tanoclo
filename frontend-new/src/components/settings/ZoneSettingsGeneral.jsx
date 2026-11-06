@@ -9,27 +9,11 @@
 import Card from '../common/Card';
 import Button from '../common/Button';
 import Slider from '../common/Slider';
-import { Layers, Flame } from 'lucide-react';
+import { Layers, Flame, Maximize2, Sparkles } from 'lucide-react';
+import { calculatePidPreset, ROOM_SIZE_PRESETS } from '../../utils/pidPresets';
 
 /**
  * @brief General zone settings sub-panel.
- * @param {object} props.zone - Active zone (room) details.
- * @param {boolean} props.isDhw - Whether target zone is Domestic Hot Water.
- * @param {string} props.name - Current text value for name input.
- * @param {function} props.setName - Name input state setter.
- * @param {function} props.handleSaveName - Save name callback.
- * @param {boolean} props.isSavingName - Progress indicator for name updates.
- * @param {boolean} props.isReadOnly - Read-only view flag.
- * @param {string} props.measuringDeviceSerial - Serial number of primary measuring device.
- * @param {function} props.handleMeasuringDeviceChange - Measuring device selector change callback.
- * @param {function} props.getDeviceDisplayName - Device display name helper utility.
- * @param {number} props.offset - Temperature offset correction in Celsius.
- * @param {function} props.setOffset - Offset change callback.
- * @param {string} props.controllerSerial - Serial number of zone controller device.
- * @param {function} props.handleControllerChange - Zone controller change callback.
- * @param {Array} props.devices - Paired home devices.
- * @param {function} props.onNavigateToDevice - Navigation callback to focus on a single device page.
- * @param {function} props.t - Translation resolver hook.
  */
 export default function ZoneSettingsGeneral({
   zone,
@@ -54,6 +38,12 @@ export default function ZoneSettingsGeneral({
   heatingType = 'RADIATOR',
   handleHeatingTypeChange,
   underfloorMass = 'SCREED',
+  roomSize = null,
+  handleRoomSizeChange,
+  setKp,
+  setKi,
+  setKd,
+  handleSaveAdvancedDetails,
   t
 }) {
   const isInherited = insulationFactor === null || insulationFactor === undefined;
@@ -264,6 +254,144 @@ export default function ZoneSettingsGeneral({
               </span>
             </div>
           )}
+        </Card>
+      )}
+
+      {/* Room Size / Floor Area & Suggested PID Tuning (Heating only) */}
+      {!isDhw && (
+        <Card style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Maximize2 size={18} style={{ color: 'var(--primary)' }} />
+                <h3 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0 }}>
+                  {t('settings.room_size_title', { defaultValue: 'Room Size / Floor Area' })}
+                </h3>
+              </div>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '4px 0 0 0' }}>
+                {t('settings.room_size_desc', { defaultValue: 'Configure room floor area (m²) to determine thermal air volume and inertia for instant, physics-grounded PID heating demand control.' })}
+              </p>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{
+                fontSize: '0.9rem',
+                fontWeight: 700,
+                color: 'var(--primary)',
+                padding: '2px 8px',
+                borderRadius: '6px',
+                backgroundColor: 'var(--bg-input)',
+                border: '1px solid var(--border-color)'
+              }}>
+                {roomSize ? `${Number(roomSize).toFixed(0)} m²` : t('settings.room_size_not_set', { defaultValue: 'Not set (20 m² default)' })}
+              </span>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.5rem', marginTop: '0.25rem' }}>
+            {ROOM_SIZE_PRESETS.map((preset) => {
+              const isSelected = roomSize !== null && Math.abs(Number(roomSize) - preset.value) < 1.0;
+              return (
+                <button
+                  key={preset.tier}
+                  type="button"
+                  disabled={isReadOnly}
+                  onClick={() => handleRoomSizeChange && handleRoomSizeChange(preset.value)}
+                  style={{
+                    padding: '0.6rem 0.75rem',
+                    borderRadius: '8px',
+                    backgroundColor: isSelected ? 'var(--primary-glow, rgba(0, 180, 216, 0.15))' : 'var(--bg-tertiary, rgba(255,255,255,0.03))',
+                    border: isSelected ? '2px solid var(--primary, #00b4d8)' : '1px solid var(--border-color, rgba(255,255,255,0.1))',
+                    color: isSelected ? 'var(--primary, #00b4d8)' : 'var(--text-primary)',
+                    cursor: isReadOnly ? 'not-allowed' : 'pointer',
+                    fontSize: '0.8rem',
+                    fontWeight: isSelected ? 700 : 500,
+                    textAlign: 'center',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <strong style={{ display: 'block' }}>{t(preset.labelKey, { defaultValue: preset.defaultLabel })}</strong>
+                  <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)' }}>{t(preset.descKey, { defaultValue: preset.defaultDesc })}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Custom Size Slider */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginTop: '0.25rem' }}>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', minWidth: '45px' }}>5 m²</span>
+            <input
+              type="range"
+              min="5"
+              max="100"
+              step="1"
+              value={roomSize || 20}
+              disabled={isReadOnly}
+              onChange={(e) => handleRoomSizeChange && handleRoomSizeChange(Number(e.target.value))}
+              style={{ flex: 1, accentColor: 'var(--primary, #00b4d8)', cursor: isReadOnly ? 'not-allowed' : 'pointer' }}
+            />
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', minWidth: '55px', textAlign: 'right' }}>100 m²</span>
+          </div>
+
+          {/* Size-Based PID Suggestion Callout Card */}
+          {(() => {
+            const calculated = calculatePidPreset({
+              roomSizeSqm: roomSize || 20,
+              heatingType,
+              underfloorMass
+            });
+
+            const handleApplyThisPreset = async () => {
+              if (setKp) setKp(calculated.kp);
+              if (setKi) setKi(calculated.ki);
+              if (setKd) setKd(calculated.kd);
+              if (handleSaveAdvancedDetails) {
+                await handleSaveAdvancedDetails();
+              }
+            };
+
+            return (
+              <div style={{
+                marginTop: '0.25rem',
+                padding: '0.85rem 1rem',
+                borderRadius: '8px',
+                backgroundColor: 'rgba(59, 130, 246, 0.08)',
+                border: '1px solid rgba(59, 130, 246, 0.25)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.5rem'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--primary)' }}>
+                    <Sparkles size={16} />
+                    <strong style={{ fontSize: '0.85rem' }}>
+                      {t('settings.pid_size_suggestion_title', { defaultValue: 'Thermodynamic PID Tuning Recommendation' })}
+                    </strong>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontFamily: 'monospace', fontSize: '0.85rem' }}>
+                    <span>Kp: <strong>{calculated.kp.toFixed(2)}</strong></span>
+                    <span>Ki: <strong>{calculated.ki.toFixed(2)}</strong></span>
+                    <span>Kd: <strong>{calculated.kd.toFixed(2)}</strong></span>
+                  </div>
+                </div>
+
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.4' }}>
+                  {t(calculated.explanationKey, { defaultValue: calculated.defaultExplanation })}
+                </p>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.25rem' }}>
+                  <Button
+                    variant="secondary"
+                    disabled={isReadOnly}
+                    onClick={handleApplyThisPreset}
+                    style={{ fontSize: '0.75rem', padding: '0.35rem 0.75rem' }}
+                  >
+                    <Sparkles size={13} style={{ marginRight: '4px' }} />
+                    {t('settings.apply_size_pid', { defaultValue: 'Apply Suggested PID ({{kp}} / {{ki}} / {{kd}})', kp: calculated.kp.toFixed(2), ki: calculated.ki.toFixed(2), kd: calculated.kd.toFixed(2) })}
+                  </Button>
+                </div>
+              </div>
+            );
+          })()}
         </Card>
       )}
 

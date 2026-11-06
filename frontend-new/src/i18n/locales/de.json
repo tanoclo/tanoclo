@@ -1123,7 +1123,11 @@
       "source_both_desc": "Die Heizung schaltet ab, sobald entweder das Gerät oder der Server einen Abfall erkennt.",
       "source_external_api_desc": "Deaktiviert die automatische Erkennung auf Thermostat und Server. Verlässt sich ausschließlich auf externe Tür-/Fensterkontakte (z. B. Zigbee-Kontakte über Home Assistant API-Aufrufe).",
       "pid_ufh_preset": "Fußbodenheizungs-PID anwenden (4.00 / 1.50 / 25.00)",
-      "pid_ufh_preset_applied": "Fußbodenheizungs-PID-Voreinstellung übernommen (4.00 / 1.50 / 25.00)"
+      "pid_ufh_preset_applied": "Fußbodenheizungs-PID-Voreinstellung übernommen (4.00 / 1.50 / 25.00)",
+      "size_preset_box_title": "Größenbasierte Empfehlung ({{size}} m² • {{emitter}})",
+      "apply_size_preset_btn": "Größen-Voreinstellung anwenden ({{kp}} / {{ki}} / {{kd}})",
+      "pid_size_preset_btn_short": "Größen-Voreinstellung ({{kp}} / {{ki}} / {{kd}})",
+      "pid_size_preset_applied": "Größenbasierte PID-Voreinstellung angewendet ({{kp}} / {{ki}} / {{kd}})"
     },
     "display_saved_success": "Display-Einstellungen erfolgreich gespeichert!",
     "display_saved_error": "Fehler beim Speichern der Display-Einstellungen.",
@@ -1189,7 +1193,32 @@
     "emitter_underfloor_sub": "Niedertemperatur-Fußbodenheizung im Estrich oder Trockenbausystem",
     "underfloor_mass_title": "Thermische Speichermasse",
     "underfloor_mass_screed": "Zementestrich / Nasssystem (~2h Trägheit)",
-    "underfloor_mass_dry": "Trockenbausystem / Dünnbett (~45 Min Trägheit)"
+    "underfloor_mass_dry": "Trockenbausystem / Dünnbett (~45 Min Trägheit)",
+    "room_size_title": "Raumgröße / Grundfläche",
+    "room_size_desc": "Konfigurieren Sie die Grundfläche (m²), um das thermische Luftvolumen und die Trägheit für eine sofortige physikbasierte PID-Regelung zu bestimmen.",
+    "room_size_not_set": "Nicht festgelegt (20 m² Standard)",
+    "room_size_small": "Klein (~10 m²)",
+    "room_size_small_desc": "Badezimmer, Flure, kleine Räume",
+    "room_size_medium": "Mittel (~20 m²)",
+    "room_size_medium_desc": "Schlafzimmer, Küchen, Büros",
+    "room_size_large": "Groß (~35 m²)",
+    "room_size_large_desc": "Wohnzimmer, Hauptschlafzimmer",
+    "room_size_xl": "Sehr groß (~55 m²)",
+    "room_size_xl_desc": "Offene Wohnbereiche, Lofts",
+    "pid_size_suggestion_title": "Thermodynamische PID-Abstimmungsempfehlung",
+    "apply_size_pid": "Empfohlenes PID anwenden ({{kp}} / {{ki}} / {{kd}})",
+    "pid_explain_ufh_dry_small": "Kleiner Raum mit Trockenbau-Fußbodenheizung: mäßige proportionale Verstärkung und erhöhte Dämpfung verhindern schnelles Überschwingen.",
+    "pid_explain_ufh_dry_medium": "Mittlerer Raum mit Trockenbau-Fußbodenheizung: ausgewogene Reaktion abgestimmt auf Standard-Reaktionszeiten (45–90m).",
+    "pid_explain_ufh_dry_large": "Großer Raum mit Trockenbau-Fußbodenheizung: erhöhte proportionale Verstärkung sorgt für ausreichend Wärmefluss über lange Leitungen.",
+    "pid_explain_ufh_dry_xl": "Großer offener Bereich mit Trockenbau-Fußbodenheizung: maximale Strahlungsverstärkung für großes Luftvolumen bei stabiler Integralregelung.",
+    "pid_explain_ufh_screed_small": "Kleiner Raum mit Estrich-Fußbodenheizung: konservatives Kp und starke Kd-Dämpfung verhindern massives Überschwingen der Estrichmasse.",
+    "pid_explain_ufh_screed_medium": "Standard-Estrich-Fußbodenheizung: Basisparameter angepasst an 2–4 Stunden thermische Verzögerung des Betons.",
+    "pid_explain_ufh_screed_large": "Große Estrichzone: erhöhtes Kp und Ki überwinden hohe thermische Trägheit ohne übermäßige Oberflächentemperatur.",
+    "pid_explain_ufh_screed_xl": "Sehr großer offener Estrichbereich: anhaltende Wärmeintegration zur Überwindung hoher Speichermasse bei gleichzeitiger Schwingungsdämpfung.",
+    "pid_explain_rad_small": "Kleiner Raum mit Heizkörper: geringes Luftvolumen heizt schnell auf. Reduziertes Kp dämpft Ventilhübe; erhöhtes Kd bremst frühzeitig vor Überschwingen.",
+    "pid_explain_rad_medium": "Standard-Mittelgroßer Raum mit Heizkörper: ausgewogene Standardwerte (10.00 / 5.00 / 15.00) für stabiles Gleichgewicht.",
+    "pid_explain_rad_large": "Großer Raum mit Heizkörpern: größere thermische Masse und Luftvolumen. Erhöhtes Kp öffnet Ventile weiter; reduziertes Kd verhindert träges Aufheizen.",
+    "pid_explain_rad_xl": "Sehr großer offener Heizkörperbereich: hohe proportionale und integrale Verstärkung überwindet thermische Trägheit ohne Sollwertunterschreitung."
   },
   "tanoclo_ex": {
     "title": "Erweitertes TaNoClo Dashboard",
@@ -1462,6 +1491,9 @@
     "apply_all": "Empfohlene Werte anwenden",
     "history_title": "Optimierungsverlauf",
     "applied": "Angewendet",
-    "not_applied": "Nur beratend"
+    "not_applied": "Nur beratend",
+    "apply_zone_btn": "Anwenden",
+    "zone_applied_success": "PID-Einstellungen für {{name}} aktualisiert!",
+    "apply_failed": "PID-Einstellungen konnten nicht angewendet werden"
   }
 }

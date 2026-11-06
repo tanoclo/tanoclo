@@ -1116,7 +1116,11 @@
       "source_both_desc": "Verwarming schakelt uit als het apparaat of de server een daling detecteert.",
       "source_external_api_desc": "Schakelt automatische detectie op zowel thermostaat als server uit. Vertrouwt uitsluitend op externe deur-/raamcontacten (bijv. Zigbee-contacten geïntegreerd via Home Assistant API-aanroepen).",
       "pid_ufh_preset": "Vloerverwarming PID toepassen (4.00 / 1.50 / 25.00)",
-      "pid_ufh_preset_applied": "Vloerverwarming PID-voorinstelling toegepast (4.00 / 1.50 / 25.00)"
+      "pid_ufh_preset_applied": "Vloerverwarming PID-voorinstelling toegepast (4.00 / 1.50 / 25.00)",
+      "size_preset_box_title": "Aanbeveling op basis van grootte ({{size}} m² • {{emitter}})",
+      "apply_size_preset_btn": "Grootte-preset toepassen ({{kp}} / {{ki}} / {{kd}})",
+      "pid_size_preset_btn_short": "Grootte-preset ({{kp}} / {{ki}} / {{kd}})",
+      "pid_size_preset_applied": "Grootte-gebaseerde PID-preset toegepast ({{kp}} / {{ki}} / {{kd}})"
     },
     "display_saved_success": "Scherminstellingen succesvol opgeslagen!",
     "display_saved_error": "Scherminstellingen opslaan mislukt.",
@@ -1189,7 +1193,32 @@
     "emitter_underfloor_sub": "Lagetemperatuur vloerverwarming in zandcement of droogbouwsysteem",
     "underfloor_mass_title": "Thermische Massa Vloer",
     "underfloor_mass_screed": "Traditionele Chape / Dekvloer (~2u vertraging)",
-    "underfloor_mass_dry": "Droogbouwsysteem / Dunne Plaat (~45m vertraging)"
+    "underfloor_mass_dry": "Droogbouwsysteem / Dunne Plaat (~45m vertraging)",
+    "room_size_title": "Kamergrootte / Oppervlakte",
+    "room_size_desc": "Configureer het vloeroppervlak (m²) om het thermisch luchtvolume en inertie te bepalen voor directe, fysisch onderbouwde PID-sturing.",
+    "room_size_not_set": "Niet ingesteld (20 m² standaard)",
+    "room_size_small": "Klein (~10 m²)",
+    "room_size_small_desc": "Badkamers, hallen, kleine kamers",
+    "room_size_medium": "Gemiddeld (~20 m²)",
+    "room_size_medium_desc": "Standaard slaapkamers, keukens, kantoren",
+    "room_size_large": "Groot (~35 m²)",
+    "room_size_large_desc": "Woonkamers, hoofdslaapkamers",
+    "room_size_xl": "Extra groot (~55 m²)",
+    "room_size_xl_desc": "Open woonruimtes, lofts",
+    "pid_size_suggestion_title": "Thermodynamische PID-aanbeveling",
+    "apply_size_pid": "Aanbevolen PID toepassen ({{kp}} / {{ki}} / {{kd}})",
+    "pid_explain_ufh_dry_small": "Kleine kamer met droogsysteem vloerverwarming: gematigde proportionele versterking en verhoogde differentiële demping voorkomen snelle doorschieters.",
+    "pid_explain_ufh_dry_medium": "Gemiddelde kamer met droogsysteem vloerverwarming: gebalanceerde respons afgestemd op standaard paneelreactietijden (45–90m).",
+    "pid_explain_ufh_dry_large": "Grote kamer met droogsysteem vloerverwarming: verhoogde proportionele versterking levert voldoende thermische stroom over lange leidingen.",
+    "pid_explain_ufh_dry_xl": "Open ruimte met droogsysteem vloerverwarming: maximale stralingsversterking om groot luchtvolume te compenseren met stabiele integrale regeling.",
+    "pid_explain_ufh_screed_small": "Kleine kamer met cementdekvloer vloerverwarming: conservatieve Kp en sterke Kd differentiële remming voorkomen thermische doorschieting van de dekvloer.",
+    "pid_explain_ufh_screed_medium": "Standaard cementdekvloer vloerverwarming: basisversterkingen afgestemd op 2–4 uur thermische vertraging van beton.",
+    "pid_explain_ufh_screed_large": "Grote cementdekvloer zone: verhoogde Kp en Ki overwinnen zware thermische inertie zonder overmatige vloertemperatuur.",
+    "pid_explain_ufh_screed_xl": "Extra grote open ruimte met dekvloer: langdurige warmte-integratie om grote thermische massa te overwinnen met demping van oscillaties.",
+    "pid_explain_rad_small": "Kleine kamer met radiator: laag luchtvolume warmt snel op. Lagere Kp dempt kleppieken; hogere Kd remt vroegtijdig af om doorschieting te voorkomen.",
+    "pid_explain_rad_medium": "Standaard gemiddelde kamer met radiator: gebalanceerde fabrieksinstelling (10.00 / 5.00 / 15.00) voor stabiel evenwicht.",
+    "pid_explain_rad_large": "Grote kamer met radiatoren: hogere thermische massa en luchtvolume. Hogere Kp opent kleppen verder; lagere Kd voorkomt trage opwarming.",
+    "pid_explain_rad_xl": "Extra grote open radiatorruimte: hoge proportionele en integrale sturing overwint zware inertie zonder onder de doeltemperatuur te blijven steken."
   },
   "tanoclo_ex": {
     "title": "TaNoClo Uitgebreid Dashboard",
@@ -1462,6 +1491,9 @@
     "apply_all": "Aanbevolen waarden toepassen",
     "history_title": "Inregelgeschiedenis",
     "applied": "Toegepast",
-    "not_applied": "Enkel advies"
+    "not_applied": "Enkel advies",
+    "apply_zone_btn": "Toepassen",
+    "zone_applied_success": "PID-instellingen bijgewerkt voor {{name}}!",
+    "apply_failed": "Kan PID-instellingen niet toepassen"
   }
 }

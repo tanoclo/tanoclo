@@ -1116,7 +1116,11 @@
       "source_both_desc": "Le chauffage s'éteint si l'appareil ou le serveur détecte une baisse.",
       "source_external_api_desc": "Désactive l'auto-détection sur le thermostat et le serveur. Repose strictement sur des contacts de porte/fenêtre externes (ex. contacts Zigbee intégrés via l'API Home Assistant).",
       "pid_ufh_preset": "Appliquer le PID plancher chauffant (4.00 / 1.50 / 25.00)",
-      "pid_ufh_preset_applied": "Préréglage PID plancher chauffant appliqué (4.00 / 1.50 / 25.00)"
+      "pid_ufh_preset_applied": "Préréglage PID plancher chauffant appliqué (4.00 / 1.50 / 25.00)",
+      "size_preset_box_title": "Recommandation basée sur la taille ({{size}} m² • {{emitter}})",
+      "apply_size_preset_btn": "Appliquer le préréglage de taille ({{kp}} / {{ki}} / {{kd}})",
+      "pid_size_preset_btn_short": "Préréglage taille ({{kp}} / {{ki}} / {{kd}})",
+      "pid_size_preset_applied": "Préréglage PID basé sur la taille appliqué ({{kp}} / {{ki}} / {{kd}})"
     },
     "display_saved_success": "Paramètres d'affichage enregistrés avec succès !",
     "display_saved_error": "Échec de l'enregistrement des paramètres d'affichage.",
@@ -1189,7 +1193,32 @@
     "emitter_underfloor_sub": "Plancher chauffant basse température sur chape ou système sec",
     "underfloor_mass_title": "Masse thermique du sol",
     "underfloor_mass_screed": "Chape traditionnelle béton (~2h d'inertie)",
-    "underfloor_mass_dry": "Système sec / plaques minces (~45 min d'inertie)"
+    "underfloor_mass_dry": "Système sec / plaques minces (~45 min d'inertie)",
+    "room_size_title": "Superficie de la pièce",
+    "room_size_desc": "Configurez la surface (m²) pour déterminer le volume d'air thermique et l'inertie pour un contrôle PID immédiat et physique.",
+    "room_size_not_set": "Non défini (20 m² par défaut)",
+    "room_size_small": "Petite (~10 m²)",
+    "room_size_small_desc": "Salles de bain, couloirs, petites pièces",
+    "room_size_medium": "Moyenne (~20 m²)",
+    "room_size_medium_desc": "Chambres standard, cuisines, bureaux",
+    "room_size_large": "Grande (~35 m²)",
+    "room_size_large_desc": "Salons, chambres parentales",
+    "room_size_xl": "Très grande (~55 m²)",
+    "room_size_xl_desc": "Espaces ouverts, lofts",
+    "pid_size_suggestion_title": "Recommandation PID thermodynamique",
+    "apply_size_pid": "Appliquer le PID recommandé ({{kp}} / {{ki}} / {{kd}})",
+    "pid_explain_ufh_dry_small": "Petite pièce avec plancher chauffant sec : gain proportionnel modéré et amortissement dérivé élevé pour éviter les dépassements rapides.",
+    "pid_explain_ufh_dry_medium": "Pièce moyenne avec plancher chauffant sec : réponse équilibrée adaptée aux temps de réponse standard (45–90m).",
+    "pid_explain_ufh_dry_large": "Grande pièce avec plancher chauffant sec : gain proportionnel renforcé pour un flux thermique suffisant sur les grandes surfaces.",
+    "pid_explain_ufh_dry_xl": "Grand espace ouvert avec plancher sec : gain radiant maximal pour compenser le grand volume d'air tout en maintenant la stabilité.",
+    "pid_explain_ufh_screed_small": "Petite pièce avec chape béton : Kp conservateur et fort freinage dérivé Kd pour éviter l'inertie thermique de la chape.",
+    "pid_explain_ufh_screed_medium": "Chape béton standard : gains de base adaptés au retard thermique du béton de 2 à 4h.",
+    "pid_explain_ufh_screed_large": "Grande zone sur chape : Kp et Ki élevés pour surmonter la forte inertie sans emballement de la température de surface.",
+    "pid_explain_ufh_screed_xl": "Très grand espace ouvert sur chape : intégration thermique soutenue pour surmonter l'importante masse thermique tout en amortissant les oscillations.",
+    "pid_explain_rad_small": "Petite pièce avec radiateur : faible volume d'air chauffant vite. Kp réduit adoucit les à-coups ; Kd élevé freine tôt pour éviter les dépassements.",
+    "pid_explain_rad_medium": "Pièce moyenne avec radiateur : référence d'usine équilibrée (10.00 / 5.00 / 15.00) offrant un équilibre stable.",
+    "pid_explain_rad_large": "Grande pièce avec radiateurs : masse thermique et volume d'air plus importants. Kp augmenté ouvre plus les vannes ; Kd réduit évite la lenteur.",
+    "pid_explain_rad_xl": "Très grand espace ouvert avec radiateurs : forte commande proportionnelle et intégrale pour vaincre l'inertie sans rester sous la consigne."
   },
   "tanoclo_ex": {
     "title": "Tableau de Bord Avancé TaNoClo",
@@ -1462,6 +1491,9 @@
     "apply_all": "Appliquer les gains suggérés",
     "history_title": "Historique de régulation",
     "applied": "Appliqué",
-    "not_applied": "Conseil uniquement"
+    "not_applied": "Conseil uniquement",
+    "apply_zone_btn": "Appliquer",
+    "zone_applied_success": "Paramètres PID mis à jour pour {{name}} !",
+    "apply_failed": "Échec de l'application des paramètres PID"
   }
 }
