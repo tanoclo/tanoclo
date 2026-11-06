@@ -173,21 +173,6 @@ export default function BoilerCircuitsSettings() {
     }
   };
 
-  const handleToggleUnderfloor = async (e) => {
-    const isPresent = e.target.checked;
-    try {
-      await apiFetch(SWR_KEYS.heatingSystem(activeHomeId), {
-        method: 'PUT',
-        body: {
-          present: isPresent
-        }
-      });
-      await mutateHeatingSystem();
-    } catch (err) {
-      logger.error('Failed to toggle underfloor heating:', err);
-    }
-  };
-
   const handleSaveBoilerModel = async () => {
     if (!selectedModelId) return;
     setIsSavingModel(true);
@@ -361,54 +346,6 @@ export default function BoilerCircuitsSettings() {
                   height: '18px',
                   width: '18px',
                   left: heatingSystem?.boiler?.present ? '24px' : '3px',
-                  bottom: '2px',
-                  backgroundColor: '#fff',
-                  borderRadius: '50%',
-                  transition: '0.3s',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.4)'
-                }} />
-              </span>
-            </label>
-          </div>
-
-          {/* Underfloor Switch */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              <span style={{ fontSize: '0.9rem', fontWeight: 600 }}>
-                {t('heating_activity.underfloor_heating_enabled')}
-              </span>
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                {t('heating_activity.underfloor_desc', 'Enable underfloor heating pump control.')}
-              </span>
-            </div>
-
-            <label className="switch" style={{
-              position: 'relative',
-              display: 'inline-block',
-              width: '46px',
-              height: '24px',
-              cursor: 'pointer'
-            }}>
-              <input
-                type="checkbox"
-                checked={Boolean(heatingSystem?.underfloorHeating?.present)}
-                onChange={handleToggleUnderfloor}
-                style={{ opacity: 0, width: 0, height: 0 }}
-              />
-              <span style={{
-                position: 'absolute',
-                top: 0, left: 0, right: 0, bottom: 0,
-                backgroundColor: heatingSystem?.underfloorHeating?.present ? 'var(--primary)' : 'var(--bg-input)',
-                borderRadius: '24px',
-                border: '1px solid var(--border-color)',
-                transition: '0.3s'
-              }}>
-                <span style={{
-                  position: 'absolute',
-                  content: '""',
-                  height: '18px',
-                  width: '18px',
-                  left: heatingSystem?.underfloorHeating?.present ? '24px' : '3px',
                   bottom: '2px',
                   backgroundColor: '#fff',
                   borderRadius: '50%',

@@ -274,7 +274,7 @@
     "hours_short": "{{count}} hrs",
     "mean_month": "Mean / Month",
     "mean_day": "Mean / Day",
-    "boiler_configuration": "Boiler & Underfloor Heating",
+    "boiler_configuration": "Boiler Configuration",
     "boiler_enabled": "Boiler Enabled",
     "underfloor_heating_enabled": "Underfloor Heating Enabled",
     "change_boiler": "Change Boiler Model",

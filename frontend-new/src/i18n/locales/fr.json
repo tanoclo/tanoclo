@@ -277,7 +277,7 @@
     "hours_short": "{{count}} h",
     "mean_month": "Moyenne / Mois",
     "mean_day": "Moyenne / Jour",
-    "boiler_configuration": "Chaudière et plancher chauffant",
+    "boiler_configuration": "Configuration de la chaudière",
     "boiler_enabled": "Chaudière activée",
     "underfloor_heating_enabled": "Plancher chauffant activé",
     "change_boiler": "Modifier le modèle de chaudière",

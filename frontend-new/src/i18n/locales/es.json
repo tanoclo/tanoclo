@@ -277,7 +277,7 @@
     "hours_short": "{{count}} hrs",
     "mean_month": "Media / Mes",
     "mean_day": "Media / Día",
-    "boiler_configuration": "Caldera y suelo radiante",
+    "boiler_configuration": "Configuración de la caldera",
     "boiler_enabled": "Caldera habilitada",
     "underfloor_heating_enabled": "Suelo radiante habilitado",
     "change_boiler": "Cambiar modelo de caldera",

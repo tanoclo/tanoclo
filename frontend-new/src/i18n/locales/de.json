@@ -277,7 +277,7 @@
     "hours_short": "{{count}} Std",
     "mean_month": "Durchschnitt / Monat",
     "mean_day": "Durchschnitt / Tag",
-    "boiler_configuration": "Heizkessel & Fußbodenheizung",
+    "boiler_configuration": "Heizkessel-Konfiguration",
     "boiler_enabled": "Kessel aktiviert",
     "underfloor_heating_enabled": "Fußbodenheizung aktiviert",
     "change_boiler": "Kesselmodell ändern",

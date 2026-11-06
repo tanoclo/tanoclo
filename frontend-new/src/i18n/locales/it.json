@@ -277,7 +277,7 @@
     "hours_short": "{{count}} ore",
     "mean_month": "Media / Mese",
     "mean_day": "Media / Giorno",
-    "boiler_configuration": "Caldaia e riscaldamento a pavimento",
+    "boiler_configuration": "Configurazione della caldaia",
     "boiler_enabled": "Caldaia abilitata",
     "underfloor_heating_enabled": "Riscaldamento a pavimento abilitato",
     "change_boiler": "Modifica modello caldaia",

@@ -277,7 +277,7 @@
     "hours_short": "{{count}} uur",
     "mean_month": "Gemiddeld / Maand",
     "mean_day": "Gemiddeld / Dag",
-    "boiler_configuration": "Ketel & Vloerverwarming",
+    "boiler_configuration": "Ketelconfiguratie",
     "boiler_enabled": "Ketel Ingeschakeld",
     "underfloor_heating_enabled": "Vloerverwarming Ingeschakeld",
     "change_boiler": "Ketelmodel Wijzigen",

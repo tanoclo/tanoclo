@@ -25,6 +25,8 @@ router.get('/:homeId/heatingSystem', async (req, res) => {
         const pool = db.getPool();
         const [systems] = await pool.execute('SELECT * FROM heating_systems WHERE home_id = ?', [homeId]);
         const hs = systems[0] || {};
+        const [ufhRows] = await pool.execute('SELECT 1 FROM zones WHERE home_id = ? AND heating_type = ? LIMIT 1', [homeId, 'UNDERFLOOR']);
+        const hasUfh = Boolean(hs.underfloor_heating_present || (ufhRows && ufhRows.length > 0));
 
         res.json({
             boiler: {
@@ -32,7 +34,7 @@ router.get('/:homeId/heatingSystem', async (req, res) => {
                 id: hs.boiler_id || null,
                 found: Boolean(hs.boiler_found)
             },
-            underfloorHeating: { present: Boolean(hs.underfloor_heating_present) },
+            underfloorHeating: { present: hasUfh },
             telemetry: {
                 flowTemperature: hs.field_044c !== null && hs.field_044c !== undefined ? parseFloat(hs.field_044c) : null,
                 returnTemperature: hs.field_044d !== null && hs.field_044d !== undefined ? parseFloat(hs.field_044d) : null,
