@@ -60,9 +60,9 @@ describe('api/tanoclo.js', () => {
   });
 
   it('updateHomeTimezone → PUT', async () => {
-    await updateHomeTimezone(1, 'Europe/Amsterdam');
+    await updateHomeTimezone(1, 'Europe/Berlin');
     expect(apiFetch).toHaveBeenCalledWith('/api/v2/homes/1/tanoclo/timezone', {
-      method: 'PUT', body: { dateTimeZone: 'Europe/Amsterdam' }
+      method: 'PUT', body: { dateTimeZone: 'Europe/Berlin' }
     });
   });
 });

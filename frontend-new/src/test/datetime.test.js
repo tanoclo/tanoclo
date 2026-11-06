@@ -38,8 +38,8 @@ describe('datetime utils', () => {
     });
 
     it('formats with specific timezone', () => {
-      const resAmsterdam = formatLocalTime('2026-10-24 19:58:00', 'Europe/Amsterdam');
-      expect(resAmsterdam).toBe('21:58');
+      const resBerlin = formatLocalTime('2026-10-24 19:58:00', 'Europe/Berlin');
+      expect(resBerlin).toBe('21:58');
 
       const resLondon = formatLocalTime('2026-10-24 19:58:00', 'Europe/London');
       expect(resLondon).toBe('20:58');

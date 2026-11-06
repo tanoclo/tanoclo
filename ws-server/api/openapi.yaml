@@ -6812,7 +6812,7 @@ components:
         - properties:
             dateTimeZone:
               type: string
-              example: Europe/Amsterdam
+              example: Europe/Berlin
             dateCreated:
               type: string
               format: date-time

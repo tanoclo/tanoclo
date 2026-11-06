@@ -1,17 +1,14 @@
 import { describe, it, expect, vi } from 'vitest';
 import React from 'react';
 import { renderToString } from 'react-dom/server';
+import { HomeContext } from '../../context/HomeContext';
 
-const { MockHomeContext } = vi.hoisted(() => {
-  const React = require('react');
+vi.mock('../../context/HomeContext', async () => {
+  const React = await import('react');
   return {
-    MockHomeContext: React.createContext(null)
+    HomeContext: React.createContext(null)
   };
 });
-
-vi.mock('../../context/HomeContext', () => ({
-  HomeContext: MockHomeContext
-}));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -70,23 +67,23 @@ vi.mock('swr', () => ({
 import SupplyTempSettings from '../../components/settings/SupplyTempSettings';
 
 describe('SupplyTempSettings', () => {
-  it('renders timestamps converted to Amsterdam timezone', () => {
+  it('renders timestamps converted to Berlin timezone', () => {
     const html = renderToString(
-      <MockHomeContext.Provider value={{ homeInfo: { dateTimeZone: 'Europe/Amsterdam' } }}>
+      <HomeContext.Provider value={{ homeInfo: { dateTimeZone: 'Europe/Berlin' } }}>
         <SupplyTempSettings homeId={123} />
-      </MockHomeContext.Provider>
+      </HomeContext.Provider>
     );
 
-    // 19:58:00 UTC in Europe/Amsterdam (CEST +2) is 21:58
+    // 19:58:00 UTC in Europe/Berlin (CEST +2) is 21:58
     expect(html).toContain('21:58:00');
     expect(html).toContain('21:58');
   });
 
   it('renders timestamps converted to London timezone', () => {
     const html = renderToString(
-      <MockHomeContext.Provider value={{ homeInfo: { dateTimeZone: 'Europe/London' } }}>
+      <HomeContext.Provider value={{ homeInfo: { dateTimeZone: 'Europe/London' } }}>
         <SupplyTempSettings homeId={123} />
-      </MockHomeContext.Provider>
+      </HomeContext.Provider>
     );
 
     // 19:58:00 UTC in Europe/London (BST +1) is 20:58

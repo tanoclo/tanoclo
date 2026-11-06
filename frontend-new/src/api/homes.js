@@ -166,3 +166,15 @@ export function deleteUserFromHome(homeId, username) {
     method: 'DELETE'
   });
 }
+
+/**
+ * Updates building insulation factor
+ * @param {string|number} homeId
+ * @param {number} insulationFactor
+ */
+export function updateHomeInsulation(homeId, insulationFactor) {
+  return apiFetch(`/api/v2/homes/${homeId}/insulation`, {
+    method: 'PUT',
+    body: { insulationFactor }
+  });
+}

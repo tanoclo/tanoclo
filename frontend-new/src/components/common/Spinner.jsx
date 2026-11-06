@@ -12,7 +12,7 @@ import { Loader2 } from 'lucide-react';
  * @param {object} props.style - Inline styling overrides.
  */
 export default function Spinner({ size = 24, className = '', style = {}, ...props }) {
-  let pixelSize = 24;
+  let pixelSize;
   if (typeof size === 'number') {
     pixelSize = size;
   } else if (size === 'sm' || size === 'small') {

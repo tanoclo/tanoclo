@@ -391,7 +391,8 @@ export default function HomeSettings({ homeId, homeInfo, mutateHomeInfo }) {
         setContactPhone(prev => prev !== (details.contactDetails.phone || '') ? (details.contactDetails.phone || '') : prev);
       }
       if (details.insulationFactor !== undefined && details.insulationFactor !== null) {
-        setInsulationFactor(parseFloat(details.insulationFactor));
+        const factor = parseFloat(details.insulationFactor);
+        if (!isNaN(factor)) setInsulationFactor(factor);
       }
     }
   }, [details]);
@@ -426,6 +427,10 @@ export default function HomeSettings({ homeId, homeInfo, mutateHomeInfo }) {
     }
     if (homeInfo?.awayRadiusInMeters) {
       setRadius(prev => prev !== Math.round(homeInfo.awayRadiusInMeters) ? Math.round(homeInfo.awayRadiusInMeters) : prev);
+    }
+    if (homeInfo?.insulationFactor !== undefined && homeInfo?.insulationFactor !== null) {
+      const factor = parseFloat(homeInfo.insulationFactor);
+      if (!isNaN(factor)) setInsulationFactor(factor);
     }
   }, [homeInfo]);
 

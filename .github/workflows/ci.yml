@@ -1,0 +1,125 @@
+name: TaNoClo CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ws-server:
+    name: WS Server Tests & AST Validation
+    runs-on: ubuntu-latest
+
+    services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: tanoclo
+          MARIADB_USER: tanoclo
+          MARIADB_PASSWORD: password
+        ports:
+          - 3306:3306
+        options: --health-cmd="healthcheck.sh --connect --innodb_initialized" --health-interval=10s --health-timeout=5s --health-retries=5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          package-manager-cache: false
+
+      - name: Initialize Database Schema and Test Fixtures
+        run: |
+          mysql -h 127.0.0.1 -P 3306 -u tanoclo -ppassword tanoclo < ws-server/tanoclo.sql
+          mysql -h 127.0.0.1 -P 3306 -u tanoclo -ppassword tanoclo < ws-server/test/ci_seed.sql
+
+      - name: Install ws-server dependencies
+        run: |
+          cd ws-server
+          npm ci || npm install
+
+      - name: Run Acorn AST static check
+        run: |
+          cd ws-server
+          node check.js
+
+      - name: Run ws-server Vitest test suite
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_NAME: tanoclo
+          DB_USER: tanoclo
+          DB_PASS: password
+          JWT_SECRET: fallback_secret_for_tanoclo_development
+        run: |
+          cd ws-server
+          npx vitest run
+
+  frontend:
+    name: Frontend Lint, Tests & Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          package-manager-cache: false
+
+      - name: Install frontend dependencies
+        run: |
+          cd frontend-new
+          npm ci || npm install
+
+      - name: Run ESLint
+        run: |
+          cd frontend-new
+          npm run lint
+
+      - name: Run frontend Vitest test suite
+        run: |
+          cd frontend-new
+          npx vitest run
+
+      - name: Verify production build
+        run: |
+          cd frontend-new
+          npm run build
+
+  stream-receiver:
+    name: Stream Receiver Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          package-manager-cache: false
+
+      - name: Install stream-receiver dependencies
+        run: |
+          cd tanoclo-stream-receiver
+          npm ci || npm install
+
+      - name: Run stream-receiver Vitest test suite
+        run: |
+          cd tanoclo-stream-receiver
+          npx vitest run
