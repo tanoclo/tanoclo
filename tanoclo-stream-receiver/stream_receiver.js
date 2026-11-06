@@ -281,7 +281,7 @@ function displayPacket(packet, type, meta = {}) {
     if (type === 'incomplete') {
         const f = packet.fragmentInfo;
         if (!config.consoleLogging) {
-            logToFile(`Fragment received: Tag=0x${f.tag.toString(16).toUpperCase()} Type=${f.fragType} Progress=${f.progress.percent}%`);
+            logToFile(`Fragment received: From=${packet.macInfo.src} To=${packet.macInfo.dst} Tag=0x${f.tag.toString(16).toUpperCase()} Type=${f.fragType} Progress=${f.progress.percent}%`);
             return;
         }
 
@@ -300,7 +300,7 @@ function displayPacket(packet, type, meta = {}) {
         console.log(`*  Progress:    Received ${f.progress.receivedBytes} / ${f.progress.totalBytes || f.progress.totalSize} bytes (${f.progress.percent}%)`);
         console.log(`*  Missing:     ${f.missingParts}`);
         console.log(border + '\n');
-        logToFile(`Fragment received: Tag=0x${f.tag.toString(16).toUpperCase()} Type=${f.fragType} Progress=${f.progress.percent}%`);
+        logToFile(`Fragment received: From=${packet.macInfo.src} To=${packet.macInfo.dst} Tag=0x${f.tag.toString(16).toUpperCase()} Type=${f.fragType} Progress=${f.progress.percent}%`);
         return;
     }
 
@@ -316,7 +316,7 @@ function displayPacket(packet, type, meta = {}) {
     const pathStr = result.pathStr || 'Unknown';
 
     if (!config.consoleLogging) {
-        logToFile(`COAP: /${pathStr} MID=0x${packet.coap.mid.toString(16).toUpperCase()} Code=${coapParser.codeStr(packet.coap.code)} Key=${meta.keyName} RSSI=${meta.rssi}`);
+        logToFile(`COAP: /${pathStr} From=${packet.macInfo.src} To=${packet.macInfo.dst} MID=0x${packet.coap.mid.toString(16).toUpperCase()} Code=${coapParser.codeStr(packet.coap.code)} Key=${meta.keyName} RSSI=${meta.rssi}`);
         return;
     }
 
@@ -343,7 +343,7 @@ function displayPacket(packet, type, meta = {}) {
         console.log(`*  Fragment:    ${f.fragType} | Tag: 0x${f.tag.toString(16).toUpperCase()}`);
         console.log(`*  Progress:    Received ${f.progress.receivedBytes} / ${f.progress.totalSize} bytes (${f.progress.percent}%)`);
         console.log(`*  Missing:     ${f.missingParts}`);
-        logToFile(`Fragment received: Tag=0x${f.tag.toString(16).toUpperCase()} Type=${f.fragType} Progress=${f.progress.percent}%`);
+        logToFile(`Fragment received: From=${packet.macInfo.src} To=${packet.macInfo.dst} Tag=0x${f.tag.toString(16).toUpperCase()} Type=${f.fragType} Progress=${f.progress.percent}%`);
         return;
     }
 
@@ -369,7 +369,7 @@ function displayPacket(packet, type, meta = {}) {
     }
 
     console.log(border + '\n');
-    logToFile(`COAP: /${pathStr} MID=0x${packet.coap.mid.toString(16).toUpperCase()} Code=${coapParser.codeStr(packet.coap.code)} Key=${meta.keyName} RSSI=${meta.rssi}`);
+    logToFile(`COAP: /${pathStr} From=${packet.macInfo.src} To=${packet.macInfo.dst} MID=0x${packet.coap.mid.toString(16).toUpperCase()} Code=${coapParser.codeStr(packet.coap.code)} Key=${meta.keyName} RSSI=${meta.rssi}`);
 }
 
 function processDecryptedPayload(payload, macInfo, innerProto, seq, type, meta, reassemblyInfo = null) {
@@ -385,7 +385,7 @@ function processDecryptedPayload(payload, macInfo, innerProto, seq, type, meta, 
         if (coap.ok && coap.ver === 1) {
             if (coap.code === 0) {
                 statsDecodedCoap++;
-                logToFile(`COAP_EMPTY_ACK: MID=0x${coap.mid.toString(16).toUpperCase()} Key=${meta.keyName} RSSI=${meta.rssi}`);
+                logToFile(`COAP_EMPTY_ACK: From=${macInfo.src} To=${macInfo.dst} MID=0x${coap.mid.toString(16).toUpperCase()} Key=${meta.keyName} RSSI=${meta.rssi}`);
                 if (config.consoleLogging) {
                     console.log(`[COAP ACK] 📭 Empty ACK MID=0x${coap.mid.toString(16).toUpperCase()} From=${macInfo.src} To=${macInfo.dst} RSSI=${meta.rssi} dBm`);
                 }
@@ -437,7 +437,7 @@ function processDecryptedPayload(payload, macInfo, innerProto, seq, type, meta, 
     }
 
     statsNoCoap++;
-    logToFile(`Decryption ignored: No CoAP, len=${payload.length}`);
+    logToFile(`Decryption ignored: No CoAP, From=${macInfo.src} To=${macInfo.dst} len=${payload.length}`);
 }
 
 function printDecryptStats() {
@@ -556,8 +556,8 @@ async function start() {
                     }
                     if (!decrypted) {
                         statsDecryptionFailed++;
-                        const failSrc = rfCrypto.decodeMAC(frame, null).srcClean;
-                        decryptStats.recordAttempt(false, frame, failSrc, rssi, data.hex);
+                        const failMac = rfCrypto.decodeMAC(frame, null);
+                        decryptStats.recordAttempt(false, frame, failMac.srcClean, rssi, data.hex);
                         if (config.autoExclusion && pan !== null && !discoveredPanIds.has(pan)) {
                             excludedPanIds.add(pan);
                             if (config.consoleLogging) {
@@ -565,7 +565,7 @@ async function start() {
                             }
                         }
                         if (isWhitelisted) {
-                            logToFile(`Decryption failed: signature=0x09, len=${len}, PAN=${panStr}, src=${failSrc}, rssi=${rssi}`);
+                            logToFile(`Decryption failed: signature=0x09, len=${len}, PAN=${panStr}, src=${failMac.srcClean}, dst=${failMac.dstClean}, rssi=${rssi}`);
                         }
                         return;
                     }

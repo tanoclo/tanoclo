@@ -59,6 +59,14 @@ describe('rf-crypto module', () => {
         expect(macInfo.isDstIb).toBe(true);
         expect(macInfo.isSrcVa).toBe(true);
         expect(macInfo.direction).toBe('CLIENT_TO_SERVER');
+        expect(macInfo.src).toContain('(VA/RU)');
+        expect(macInfo.dst).toContain('(IB)');
+        expect(macInfo.srcClean).toBe('001BC50700001234');
+        expect(macInfo.dstClean).toBe('001BC50700000000');
+
+        // Verify format matches sniffer logToFile format convention
+        const coapLog = `COAP: /z/p From=${macInfo.src} To=${macInfo.dst} MID=0x1234 Code=2.04 Key=HOME RSSI=-50`;
+        expect(coapLog).toContain(`From=${macInfo.src} To=${macInfo.dst}`);
     });
 
     it('recognises a configured bridge MAC as the IB', () => {
