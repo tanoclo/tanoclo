@@ -146,4 +146,43 @@ describe('Flow Temperature Optimizer Engine', () => {
             assert.strictEqual(result.targetFlow, 55);
         }
     });
+
+    test('Circuit operating mode: STANDBY (0) on micro-demand under 25% and error < 0.4°C', () => {
+        const result = computeOptimalFlowTemperature({
+            outsideTemp: 10,
+            minFlow: 30,
+            maxFlowLimit: 80,
+            currentMaxFlow: 50,
+            maxZoneError: 0.2,
+            circuitDemandPct: 20
+        });
+
+        assert.strictEqual(result.circuitOperatingMode, 0);
+    });
+
+    test('Circuit operating mode: SCHEDULE (1) when demand >= 25%', () => {
+        const result = computeOptimalFlowTemperature({
+            outsideTemp: 10,
+            minFlow: 30,
+            maxFlowLimit: 80,
+            currentMaxFlow: 50,
+            maxZoneError: 0.2,
+            circuitDemandPct: 35
+        });
+
+        assert.strictEqual(result.circuitOperatingMode, 1);
+    });
+
+    test('Circuit operating mode: SCHEDULE (1) when zone error >= 0.4°C even on low demand', () => {
+        const result = computeOptimalFlowTemperature({
+            outsideTemp: 10,
+            minFlow: 30,
+            maxFlowLimit: 80,
+            currentMaxFlow: 50,
+            maxZoneError: 0.6,
+            circuitDemandPct: 15
+        });
+
+        assert.strictEqual(result.circuitOperatingMode, 1);
+    });
 });

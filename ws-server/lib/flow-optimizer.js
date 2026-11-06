@@ -62,7 +62,8 @@ function computeOptimalFlowTemperature({
             forecastAdj: 0,
             modAdj: 0,
             reason: 'idle_standby',
-            changed: Math.round(steppedFlow) !== currentMaxFlow
+            changed: Math.round(steppedFlow) !== currentMaxFlow,
+            circuitOperatingMode: 0
         };
     }
 
@@ -123,6 +124,12 @@ function computeOptimalFlowTemperature({
         changed = nextFlow !== currentMaxFlow;
     }
 
+    // Operating mode (0x2090): 0 = STANDBY (burner disabled), 1 = SCHEDULE (burner active)
+    let circuitOperatingMode = 1;
+    if (circuitDemandPct < 25 && maxZoneError < 0.4) {
+        circuitOperatingMode = 0;
+    }
+
     return {
         targetFlow: nextFlow,
         baseFlow: Math.round(baseFlow * 10) / 10,
@@ -130,7 +137,8 @@ function computeOptimalFlowTemperature({
         forecastAdj,
         modAdj,
         reason,
-        changed
+        changed,
+        circuitOperatingMode
     };
 }
 
@@ -184,7 +192,7 @@ async function evaluateHome(homeId) {
 
         // 5. Dynamic circuit determination & demand %
         const [circRows] = await pool.execute(
-            'SELECT number, field_4080, field_2040, driver_serial_no FROM heating_circuits WHERE home_id = ? ORDER BY number ASC',
+            'SELECT number, field_4080, field_2040, field_2090, driver_serial_no FROM heating_circuits WHERE home_id = ? ORDER BY number ASC',
             [homeId]
         );
 
@@ -257,20 +265,34 @@ async function evaluateHome(homeId) {
         });
 
         const newFlow = opt.targetFlow;
+        const targetMode = opt.circuitOperatingMode ?? 1;
+        const effectiveFlow = targetMode === 0 ? 0 : newFlow;
         const nowIso = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
-        // 8. If changed, apply new flow temperature
-        if (opt.changed) {
-            log('info', `[flow-optimizer] Home ${homeId}: max flow temp adjusted ${currentMaxFlow}°C -> ${newFlow}°C (reason=${opt.reason}, outdoor=${outsideTemp.toFixed(1)}°C, maxZoneError=${maxZoneError.toFixed(1)}°C, demand=${circuitDemandPct}%)`);
+        const currentMode = circRows.length > 0 && circRows[0].field_2090 !== null && circRows[0].field_2090 !== undefined
+            ? parseInt(circRows[0].field_2090, 10)
+            : 1;
+        const currentFlow = circRows.length > 0 && circRows[0].field_2040 !== null
+            ? parseFloat(circRows[0].field_2040)
+            : null;
 
-            await pool.execute(
-                'UPDATE flow_temperature_settings SET max_flow_temperature = ? WHERE home_id = ?',
-                [newFlow, homeId]
-            );
+        const modeChanged = currentMode !== targetMode;
+        const flowChanged = currentFlow !== effectiveFlow;
+
+        // 8. If flow changed or circuit operating mode changed, apply and downlink to circuit
+        if (opt.changed || modeChanged || flowChanged) {
+            log('info', `[flow-optimizer] Home ${homeId}: flow=${currentMaxFlow}°C->${newFlow}°C (effective=${effectiveFlow}°C) mode=${currentMode}->${targetMode} (reason=${opt.reason}, outdoor=${outsideTemp.toFixed(1)}°C, maxZoneError=${maxZoneError.toFixed(1)}°C, demand=${circuitDemandPct}%)`);
+
+            if (opt.changed) {
+                await pool.execute(
+                    'UPDATE flow_temperature_settings SET max_flow_temperature = ? WHERE home_id = ?',
+                    [newFlow, homeId]
+                );
+            }
 
             // Update circuit configs dynamically in DB and invalidate ETag so RU / bridge picks it up
             for (const cNum of targetCircuitNumbers) {
-                await _db.updateCircuitConfig(homeId, cNum, { '0x2040': newFlow });
+                await _db.updateCircuitConfig(homeId, cNum, { '0x2040': effectiveFlow, '0x2090': targetMode });
             }
         }
 

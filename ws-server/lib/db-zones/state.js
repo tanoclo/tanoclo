@@ -747,18 +747,22 @@ async function insertCircuitMeasurement(homeId, circuitNumber, circuitFields = {
 async function updateCircuitConfig(homeId, circuitNumber, fields) {
     const p = getPool();
     const val = fields['0x2040'] ?? fields.circuit_max_flow_temperature ?? fields.max_temp;
+    const mode = fields['0x2090'] ?? fields.circuit_operating_mode ?? fields.field_2090;
     const etag = generateEtag();
-    const [rows] = await p.execute('SELECT id FROM heating_circuits WHERE home_id=? AND number=?', [homeId, circuitNumber]);
+    const [rows] = await p.execute('SELECT id, field_2040, field_2090 FROM heating_circuits WHERE home_id=? AND number=?', [homeId, circuitNumber]);
+
+    const newFlow = val !== undefined ? val : (rows.length > 0 ? rows[0].field_2040 : null);
+    const newMode = mode !== undefined ? (typeof mode === 'string' ? parseInt(mode, 10) : mode) : (rows.length > 0 && rows[0].field_2090 !== null ? rows[0].field_2090 : 1);
 
     if (rows.length > 0) {
         await p.execute(
-            'UPDATE heating_circuits SET config_etag=?, config_etag_real=NULL, field_2040=? WHERE home_id=? AND number=?',
-            [etag, val !== undefined ? val : null, homeId, circuitNumber]
+            'UPDATE heating_circuits SET config_etag=?, config_etag_real=NULL, field_2040=?, field_2090=? WHERE home_id=? AND number=?',
+            [etag, newFlow, newMode, homeId, circuitNumber]
         );
     } else {
         await p.execute(
-            'INSERT INTO heating_circuits (home_id, number, config_etag, field_2040) VALUES (?, ?, ?, ?)',
-            [homeId, circuitNumber, etag, val !== undefined ? val : null]
+            'INSERT INTO heating_circuits (home_id, number, config_etag, field_2040, field_2090) VALUES (?, ?, ?, ?, ?)',
+            [homeId, circuitNumber, etag, newFlow, newMode]
         );
     }
 }

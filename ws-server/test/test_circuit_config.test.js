@@ -52,6 +52,23 @@ test('legacy test suite runs successfully', async () => {
           } else {
               throw new Error(`Mismatch: expected ${testMaxTemp}, got ${decoded.fields['0x2040']}`);
           }
+
+          if (decoded.fields['0x2090'] === undefined) {
+              console.log('SUCCESS: 0x2090 is NOT sent in c/config (telemetry-only FID per RU firmware)');
+          } else {
+              throw new Error('Mismatch: 0x2090 should not be in c/config TLV payload!');
+          }
+
+          // Test standby mode (field_2090 === 0 -> 0x2040 = 0.0)
+          console.log('\n2b. Testing standby mode (field_2090 = 0)...');
+          await db.updateCircuitConfig(homeId, circuitNumber, { field_2090: 0 }, { field_2090: 0 });
+          const standbyPayload = await db.buildCircuitConfigTLV(homeId, circuitNumber);
+          const standbyDecoded = tlv.decode(standbyPayload);
+          if (standbyDecoded.fields['0x2040'] === 0.0) {
+              console.log('SUCCESS: Standby mode successfully suppressed 0x2040 to 0.0');
+          } else {
+              throw new Error(`Mismatch: expected 0.0 in standby, got ${standbyDecoded.fields['0x2040']}`);
+          }
   
           console.log('\n3. Testing storeRealCircuitEtag...');
           const realEtag = Buffer.from('1e38286d77c0c25c', 'hex');

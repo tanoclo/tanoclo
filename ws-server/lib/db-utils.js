@@ -490,21 +490,28 @@ async function buildHvacConfigTLV(homeId) {
 async function buildCircuitConfigTLV(homeId, circuitNumber) {
     const tlv = require('./tlv');
     const p = getPool();
-    const [rows] = await p.execute('SELECT field_2040 FROM heating_circuits WHERE home_id = ? AND number = ? LIMIT 1', [homeId, circuitNumber]);
+    const [rows] = await p.execute('SELECT field_2040, field_2090 FROM heating_circuits WHERE home_id = ? AND number = ? LIMIT 1', [homeId, circuitNumber]);
 
     let fields = {};
     const field2040 = rows.length > 0 ? rows[0].field_2040 : null;
+    const field2090 = rows.length > 0 && rows[0].field_2090 !== null && rows[0].field_2090 !== undefined
+        ? parseInt(rows[0].field_2090, 10)
+        : 1;
 
-    // Always query flow_temperature_settings to allow user override from TaNoClo frontend
-    const [settingsRows] = await p.execute('SELECT max_flow_temperature FROM flow_temperature_settings WHERE home_id = ?', [homeId]);
-    if (settingsRows.length > 0 && settingsRows[0].max_flow_temperature) {
-        fields['0x2040'] = parseFloat(settingsRows[0].max_flow_temperature);
-    } else if (field2040 !== null && field2040 !== undefined) {
-        fields['0x2040'] = parseFloat(field2040);
+    // If circuit is in STANDBY (field_2090 === 0), suppress max flow temp to 0.0 to shut off RU OpenTherm burner
+    if (field2090 === 0) {
+        fields['0x2040'] = 0.0;
     } else {
-        fields['0x2040'] = 60.0;
+        // Always query flow_temperature_settings to allow user override from TaNoClo frontend
+        const [settingsRows] = await p.execute('SELECT max_flow_temperature FROM flow_temperature_settings WHERE home_id = ?', [homeId]);
+        if (settingsRows.length > 0 && settingsRows[0].max_flow_temperature) {
+            fields['0x2040'] = parseFloat(settingsRows[0].max_flow_temperature);
+        } else if (field2040 !== null && field2040 !== undefined) {
+            fields['0x2040'] = parseFloat(field2040);
+        } else {
+            fields['0x2040'] = 60.0;
+        }
     }
-
     fields = cleanFriendlyConfig(fields);
     return tlv.encodeFromFields(fields);
 }
