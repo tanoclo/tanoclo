@@ -5,13 +5,15 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import crypto from 'crypto';
-import rfCrypto from '../lib/rf-crypto.js';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const rfCrypto = require('../lib/rf-crypto.js');
 import SixLoWPANReassembler from '../lib/reassembler.js';
 import * as coapParser from '../lib/coap.js';
 import * as tlvDecoder from '../lib/tlv.js';
-import deviceRegistry from '../lib/device-registry.js';
+const deviceRegistry = require('../lib/device-registry.js');
 import * as haDiscovery from '../lib/ha-discovery.js';
-import * as messageProcessor from '../lib/message-processor.js';
+const messageProcessor = require('../lib/message-processor.js');
 import * as mqttPublisher from '../lib/mqtt-publisher.js';
 import * as csl from '../lib/csl.js';
 import * as icmpv6 from '../lib/icmpv6.js';
@@ -57,6 +59,50 @@ describe('rf-crypto module', () => {
         expect(macInfo.isDstIb).toBe(true);
         expect(macInfo.isSrcVa).toBe(true);
         expect(macInfo.direction).toBe('CLIENT_TO_SERVER');
+    });
+
+    it('recognises a configured bridge MAC as the IB', () => {
+        // Data frame, dest short 0x1234, src extended 00:1B:C5:07:31:2A:E4:D7 (5 bytes in header + 3 from payload)
+        const frame = Buffer.from([0x69, 0xC8, 0x01, 0xD7, 0xE4, 0x34, 0x12, 0xD7, 0xE4, 0x2A, 0x31, 0x07]);
+        const decrypted = Buffer.from([0xC5, 0x1B, 0x00]);
+
+        expect(rfCrypto.decodeMAC(frame, decrypted).isSrcIb).toBe(false);
+
+        rfCrypto.setBridgeMacs(['00:1B:C5:07:31:2A:E4:D7']);
+        try {
+            const macInfo = rfCrypto.decodeMAC(frame, decrypted);
+            expect(macInfo.srcMac).toBe('00:1B:C5:07:31:2A:E4:D7');
+            expect(macInfo.isSrcIb).toBe(true);
+            expect(macInfo.direction).toBe('SERVER_TO_CLIENT');
+        } finally {
+            rfCrypto.setBridgeMacs([]);
+        }
+    });
+
+    it('accepts bridge MACs in common formats and reports invalid ones', () => {
+        try {
+            const res = rfCrypto.setBridgeMacs('00:1b:c5:07:31:2a:e4:d7, 001BC507312AE4D8,0x001BC507312AE4D9, 00-1B-C5-07-31-2A-E4-DA, 1234');
+            expect(res.valid).toHaveLength(4);
+            expect(res.invalid).toEqual(['1234']);
+            expect(rfCrypto.isBridgeMac('00:1B:C5:07:31:2A:E4:D7')).toBe(true);
+            expect(rfCrypto.isBridgeMac('00:1B:C5:07:31:2A:E4:D9')).toBe(true);
+            expect(rfCrypto.isBridgeMac('00:1B:C5:07:31:2A:E4:DB')).toBe(false);
+            expect(rfCrypto.isBridgeMac('00:1B:C5:07:31:55:00:00')).toBe(false);
+        } finally {
+            rfCrypto.setBridgeMacs([]);
+        }
+    });
+
+    it('dynamically promotes extended MAC when short address is 0x0000', () => {
+        try {
+            expect(rfCrypto.isBridgeMac('00:1B:C5:07:31:2A:E4:E1')).toBe(false);
+            const added = rfCrypto.addBridgeMac('00:1B:C5:07:31:2A:E4:E1');
+            expect(added).toBe(true);
+            expect(rfCrypto.isBridgeMac('00:1B:C5:07:31:2A:E4:E1')).toBe(true);
+            expect(rfCrypto.addBridgeMac('00:1B:C5:07:31:2A:E4:E1')).toBe(false);
+        } finally {
+            rfCrypto.setBridgeMacs([]);
+        }
     });
 });
 
@@ -263,6 +309,114 @@ describe('Device Registry & Message Processor', () => {
         expect(dev.state.target_temperature).toBe(20.00);
         expect(dev.state.child_lock).toBe(true);
         expect(dev.state.reset_reason).toBe('PIN');
+    });
+
+    it('infers device types dynamically from TLV fields and roles', () => {
+        // 0x015d: 0x70 / 112 -> VA02, 0x47 / 71 -> RU02
+        expect(deviceRegistry.inferDeviceType(null, null, { '0x015d': 0x70 })).toBe('VA02');
+        expect(deviceRegistry.inferDeviceType(null, null, { '0x015d': 0x47 })).toBe('RU02');
+
+        // 0x015e: role 5 (VA_ZONE_MEMBER) -> VA02, role 11 (RU_LEADER_CONTROLLER) -> RU02, role 13 (BRIDGE_HW_LEADER) -> IB01
+        expect(deviceRegistry.inferDeviceType(null, null, { '0x015e': { role: 5 } })).toBe('VA02');
+        expect(deviceRegistry.inferDeviceType(null, null, { '0x015e': { role: 11 } })).toBe('RU02');
+        expect(deviceRegistry.inferDeviceType(null, null, { '0x015e': { role: 13 } })).toBe('IB01');
+
+        // Exclusive motor / mount FIDs -> VA02
+        expect(deviceRegistry.inferDeviceType(null, null, { '0x0265': 150 })).toBe('VA02');
+        expect(deviceRegistry.inferDeviceType(null, null, { '0x0290': true })).toBe('VA02');
+
+        // Exclusive boiler / OpenTherm FIDs -> RU02
+        expect(deviceRegistry.inferDeviceType(null, null, { '0x0161': 15000 })).toBe('RU02');
+        expect(deviceRegistry.inferDeviceType(null, null, { '0x044c': 55.0 })).toBe('RU02');
+    });
+
+    it('dynamically promotes bridge MAC on uplink to /d/<serial>/sen without misbinding serial to bridge', () => {
+        const bridgeMac = '00:1B:C5:07:31:22:33:44'; // does not contain 31:55
+        const childMac = '00:1B:C5:07:31:66:77:88';
+        const childSerial = 'VA1122334455';
+
+        try {
+            // Child sends uplink /d/VA.../sen to Bridge
+            const uplinkPacket = {
+                coap: {
+                    type: coapParser.TYPE_CON,
+                    code: coapParser.CODE_POST,
+                    mid: 0x1234,
+                    token: Buffer.alloc(0),
+                    options: [
+                        { num: coapParser.OPT_URI_PATH, value: Buffer.from('d') },
+                        { num: coapParser.OPT_URI_PATH, value: Buffer.from(childSerial) },
+                        { num: coapParser.OPT_URI_PATH, value: Buffer.from('sen') }
+                    ],
+                    payload: Buffer.alloc(0)
+                },
+                macInfo: {
+                    srcMac: childMac,
+                    dstMac: bridgeMac,
+                    srcClean: childMac.replace(/:/g, ''),
+                    dstClean: bridgeMac.replace(/:/g, ''),
+                    isSrcIb: false,
+                    isDstIb: false
+                },
+                tlv: { fields: {} }
+            };
+
+            const upRes = messageProcessor.processCoapPacket(uplinkPacket, 'unfragmented', { rssi: -60 });
+            expect(upRes.deviceRecord.mac).toBe(childMac);
+            expect(upRes.deviceRecord.serial).toBe(childSerial);
+            expect(rfCrypto.isBridgeMac(bridgeMac)).toBe(true);
+
+            // Now bridge sends downlink with childSerial in path (e.g. /d/VA.../lock)
+            const downlinkPacket = {
+                coap: {
+                    type: coapParser.TYPE_CON,
+                    code: coapParser.CODE_PUT,
+                    mid: 0x1235,
+                    token: Buffer.alloc(0),
+                    options: [
+                        { num: coapParser.OPT_URI_PATH, value: Buffer.from('d') },
+                        { num: coapParser.OPT_URI_PATH, value: Buffer.from(childSerial) },
+                        { num: coapParser.OPT_URI_PATH, value: Buffer.from('lock') }
+                    ],
+                    payload: Buffer.alloc(0)
+                },
+                macInfo: {
+                    srcMac: bridgeMac,
+                    dstMac: childMac,
+                    srcClean: bridgeMac.replace(/:/g, ''),
+                    dstClean: childMac.replace(/:/g, ''),
+                    isSrcIb: true,
+                    isDstIb: false
+                },
+                tlv: { fields: {} }
+            };
+
+            messageProcessor.processCoapPacket(downlinkPacket, 'unfragmented', { rssi: -50 });
+
+            // Ensure bridge MAC was NOT bound to childSerial!
+            const bridgeDev = deviceRegistry.getDevice(bridgeMac);
+            expect(bridgeDev.serial).not.toBe(childSerial);
+            const childDev = deviceRegistry.getDevice(childSerial);
+            expect(childDev.mac).toBe(childMac);
+        } finally {
+            rfCrypto.setBridgeMacs([]);
+        }
+    });
+
+    it('hydrates bridge MACs into rfCrypto when registering or loading bridge device', () => {
+        try {
+            const bridgeMac = '00:1B:C5:07:31:88:99:00';
+            expect(rfCrypto.isBridgeMac(bridgeMac)).toBe(false);
+
+            deviceRegistry.registerBridgeMac(bridgeMac);
+            expect(rfCrypto.isBridgeMac(bridgeMac)).toBe(true);
+
+            const dev = deviceRegistry.getDevice(bridgeMac);
+            expect(dev).toBeDefined();
+            expect(dev.deviceType).toBe('IB01');
+        } finally {
+            rfCrypto.setBridgeMacs([]);
+        }
     });
 });
 

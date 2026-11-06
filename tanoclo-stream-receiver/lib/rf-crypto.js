@@ -10,6 +10,44 @@ const crypto = require('crypto');
 // Standard static Tado bootstrap pairing key
 const PAIRING_KEY_HEX = '7461646f2070616972696e67206b6579';
 
+let bridgeMacs = new Set();
+
+function cleanMacHex(mac) {
+    return String(mac || '').trim().replace(/^0x/i, '').replace(/[^A-Fa-f0-9]/g, '').toUpperCase();
+}
+
+/**
+ * Set the bridge EUI-64s. Accepts an array or a comma-separated string, in any common MAC format.
+ * @returns {{ valid: string[], invalid: string[] }} accepted MACs (16 hex digits) and rejected entries as given
+ */
+function setBridgeMacs(macs) {
+    const entries = (Array.isArray(macs) ? macs : String(macs || '').split(','))
+        .map(m => String(m).trim()).filter(Boolean);
+    const invalid = entries.filter(m => cleanMacHex(m).length !== 16);
+    bridgeMacs = new Set(entries.map(cleanMacHex).filter(m => m.length === 16));
+    return { valid: [...bridgeMacs], invalid };
+}
+
+function addBridgeMac(mac) {
+    if (!mac) return false;
+    const clean = cleanMacHex(mac);
+    if (clean.length === 16 && !clean.startsWith('000000000000')) {
+        const wasPresent = bridgeMacs.has(clean);
+        bridgeMacs.add(clean);
+        return !wasPresent;
+    }
+    return false;
+}
+
+function getBridgeMacs() {
+    return Array.from(bridgeMacs);
+}
+
+function isBridgeMac(mac) {
+    if (!mac) return false;
+    return bridgeMacs.has(cleanMacHex(mac));
+}
+
 /**
  * Extract PAN ID from raw packet if available.
  * @param {Buffer} rawBytes 
@@ -159,10 +197,11 @@ function decodeMAC(frame, decrypted) {
     if (destMode === 2) {
         if (destShort === 0xFFFF) {
             dstMac = '00:1B:C5:07:FF:FF:FF:FF';
+        } else if (destShort === 0x0000) {
+            const known = getBridgeMacs()[0];
+            dstMac = known ? known.match(/.{1,2}/g).join(':') : '00:1B:C5:07:00:00:00:00';
         } else {
-            const isIb = (destShort === 0x0000);
-            const middle = isIb ? '31:55' : '31:56';
-            dstMac = `00:1B:C5:07:${middle}:${dstShortStr.slice(0, 2)}:${dstShortStr.slice(2, 4)}`;
+            dstMac = `00:1B:C5:07:00:00:${dstShortStr.slice(0, 2)}:${dstShortStr.slice(2, 4)}`;
         }
     } else if (destMode === 3 && destExtBytes) {
         if (destExtBytes.length === 6 && destPan !== null) {
@@ -180,9 +219,12 @@ function decodeMAC(frame, decrypted) {
     let srcMac = '00:00:00:00:00:00:00:00';
     const srcShortStr = srcShort !== null ? srcShort.toString(16).toUpperCase().padStart(4, '0') : '';
     if (srcMode === 2) {
-        const isIb = (srcShort === 0x0000);
-        const middle = isIb ? '31:55' : '31:56';
-        srcMac = `00:1B:C5:07:${middle}:${srcShortStr.slice(0, 2)}:${srcShortStr.slice(2, 4)}`;
+        if (srcShort === 0x0000) {
+            const known = getBridgeMacs()[0];
+            srcMac = known ? known.match(/.{1,2}/g).join(':') : '00:1B:C5:07:00:00:00:00';
+        } else {
+            srcMac = `00:1B:C5:07:00:00:${srcShortStr.slice(0, 2)}:${srcShortStr.slice(2, 4)}`;
+        }
     } else if (srcMode === 3 && srcExtBytes) {
         if (srcExtBytes.length === 5) {
             const b = Buffer.alloc(8);
@@ -206,10 +248,17 @@ function decodeMAC(frame, decrypted) {
         }
     }
 
-    const isDstIb = dstMac.includes(':31:55:') || destShort === 0x0000;
-    const isDstVa = dstMac.includes(':31:56:') || (destShort !== null && !isDstIb && destShort !== 0xFFFF);
-    const isSrcIb = srcMac.includes(':31:55:') || srcShort === 0x0000;
-    const isSrcVa = srcMac.includes(':31:56:') || (srcShort !== null && !isSrcIb);
+    if (destShort === 0x0000 && destMode === 3 && destExtBytes) {
+        addBridgeMac(dstMac);
+    }
+    if (srcShort === 0x0000 && srcMode === 3 && srcExtBytes) {
+        addBridgeMac(srcMac);
+    }
+
+    const isDstIb = isBridgeMac(dstMac) || destShort === 0x0000;
+    const isDstVa = destShort !== null && !isDstIb && destShort !== 0xFFFF;
+    const isSrcIb = isBridgeMac(srcMac) || srcShort === 0x0000;
+    const isSrcVa = srcShort !== null && !isSrcIb;
 
     let direction = 'UNKNOWN';
     if (isSrcIb && !isDstIb) {
@@ -280,6 +329,11 @@ function verifyKermitCrc(frameHeader, plaintextWithTrailer) {
 
 module.exports = {
     PAIRING_KEY_HEX,
+    setBridgeMacs,
+    addBridgeMac,
+    getBridgeMacs,
+    cleanMacHex,
+    isBridgeMac,
     getPanId,
     decryptCCM,
     decryptAES128ECB,

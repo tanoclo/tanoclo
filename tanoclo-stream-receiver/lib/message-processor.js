@@ -8,6 +8,7 @@
 const coapParser = require('./coap');
 const tlvDecoder = require('./tlv');
 const deviceRegistry = require('./device-registry');
+const rfCrypto = require('./rf-crypto.js');
 const haDiscovery = require('./ha-discovery');
 const mqttPublisher = require('./mqtt-publisher');
 
@@ -309,10 +310,58 @@ function processCoapPacket(packet, type, meta = {}) {
         if (dhwMeas !== undefined) updates.dhw_measured_temperature = dhwMeas;
     }
 
+    // Dynamic Bridge promotion based on short address 0x0000 or CoAP context
+    if (macInfo.dstShort === '0000' || macInfo.isDstIb) {
+        deviceRegistry.registerBridgeMac(macInfo.dstMac);
+    }
+    if (macInfo.srcShort === '0000' || macInfo.isSrcIb) {
+        deviceRegistry.registerBridgeMac(macInfo.srcMac);
+    }
+
+    if (tlv && tlv.fields) {
+        const f = tlv.fields;
+        // TLV 0x015e with role 0x0D (BRIDGE_HW_LEADER)
+        if (f['0x015e'] && typeof f['0x015e'] === 'object' && f['0x015e'].role === 0x0D) {
+            deviceRegistry.registerBridgeMac(macInfo.srcMac);
+        }
+        // TLV 0x01d0 (neighbor_self_ipv6) contains Bridge link-local IPv6 in Block 0
+        if (f['0x01d0']) {
+            const raw1d0 = String(f['0x01d0']).replace(/[^a-f0-9]/gi, '');
+            if (raw1d0.length === 32) {
+                deviceRegistry.registerBridgeMac(raw1d0.slice(16));
+            }
+        }
+    }
+
+    // Heuristic bridge promotion for request targets
+    if (isRequest && pathStr && pathStr !== 'Unknown') {
+        if (/^d\/(RU|VA|SU|BP|BR|WR)[0-9A-Z]+\/(sen|mnt|config|err|fallback|lock)/i.test(pathStr) || /^d\/[0-9A-Z]+\/neighbors/i.test(pathStr)) {
+            // Uplink request from child node -> dest is Bridge
+            if (macInfo.dstMac && !macInfo.dstMac.startsWith('00:00:00:00:00:00:00:00')) {
+                deviceRegistry.registerBridgeMac(macInfo.dstMac);
+            }
+        } else if (/^d\/info/i.test(pathStr)) {
+            // Downlink request from Bridge -> src is Bridge
+            if (macInfo.srcMac && !macInfo.srcMac.startsWith('00:00:00:00:00:00:00:00')) {
+                deviceRegistry.registerBridgeMac(macInfo.srcMac);
+            }
+        }
+    }
+
     // Determine target device identifier (for uplink: source MAC; for downlink: dest MAC or path serial)
     const senderMac = macInfo.srcMac;
-    const isUplink = !macInfo.isSrcIb;
+    const isDownlink = macInfo.isSrcIb || rfCrypto.isBridgeMac(macInfo.srcMac);
+    const isUplink = !isDownlink && (
+        macInfo.isDstIb ||
+        rfCrypto.isBridgeMac(macInfo.dstMac) ||
+        macInfo.dstShort === '0000' ||
+        (isRequest && /^[dh]\//i.test(pathStr) && !/^d\/info/i.test(pathStr))
+    );
     const targetMac = isUplink ? senderMac : macInfo.dstMac;
+
+    if (!detectedDeviceType) {
+        detectedDeviceType = deviceRegistry.inferDeviceType(detectedSerial, targetMac, tlv ? tlv.fields : null);
+    }
 
     const deviceRecord = deviceRegistry.getOrCreate(targetMac, {
         mac: targetMac,
@@ -320,11 +369,12 @@ function processCoapPacket(packet, type, meta = {}) {
         deviceType: detectedDeviceType,
         fwVersion: detectedFwVersion,
         hardwareRevision: detectedHwRev,
-        rssi: meta.rssi
+        rssi: meta.rssi,
+        fields: tlv ? tlv.fields : null
     });
 
-    if (detectedSerial && !deviceRecord.serial) {
-        deviceRegistry.bindMacToSerial(targetMac, detectedSerial, detectedDeviceType);
+    if (detectedSerial && !deviceRecord.serial && (!rfCrypto.isBridgeMac(targetMac) || detectedSerial.startsWith('IB'))) {
+        deviceRegistry.bindMacToSerial(targetMac, detectedSerial, detectedDeviceType, tlv ? tlv.fields : null);
     }
 
     // Emulated check (FW 13762 or HW 4 on RU)

@@ -7,6 +7,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const rfCrypto = require('./rf-crypto.js');
 
 class DeviceRegistry {
     constructor() {
@@ -42,7 +43,7 @@ class DeviceRegistry {
         return String(serial).trim().toUpperCase();
     }
 
-    inferDeviceType(serial, mac) {
+    inferDeviceType(serial, mac, fields = null) {
         if (serial) {
             const s = serial.toUpperCase();
             if (s.startsWith('VA')) return 'VA02';
@@ -54,8 +55,38 @@ class DeviceRegistry {
         }
         if (mac) {
             const m = String(mac).toUpperCase();
-            if (m.includes(':31:55:') || m.endsWith(':0E:82') || m.endsWith(':00:1E')) return 'IB01';
-            if (m.includes(':31:56:')) return 'VA02';
+            if (rfCrypto.isBridgeMac(m) || m.endsWith(':0E:82') || m.endsWith(':00:1E')) return 'IB01';
+        }
+        if (fields && typeof fields === 'object') {
+            // 1. Device Type Code TLV (0x015d)
+            if (fields['0x015d'] !== undefined) {
+                const dt = Number(fields['0x015d']);
+                if (dt === 0x70 || dt === 0x71 || dt === 112 || dt === 113) return 'VA02';
+                if (dt === 0x47 || dt === 0xc8 || dt === 71 || dt === 200) return 'RU02';
+            }
+            // 2. Zone Binding / Topology Role TLV (0x015e)
+            if (fields['0x015e'] !== undefined) {
+                const rObj = fields['0x015e'];
+                const role = typeof rObj === 'object' && rObj !== null ? rObj.role : Number(rObj);
+                if (role === 0x05) return 'VA02';
+                if (role === 0x03 || role === 0x09 || role === 0x0B || role === 0x02) return 'RU02';
+                if (role === 0x0D) return 'IB01';
+            }
+            // 3. Actuator / Valve specific FIDs
+            if (fields['0x0265'] !== undefined || fields['0x028c'] !== undefined ||
+                fields['0x016a'] !== undefined || fields['0x0283'] !== undefined ||
+                fields['0x0273'] !== undefined || fields['0x027c'] !== undefined ||
+                fields['0x0280'] !== undefined || fields['0x0290'] !== undefined ||
+                fields['0x0149'] !== undefined) {
+                return 'VA02';
+            }
+            // 4. OpenTherm / Boiler specific FIDs
+            if (fields['0x0161'] !== undefined || fields['0x0165'] !== undefined ||
+                fields['0x044c'] !== undefined || fields['0x044d'] !== undefined ||
+                fields['0x0457'] !== undefined || fields['0x0460'] !== undefined ||
+                fields['0x045b'] !== undefined || fields['0x044f'] !== undefined) {
+                return 'RU02';
+            }
         }
         return 'UNKNOWN';
     }
@@ -80,7 +111,7 @@ class DeviceRegistry {
         if (!record) {
             const effectiveSerial = serial || meta.serial || null;
             const effectiveMac = isMac ? identifier : (meta.mac || null);
-            const devType = meta.deviceType || this.inferDeviceType(effectiveSerial, effectiveMac);
+            const devType = meta.deviceType || this.inferDeviceType(effectiveSerial, effectiveMac, meta.fields);
 
             record = {
                 mac: effectiveMac,
@@ -100,6 +131,12 @@ class DeviceRegistry {
             if (record.cleanMac) this.devicesByMac.set(record.cleanMac, record);
             if (record.serial) this.devicesBySerial.set(record.serial, record);
             this.dirty = true;
+        } else if (record.deviceType === 'UNKNOWN') {
+            const updatedType = meta.deviceType || this.inferDeviceType(record.serial || meta.serial, record.mac || meta.mac, meta.fields);
+            if (updatedType !== 'UNKNOWN') {
+                record.deviceType = updatedType;
+                this.dirty = true;
+            }
         }
 
         return record;
@@ -108,10 +145,19 @@ class DeviceRegistry {
     /**
      * Bind a MAC address to a known serial number and device type.
      */
-    bindMacToSerial(mac, serial, deviceType = null) {
+    bindMacToSerial(mac, serial, deviceType = null, fields = null) {
         if (!mac || !serial) return;
         const cMac = this.cleanMac(mac);
         const cSerial = this.cleanSerial(serial);
+
+        // Guard: never bind a peripheral serial (VA/RU) to a bridge MAC!
+        if (rfCrypto.isBridgeMac(mac) && !cSerial.startsWith('IB')) {
+            return;
+        }
+
+        if (cSerial.startsWith('IB')) {
+            rfCrypto.addBridgeMac(mac);
+        }
 
         let record = this.devicesBySerial.get(cSerial);
         if (!record && this.devicesByMac.has(cMac)) {
@@ -119,14 +165,14 @@ class DeviceRegistry {
         }
 
         if (!record) {
-            record = this.getOrCreate(cSerial, { mac, deviceType });
+            record = this.getOrCreate(cSerial, { mac, deviceType, fields });
         }
 
         record.mac = mac;
         record.cleanMac = cMac;
         record.serial = cSerial;
         if (deviceType) record.deviceType = deviceType;
-        else if (record.deviceType === 'UNKNOWN') record.deviceType = this.inferDeviceType(cSerial, mac);
+        else if (record.deviceType === 'UNKNOWN') record.deviceType = this.inferDeviceType(cSerial, mac, fields);
 
         // Check if emulated
         if (cSerial.startsWith('RU') && (record.fwVersion === '13762' || record.hardwareRevision === 4 || record.isEmulated)) {
@@ -136,6 +182,23 @@ class DeviceRegistry {
         this.devicesByMac.set(cMac, record);
         this.devicesBySerial.set(cSerial, record);
         this.dirty = true;
+    }
+
+    registerBridgeMac(mac) {
+        if (!mac) return;
+        const added = rfCrypto.addBridgeMac(mac);
+        const cMac = this.cleanMac(mac);
+        if (!cMac) return;
+        let rec = this.devicesByMac.get(cMac);
+        if (!rec) {
+            rec = this.getOrCreate(mac, { deviceType: 'IB01' });
+        } else if (rec.deviceType !== 'IB01') {
+            rec.deviceType = 'IB01';
+            this.dirty = true;
+        }
+        if (added || this.dirty) {
+            this.saveCache();
+        }
     }
 
     getDevice(identifier) {
@@ -197,6 +260,9 @@ class DeviceRegistry {
                         };
                         if (rec.cleanMac) this.devicesByMac.set(rec.cleanMac, rec);
                         if (rec.serial) this.devicesBySerial.set(rec.serial, rec);
+                        if (rec.deviceType === 'IB01' || (rec.serial && rec.serial.startsWith('IB'))) {
+                            if (rec.mac) rfCrypto.addBridgeMac(rec.mac);
+                        }
                     }
                 }
             }
