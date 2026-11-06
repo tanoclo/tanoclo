@@ -32,6 +32,7 @@ const BUILTIN_LABELS = {
     '0x0290': { name: 'va_child_lock_enabled', type: 'bool' },
     '0x0298': { name: 'zone_presence_flag', type: 'u8' },
     '0x2060': { name: 'circuit_flow_temperature', type: 's16be', scale: 0.01 },
+    '0x4020': { name: 'zone_target_temp', type: 's16be', scale: 0.01 },
     '0x4060': { name: 'circuit_forwarded_temperature', type: 's16be', scale: 0.01 },
     '0x40c0': { name: 'circuit_pump_active', type: 'bool' },
     '0x4100': { name: 'circuit_heating_active', type: 'bool' },

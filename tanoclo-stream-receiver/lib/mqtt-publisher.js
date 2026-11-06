@@ -121,6 +121,10 @@ function publishDeviceTelemetry(deviceRecord, updates = {}) {
     if (updates.temperature_offset !== undefined) pub(`${prefix}/temperature_offset`, updates.temperature_offset);
     if (updates.rssi !== undefined) pub(`${prefix}/rssi`, updates.rssi);
 
+    // Heat demand fields
+    if (updates.demand_percent !== undefined) pub(`${prefix}/demand_percent`, updates.demand_percent);
+    if (updates.zone_call_for_heat !== undefined) pub(`${prefix}/zone_call_for_heat`, updates.zone_call_for_heat ? 'ON' : 'OFF');
+
     // Valve Actuator fields
     if (updates.valve_position !== undefined) pub(`${prefix}/valve_position`, updates.valve_position);
     if (updates.valve_position_pct !== undefined) pub(`${prefix}/valve_position_pct`, updates.valve_position_pct);
@@ -142,6 +146,29 @@ function publishDeviceTelemetry(deviceRecord, updates = {}) {
     if (updates.outside_temperature !== undefined) pub(`${prefix}/boiler/outside_temperature`, updates.outside_temperature);
     if (updates.exhaust_temperature !== undefined) pub(`${prefix}/boiler/exhaust_temperature`, updates.exhaust_temperature);
     if (updates.dhw_measured_temperature !== undefined) pub(`${prefix}/boiler/dhw_measured_temperature`, updates.dhw_measured_temperature);
+}
+
+function getCircuitTopicPrefix(circuitNumber) {
+    const base = (config && config.mqtt && config.mqtt.topic) || BASE_TOPIC;
+    return `${base}/c/${circuitNumber}`;
+}
+
+/**
+ * Publish read-only heating circuit state (tado/sniffer/c/{n}/...).
+ */
+function publishCircuitTelemetry(circuitNumber, updates = {}) {
+    if (!isConnected()) return;
+    const prefix = getCircuitTopicPrefix(circuitNumber);
+    const onOff = (v) => (v ? 'ON' : 'OFF');
+
+    pub(`${prefix}/availability`, 'online');
+    if (updates.demand_percent !== undefined) pub(`${prefix}/demand_percent`, updates.demand_percent);
+    if (updates.call_for_heat !== undefined) pub(`${prefix}/call_for_heat`, onOff(updates.call_for_heat));
+    if (updates.heating_active !== undefined) pub(`${prefix}/heating_active`, onOff(updates.heating_active));
+    if (updates.pump_active !== undefined) pub(`${prefix}/pump_active`, onOff(updates.pump_active));
+    if (updates.target_temperature !== undefined) pub(`${prefix}/target_temperature`, updates.target_temperature);
+    if (updates.reference_temperature !== undefined) pub(`${prefix}/reference_temperature`, updates.reference_temperature);
+    if (updates.operating_mode !== undefined) pub(`${prefix}/operating_mode`, updates.operating_mode);
 }
 
 /**
@@ -189,7 +216,9 @@ module.exports = {
     isConnected,
     pub,
     getDeviceTopicPrefix,
+    getCircuitTopicPrefix,
     publishDeviceTelemetry,
+    publishCircuitTelemetry,
     publishRawTelemetry,
     publishReceiverStats,
     close

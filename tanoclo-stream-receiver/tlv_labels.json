@@ -624,6 +624,14 @@
       "decimals": 2,
       "notes": "Circuit target temperature. | Seen in: h/*/c/1/act | Len: 2 bytes | Observed values in h/*/c/*/act consistent with target temp in cC."
     },
+    "0x4020": {
+      "name": "zone_target_temp",
+      "type": "s16be",
+      "unit": "C",
+      "scale": 0.01,
+      "decimals": 2,
+      "notes": "Active target temperature / setpoint in /z/p pings"
+    },
     "0x4040": {
       "name": "circuit_reference_temp",
       "type": "s16be",

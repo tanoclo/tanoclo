@@ -134,3 +134,8 @@ Once running, the sniffer automatically performs:
      - **Battery & Diagnostics**: Battery Voltage (V), Battery Level (%), Battery Low warning, RSSI (dBm), Reset Reason (POR/PDR, PIN, IWDG), Error Flags.
      - **Radiator Actuators (VA)**: Valve Position (%), Raw Steps, Actuator Active, Mounting State, Child Lock, Display Orientation, Drive Limits.
      - **Boiler & HVAC (RU/IB)**: Flow/Return Temperature, Water Pressure (bar), DHW Target/Measured Temperature, Boiler Active, Outside Temperature.
+     - **Heat Demand (VA)**: Heat Demand (%) from the valve's `/z/p` pings (`0x40a0`). A ping without `0x40a0` is published as 0%, because valves only include it when demand is non-zero or changing.
+     - **Zone Call for Heat**: zone demand latch (`0x6180`) from zone state pushed to the device.
+3. **Heating Circuit Discovery**:
+   - When `/c/{n}/act` traffic is seen, a `Sniffed Heating Circuit {n}` device is registered with Heat Demand (%) (`0x4080`), Call for Heat, Heating Active (`0x4100`), Pump Active (`0x40c0`), Target/Reference Temperature and Operating Mode. Call for Heat follows Heating Active once the circuit reports it, otherwise Heat Demand > 0.
+   - State topics: `tado/sniffer/c/{n}/...`. Circuits are keyed by number only, which assumes one home per sniffer.
