@@ -208,6 +208,7 @@ export default function BalancingSettings({ homeId, devices = [], zones = [], is
         groups.push({
           zoneId: zone.id,
           zoneName: zone.name,
+          heatingType: zone.heatingType || zone.heating_type || 'RADIATOR',
           devices: sorted
         });
       }
@@ -428,9 +429,24 @@ export default function BalancingSettings({ homeId, devices = [], zones = [], is
                   justifyContent: 'space-between',
                   alignItems: 'center'
                 }}>
-                  <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                    {zone.zoneName}
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                      {zone.zoneName}
+                    </span>
+                    {(zone.heatingType === 'UNDERFLOOR' || zone.heating_type === 'UNDERFLOOR') && (
+                      <span style={{
+                        fontSize: '0.65rem',
+                        fontWeight: 700,
+                        padding: '1px 6px',
+                        borderRadius: '4px',
+                        backgroundColor: 'rgba(234, 88, 12, 0.1)',
+                        color: 'var(--warning, #ea580c)',
+                        textTransform: 'uppercase'
+                      }}>
+                        {t('settings.emitter_underfloor', { defaultValue: 'Underfloor' })}
+                      </span>
+                    )}
+                  </div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', gap: '0.75rem' }}>
                     <span>{t('balancing.avg_rise', { defaultValue: 'Avg rise:' })} +{(zone.avgRiseRate || 0).toFixed(3)}°C/min</span>
                     {zone.avgHeatingPower > 0 && <span>{t('balancing.power', { defaultValue: 'Power:' })} {zone.avgHeatingPower}%</span>}
@@ -649,6 +665,19 @@ export default function BalancingSettings({ homeId, devices = [], zones = [], is
                     <span style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-primary)' }}>
                       {group.zoneName}
                     </span>
+                    {(group.heatingType === 'UNDERFLOOR') && (
+                      <span style={{
+                        fontSize: '0.65rem',
+                        fontWeight: 700,
+                        padding: '1px 6px',
+                        borderRadius: '4px',
+                        backgroundColor: 'rgba(234, 88, 12, 0.1)',
+                        color: 'var(--warning, #ea580c)',
+                        textTransform: 'uppercase'
+                      }}>
+                        {t('settings.emitter_underfloor', { defaultValue: 'Underfloor' })}
+                      </span>
+                    )}
                   </div>
                   <span style={{
                     fontSize: '0.75rem',

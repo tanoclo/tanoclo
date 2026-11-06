@@ -514,4 +514,49 @@ router.post('/:homeId/zones/:zoneId/offline-schedule/sync', async (req, res) => 
     }
 });
 
+router.get('/:homeId/zones/:zoneId/schedule/advice', async (req, res) => {
+    try {
+        const { homeId, zoneId } = req.params;
+        const pool = db.getPool();
+
+        const [zoneRows] = await pool.execute(
+            'SELECT heating_type, underfloor_mass, early_start_enabled FROM zones WHERE id = ? AND home_id = ?',
+            [zoneId, homeId]
+        );
+        if (zoneRows.length === 0) return res.status(404).json({ error: 'Zone not found' });
+
+        const zone = zoneRows[0];
+        const [activeTt] = await pool.execute(
+            'SELECT id, type FROM zone_timetables WHERE zone_id = ? AND home_id = ? AND is_active = 1',
+            [zoneId, homeId]
+        );
+
+        let blocks = [];
+        if (activeTt.length > 0) {
+            const [rows] = await pool.execute(
+                `SELECT ${BLOCK_COLUMNS} FROM schedule_blocks WHERE timetable_id = ? AND home_id = ?`,
+                [activeTt[0].id, homeId]
+            );
+            blocks = rows.map(mapBlockRow);
+        }
+
+        const scheduleAdviser = require('../../../lib/schedule-adviser');
+        const advice = scheduleAdviser.evaluateScheduleAdvice(blocks, {
+            heatingType: zone.heating_type || 'RADIATOR',
+            underfloorMass: zone.underfloor_mass || 'SCREED',
+            earlyStartEnabled: Boolean(zone.early_start_enabled)
+        });
+
+        res.json({
+            zoneId: Number(zoneId),
+            heatingType: zone.heating_type || 'RADIATOR',
+            underfloorMass: zone.underfloor_mass || 'SCREED',
+            advisories: advice
+        });
+    } catch (err) {
+        _log('error', `Schedule advice error: ${err.message}`);
+        res.status(500).json({ error: 'internal_error' });
+    }
+});
+
 module.exports = router;

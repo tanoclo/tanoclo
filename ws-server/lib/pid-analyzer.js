@@ -262,16 +262,16 @@ function evaluateZoneTransients(windows) {
 }
 
 /**
- * Generate PID tuning suggestions (Kp, Ki, Kd) based on evaluated transients.
- * 
  * @param {Object} metrics - Zone transient metrics
  * @param {Object} currentGains - { kp, ki, kd }
+ * @param {string} [heatingType='RADIATOR'] - 'RADIATOR' | 'UNDERFLOOR'
  * @returns {Object} Suggested gains, diagnosis, reason
  */
-function derivePidSuggestions(metrics, currentGains) {
-    const curKp = Number(currentGains.kp || 10.00);
-    const curKi = Number(currentGains.ki || 5.00);
-    const curKd = Number(currentGains.kd || 15.00);
+function derivePidSuggestions(metrics, currentGains, heatingType = 'RADIATOR') {
+    const isUfh = heatingType === 'UNDERFLOOR';
+    const curKp = Number(currentGains.kp || (isUfh ? 4.00 : 10.00));
+    const curKi = Number(currentGains.ki || (isUfh ? 1.50 : 5.00));
+    const curKd = Number(currentGains.kd || (isUfh ? 25.00 : 15.00));
 
     let suggestedKp = curKp;
     let suggestedKi = curKi;
@@ -295,41 +295,73 @@ function derivePidSuggestions(metrics, currentGains) {
         };
     }
 
-    // 1. Check for Hunting / Oscillations (High Priority)
-    if (oscillationScore >= 2.5) {
-        diagnosis = 'HUNTING';
-        suggestedKp = Math.max(4.0, Math.round(curKp * 0.80 * 10) / 10);
-        suggestedKi = Math.max(2.0, Math.round(curKi * 0.80 * 10) / 10);
-        suggestedKd = Math.min(30.0, Math.round(curKd * 1.20 * 10) / 10);
-        reasons.push(`Temperature hunts/oscillates around target (${oscillationScore} direction reversals). Decreasing Kp and Ki, and increasing Kd damping to stabilize loop.`);
-    }
-    // 2. Check for Thermal Overshoot
-    else if (maxOvershoot >= 0.50 || avgOvershoot >= 0.35) {
-        diagnosis = 'OVERSHOOT';
-        suggestedKp = Math.max(3.0, Math.round(curKp * 0.85 * 10) / 10);
-        suggestedKd = Math.min(35.0, Math.round(curKd * 1.25 * 10) / 10);
-        reasons.push(`Room overshoots target temperature by up to ${maxOvershoot.toFixed(2)}°C. Reducing Kp to soften initial surge and boosting Kd dynamic braking.`);
-    }
-    // 3. Check for Steady-State Droop (Under-heating)
-    else if (avgSteadyStateError >= 0.30) {
-        diagnosis = 'DROOP';
-        suggestedKi = Math.min(18.0, Math.round(curKi * 1.35 * 10) / 10);
-        reasons.push(`Room consistently settles ${avgSteadyStateError.toFixed(2)}°C below setpoint. Increasing Ki integral gain to eliminate steady-state shortfall.`);
-    }
-    // 4. Check for Sluggish Rise
-    else if (metrics.avgRiseTimeMinutes > 75 && avgOvershoot < 0.15 && oscillationScore < 1.0) {
-        diagnosis = 'SLUGGISH';
-        suggestedKp = Math.min(25.0, Math.round(curKp * 1.25 * 10) / 10);
-        reasons.push(`Rise time is slow (${metrics.avgRiseTimeMinutes} mins) without overshoot. Increasing Kp proportional gain to deliver heat faster.`);
-    } else {
-        diagnosis = 'OPTIMAL';
-        reasons.push('Room temperature tracks setpoint accurately with minimal overshoot and stable equilibrium.');
-    }
+    if (isUfh) {
+        // Underfloor heating has high thermal capacitance and long delay
+        if (oscillationScore >= 2.0) {
+            diagnosis = 'HUNTING';
+            suggestedKp = Math.max(2.0, Math.min(4.0, Math.round(curKp * 0.75 * 10) / 10));
+            suggestedKi = Math.max(0.8, Math.min(1.8, Math.round(curKi * 0.75 * 10) / 10));
+            suggestedKd = Math.min(35.0, Math.max(20.0, Math.round(curKd * 1.25 * 10) / 10));
+            reasons.push('Underfloor slab hunting. Dampening Kp and Ki, and boosting Kd derivative braking to arrest thermal inertia.');
+        } else if (maxOvershoot >= 0.35 || avgOvershoot >= 0.25) {
+            diagnosis = 'OVERSHOOT';
+            suggestedKp = Math.max(2.0, Math.min(4.0, Math.round(curKp * 0.80 * 10) / 10));
+            suggestedKd = Math.min(35.0, Math.max(22.0, Math.round(curKd * 1.30 * 10) / 10));
+            reasons.push(`Underfloor slab overshoots target by up to ${maxOvershoot.toFixed(2)}°C. Lowering Kp and increasing Kd dynamic braking to stop heat early.`);
+        } else if (avgSteadyStateError >= 0.40) {
+            diagnosis = 'DROOP';
+            suggestedKi = Math.min(2.5, Math.round(curKi * 1.25 * 10) / 10);
+            reasons.push(`Underfloor room settles ${avgSteadyStateError.toFixed(2)}°C below setpoint. Gentle Ki boost with conservative anti-windup.`);
+        } else if (metrics.avgRiseTimeMinutes > 180 && avgOvershoot < 0.15 && oscillationScore < 1.0) {
+            diagnosis = 'SLUGGISH';
+            suggestedKp = Math.min(5.5, Math.round(curKp * 1.20 * 10) / 10);
+            reasons.push(`Underfloor heating rise time excessively slow (${metrics.avgRiseTimeMinutes} mins). Gentle Kp boost within radiant safety limits.`);
+        } else {
+            diagnosis = 'OPTIMAL';
+            reasons.push('Underfloor thermal inertia well managed with stable equilibrium.');
+        }
 
-    // Clamp to valid firmware bounds
-    suggestedKp = Math.min(30.0, Math.max(2.0, suggestedKp));
-    suggestedKi = Math.min(20.0, Math.max(1.0, suggestedKi));
-    suggestedKd = Math.min(40.0, Math.max(5.0, suggestedKd));
+        suggestedKp = Math.min(6.0, Math.max(2.0, suggestedKp));
+        suggestedKi = Math.min(2.5, Math.max(0.5, suggestedKi));
+        suggestedKd = Math.min(40.0, Math.max(15.0, suggestedKd));
+    } else {
+        // Standard Radiator tuning logic
+        // 1. Check for Hunting / Oscillations (High Priority)
+        if (oscillationScore >= 2.5) {
+            diagnosis = 'HUNTING';
+            suggestedKp = Math.max(4.0, Math.round(curKp * 0.80 * 10) / 10);
+            suggestedKi = Math.max(2.0, Math.round(curKi * 0.80 * 10) / 10);
+            suggestedKd = Math.min(30.0, Math.round(curKd * 1.20 * 10) / 10);
+            reasons.push(`Temperature hunts/oscillates around target (${oscillationScore} direction reversals). Decreasing Kp and Ki, and increasing Kd damping to stabilize loop.`);
+        }
+        // 2. Check for Thermal Overshoot
+        else if (maxOvershoot >= 0.50 || avgOvershoot >= 0.35) {
+            diagnosis = 'OVERSHOOT';
+            suggestedKp = Math.max(3.0, Math.round(curKp * 0.85 * 10) / 10);
+            suggestedKd = Math.min(35.0, Math.round(curKd * 1.25 * 10) / 10);
+            reasons.push(`Room overshoots target temperature by up to ${maxOvershoot.toFixed(2)}°C. Reducing Kp to soften initial surge and boosting Kd dynamic braking.`);
+        }
+        // 3. Check for Steady-State Droop (Under-heating)
+        else if (avgSteadyStateError >= 0.30) {
+            diagnosis = 'DROOP';
+            suggestedKi = Math.min(18.0, Math.round(curKi * 1.35 * 10) / 10);
+            reasons.push(`Room consistently settles ${avgSteadyStateError.toFixed(2)}°C below setpoint. Increasing Ki integral gain to eliminate steady-state shortfall.`);
+        }
+        // 4. Check for Sluggish Rise
+        else if (metrics.avgRiseTimeMinutes > 75 && avgOvershoot < 0.15 && oscillationScore < 1.0) {
+            diagnosis = 'SLUGGISH';
+            suggestedKp = Math.min(25.0, Math.round(curKp * 1.25 * 10) / 10);
+            reasons.push(`Rise time is slow (${metrics.avgRiseTimeMinutes} mins) without overshoot. Increasing Kp proportional gain to deliver heat faster.`);
+        } else {
+            diagnosis = 'OPTIMAL';
+            reasons.push('Room temperature tracks setpoint accurately with minimal overshoot and stable equilibrium.');
+        }
+
+        // Clamp to valid firmware bounds
+        suggestedKp = Math.min(30.0, Math.max(2.0, suggestedKp));
+        suggestedKi = Math.min(20.0, Math.max(1.0, suggestedKi));
+        suggestedKd = Math.min(40.0, Math.max(5.0, suggestedKd));
+    }
 
     const confidence = validWindowsCount >= 5 ? 'HIGH' : (validWindowsCount >= 3 ? 'MEDIUM' : 'LOW');
 
@@ -342,7 +374,8 @@ function derivePidSuggestions(metrics, currentGains) {
         suggestedKd,
         diagnosis,
         reason: reasons.join(' '),
-        confidence
+        confidence,
+        heatingType
     };
 }
 
@@ -362,7 +395,7 @@ async function analyzePidTuning(homeId, options = {}) {
 
     // 1. Fetch heating zones
     const [zones] = await pool.execute(
-        `SELECT id, name, heating_circuit, field_6080, field_60a0, field_60c0 
+        `SELECT id, name, heating_circuit, heating_type, underfloor_mass, field_6080, field_60a0, field_60c0 
          FROM zones 
          WHERE home_id = ? AND type = 'HEATING' 
          ORDER BY id ASC`,
@@ -455,23 +488,32 @@ async function analyzePidTuning(homeId, options = {}) {
         const zId = Number(zone.id);
         const cNum = Number(zone.heating_circuit) || 1;
         const circuitIntervals = circuitIntervalsByCircuit.get(cNum) || null;
+        const heatingType = zone.heating_type || 'RADIATOR';
+        const underfloorMass = zone.underfloor_mass || 'SCREED';
 
+        const maxWinMinutes = heatingType === 'UNDERFLOOR' ? 240 : 120;
         const rows = zoneMap.get(zId) || [];
-        const windows = extractTransientWindows(rows, 120, { circuitIntervals });
+        const windows = extractTransientWindows(rows, maxWinMinutes, { circuitIntervals });
         totalWindows += windows.length;
 
         const metrics = evaluateZoneTransients(windows);
+        const defaultKp = heatingType === 'UNDERFLOOR' ? 4.00 : 10.00;
+        const defaultKi = heatingType === 'UNDERFLOOR' ? 1.50 : 5.00;
+        const defaultKd = heatingType === 'UNDERFLOOR' ? 25.00 : 15.00;
+
         const currentGains = {
-            kp: zone.field_6080 !== null ? parseFloat(zone.field_6080) : 10.00,
-            ki: zone.field_60a0 !== null ? parseFloat(zone.field_60a0) : 5.00,
-            kd: zone.field_60c0 !== null ? parseFloat(zone.field_60c0) : 15.00
+            kp: zone.field_6080 !== null ? parseFloat(zone.field_6080) : defaultKp,
+            ki: zone.field_60a0 !== null ? parseFloat(zone.field_60a0) : defaultKi,
+            kd: zone.field_60c0 !== null ? parseFloat(zone.field_60c0) : defaultKd
         };
 
-        const suggestions = derivePidSuggestions(metrics, currentGains);
+        const suggestions = derivePidSuggestions(metrics, currentGains, heatingType);
 
         zoneResults.push({
             zoneId: zId,
             zoneName: zone.name,
+            heatingType,
+            underfloorMass,
             metrics,
             ...suggestions
         });

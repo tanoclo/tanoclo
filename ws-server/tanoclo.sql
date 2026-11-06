@@ -24885,6 +24885,8 @@ CREATE TABLE `zones` (
   `field_6080` decimal(5,2) DEFAULT 10.00 COMMENT 'zone_pid_kp',
   `field_6340` tinyint(3) UNSIGNED DEFAULT 1 COMMENT 'owd_nvm_state',
   `insulation_factor` decimal(3,2) DEFAULT NULL,
+  `heating_type` varchar(32) NOT NULL DEFAULT 'RADIATOR',
+  `underfloor_mass` varchar(32) NOT NULL DEFAULT 'SCREED',
   `field_60c0` decimal(5,2) DEFAULT 15.00 COMMENT 'zone_pid_kd'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

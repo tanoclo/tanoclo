@@ -122,7 +122,10 @@ router.get('/:homeId/zones', async (req, res) => {
                 offlineScheduleEnabled: Boolean(zone.offline_schedule_enabled),
                 offlineScheduleSyncedAt: zone.offline_schedule_synced_at ? formatDate(zone.offline_schedule_synced_at) : null,
                 earlyStartEnabled: Boolean(zone.early_start_enabled),
-                heatingCircuit: zone.heating_circuit !== null && zone.heating_circuit !== undefined && zone.heating_circuit !== '' ? parseInt(zone.heating_circuit, 10) : null
+                heatingCircuit: zone.heating_circuit !== null && zone.heating_circuit !== undefined && zone.heating_circuit !== '' ? parseInt(zone.heating_circuit, 10) : null,
+                heatingType: zone.heating_type || 'RADIATOR',
+                underfloorMass: zone.underfloor_mass || 'SCREED',
+                insulationFactor: zone.insulation_factor !== null && zone.insulation_factor !== undefined ? parseFloat(zone.insulation_factor) : null
             };
         });
 
@@ -183,12 +186,16 @@ router.post('/:homeId/zones', async (req, res) => {
             }
         }
 
+        const heatingType = req.body.heatingType === 'UNDERFLOOR' ? 'UNDERFLOOR' : 'RADIATOR';
+        const underfloorMass = req.body.underfloorMass === 'DRY_SYSTEM' ? 'DRY_SYSTEM' : 'SCREED';
+
         await pool.execute(
             `INSERT INTO zones (
                 id, home_id, name, type, date_created, open_window_enabled, open_window_timeout, 
                 dazzle_enabled, early_start_enabled, min_temp, max_temp, step_temp, 
-                default_overlay_type, default_overlay_duration, heating_circuit, display_order
-            ) VALUES (?, ?, ?, ?, ?, 1, 900, 1, 0, ?, ?, ?, 'MANUAL', null, ?, ?)`,
+                default_overlay_type, default_overlay_duration, heating_circuit, display_order,
+                heating_type, underfloor_mass
+            ) VALUES (?, ?, ?, ?, ?, 1, 900, 1, 0, ?, ?, ?, 'MANUAL', null, ?, ?, ?, ?)`,
             [
                 newZoneId,
                 homeId, name, type, now,
@@ -196,7 +203,9 @@ router.post('/:homeId/zones', async (req, res) => {
                 isHotWater ? 65.0 : 25.0, // max temp
                 isHotWater ? 1.0 : 0.5, // step temp
                 defaultHeatingCircuit,
-                nextOrder
+                nextOrder,
+                heatingType,
+                underfloorMass
             ]
         );
 
@@ -308,7 +317,9 @@ router.post('/:homeId/zones', async (req, res) => {
             openWindowDetection: !isHotWater ? { supported: true, enabled: true, timeoutInSeconds: 900 } : { supported: false },
             offlineScheduleEnabled: false,
             offlineScheduleSyncedAt: null,
-            earlyStartEnabled: false
+            earlyStartEnabled: false,
+            heatingType,
+            underfloorMass
         });
     } catch (err) {
         _log('error', `Error creating zone: ${err.message}\n${err.stack}`);
@@ -532,6 +543,16 @@ router.put('/:homeId/zones/:zoneId/details', async (req, res) => {
                 const factor = Math.max(0.40, Math.min(0.95, parseFloat(req.body.insulationFactor)));
                 await pool.execute('UPDATE zones SET insulation_factor = ? WHERE id = ? AND home_id = ?', [factor, zoneId, homeId]);
             }
+        }
+
+        if (req.body.heatingType !== undefined) {
+            const hType = req.body.heatingType === 'UNDERFLOOR' ? 'UNDERFLOOR' : 'RADIATOR';
+            await pool.execute('UPDATE zones SET heating_type = ? WHERE id = ? AND home_id = ?', [hType, zoneId, homeId]);
+        }
+
+        if (req.body.underfloorMass !== undefined) {
+            const uMass = req.body.underfloorMass === 'DRY_SYSTEM' ? 'DRY_SYSTEM' : 'SCREED';
+            await pool.execute('UPDATE zones SET underfloor_mass = ? WHERE id = ? AND home_id = ?', [uMass, zoneId, homeId]);
         }
 
         const configFields = {};

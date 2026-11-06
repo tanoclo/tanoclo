@@ -216,7 +216,7 @@ async function checkZones() {
     if (db.isOffline()) return;
     try {
         const pool = db.getPool();
-        const [zones] = await pool.execute('SELECT id, home_id, type, early_start_enabled, last_schedule_transition_at, last_early_start_at, open_window_active, open_window_expiry FROM zones');
+        const [zones] = await pool.execute('SELECT id, home_id, type, heating_type, underfloor_mass, early_start_enabled, last_schedule_transition_at, last_early_start_at, open_window_active, open_window_expiry FROM zones');
         const [overlays] = await pool.execute('SELECT zone_id, home_id, termination_expiry, termination_type FROM zone_overlays');
         const overlaysMap = new Map(overlays.map(o => [`${o.home_id}:${o.zone_id}`, o]));
 
@@ -319,7 +319,7 @@ async function maintenanceZone(homeId, zoneId, zoneData, initialOverlay) {
         const isAway = home && (home.presence === 'AWAY' || home.field_6160 === 0);
         const isProxied = home && home.is_proxied;
 
-        // 2. Early Start Detection (30 min look-ahead)
+        // 2. Early Start Detection (Adaptive look-ahead: 30m radiators, 75m dry UFH, 150m screed UFH)
         if (!isAway && !hasOverlay && zoneData.type === 'HEATING' && zoneData.early_start_enabled === 1) {
             const nextBlock = await db.getNextScheduleBlock(homeId, zoneId);
             if (nextBlock) {
@@ -329,14 +329,19 @@ async function maintenanceZone(homeId, zoneId, zoneData, initialOverlay) {
                 const nextStartLocal = parseLocalTimeInTimezone(`${dateStr} ${nextBlock.startTime}`, tzName);
                 const nextDiffMin = Math.round((nextStartLocal.getTime() - now.getTime()) / 60000);
 
-                if (nextDiffMin > 0 && nextDiffMin <= 30) {
+                let maxLookaheadMin = 30;
+                if (zoneData.heating_type === 'UNDERFLOOR') {
+                    maxLookaheadMin = (zoneData.underfloor_mass === 'DRY_SYSTEM') ? 75 : 150;
+                }
+
+                if (nextDiffMin > 0 && nextDiffMin <= maxLookaheadMin) {
                     const lastEarly = zoneData.last_early_start_at || null;
 
                     if (lastEarly !== nextBlock.startTime) {
                         const targetTemp = nextBlock.setting?.temperature?.celsius ?? null;
                         const powerState = nextBlock.setting?.power || 'ON';
 
-                        log('info', `Early start detected for Home ${homeId}, Zone ${zoneId}. Starting transition to ${targetTemp !== null ? targetTemp + ' °C' : powerState} (Next block starts at ${nextBlock.startTime})`);
+                        log('info', `Early start detected for Home ${homeId}, Zone ${zoneId} (${zoneData.heating_type || 'RADIATOR'}, lookahead=${maxLookaheadMin}m). Starting transition to ${targetTemp !== null ? targetTemp + ' °C' : powerState} (Next block starts at ${nextBlock.startTime})`);
 
                         await db.insertMergedZoneMeasurement(homeId, zoneId, {
                             field_6200: targetTemp,

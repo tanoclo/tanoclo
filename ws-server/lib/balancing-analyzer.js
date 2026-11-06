@@ -177,6 +177,7 @@ function calculateMedian(numbers) {
  * @param {number|null} [params.avgCircuitDeltaT] - Flow/return delta T (°C)
  * @param {number} params.runsCount - Number of qualifying runs
  * @param {number} params.dataSpanHours - Hours of historical data analyzed
+ * @param {string} [params.heatingType='RADIATOR'] - Emitter type ('RADIATOR' | 'UNDERFLOOR')
  * @returns {Object} Suggestion details
  */
 function generateDeviceSuggestion({
@@ -185,12 +186,15 @@ function generateDeviceSuggestion({
     houseMedianRiseRate = 0.05,
     avgCircuitDeltaT = null,
     runsCount = 0,
-    dataSpanHours = 24
+    dataSpanHours = 24,
+    heatingType = 'RADIATOR'
 }) {
     let suggestedSensitivity = currentSensitivity;
     let confidence = (runsCount >= 10 && dataSpanHours >= 48) ? 'HIGH' : 'MEDIUM';
 
-    const safeMedian = houseMedianRiseRate > 0 ? houseMedianRiseRate : 0.05;
+    const isUfh = heatingType === 'UNDERFLOOR';
+    const defaultMedian = isUfh ? 0.01 : 0.05;
+    const safeMedian = houseMedianRiseRate > 0 ? houseMedianRiseRate : defaultMedian;
 
     if (deviceRiseRate <= 0.001) {
         // Severe heat deficit: radiator heating very slowly or cooling during active call
@@ -220,12 +224,15 @@ function generateDeviceSuggestion({
 
     const diffPct = Math.abs(suggestedSensitivity - currentSensitivity);
     let reasoning = '';
+    const emitterLabel = isUfh ? 'Underfloor heating loop' : 'Radiator';
+    const cohortLabel = isUfh ? 'UFH slab median' : 'house median';
+
     if (changeDirection === 'INCREASE_OPENING') {
-        reasoning = `Rise rate (+${deviceRiseRate.toFixed(3)}°C/min) is below house median (+${safeMedian.toFixed(3)}°C/min). Boost valve flow by ${diffPct}%.`;
+        reasoning = `${emitterLabel} rise rate (+${deviceRiseRate.toFixed(3)}°C/min) is below ${cohortLabel} (+${safeMedian.toFixed(3)}°C/min). Boost valve flow by ${diffPct}%.`;
     } else if (changeDirection === 'DECREASE_OPENING') {
-        reasoning = `Rise rate (+${deviceRiseRate.toFixed(3)}°C/min) exceeds house median (+${safeMedian.toFixed(3)}°C/min). Reduce valve boost by ${diffPct}%.`;
+        reasoning = `${emitterLabel} rise rate (+${deviceRiseRate.toFixed(3)}°C/min) exceeds ${cohortLabel} (+${safeMedian.toFixed(3)}°C/min). Reduce valve boost by ${diffPct}%.`;
     } else {
-        reasoning = `Rise rate (+${deviceRiseRate.toFixed(3)}°C/min) is well balanced with house median (+${safeMedian.toFixed(3)}°C/min).`;
+        reasoning = `${emitterLabel} rise rate (+${deviceRiseRate.toFixed(3)}°C/min) is well balanced with ${cohortLabel} (+${safeMedian.toFixed(3)}°C/min).`;
     }
 
     return {
@@ -233,7 +240,8 @@ function generateDeviceSuggestion({
         suggestedSensitivity,
         confidence,
         changeDirection,
-        reasoning
+        reasoning,
+        heatingType
     };
 }
 
@@ -257,7 +265,7 @@ async function analyzeBalancing(homeId, options = {}) {
 
     // 1. Fetch heating zones
     const [zones] = await pool.execute(
-        'SELECT id, name, type, heating_circuit FROM zones WHERE home_id = ? AND type = "HEATING"',
+        'SELECT id, name, type, heating_circuit, heating_type, underfloor_mass FROM zones WHERE home_id = ? AND type = "HEATING"',
         [homeId]
     );
 
@@ -401,6 +409,8 @@ async function analyzeBalancing(homeId, options = {}) {
     }
 
     // Compute rise rates for each VA device
+    const zoneHeatingTypeMap = new Map(zones.map(z => [Number(z.id), z.heating_type || 'RADIATOR']));
+
     const deviceResults = [];
     for (const dev of devices) {
         const zId = Number(dev.zone_id);
@@ -413,19 +423,32 @@ async function analyzeBalancing(homeId, options = {}) {
         deviceResults.push({
             device: dev,
             zoneId: zId,
+            heatingType: zoneHeatingTypeMap.get(zId) || 'RADIATOR',
             avgRiseRate,
             runsCount,
             runRates
         });
     }
 
-    // Compute house median rise rate across all devices with positive rates
-    const positiveRates = deviceResults
-        .map(d => d.avgRiseRate)
-        .filter(r => r > 0.001);
+    // Compute separate cohort medians: Radiators vs Underfloor Heating
+    const radiatorRates = deviceResults
+        .filter(d => d.heatingType !== 'UNDERFLOOR' && d.avgRiseRate > 0.001)
+        .map(d => d.avgRiseRate);
+    const ufhRates = deviceResults
+        .filter(d => d.heatingType === 'UNDERFLOOR' && d.avgRiseRate > 0.001)
+        .map(d => d.avgRiseRate);
 
-    const houseMedianRiseRate = positiveRates.length > 0
-        ? Math.round(calculateMedian(positiveRates) * 10000) / 10000
+    const radiatorMedianRiseRate = radiatorRates.length > 0
+        ? Math.round(calculateMedian(radiatorRates) * 10000) / 10000
+        : 0.05;
+    const ufhMedianRiseRate = ufhRates.length > 0
+        ? Math.round(calculateMedian(ufhRates) * 10000) / 10000
+        : 0.01;
+
+    // Overall house median fallback
+    const allPositiveRates = deviceResults.map(d => d.avgRiseRate).filter(r => r > 0.001);
+    const houseMedianRiseRate = allPositiveRates.length > 0
+        ? Math.round(calculateMedian(allPositiveRates) * 10000) / 10000
         : 0.05;
 
     // Build zone and device suggestion response structure
@@ -440,6 +463,8 @@ async function analyzeBalancing(homeId, options = {}) {
         zoneMap.set(Number(zone.id), {
             zoneId: Number(zone.id),
             zoneName: zone.name,
+            heatingType: zone.heating_type || 'RADIATOR',
+            underfloorMass: zone.underfloor_mass || 'SCREED',
             avgHeatingPower,
             devices: []
         });
@@ -451,13 +476,16 @@ async function analyzeBalancing(homeId, options = {}) {
             ? Number(dev.valve_sensitivity)
             : 100;
 
+        const cohortMedian = res.heatingType === 'UNDERFLOOR' ? ufhMedianRiseRate : radiatorMedianRiseRate;
+
         const suggestion = generateDeviceSuggestion({
             currentSensitivity: currentSens,
             deviceRiseRate: res.avgRiseRate,
-            houseMedianRiseRate,
+            houseMedianRiseRate: cohortMedian,
             avgCircuitDeltaT,
             runsCount: res.runsCount,
-            dataSpanHours
+            dataSpanHours,
+            heatingType: res.heatingType
         });
 
         const devEntry = {

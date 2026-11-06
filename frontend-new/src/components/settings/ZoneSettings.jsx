@@ -99,6 +99,8 @@ export default function ZoneSettings({ homeId, zoneId, zone, onBack, mutateZones
   const [tanocloOwdEnabled, setTaNoCloOwdEnabled] = useState(zone?.tanocloOwdEnabled || false);
   const [owdSource, setOwdSource] = useState(zone?.tanocloOwdSource || 'device');
   const [insulationFactor, setInsulationFactor] = useState(zone?.insulationFactor ?? null);
+  const [heatingType, setHeatingType] = useState(zone?.heatingType || 'RADIATOR');
+  const [underfloorMass, setUnderfloorMass] = useState(zone?.underfloorMass || 'SCREED');
 
   const [overlayType, setOverlayType] = useState('TADO_MODE'); // TADO_MODE | TIMER | MANUAL
   const [overlayDuration, setOverlayDuration] = useState(1800); // 30 mins default
@@ -148,6 +150,8 @@ export default function ZoneSettings({ homeId, zoneId, zone, onBack, mutateZones
       setTaNoCloOwdEnabled(prev => prev !== (zone.tanocloOwdEnabled || false) ? (zone.tanocloOwdEnabled || false) : prev);
       setOwdSource(prev => prev !== (zone.tanocloOwdSource || 'device') ? (zone.tanocloOwdSource || 'device') : prev);
       setOfflineScheduleEnabled(prev => prev !== (zone.offlineScheduleEnabled || false) ? (zone.offlineScheduleEnabled || false) : prev);
+      setHeatingType(prev => prev !== (zone.heatingType || 'RADIATOR') ? (zone.heatingType || 'RADIATOR') : prev);
+      setUnderfloorMass(prev => prev !== (zone.underfloorMass || 'SCREED') ? (zone.underfloorMass || 'SCREED') : prev);
     }
   }, [zone]);
 
@@ -303,6 +307,29 @@ export default function ZoneSettings({ homeId, zoneId, zone, onBack, mutateZones
       logger.error(err);
       triggerToast(err.message || t('settings.failed_save_settings'), 'error');
       setInsulationFactor(zone?.insulationFactor ?? null);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleHeatingTypeChange = async (newType, newMass = underfloorMass) => {
+    setHeatingType(newType);
+    if (newMass) setUnderfloorMass(newMass);
+    try {
+      setIsSaving(true);
+      await updateZoneDetails(homeId, zoneId, {
+        name: zone?.name || name,
+        type: zone?.type,
+        heatingType: newType,
+        underfloorMass: newMass
+      });
+      if (mutateZones) await mutateZones();
+      triggerToast(t('settings.zone_updated_success'), 'success');
+    } catch (err) {
+      logger.error(err);
+      triggerToast(err.message || t('settings.failed_save_settings'), 'error');
+      setHeatingType(zone?.heatingType || 'RADIATOR');
+      setUnderfloorMass(zone?.underfloorMass || 'SCREED');
     } finally {
       setIsSaving(false);
     }
@@ -582,6 +609,7 @@ export default function ZoneSettings({ homeId, zoneId, zone, onBack, mutateZones
           handleTaNoCloOwdToggle={handleTaNoCloOwdToggle}
           owdSource={owdSource}
           handleOwdSourceChange={handleOwdSourceChange}
+          heatingType={heatingType}
           t={t}
         />
       ) : (
@@ -608,6 +636,9 @@ export default function ZoneSettings({ homeId, zoneId, zone, onBack, mutateZones
             onNavigateToDevice={onNavigateToDevice}
             insulationFactor={insulationFactor}
             handleInsulationFactorChange={handleInsulationFactorChange}
+            heatingType={heatingType}
+            handleHeatingTypeChange={handleHeatingTypeChange}
+            underfloorMass={underfloorMass}
             t={t}
           />
 

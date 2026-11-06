@@ -425,7 +425,8 @@
     "create_failed": "Fehler beim Erstellen des Profils",
     "profile_deleted": "Profil gelöscht",
     "add_custom_profile": "Zeitplan-Profil erstellen",
-    "icon_type": "Design / Symbol"
+    "icon_type": "Design / Symbol",
+    "ufh_advisory_title": "Empfehlungen für Fußbodenheizungs-Zeitpläne"
   },
   "settings": {
     "reboot": "Neustart",
@@ -1120,7 +1121,9 @@
       "source_device_only_desc": "Verwendet ausschließlich den internen Sensoralgorithmus des Thermostats.",
       "source_server_heuristics_desc": "Nutzt Serveranalysen und vergleicht Raumsensoren mit Wetter-Temperaturabfallraten.",
       "source_both_desc": "Die Heizung schaltet ab, sobald entweder das Gerät oder der Server einen Abfall erkennt.",
-      "source_external_api_desc": "Deaktiviert die automatische Erkennung auf Thermostat und Server. Verlässt sich ausschließlich auf externe Tür-/Fensterkontakte (z. B. Zigbee-Kontakte über Home Assistant API-Aufrufe)."
+      "source_external_api_desc": "Deaktiviert die automatische Erkennung auf Thermostat und Server. Verlässt sich ausschließlich auf externe Tür-/Fensterkontakte (z. B. Zigbee-Kontakte über Home Assistant API-Aufrufe).",
+      "pid_ufh_preset": "Fußbodenheizungs-PID anwenden (4.00 / 1.50 / 25.00)",
+      "pid_ufh_preset_applied": "Fußbodenheizungs-PID-Voreinstellung übernommen (4.00 / 1.50 / 25.00)"
     },
     "display_saved_success": "Display-Einstellungen erfolgreich gespeichert!",
     "display_saved_error": "Fehler beim Speichern der Display-Einstellungen.",
@@ -1177,7 +1180,16 @@
       "how_to_use": "Bedienung",
       "how_to_use_desc": "Aktivieren Sie den obigen Schalter und klicken Sie auf Jetzt synchronisieren. Der Server kompiliert Ihren aktiven Zeitplan in ein hardwarekompatibles TLV-Profil und überträgt es über die Bridge an das Gerät.",
       "interpretation": "Wenn Ihre Internetverbindung ausfällt, schaltet der Thermostat zu den geplanten Zeiten autonom die Temperaturen um, anstatt auf dem letzten Sollwert eingefroren zu bleiben. Aufgrund von Speicherbeschränkungen der Hardware können komplexe mehrstufige Regeln vereinfacht werden."
-    }
+    },
+    "heating_emitter_title": "Heizkörper- / Wärmeerzeugerart",
+    "heating_emitter_desc": "Wählen Sie das Heizsystem dieses Raums, um Vorlauftemperaturgrenzen, hydraulischen Abgleich und PID-Regelung anzupassen.",
+    "emitter_radiators": "Heizkörper",
+    "emitter_radiators_sub": "Klassische Konvektoren oder Gliederheizkörper",
+    "emitter_underfloor": "Fußbodenheizung",
+    "emitter_underfloor_sub": "Niedertemperatur-Fußbodenheizung im Estrich oder Trockenbausystem",
+    "underfloor_mass_title": "Thermische Speichermasse",
+    "underfloor_mass_screed": "Zementestrich / Nasssystem (~2h Trägheit)",
+    "underfloor_mass_dry": "Trockenbausystem / Dünnbett (~45 Min Trägheit)"
   },
   "tanoclo_ex": {
     "title": "Erweitertes TaNoClo Dashboard",

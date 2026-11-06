@@ -217,6 +217,29 @@ export function updateZoneInsulation(homeId, zoneId, insulationFactor) {
 }
 
 /**
+ * Updates zone heat emitter type and underfloor thermal mass
+ * @param {string|number} homeId
+ * @param {string|number} zoneId
+ * @param {string} heatingType - 'RADIATOR' | 'UNDERFLOOR'
+ * @param {string} underfloorMass - 'SCREED' | 'DRY_SYSTEM'
+ */
+export function updateZoneHeatingType(homeId, zoneId, heatingType, underfloorMass = 'SCREED') {
+  return apiFetch(`/api/v2/homes/${homeId}/zones/${zoneId}/details`, {
+    method: 'PUT',
+    body: { heatingType, underfloorMass }
+  });
+}
+
+/**
+ * Gets advisory recommendations for a zone heating schedule
+ * @param {string|number} homeId
+ * @param {string|number} zoneId
+ */
+export function getScheduleAdvice(homeId, zoneId) {
+  return apiFetch(`/api/v2/homes/${homeId}/zones/${zoneId}/schedule/advice`);
+}
+
+/**
  * Updates early start setting for a zone
  * @param {string|number} homeId
  * @param {string|number} zoneId

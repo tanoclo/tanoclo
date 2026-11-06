@@ -32,6 +32,7 @@ function init(db, commandApi, mqttPublisher) {
  * @param {number} params.circuitDemandPct - Circuit demand percent (0 - 100)
  * @param {number|null} [params.modulationPct] - Live burner modulation percent (0 - 100)
  * @param {number[]|null} [params.forecastHourly] - Array of forecasted outdoor temperatures (next hours)
+ * @param {string} [params.activeDemandType='ANY'] - 'ANY' | 'ONLY_UNDERFLOOR' | 'ONLY_RADIATOR' | 'MIXED'
  * @returns {Object} { targetFlow, baseFlow, demandBoost, forecastAdj, modAdj, reason, changed }
  */
 function computeOptimalFlowTemperature({
@@ -42,11 +43,15 @@ function computeOptimalFlowTemperature({
     maxZoneError = 0,
     circuitDemandPct = 0,
     modulationPct = null,
-    forecastHourly = null
+    forecastHourly = null,
+    activeDemandType = 'ANY'
 }) {
     // 1. Guardrail sanity checks
+    const isOnlyUfh = activeDemandType === 'ONLY_UNDERFLOOR';
+    const effectiveMaxLimit = isOnlyUfh ? Math.min(maxFlowLimit, 45) : maxFlowLimit;
+
     minFlow = Math.max(20, Math.min(minFlow, 50));
-    maxFlowLimit = Math.max(minFlow, Math.min(maxFlowLimit, 85));
+    maxFlowLimit = Math.max(minFlow, Math.min(effectiveMaxLimit, 85));
     currentMaxFlow = Math.max(minFlow, Math.min(currentMaxFlow, maxFlowLimit));
 
     // 2. Idle / Standby check: If no circuit demand and all rooms satisfied
@@ -73,17 +78,17 @@ function computeOptimalFlowTemperature({
 
     // 4. Zone Demand Adjustment
     let demandBoost = 0;
-    let reason = 'weather_curve';
+    let reason = isOnlyUfh ? 'weather_curve_ufh' : (activeDemandType === 'MIXED' ? 'mixed_radiator_priority' : 'weather_curve');
 
     if (maxZoneError >= 2.0) {
-        demandBoost = 5.0;
-        reason = 'cold_recovery';
+        demandBoost = isOnlyUfh ? 2.0 : 5.0;
+        reason = isOnlyUfh ? 'ufh_demand_boost' : 'cold_recovery';
     } else if (maxZoneError >= 1.0) {
-        demandBoost = 2.5;
-        reason = 'demand_recovery';
+        demandBoost = isOnlyUfh ? 1.0 : 2.5;
+        reason = isOnlyUfh ? 'ufh_demand_boost' : 'demand_recovery';
     } else if (maxZoneError < 0.3) {
-        demandBoost = -3.0;
-        reason = 'near_setpoint';
+        demandBoost = isOnlyUfh ? -2.0 : -3.0;
+        reason = isOnlyUfh ? 'ufh_near_setpoint' : 'near_setpoint';
     }
 
     // 5. Weather Forecast Pre-adjustment (Next 3h trend)
@@ -217,9 +222,9 @@ async function evaluateHome(homeId) {
             }
         }
 
-        // 6. Active zone temperatures and errors
+        // 6. Active zone temperatures, heating types and errors
         const [zoneRows] = await pool.execute(
-            `SELECT z.id, z.name, zm.field_012d AS current_temp
+            `SELECT z.id, z.name, z.heating_type, zm.field_012d AS current_temp
              FROM zones z
              LEFT JOIN (
                  SELECT zone_id, field_012d
@@ -231,6 +236,9 @@ async function evaluateHome(homeId) {
         );
 
         let maxZoneError = 0;
+        let callingRadiators = 0;
+        let callingUfh = 0;
+
         for (const z of zoneRows) {
             try {
                 const zState = await _db.getZoneState(homeId, z.id);
@@ -244,12 +252,26 @@ async function evaluateHome(homeId) {
                             if (err > maxZoneError) {
                                 maxZoneError = err;
                             }
+                            if (z.heating_type === 'UNDERFLOOR') {
+                                callingUfh++;
+                            } else {
+                                callingRadiators++;
+                            }
                         }
                     }
                 }
             } catch (err) {
                 log('warn', `Error evaluating zone ${z.id} state for home ${homeId}: ${err.message}`);
             }
+        }
+
+        let activeDemandType = 'ANY';
+        if (callingUfh > 0 && callingRadiators === 0) {
+            activeDemandType = 'ONLY_UNDERFLOOR';
+        } else if (callingUfh > 0 && callingRadiators > 0) {
+            activeDemandType = 'MIXED';
+        } else if (callingRadiators > 0) {
+            activeDemandType = 'ONLY_RADIATOR';
         }
 
         // 7. Calculate optimal flow temperature
@@ -261,7 +283,8 @@ async function evaluateHome(homeId) {
             maxZoneError,
             circuitDemandPct,
             modulationPct,
-            forecastHourly
+            forecastHourly,
+            activeDemandType
         });
 
         const newFlow = opt.targetFlow;

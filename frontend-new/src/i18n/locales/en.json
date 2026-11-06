@@ -425,7 +425,8 @@
     "create_failed": "Failed to create profile",
     "profile_deleted": "Profile deleted",
     "add_custom_profile": "Create schedule profile",
-    "icon_type": "Theme / Icon"
+    "icon_type": "Theme / Icon",
+    "ufh_advisory_title": "Underfloor Heating Schedule Recommendations"
   },
   "settings": {
     "back_to_settings": "Back to Settings",
@@ -1102,7 +1103,9 @@
       "source_device_only_desc": "Uses only the thermostat's internal sensor algorithm.",
       "source_server_heuristics_desc": "Uses server analytics, comparing room sensors and weather drop speeds.",
       "source_both_desc": "Heating turns off if either the device or server detects a drop.",
-      "source_external_api_desc": "Disables auto-detection on both thermostat and server. Relies strictly on external door/window contacts (e.g. Zigbee contacts integrated via Home Assistant API calls)."
+      "source_external_api_desc": "Disables auto-detection on both thermostat and server. Relies strictly on external door/window contacts (e.g. Zigbee contacts integrated via Home Assistant API calls).",
+      "pid_ufh_preset": "Apply Underfloor Heating PID (4.00 / 1.50 / 25.00)",
+      "pid_ufh_preset_applied": "Underfloor heating PID preset applied (4.00 / 1.50 / 25.00)"
     },
     "display_saved_success": "Display settings saved successfully!",
     "display_saved_error": "Failed to save display settings.",
@@ -1177,7 +1180,16 @@
       "how_to_use": "How to use",
       "how_to_use_desc": "Enable the toggle above, then click Sync Now. The server compiles your active schedule into a hardware-compatible TLV profile and transmits it via the Bridge to the device.",
       "interpretation": "If your internet connection drops, the thermostat will autonomously switch temperatures at the scheduled times rather than remaining frozen at the last setpoint. Note that because of hardware memory limits, complex multi-step rules may be simplified."
-    }
+    },
+    "heating_emitter_title": "Heating Emitter Type",
+    "heating_emitter_desc": "Select the heat distribution hardware installed in this room to adapt flow temperature ceilings, hydraulic balancing cohorts, and PID response.",
+    "emitter_radiators": "Radiators",
+    "emitter_radiators_sub": "Standard convective or cast-iron radiators",
+    "emitter_underfloor": "Underfloor Heating",
+    "emitter_underfloor_sub": "Low-temperature radiant floor slab or dry system",
+    "underfloor_mass_title": "Floor Thermal Mass",
+    "underfloor_mass_screed": "Wet Screed / Concrete Slab (~2h thermal lag)",
+    "underfloor_mass_dry": "Dry System / Thin Board (~45m thermal lag)"
   },
   "tanoclo_ex": {
     "title": "TaNoClo Advanced Dashboard",

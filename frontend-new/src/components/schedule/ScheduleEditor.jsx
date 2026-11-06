@@ -11,7 +11,7 @@ import { useState, useEffect, useRef } from 'react';
 import useSWR from 'swr';
 import { useTranslation } from 'react-i18next';
 import { useHome } from '../../context/HomeContext';
-import { getTimetableBlocks, updateDayBlocks, copySchedule, getActiveTimetable, setActiveTimetable } from '../../api/zones';
+import { getTimetableBlocks, updateDayBlocks, copySchedule, getActiveTimetable, setActiveTimetable, getScheduleAdvice } from '../../api/zones';
 import DaySelector from './DaySelector';
 import DayTimeline from './DayTimeline';
 import Modal from '../common/Modal';
@@ -20,7 +20,7 @@ import Toggle from '../common/Toggle';
 import Slider from '../common/Slider';
 import Card from '../common/Card';
 import Spinner from '../common/Spinner';
-import { Copy, Clipboard, Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Copy, Clipboard, Plus, Trash2, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react';
 import { apiFetch } from '../../api/client';
 import logger from '../../utils/logger';
 import { useToast } from '../../context/ToastContext';
@@ -70,6 +70,11 @@ export default function ScheduleEditor({ zoneId }) {
   const [isCopying, setIsCopying] = useState(false);
   const [isSavingBlocks, setIsSavingBlocks] = useState(false);
   const savingBlocksRef = useRef(false);
+
+  const { data: scheduleAdvice } = useSWR(
+    activeHomeId && zoneId ? ['scheduleAdvice', activeHomeId, zoneId] : null,
+    () => getScheduleAdvice(activeHomeId, zoneId)
+  );
 
   const handleCopyScheduleToZones = async () => {
     const targetZoneIds = Object.keys(selectedZones)
@@ -542,6 +547,33 @@ export default function ScheduleEditor({ zoneId }) {
 
       {activeSubTab === 'schedule' ? (
         <>
+          {/* UFH Schedule Advisory Banner */}
+          {scheduleAdvice?.hasRecommendations && scheduleAdvice.recommendations?.length > 0 && (
+            <div style={{
+              padding: '0.85rem 1rem',
+              borderRadius: 'var(--radius-md)',
+              backgroundColor: 'rgba(234, 88, 12, 0.08)',
+              border: '1px solid rgba(234, 88, 12, 0.25)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.5rem'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--warning, #ea580c)' }}>
+                <AlertTriangle size={18} />
+                <strong style={{ fontSize: '0.9rem' }}>
+                  {t('schedule.ufh_advisory_title', 'Underfloor Heating Schedule Recommendations')}
+                </strong>
+              </div>
+              <ul style={{ margin: 0, paddingLeft: '1.25rem', fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: '1.45' }}>
+                {scheduleAdvice.recommendations.map((rec, i) => (
+                  <li key={i} style={{ marginTop: i > 0 ? '0.25rem' : 0 }}>
+                    {rec.message}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {/* Timetable Mode Selector */}
           <DaySelector
             value={activeTimetableId}

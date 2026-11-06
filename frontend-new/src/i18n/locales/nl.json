@@ -425,7 +425,8 @@
     "create_failed": "Fout bij aanmaken profiel",
     "profile_deleted": "Profiel verwijderd",
     "add_custom_profile": "Schemaprofiel aanmaken",
-    "icon_type": "Thema / Icoon"
+    "icon_type": "Thema / Icoon",
+    "ufh_advisory_title": "Aanbevelingen voor Vloerverwarming Schema"
   },
   "settings": {
     "reboot": "Herstarten",
@@ -1113,7 +1114,9 @@
       "source_device_only_desc": "Gebruikt uitsluitend het interne sensoralgoritme van de thermostaat.",
       "source_server_heuristics_desc": "Gebruikt serveranalyses en vergelijkt kamersensoren met weerstemperatuurdalingen.",
       "source_both_desc": "Verwarming schakelt uit als het apparaat of de server een daling detecteert.",
-      "source_external_api_desc": "Schakelt automatische detectie op zowel thermostaat als server uit. Vertrouwt uitsluitend op externe deur-/raamcontacten (bijv. Zigbee-contacten geïntegreerd via Home Assistant API-aanroepen)."
+      "source_external_api_desc": "Schakelt automatische detectie op zowel thermostaat als server uit. Vertrouwt uitsluitend op externe deur-/raamcontacten (bijv. Zigbee-contacten geïntegreerd via Home Assistant API-aanroepen).",
+      "pid_ufh_preset": "Vloerverwarming PID toepassen (4.00 / 1.50 / 25.00)",
+      "pid_ufh_preset_applied": "Vloerverwarming PID-voorinstelling toegepast (4.00 / 1.50 / 25.00)"
     },
     "display_saved_success": "Scherminstellingen succesvol opgeslagen!",
     "display_saved_error": "Scherminstellingen opslaan mislukt.",
@@ -1177,7 +1180,16 @@
       "how_to_use": "Gebruiksaanwijzing",
       "how_to_use_desc": "Schakel de bovenstaande schakelaar in en klik op Nu synchroniseren. De server compileert uw actieve schema in een hardwarecompatibel TLV-profiel en verzendt dit via de Bridge naar het apparaat.",
       "interpretation": "Als uw internetverbinding wegvalt, schakelt de thermostaat autonoom over naar temperaturen op de geplande tijden in plaats van bevroren te blijven op het laatste instelpunt. Vanwege hardwaregeheugenlimieten kunnen complexe meervoudige regels worden vereenvoudigd."
-    }
+    },
+    "heating_emitter_title": "Type Verwarming",
+    "heating_emitter_desc": "Selecteer het warmteafgiftesysteem in deze kamer voor optimale aanvoertemperatuur, waterzijdige inregeling en PID-respons.",
+    "emitter_radiators": "Radiatoren",
+    "emitter_radiators_sub": "Standaard convectoren of gietijzeren radiatoren",
+    "emitter_underfloor": "Vloerverwarming",
+    "emitter_underfloor_sub": "Lagetemperatuur vloerverwarming in zandcement of droogbouwsysteem",
+    "underfloor_mass_title": "Thermische Massa Vloer",
+    "underfloor_mass_screed": "Traditionele Chape / Dekvloer (~2u vertraging)",
+    "underfloor_mass_dry": "Droogbouwsysteem / Dunne Plaat (~45m vertraging)"
   },
   "tanoclo_ex": {
     "title": "TaNoClo Uitgebreid Dashboard",

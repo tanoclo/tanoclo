@@ -425,7 +425,8 @@
     "create_failed": "Échec de la création du profil",
     "profile_deleted": "Profil supprimé",
     "add_custom_profile": "Créer un profil de programmation",
-    "icon_type": "Thème / Icône"
+    "icon_type": "Thème / Icône",
+    "ufh_advisory_title": "Recommandations de programmation plancher chauffant"
   },
   "settings": {
     "reboot": "Redémarrer",
@@ -1113,7 +1114,9 @@
       "source_device_only_desc": "Utilise uniquement l'algorithme des capteurs internes du thermostat.",
       "source_server_heuristics_desc": "Utilise l'analyse serveur en comparant les capteurs de pièce et la vitesse de chute météo.",
       "source_both_desc": "Le chauffage s'éteint si l'appareil ou le serveur détecte une baisse.",
-      "source_external_api_desc": "Désactive l'auto-détection sur le thermostat et le serveur. Repose strictement sur des contacts de porte/fenêtre externes (ex. contacts Zigbee intégrés via l'API Home Assistant)."
+      "source_external_api_desc": "Désactive l'auto-détection sur le thermostat et le serveur. Repose strictement sur des contacts de porte/fenêtre externes (ex. contacts Zigbee intégrés via l'API Home Assistant).",
+      "pid_ufh_preset": "Appliquer le PID plancher chauffant (4.00 / 1.50 / 25.00)",
+      "pid_ufh_preset_applied": "Préréglage PID plancher chauffant appliqué (4.00 / 1.50 / 25.00)"
     },
     "display_saved_success": "Paramètres d'affichage enregistrés avec succès !",
     "display_saved_error": "Échec de l'enregistrement des paramètres d'affichage.",
@@ -1177,7 +1180,16 @@
       "how_to_use": "Utilisation",
       "how_to_use_desc": "Activez le bouton ci-dessus, puis cliquez sur Synchroniser maintenant. Le serveur compile votre programmation active en un profil TLV compatible matériel et le transmet à l'appareil via le Bridge.",
       "interpretation": "Si votre connexion internet est interrompue, le thermostat basculera les températures de manière autonome aux heures programmées au lieu de rester bloqué sur la dernière consigne. En raison des limites de mémoire matérielle, les règles complexes peuvent être simplifiées."
-    }
+    },
+    "heating_emitter_title": "Type d'émetteur de chaleur",
+    "heating_emitter_desc": "Sélectionnez le système de diffusion installé dans cette pièce pour adapter la température de départ, l'équilibrage et le PID.",
+    "emitter_radiators": "Radiateurs",
+    "emitter_radiators_sub": "Radiateurs convecteurs ou en fonte classiques",
+    "emitter_underfloor": "Plancher chauffant",
+    "emitter_underfloor_sub": "Plancher chauffant basse température sur chape ou système sec",
+    "underfloor_mass_title": "Masse thermique du sol",
+    "underfloor_mass_screed": "Chape traditionnelle béton (~2h d'inertie)",
+    "underfloor_mass_dry": "Système sec / plaques minces (~45 min d'inertie)"
   },
   "tanoclo_ex": {
     "title": "Tableau de Bord Avancé TaNoClo",

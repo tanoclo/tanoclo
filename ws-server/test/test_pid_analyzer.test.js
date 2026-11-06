@@ -165,5 +165,17 @@ describe('Thermodynamic PID Analyzer', () => {
             expect(res.suggestedKi).toBe(5.0);
             expect(res.suggestedKd).toBe(15.0);
         });
+
+        it('recommends low Kp and high Kd damping for underfloor heating with thermal overshoot', () => {
+            const ufhGains = { kp: 5.0, ki: 2.0, kd: 20.0 };
+            const metrics = { validWindowsCount: 4, avgOvershoot: 0.45, maxOvershoot: 0.60, avgSteadyStateError: 0.05, oscillationScore: 0.2, avgRiseTimeMinutes: 120 };
+            const res = derivePidSuggestions(metrics, ufhGains, 'UNDERFLOOR');
+            expect(res.diagnosis).toBe('OVERSHOOT');
+            expect(res.suggestedKp).toBeLessThanOrEqual(5.0);
+            expect(res.suggestedKd).toBeGreaterThanOrEqual(20.0);
+            expect(res.suggestedKp).toBeLessThanOrEqual(6.0); // clamped to UFH safety ceiling
+            expect(res.reason).toContain('Underfloor slab');
+        });
     });
 });
+

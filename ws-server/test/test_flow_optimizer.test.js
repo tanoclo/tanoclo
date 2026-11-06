@@ -185,4 +185,39 @@ describe('Flow Temperature Optimizer Engine', () => {
 
         assert.strictEqual(result.circuitOperatingMode, 1);
     });
+
+    test('Underfloor heating clamp: restricts flow target to max 45°C when only UFH calls for heat', () => {
+        const result = computeOptimalFlowTemperature({
+            outsideTemp: -5,
+            minFlow: 25,
+            maxFlowLimit: 75,
+            currentMaxFlow: 42,
+            maxZoneError: 2.5,
+            circuitDemandPct: 90,
+            activeDemandType: 'ONLY_UNDERFLOOR'
+        });
+
+        // Underfloor heating ceiling clamped to 45°C
+        assert.ok(result.targetFlow <= 45, `Expected targetFlow <= 45, got ${result.targetFlow}`);
+        assert.strictEqual(result.reason, 'ufh_demand_boost');
+        assert.strictEqual(result.demandBoost, 2.0);
+    });
+
+    test('Mixed demand: allows radiator curve priority when radiators are calling', () => {
+        const result = computeOptimalFlowTemperature({
+            outsideTemp: 0,
+            minFlow: 30,
+            maxFlowLimit: 75,
+            currentMaxFlow: 60,
+            maxZoneError: 2.0,
+            circuitDemandPct: 80,
+            activeDemandType: 'MIXED'
+        });
+
+        // Radiator priority allowed
+        assert.strictEqual(result.reason, 'cold_recovery');
+        assert.strictEqual(result.demandBoost, 5.0);
+        assert.ok(result.targetFlow > 50);
+    });
 });
+

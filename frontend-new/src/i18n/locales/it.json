@@ -425,7 +425,8 @@
     "create_failed": "Impossibile creare il profilo",
     "profile_deleted": "Profilo eliminato",
     "add_custom_profile": "Crea profilo di programmazione",
-    "icon_type": "Tema / Icona"
+    "icon_type": "Tema / Icona",
+    "ufh_advisory_title": "Suggerimenti programmazione riscaldamento a pavimento"
   },
   "settings": {
     "reboot": "Riavvia",
@@ -1113,7 +1114,9 @@
       "source_device_only_desc": "Utilizza solo l'algoritmo del sensore interno del termostato.",
       "source_server_heuristics_desc": "Utilizza l'analisi del server, confrontando i sensori della stanza e la velocità di calo meteo.",
       "source_both_desc": "Il riscaldamento si spegne se il dispositivo o il server rilevano un calo.",
-      "source_external_api_desc": "Disabilita il rilevamento automatico sia sul termostato che sul server. Si affida esclusivamente a contatti porta/finestra esterni (es. sensori Zigbee integrati tramite API Home Assistant)."
+      "source_external_api_desc": "Disabilita il rilevamento automatico sia sul termostato che sul server. Si affida esclusivamente a contatti porta/finestra esterni (es. sensori Zigbee integrati tramite API Home Assistant).",
+      "pid_ufh_preset": "Applica PID riscaldamento a pavimento (4.00 / 1.50 / 25.00)",
+      "pid_ufh_preset_applied": "Preimpostazione PID pavimento applicata (4.00 / 1.50 / 25.00)"
     },
     "display_saved_success": "Impostazioni del display salvate con successo!",
     "display_saved_error": "Impossibile salvare le impostazioni del display.",
@@ -1177,7 +1180,16 @@
       "how_to_use": "Come usare",
       "how_to_use_desc": "Attiva l'interruttore sopra, quindi fai clic su Sincronizza ora. Il server compila la programmazione attiva in un profilo TLV compatibile con l'hardware e lo trasmette al dispositivo tramite il Bridge.",
       "interpretation": "Se la connessione internet si interrompe, il termostato cambierà autonomamente le temperature agli orari programmati anziché rimanere bloccato sull'ultimo setpoint. A causa dei limiti di memoria hardware, le regole complesse possono essere semplificate."
-    }
+    },
+    "heating_emitter_title": "Tipo di emettitore termico",
+    "heating_emitter_desc": "Seleziona il sistema di riscaldamento presente nella stanza per ottimizzare temperatura di mandata, bilanciamento e PID.",
+    "emitter_radiators": "Radiatori",
+    "emitter_radiators_sub": "Termosifoni tradizionali a convezione o ghisa",
+    "emitter_underfloor": "Riscaldamento a pavimento",
+    "emitter_underfloor_sub": "Pannelli radianti a pavimento a bassa temperatura su massetto o a secco",
+    "underfloor_mass_title": "Massa termica del pavimento",
+    "underfloor_mass_screed": "Massetto tradizionale in cemento (~2 ore di inerzia)",
+    "underfloor_mass_dry": "Sistema a secco / a basso spessore (~45 min di inerzia)"
   },
   "tanoclo_ex": {
     "title": "Pannello Avanzato TaNoClo",

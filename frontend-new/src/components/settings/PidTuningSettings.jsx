@@ -280,6 +280,19 @@ export default function PidTuningSettings({ homeId, zones = [], isReadOnly = fal
                     <span style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-primary)' }}>
                       {zone.zoneName}
                     </span>
+                    {(zone.heatingType === 'UNDERFLOOR' || zone.heating_type === 'UNDERFLOOR') && (
+                      <span style={{
+                        fontSize: '0.65rem',
+                        fontWeight: 700,
+                        padding: '1px 6px',
+                        borderRadius: '4px',
+                        backgroundColor: 'rgba(234, 88, 12, 0.1)',
+                        color: 'var(--warning, #ea580c)',
+                        textTransform: 'uppercase'
+                      }}>
+                        {t('settings.emitter_underfloor', { defaultValue: 'Underfloor' })}
+                      </span>
+                    )}
                     {getDiagnosisBadge(zone.diagnosis)}
                   </div>
                   <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>

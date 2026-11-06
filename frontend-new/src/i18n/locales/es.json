@@ -425,7 +425,8 @@
     "create_failed": "Error al crear el perfil",
     "profile_deleted": "Perfil eliminado",
     "add_custom_profile": "Crear perfil de programación",
-    "icon_type": "Tema / Icono"
+    "icon_type": "Tema / Icono",
+    "ufh_advisory_title": "Recomendaciones de programación de suelo radiante"
   },
   "settings": {
     "reboot": "Reiniciar",
@@ -1113,7 +1114,9 @@
       "source_device_only_desc": "Utiliza únicamente el algoritmo de sensor interno del termostato.",
       "source_server_heuristics_desc": "Utiliza análisis del servidor, comparando sensores de habitación y tasas de caída climáticas.",
       "source_both_desc": "La calefacción se apaga si el dispositivo o el servidor detectan una caída.",
-      "source_external_api_desc": "Deshabilita la detección automática en el termostato y el servidor. Depende estrictamente de contactos externos de puertas/ventanas (p. ej. contactos Zigbee mediante llamadas a la API de Home Assistant)."
+      "source_external_api_desc": "Deshabilita la detección automática en el termostato y el servidor. Depende estrictamente de contactos externos de puertas/ventanas (p. ej. contactos Zigbee mediante llamadas a la API de Home Assistant).",
+      "pid_ufh_preset": "Aplicar PID de suelo radiante (4.00 / 1.50 / 25.00)",
+      "pid_ufh_preset_applied": "Preajuste PID de suelo radiante aplicado (4.00 / 1.50 / 25.00)"
     },
     "display_saved_success": "¡Configuración de pantalla guardada con éxito!",
     "display_saved_error": "Error al guardar la configuración de la pantalla.",
@@ -1177,7 +1180,16 @@
       "how_to_use": "Modo de empleo",
       "how_to_use_desc": "Active la opción anterior y haga clic en Sincronizar ahora. El servidor compila su horario activo en un perfil TLV compatible con el hardware y lo transmite al dispositivo a través del Bridge.",
       "interpretation": "Si se cae la conexión a internet, el termostato cambiará las temperaturas de forma autónoma en los momentos programados en lugar de quedarse fijo en el último valor. Tenga en cuenta que debido a límites de memoria del hardware, las reglas complejas pueden simplificarse."
-    }
+    },
+    "heating_emitter_title": "Tipo de emisor de calefacción",
+    "heating_emitter_desc": "Seleccione el sistema de distribución de calor instalado en esta estancia para adaptar temperatura de impulsión, equilibrado y PID.",
+    "emitter_radiators": "Radiadores",
+    "emitter_radiators_sub": "Radiadores convencionales de convección o hierro fundido",
+    "emitter_underfloor": "Suelo radiante",
+    "emitter_underfloor_sub": "Suelo radiante de baja temperatura sobre solera o sistema seco",
+    "underfloor_mass_title": "Masa térmica del suelo",
+    "underfloor_mass_screed": "Solera de mortero / hormigón (~2h de inercia)",
+    "underfloor_mass_dry": "Sistema en seco / placa fina (~45 min de inercia)"
   },
   "tanoclo_ex": {
     "title": "Tablero Avanzado TaNoClo",

@@ -9,6 +9,7 @@
 import Card from '../common/Card';
 import Button from '../common/Button';
 import Slider from '../common/Slider';
+import { Layers, Flame } from 'lucide-react';
 
 /**
  * @brief General zone settings sub-panel.
@@ -50,6 +51,9 @@ export default function ZoneSettingsGeneral({
   onNavigateToDevice,
   insulationFactor = null,
   handleInsulationFactorChange,
+  heatingType = 'RADIATOR',
+  handleHeatingTypeChange,
+  underfloorMass = 'SCREED',
   t
 }) {
   const isInherited = insulationFactor === null || insulationFactor === undefined;
@@ -100,6 +104,98 @@ export default function ZoneSettingsGeneral({
           </Button>
         </div>
       </Card>
+
+      {/* Heating Emitter Type (Heating only) */}
+      {!isDhw && (
+        <Card style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Layers size={18} style={{ color: 'var(--primary)' }} />
+            <h3 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0 }}>
+              {t('settings.heating_emitter_title', { defaultValue: 'Heating System Emitter' })}
+            </h3>
+          </div>
+          <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0 }}>
+            {t('settings.heating_emitter_desc', { defaultValue: 'Select whether this room uses conventional radiators or radiant underfloor heating. TaNoClo automatically adapts boiler flow temperatures, hydraulic balancing, and PID regulation.' })}
+          </p>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem', marginTop: '0.25rem' }}>
+            <button
+              type="button"
+              disabled={isReadOnly}
+              onClick={() => handleHeatingTypeChange && handleHeatingTypeChange('RADIATOR', underfloorMass)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.75rem',
+                padding: '0.75rem 1rem',
+                borderRadius: 'var(--radius-sm, 8px)',
+                border: heatingType === 'RADIATOR' ? '2px solid var(--primary, #00b4d8)' : '1px solid var(--border-color)',
+                backgroundColor: heatingType === 'RADIATOR' ? 'var(--primary-glow, rgba(0,180,216,0.12))' : 'var(--bg-input)',
+                color: 'var(--text-primary)',
+                cursor: isReadOnly ? 'not-allowed' : 'pointer',
+                textAlign: 'left'
+              }}
+            >
+              <Flame size={20} style={{ color: heatingType === 'RADIATOR' ? 'var(--primary)' : 'var(--text-secondary)', flexShrink: 0 }} />
+              <div>
+                <strong style={{ display: 'block', fontSize: '0.85rem' }}>{t('settings.emitter_radiators', { defaultValue: 'Radiators' })}</strong>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{t('settings.emitter_radiators_sub', { defaultValue: 'Fast response, higher flow temp' })}</span>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              disabled={isReadOnly}
+              onClick={() => handleHeatingTypeChange && handleHeatingTypeChange('UNDERFLOOR', underfloorMass)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.75rem',
+                padding: '0.75rem 1rem',
+                borderRadius: 'var(--radius-sm, 8px)',
+                border: heatingType === 'UNDERFLOOR' ? '2px solid var(--primary, #00b4d8)' : '1px solid var(--border-color)',
+                backgroundColor: heatingType === 'UNDERFLOOR' ? 'var(--primary-glow, rgba(0,180,216,0.12))' : 'var(--bg-input)',
+                color: 'var(--text-primary)',
+                cursor: isReadOnly ? 'not-allowed' : 'pointer',
+                textAlign: 'left'
+              }}
+            >
+              <Layers size={20} style={{ color: heatingType === 'UNDERFLOOR' ? 'var(--primary)' : 'var(--text-secondary)', flexShrink: 0 }} />
+              <div>
+                <strong style={{ display: 'block', fontSize: '0.85rem' }}>{t('settings.emitter_underfloor', { defaultValue: 'Underfloor Heating' })}</strong>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>{t('settings.emitter_underfloor_sub', { defaultValue: 'Low temp, high thermal inertia' })}</span>
+              </div>
+            </button>
+          </div>
+
+          {heatingType === 'UNDERFLOOR' && (
+            <div style={{ marginTop: '0.25rem', padding: '0.75rem', backgroundColor: 'var(--bg-card, rgba(255,255,255,0.02))', borderRadius: '6px', border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+              <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                {t('settings.underfloor_mass_title', { defaultValue: 'Floor Construction / Thermal Inertia' })}
+              </label>
+              <select
+                value={underfloorMass}
+                disabled={isReadOnly}
+                onChange={(e) => handleHeatingTypeChange && handleHeatingTypeChange('UNDERFLOOR', e.target.value)}
+                style={{
+                  backgroundColor: 'var(--bg-input)',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--text-primary)',
+                  padding: '0.5rem',
+                  borderRadius: 'var(--radius-sm)',
+                  outline: 'none',
+                  fontWeight: 600,
+                  fontSize: '0.85rem',
+                  cursor: isReadOnly ? 'not-allowed' : 'pointer'
+                }}
+              >
+                <option value="SCREED">{t('settings.underfloor_mass_screed', { defaultValue: 'Concrete Slab / Wet Screed (2–4h response, high inertia)' })}</option>
+                <option value="DRY_SYSTEM">{t('settings.underfloor_mass_dry', { defaultValue: 'Dry Panels / Timber Floor (45–90m response, medium inertia)' })}</option>
+              </select>
+            </div>
+          )}
+        </Card>
+      )}
 
       {/* Room Wall Insulation Factor (Heating only) */}
       {!isDhw && (

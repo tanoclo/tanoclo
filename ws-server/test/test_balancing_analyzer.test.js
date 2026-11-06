@@ -162,6 +162,22 @@ describe('Hydraulic Balancing Analyzer', () => {
             expect(suggestion.reasoning).toContain('Reduce valve boost');
         });
 
+        it('correctly compares underfloor heating loops against UFH cohort without false throttle', () => {
+            const suggestion = generateDeviceSuggestion({
+                currentSensitivity: 100,
+                deviceRiseRate: 0.010,
+                houseMedianRiseRate: 0.010,
+                runsCount: 15,
+                dataSpanHours: 50,
+                heatingType: 'UNDERFLOOR'
+            });
+
+            expect(suggestion.suggestedSensitivity).toBe(100);
+            expect(suggestion.changeDirection).toBe('NO_CHANGE');
+            expect(suggestion.reasoning).toContain('Underfloor heating loop');
+            expect(suggestion.reasoning).toContain('UFH slab median');
+        });
+
         it('allows deep boost (<50 down to 25) when starting from already boosted sensitivity', () => {
             const suggestion = generateDeviceSuggestion({
                 currentSensitivity: 40,

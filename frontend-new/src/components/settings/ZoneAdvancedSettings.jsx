@@ -76,6 +76,15 @@ export default function ZoneAdvancedSettings({
     }
   };
 
+  const handleApplyUfhPidDefaults = () => {
+    if (setKp) setKp(4.00);
+    if (setKi) setKi(1.50);
+    if (setKd) setKd(25.00);
+    if (triggerToast) {
+      triggerToast(t('settings.zone_advanced.pid_ufh_preset_applied', 'Underfloor heating PID preset applied (4.00 / 1.50 / 25.00)'), 'info');
+    }
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       {/* Danger/Warning Banner */}
@@ -273,15 +282,27 @@ export default function ZoneAdvancedSettings({
 
         {/* Card Actions */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-color)', paddingTop: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-          <Button
-            variant="secondary"
-            onClick={handleResetPidDefaults}
-            disabled={isReadOnly}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem' }}
-          >
-            <RotateCcw size={14} />
-            {t('settings.zone_advanced.reset_pid_defaults', 'Reset PID Defaults (10.00 / 5.00 / 15.00)')}
-          </Button>
+          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <Button
+              variant="secondary"
+              onClick={handleResetPidDefaults}
+              disabled={isReadOnly}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem' }}
+            >
+              <RotateCcw size={14} />
+              {t('settings.zone_advanced.reset_pid_defaults', 'Reset PID Defaults (10.00 / 5.00 / 15.00)')}
+            </Button>
+
+            <Button
+              variant="secondary"
+              onClick={handleApplyUfhPidDefaults}
+              disabled={isReadOnly}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem' }}
+            >
+              <RotateCcw size={14} />
+              {t('settings.zone_advanced.pid_ufh_preset', 'Apply Underfloor Heating PID (4.00 / 1.50 / 25.00)')}
+            </Button>
+          </div>
 
           <Button
             variant="primary"

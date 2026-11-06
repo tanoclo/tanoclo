@@ -139,6 +139,8 @@ async function getZoneDetails(homeId, zoneId, pool) {
         offlineScheduleEnabled: Boolean(zone.offline_schedule_enabled),
         offlineScheduleSyncedAt: zone.offline_schedule_synced_at ? formatDate(zone.offline_schedule_synced_at) : null,
         heatingCircuit: zone.heating_circuit !== null && zone.heating_circuit !== undefined && zone.heating_circuit !== '' ? parseInt(zone.heating_circuit, 10) : null,
+        heatingType: zone.heating_type || 'RADIATOR',
+        underfloorMass: zone.underfloor_mass || 'SCREED',
         insulationFactor: zone.insulation_factor !== null && zone.insulation_factor !== undefined ? parseFloat(zone.insulation_factor) : null
     };
 }
