@@ -15,6 +15,7 @@ const geoUtils = require('../../../lib/geo-utils');
 const fs = require('fs');
 const path = require('path');
 const { buildHomeDetails, checkZoneConfigReadonly } = require('./helpers');
+const moldDetector = require('../../../lib/mold-detector');
 
 const router = express.Router();
 const _log = getLogger('homes-api');
@@ -53,6 +54,17 @@ const getAirComfortHandler = async (req, res) => {
         const measurementsMap = new Map();
         for (const row of ms) {
             measurementsMap.set(row.zone_id, row);
+        }
+
+        // Fetch pre-calculated mold state for all zones
+        const moldStateMap = new Map();
+        try {
+            const [moldRows] = await pool.execute('SELECT * FROM zone_mold_state WHERE home_id = ?', [homeId]);
+            for (const row of moldRows) {
+                moldStateMap.set(row.zone_id, row);
+            }
+        } catch (_e) {
+            // Table may be migrating or empty
         }
 
         let poorCount = 0;
@@ -136,6 +148,29 @@ const getAirComfortHandler = async (req, res) => {
                     link: link
                 });
             } else {
+                let moldData = moldStateMap.get(zone.id);
+                if (!moldData) {
+                    try {
+                        moldData = await moldDetector.evaluateZoneMold(homeId, zone.id, pool);
+                    } catch (e) {
+                        _log('warn', `Failed to calculate on-the-fly mold for zone ${zone.id}: ${e.message}`);
+                    }
+                }
+
+                const moldPayload = moldData ? {
+                    level: moldData.risk_level || moldData.level || 'LOW',
+                    index: moldData.mold_index != null ? parseFloat(moldData.mold_index) : (moldData.index != null ? parseFloat(moldData.index) : 0.0),
+                    status: moldData.status || 'CALIBRATING',
+                    progressPercentage: moldData.progressPercentage !== undefined ? moldData.progressPercentage : (moldData.status === 'READY' ? 100 : Math.min(100, Math.round(((moldData.hours_evaluated || 0) / moldDetector.MIN_CALIBRATION_HOURS) * 100))),
+                    surfaceTemperature: moldData.surface_temp != null ? parseFloat(moldData.surface_temp) : moldData.surfaceTemperature,
+                    surfaceRelativeHumidity: moldData.surface_humidity != null ? parseFloat(moldData.surface_humidity) : moldData.surfaceRelativeHumidity,
+                    dewPoint: moldData.dew_point != null ? parseFloat(moldData.dew_point) : moldData.dewPoint,
+                    criticalHumidity: moldData.critical_humidity != null ? parseFloat(moldData.critical_humidity) : moldData.criticalHumidity,
+                    condensationRisk: Boolean(moldData.condensation_risk !== undefined ? moldData.condensation_risk : moldData.condensationRisk),
+                    effectiveInsulationFactor: moldData.effective_insulation_factor != null ? parseFloat(moldData.effective_insulation_factor) : moldData.effectiveInsulationFactor,
+                    isInherited: moldData.isInherited !== undefined ? moldData.isInherited : true
+                } : null;
+
                 zoneComforts.push({
                     roomId: parseInt(zone.id, 10),
                     temperatureLevel: tempLevel,
@@ -144,7 +179,8 @@ const getAirComfortHandler = async (req, res) => {
                     coordinate: {
                         radial: parseFloat(Math.min(1.0, radial).toFixed(2)),
                         angular: Math.round(angular)
-                    }
+                    },
+                    mold: moldPayload
                 });
             }
         }
@@ -197,10 +233,26 @@ const getAirComfortHandler = async (req, res) => {
                 }
             }
 
+            // Aggregate home-wide mold risk
+            let homeMoldRisk = 'LOW';
+            let highestRiskRoomId = null;
+            for (const zc of zoneComforts) {
+                if (zc.mold?.level === 'HIGH') {
+                    homeMoldRisk = 'HIGH';
+                    highestRiskRoomId = zc.roomId;
+                    break;
+                } else if (zc.mold?.level === 'ELEVATED' && homeMoldRisk !== 'HIGH') {
+                    homeMoldRisk = 'ELEVATED';
+                    highestRiskRoomId = zc.roomId;
+                }
+            }
+
             res.json({
                 freshness: {
                     value: homeFreshness,
-                    lastOpenWindow: lastOpenWindow ? (typeof lastOpenWindow === 'string' ? lastOpenWindow : lastOpenWindow.toISOString()) : null
+                    lastOpenWindow: lastOpenWindow ? (typeof lastOpenWindow === 'string' ? lastOpenWindow : lastOpenWindow.toISOString()) : null,
+                    moldRisk: homeMoldRisk,
+                    highestRiskRoomId: highestRiskRoomId
                 },
                 comfort: zoneComforts
             });

@@ -22,7 +22,7 @@ const _log = getLogger('homes-api');
 
 const ALLOWED_HOME_BASE_COLS = new Set([
     'address_line1', 'address_line2', 'address_zip_code', 'address_city', 'address_state', 'address_country',
-    'contact_name', 'contact_email', 'contact_phone', 'name'
+    'contact_name', 'contact_email', 'contact_phone', 'name', 'insulation_factor'
 ]);
 
 router.get('/:homeId', async (req, res) => {
@@ -122,6 +122,11 @@ router.put('/:homeId/details', async (req, res) => {
             params.push(contactDetails.name || '', contactDetails.email || '', contactDetails.phone || '');
         }
         if (name) { updates.push('name = ?'); params.push(name); }
+        if (req.body.insulationFactor !== undefined) {
+            const factor = Math.max(0.40, Math.min(0.95, parseFloat(req.body.insulationFactor) || 0.70));
+            updates.push('insulation_factor = ?');
+            params.push(factor);
+        }
 
         if (updates.length > 0) {
             params.push(homeId);
@@ -253,5 +258,26 @@ router.delete('/:homeId/presenceLock', async (req, res) => {
     }
 });
 
+// PUT /api/v2/homes/{homeId}/insulation
+router.put('/:homeId/insulation', async (req, res) => {
+    try {
+        const homeId = req.params.homeId;
+        const { insulationFactor } = req.body;
+        if (insulationFactor === undefined || isNaN(Number(insulationFactor))) {
+            return res.status(400).json({ error: 'insulationFactor is required and must be numeric' });
+        }
+        const factor = Math.max(0.40, Math.min(0.95, parseFloat(insulationFactor)));
+        const pool = db.getPool();
+        await pool.execute('UPDATE homes SET insulation_factor = ? WHERE id = ?', [factor, homeId]);
+
+        const [homes] = await pool.execute('SELECT * FROM homes WHERE id = ?', [homeId]);
+        if (homes.length === 0) return res.status(404).json({ error: 'Home not found' });
+        const details = await buildHomeDetails(homes[0], req.user?.id || 'system');
+        res.json(details);
+    } catch (err) {
+        _log('error', `PUT insulation error: ${err.message}`);
+        res.status(500).json({ error: 'internal_error' });
+    }
+});
 
 module.exports = router;

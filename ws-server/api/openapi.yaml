@@ -6117,6 +6117,50 @@ components:
                   angular:
                     type: integer
                     example: 76
+              mold:
+                type: object
+                properties:
+                  level:
+                    type: string
+                    enum: [LOW, ELEVATED, HIGH]
+                    example: LOW
+                  index:
+                    type: number
+                    format: float
+                    example: 0.15
+                  status:
+                    type: string
+                    enum: [CALIBRATING, READY]
+                    example: READY
+                  surfaceTemperature:
+                    type: number
+                    format: float
+                    example: 18.2
+                  surfaceRelativeHumidity:
+                    type: number
+                    format: float
+                    example: 62.4
+                  dewPoint:
+                    type: number
+                    format: float
+                    example: 11.5
+                  criticalHumidity:
+                    type: number
+                    format: float
+                    example: 80.0
+                  condensationRisk:
+                    type: boolean
+                    example: false
+                  effectiveInsulationFactor:
+                    type: number
+                    format: float
+                    example: 0.70
+                  isInherited:
+                    type: boolean
+                    example: true
+                  progressPercentage:
+                    type: integer
+                    example: 100
     AirConditioningZoneSettings:
       type: object
       description: used in ZoneCapabilities for zones of type AIR_CONDITIONING

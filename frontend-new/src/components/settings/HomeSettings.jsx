@@ -350,6 +350,7 @@ export default function HomeSettings({ homeId, homeInfo, mutateHomeInfo }) {
   const [contactPhone, setContactPhone] = useState('');
   const [timezone, setTimezone] = useState('Europe/Berlin');
   const [isDeterminingTimezone, setIsDeterminingTimezone] = useState(false);
+  const [insulationFactor, setInsulationFactor] = useState(0.70);
 
   const [lat, setLat] = useState(0);
   const [lon, setLon] = useState(0);
@@ -388,6 +389,9 @@ export default function HomeSettings({ homeId, homeInfo, mutateHomeInfo }) {
         setContactName(prev => prev !== (details.contactDetails.name || '') ? (details.contactDetails.name || '') : prev);
         setContactEmail(prev => prev !== (details.contactDetails.email || '') ? (details.contactDetails.email || '') : prev);
         setContactPhone(prev => prev !== (details.contactDetails.phone || '') ? (details.contactDetails.phone || '') : prev);
+      }
+      if (details.insulationFactor !== undefined && details.insulationFactor !== null) {
+        setInsulationFactor(parseFloat(details.insulationFactor));
       }
     }
   }, [details]);
@@ -568,7 +572,8 @@ export default function HomeSettings({ homeId, homeInfo, mutateHomeInfo }) {
           name: contactName,
           email: contactEmail,
           phone: contactPhone
-        }
+        },
+        insulationFactor
       };
       await Promise.all([
         updateHomeDetails(homeId, payload),
@@ -663,6 +668,8 @@ export default function HomeSettings({ homeId, homeInfo, mutateHomeInfo }) {
         isSavingProperties={isSavingProperties}
         handleSaveProperties={handleSaveProperties}
         isMobile={isMobile}
+        insulationFactor={insulationFactor}
+        setInsulationFactor={setInsulationFactor}
         t={t}
       />
 

@@ -23249,6 +23249,7 @@ CREATE TABLE `homes` (
   `zone_config_readonly` tinyint(1) DEFAULT NULL,
   `ha_discovery_enabled` tinyint(1) NOT NULL DEFAULT 1,
   `dev_bypass` tinyint(1) DEFAULT 0,
+  `insulation_factor` decimal(3,2) NOT NULL DEFAULT 0.70,
   `address_line1` varchar(255) DEFAULT '',
   `address_line2` varchar(255) DEFAULT '',
   `address_zip_code` varchar(20) DEFAULT '',
@@ -24883,6 +24884,7 @@ CREATE TABLE `zones` (
   `field_60a0` decimal(5,2) DEFAULT 5.00 COMMENT 'zone_pid_ki',
   `field_6080` decimal(5,2) DEFAULT 10.00 COMMENT 'zone_pid_kp',
   `field_6340` tinyint(3) UNSIGNED DEFAULT 1 COMMENT 'owd_nvm_state',
+  `insulation_factor` decimal(3,2) DEFAULT NULL,
   `field_60c0` decimal(5,2) DEFAULT 15.00 COMMENT 'zone_pid_kd'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -24907,6 +24909,25 @@ CREATE TABLE `zone_measurements` (
   `field_62e0` int(11) DEFAULT NULL,
   `field_6440` tinyint(4) DEFAULT NULL,
   `open_window_detected` tinyint(1) DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `zone_mold_state` (
+  `home_id` int(11) NOT NULL,
+  `zone_id` int(11) NOT NULL,
+  `mold_index` decimal(4,2) NOT NULL DEFAULT 0.00,
+  `risk_level` enum('LOW','ELEVATED','HIGH') NOT NULL DEFAULT 'LOW',
+  `surface_temp` decimal(5,2) DEFAULT NULL,
+  `surface_humidity` decimal(5,2) DEFAULT NULL,
+  `dew_point` decimal(5,2) DEFAULT NULL,
+  `critical_humidity` decimal(5,2) DEFAULT NULL,
+  `condensation_risk` tinyint(1) NOT NULL DEFAULT 0,
+  `effective_insulation_factor` decimal(3,2) NOT NULL DEFAULT 0.70,
+  `hours_evaluated` int(11) NOT NULL DEFAULT 0,
+  `status` enum('CALIBRATING','READY') NOT NULL DEFAULT 'CALIBRATING',
+  `last_transition` datetime DEFAULT NULL,
+  `updated_at` datetime NOT NULL,
+  PRIMARY KEY (`home_id`, `zone_id`),
+  KEY `idx_zone_mold_home` (`home_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `zone_overlays` (

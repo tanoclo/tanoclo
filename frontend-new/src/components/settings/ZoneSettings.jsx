@@ -20,7 +20,8 @@ import {
   updateZoneDetails, updateEarlyStart, updateDazzle,
   updateOpenWindowDetection, updateDefaultOverlay, getDefaultOverlay,
   getZoneControl, updateMeasuringDevice, updateHeatingCircuit,
-  updateOfflineSchedule, syncOfflineSchedule, updateTaNoCloOwdSettings
+  updateOfflineSchedule, syncOfflineSchedule, updateTaNoCloOwdSettings,
+  updateZoneInsulation
 } from '../../api/zones';
 import { getDevices, updateTemperatureOffset } from '../../api/devices';
 import { getCircuits } from '../../api/tanoclo';
@@ -97,6 +98,7 @@ export default function ZoneSettings({ homeId, zoneId, zone, onBack, mutateZones
   const [owdNvmState, setOwdNvmState] = useState(1);
   const [tanocloOwdEnabled, setTaNoCloOwdEnabled] = useState(zone?.tanocloOwdEnabled || false);
   const [owdSource, setOwdSource] = useState(zone?.tanocloOwdSource || 'device');
+  const [insulationFactor, setInsulationFactor] = useState(zone?.insulationFactor ?? null);
 
   const [overlayType, setOverlayType] = useState('TADO_MODE'); // TADO_MODE | TIMER | MANUAL
   const [overlayDuration, setOverlayDuration] = useState(1800); // 30 mins default
@@ -138,6 +140,7 @@ export default function ZoneSettings({ homeId, zoneId, zone, onBack, mutateZones
       setDazzle(prev => prev !== (zone.dazzleEnabled || false) ? (zone.dazzleEnabled || false) : prev);
       setOpenWindow(prev => prev !== (zone.openWindowDetection?.enabled ?? true) ? (zone.openWindowDetection?.enabled ?? true) : prev);
       setOwdTimeout(prev => prev !== (zone.openWindowDetection?.timeoutInSeconds || 900) ? (zone.openWindowDetection?.timeoutInSeconds || 900) : prev);
+      setInsulationFactor(zone.insulationFactor !== undefined ? zone.insulationFactor : null);
       setKp(prev => prev !== (zone.kp ?? zone.pidTuning?.kp ?? 10.00) ? (zone.kp ?? zone.pidTuning?.kp ?? 10.00) : prev);
       setKi(prev => prev !== (zone.ki ?? zone.pidTuning?.ki ?? 5.00) ? (zone.ki ?? zone.pidTuning?.ki ?? 5.00) : prev);
       setKd(prev => prev !== (zone.kd ?? zone.pidTuning?.kd ?? 15.00) ? (zone.kd ?? zone.pidTuning?.kd ?? 15.00) : prev);
@@ -284,6 +287,22 @@ export default function ZoneSettings({ homeId, zoneId, zone, onBack, mutateZones
       logger.error(err);
       triggerToast(err.message || t('settings.failed_save_settings'), 'error');
       setOpenWindow(!checked);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleInsulationFactorChange = async (val) => {
+    setInsulationFactor(val);
+    try {
+      setIsSaving(true);
+      await updateZoneInsulation(homeId, zoneId, val);
+      if (mutateZones) await mutateZones();
+      triggerToast(t('settings.zone_updated_success'), 'success');
+    } catch (err) {
+      logger.error(err);
+      triggerToast(err.message || t('settings.failed_save_settings'), 'error');
+      setInsulationFactor(zone?.insulationFactor ?? null);
     } finally {
       setIsSaving(false);
     }
@@ -587,6 +606,8 @@ export default function ZoneSettings({ homeId, zoneId, zone, onBack, mutateZones
             devices={devices}
             zones={zones}
             onNavigateToDevice={onNavigateToDevice}
+            insulationFactor={insulationFactor}
+            handleInsulationFactorChange={handleInsulationFactorChange}
             t={t}
           />
 

@@ -525,6 +525,15 @@ router.put('/:homeId/zones/:zoneId/details', async (req, res) => {
             await pool.execute('UPDATE zones SET name = ? WHERE id = ? AND home_id = ?', [name.trim(), zoneId, homeId]);
         }
 
+        if (req.body.insulationFactor !== undefined) {
+            if (req.body.insulationFactor === null || req.body.insulationFactor === '' || req.body.insulationFactor === 'inherit') {
+                await pool.execute('UPDATE zones SET insulation_factor = NULL WHERE id = ? AND home_id = ?', [zoneId, homeId]);
+            } else if (!isNaN(Number(req.body.insulationFactor))) {
+                const factor = Math.max(0.40, Math.min(0.95, parseFloat(req.body.insulationFactor)));
+                await pool.execute('UPDATE zones SET insulation_factor = ? WHERE id = ? AND home_id = ?', [factor, zoneId, homeId]);
+            }
+        }
+
         const configFields = {};
         if (kp !== undefined && kp !== null) {
             configFields['0x6080'] = parseFloat(kp);
@@ -725,6 +734,33 @@ router.get('/:homeId/roomsAndDevices/rooms/:zoneId/zoneControllers', async (req,
         })));
     } catch (err) {
         _log('error', `zoneControllers error: ${err.message}`);
+        res.status(500).json({ error: 'internal_error' });
+    }
+});
+
+// PUT /api/v2/homes/{homeId}/zones/{zoneId}/insulation
+router.put('/:homeId/zones/:zoneId/insulation', async (req, res) => {
+    try {
+        const { homeId, zoneId } = req.params;
+        const { insulationFactor } = req.body;
+        const pool = db.getPool();
+
+        const [existing] = await pool.execute('SELECT id FROM zones WHERE id = ? AND home_id = ?', [zoneId, homeId]);
+        if (existing.length === 0) return res.status(404).json({ error: 'Zone not found' });
+
+        if (insulationFactor === null || insulationFactor === '' || insulationFactor === 'inherit' || insulationFactor === undefined) {
+            await pool.execute('UPDATE zones SET insulation_factor = NULL WHERE id = ? AND home_id = ?', [zoneId, homeId]);
+        } else if (!isNaN(Number(insulationFactor))) {
+            const factor = Math.max(0.40, Math.min(0.95, parseFloat(insulationFactor)));
+            await pool.execute('UPDATE zones SET insulation_factor = ? WHERE id = ? AND home_id = ?', [factor, zoneId, homeId]);
+        } else {
+            return res.status(400).json({ error: 'Invalid insulationFactor format' });
+        }
+
+        const details = await getZoneDetails(homeId, zoneId, pool);
+        res.json(details);
+    } catch (err) {
+        _log('error', `PUT zone insulation error: ${err.message}`);
         res.status(500).json({ error: 'internal_error' });
     }
 });

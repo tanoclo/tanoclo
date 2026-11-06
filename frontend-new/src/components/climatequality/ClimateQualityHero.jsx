@@ -8,7 +8,7 @@
 
 import { useTranslation } from 'react-i18next';
 import Card from '../common/Card';
-import { Wind, Smile, CheckCircle } from 'lucide-react';
+import { Wind, Smile, CheckCircle, AlertTriangle } from 'lucide-react';
 import { formatTemperature } from '../../utils/temperature';
 
 /**
@@ -115,6 +115,29 @@ export default function ClimateQualityHero({ freshness, weather }) {
             <CheckCircle size={14} style={{ color: 'var(--success)' }} />
             <span>
               {t('air_comfort.outside_weather')}: {t(`weather.states.${weather.weatherState?.value}`, { defaultValue: weather.weatherState?.value })} ({formatTemperature(weather.outsideTemperature?.celsius)})
+            </span>
+          </div>
+        )}
+
+        {freshness?.moldRisk && freshness.moldRisk !== 'LOW' && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.5rem',
+            padding: '6px 10px',
+            borderRadius: '8px',
+            backgroundColor: freshness.moldRisk === 'HIGH' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+            border: `1px solid ${freshness.moldRisk === 'HIGH' ? 'rgba(239, 68, 68, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`,
+            color: freshness.moldRisk === 'HIGH' ? '#ef4444' : '#f59e0b',
+            fontSize: '0.8rem',
+            fontWeight: 600,
+            marginTop: '0.25rem'
+          }}>
+            <AlertTriangle size={14} />
+            <span>
+              {freshness.moldRisk === 'HIGH'
+                ? t('air_comfort.home_mold_high_alert', { defaultValue: 'Critical mold risk detected in one or more rooms' })
+                : t('air_comfort.home_mold_elevated_alert', { defaultValue: 'Elevated mold risk detected in home' })}
             </span>
           </div>
         )}

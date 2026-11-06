@@ -138,7 +138,8 @@ async function getZoneDetails(homeId, zoneId, pool) {
         tanocloOwdSource: zone.tanoclo_owd_source || 'device',
         offlineScheduleEnabled: Boolean(zone.offline_schedule_enabled),
         offlineScheduleSyncedAt: zone.offline_schedule_synced_at ? formatDate(zone.offline_schedule_synced_at) : null,
-        heatingCircuit: zone.heating_circuit !== null && zone.heating_circuit !== undefined && zone.heating_circuit !== '' ? parseInt(zone.heating_circuit, 10) : null
+        heatingCircuit: zone.heating_circuit !== null && zone.heating_circuit !== undefined && zone.heating_circuit !== '' ? parseInt(zone.heating_circuit, 10) : null,
+        insulationFactor: zone.insulation_factor !== null && zone.insulation_factor !== undefined ? parseFloat(zone.insulation_factor) : null
     };
 }
 

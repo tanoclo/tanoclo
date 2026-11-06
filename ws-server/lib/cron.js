@@ -15,6 +15,7 @@ const { getLogger } = require('./logger');
 const log = getLogger('cron');
 const meshRecovery = require('./mesh-recovery');
 const { pruneAllSnapshots } = require('./snapshot-cleanup');
+const moldDetector = require('./mold-detector');
 
 let _broadcastTimeFn = null;
 let _broadcastRfKeyFn = null;
@@ -97,9 +98,10 @@ function start({ broadcastTime, broadcastRfKey, pushZoneOverlayDelete, pushSched
                 const [homes] = await pool.execute('SELECT id FROM homes');
                 for (const home of homes) {
                     await _mqttPublisher.publishHomeTelemetry(home.id).catch(e => log('debug', `[cron] Telemetry publish failed for home ${home.id}: ${e.message}`));
+                    await moldDetector.syncHomeMoldState(home.id, pool).catch(e => log('warn', `[cron] Mold sync failed for home ${home.id}: ${e.message}`));
                 }
             } catch (err) {
-                log('error', `Failed to publish home telemetry after weather update: ${err.message}`);
+                log('error', `Failed to publish telemetry / sync mold after weather update: ${err.message}`);
             }
         }
     }, 60 * 60 * 1000));

@@ -309,6 +309,8 @@ export default function HomeSettingsGeneral({
   isSavingProperties,
   handleSaveProperties,
   isMobile,
+  insulationFactor = 0.70,
+  setInsulationFactor,
   t
 }) {
   const [boostTemp, setBoostTemp] = useState(() => {
@@ -316,8 +318,81 @@ export default function HomeSettingsGeneral({
     return !isNaN(stored) ? stored : DEFAULT_TEMPERATURES.BOOST;
   });
 
+  const insulationPresets = [
+    { label: t('settings.insulation_poor', { defaultValue: 'Poor (0.55)' }), desc: t('settings.insulation_poor_desc', { defaultValue: 'Older building / uninsulated' }), value: 0.55 },
+    { label: t('settings.insulation_standard', { defaultValue: 'Standard (0.70)' }), desc: t('settings.insulation_standard_desc', { defaultValue: 'Renovated / double glazing' }), value: 0.70 },
+    { label: t('settings.insulation_high', { defaultValue: 'High (0.85)' }), desc: t('settings.insulation_high_desc', { defaultValue: 'Modern energy-efficient' }), value: 0.85 }
+  ];
+
   return (
     <form onSubmit={handleSaveProperties} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      {/* Building Envelope & Insulation Quality */}
+      <Card style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <div>
+          <h3 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0 }}>
+            {t('settings.building_insulation_title', { defaultValue: 'Building Insulation & Thermal Quality' })}
+          </h3>
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '4px 0 0 0' }}>
+            {t('settings.building_insulation_desc', { defaultValue: 'Controls how wall surface temperatures drop relative to outdoor weather for mold risk detection (ISO 13788 f_Rsi factor).' })}
+          </p>
+        </div>
+
+        {/* Preset Buttons */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem' }}>
+          {insulationPresets.map((preset) => {
+            const isSelected = Math.abs(insulationFactor - preset.value) < 0.01;
+            return (
+              <button
+                key={preset.value}
+                type="button"
+                onClick={() => setInsulationFactor && setInsulationFactor(preset.value)}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'flex-start',
+                  padding: '0.75rem',
+                  borderRadius: '10px',
+                  backgroundColor: isSelected ? 'var(--primary-glow, rgba(0, 180, 216, 0.15))' : 'var(--bg-tertiary, rgba(255,255,255,0.03))',
+                  border: isSelected ? '2px solid var(--primary, #00b4d8)' : '1px solid var(--border-color, rgba(255,255,255,0.1))',
+                  color: isSelected ? 'var(--primary, #00b4d8)' : 'var(--text-primary)',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                <span style={{ fontSize: '0.85rem', fontWeight: 700 }}>{preset.label}</span>
+                <span style={{ fontSize: '0.725rem', color: 'var(--text-secondary)', marginTop: '2px' }}>{preset.desc}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Slider & Numeric display */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginTop: '0.25rem' }}>
+          <input
+            type="range"
+            min="0.40"
+            max="0.95"
+            step="0.05"
+            value={insulationFactor}
+            onChange={(e) => setInsulationFactor && setInsulationFactor(parseFloat(e.target.value))}
+            style={{ flex: 1, accentColor: 'var(--primary, #00b4d8)' }}
+          />
+          <span style={{
+            fontSize: '0.9rem',
+            fontWeight: 700,
+            padding: '4px 10px',
+            borderRadius: '6px',
+            backgroundColor: 'var(--bg-input)',
+            border: '1px solid var(--border-color)',
+            minWidth: '55px',
+            textAlign: 'center'
+          }}>
+            {insulationFactor.toFixed(2)}
+          </span>
+        </div>
+      </Card>
+
       {/* Address Fields */}
       <Card style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
         <h3 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0 }}>{t('settings.home_properties')}</h3>

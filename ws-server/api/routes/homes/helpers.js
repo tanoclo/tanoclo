@@ -114,7 +114,8 @@ async function buildHomeDetails(homeRow, userId = null) {
         configReadonly: homeRow.zone_config_readonly === null ? config.zoneConfigReadonly : Boolean(homeRow.zone_config_readonly),
         zoneConfigReadonly: homeRow.zone_config_readonly === null ? config.zoneConfigReadonly : Boolean(homeRow.zone_config_readonly),
         devBypass: Boolean(homeRow.dev_bypass),
-        cartoApiKey: config.cartoApiKey || ''
+        cartoApiKey: config.cartoApiKey || '',
+        insulationFactor: homeRow.insulation_factor !== null && homeRow.insulation_factor !== undefined ? parseFloat(homeRow.insulation_factor) : 0.70
     };
 }
 

@@ -204,6 +204,19 @@ export function updateZoneDetails(homeId, zoneId, details) {
 }
 
 /**
+ * Updates room wall insulation factor override
+ * @param {string|number} homeId
+ * @param {string|number} zoneId
+ * @param {number|null} insulationFactor
+ */
+export function updateZoneInsulation(homeId, zoneId, insulationFactor) {
+  return apiFetch(`/api/v2/homes/${homeId}/zones/${zoneId}/insulation`, {
+    method: 'PUT',
+    body: { insulationFactor }
+  });
+}
+
+/**
  * Updates early start setting for a zone
  * @param {string|number} homeId
  * @param {string|number} zoneId

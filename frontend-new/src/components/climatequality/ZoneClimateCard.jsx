@@ -7,9 +7,12 @@
  * and handles weather correlation checks to suggest opening windows when outside weather allows.
  */
 
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Card from '../common/Card';
 import ComfortCompass from './ComfortCompass';
+import MoldRiskBadge from './MoldRiskBadge';
+import MoldDetailModal from './MoldDetailModal';
 import { Thermometer, Droplets } from 'lucide-react';
 
 /**
@@ -21,6 +24,7 @@ import { Thermometer, Droplets } from 'lucide-react';
  */
 export default function ZoneClimateCard({ name, comfort, state, outsideTemp }) {
   const { t } = useTranslation();
+  const [isMoldModalOpen, setIsMoldModalOpen] = useState(false);
 
   if (!comfort || !state) return null;
 
@@ -120,15 +124,22 @@ export default function ZoneClimateCard({ name, comfort, state, outsideTemp }) {
           <h3 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>
             {name}
           </h3>
-          <p style={{
-            fontSize: '0.8rem',
-            fontWeight: 700,
-            color: badge.color,
-            marginTop: '2px',
-            letterSpacing: '0.5px'
-          }}>
-            {badge.label}
-          </p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '4px', flexWrap: 'wrap' }}>
+            <span style={{
+              fontSize: '0.8rem',
+              fontWeight: 700,
+              color: badge.color,
+              letterSpacing: '0.5px'
+            }}>
+              {badge.label}
+            </span>
+            {comfort.mold && (
+              <MoldRiskBadge
+                mold={comfort.mold}
+                onClick={() => setIsMoldModalOpen(true)}
+              />
+            )}
+          </div>
         </div>
 
         {/* Small badge reading values */}
@@ -171,6 +182,16 @@ export default function ZoneClimateCard({ name, comfort, state, outsideTemp }) {
       }}>
         {explanation}
       </p>
+
+      {/* Mold Diagnostics Modal */}
+      <MoldDetailModal
+        isOpen={isMoldModalOpen}
+        onClose={() => setIsMoldModalOpen(false)}
+        zoneName={name}
+        comfort={comfort}
+        state={state}
+        outsideTemp={outsideTemp}
+      />
     </Card>
   );
 }

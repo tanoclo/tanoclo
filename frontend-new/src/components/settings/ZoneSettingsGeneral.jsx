@@ -48,8 +48,20 @@ export default function ZoneSettingsGeneral({
   devices,
   zones,
   onNavigateToDevice,
+  insulationFactor = null,
+  handleInsulationFactorChange,
   t
 }) {
+  const isInherited = insulationFactor === null || insulationFactor === undefined;
+  const currentVal = !isInherited ? parseFloat(insulationFactor) : 0.70;
+
+  const roomPresets = [
+    { label: t('settings.insulation_inherit', { defaultValue: 'Inherit Home' }), value: null },
+    { label: t('settings.insulation_poor', { defaultValue: 'Poor (0.55)' }), value: 0.55 },
+    { label: t('settings.insulation_standard', { defaultValue: 'Standard (0.70)' }), value: 0.70 },
+    { label: t('settings.insulation_high', { defaultValue: 'High (0.85)' }), value: 0.85 }
+  ];
+
   return (
     <>
       {/* Name input */}
@@ -88,6 +100,76 @@ export default function ZoneSettingsGeneral({
           </Button>
         </div>
       </Card>
+
+      {/* Room Wall Insulation Factor (Heating only) */}
+      {!isDhw && (
+        <Card style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          <div>
+            <h3 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0 }}>
+              {t('settings.room_insulation_title', { defaultValue: 'Room Wall Insulation Factor' })}
+            </h3>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '4px 0 0 0' }}>
+              {t('settings.room_insulation_desc', { defaultValue: 'Override building insulation for rooms with colder exterior walls, thermal bridges, or modern extensions (ISO 13788 f_Rsi factor).' })}
+            </p>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.5rem' }}>
+            {roomPresets.map((preset) => {
+              const isSelected = preset.value === null
+                ? isInherited
+                : (!isInherited && Math.abs(currentVal - preset.value) < 0.01);
+
+              return (
+                <button
+                  key={preset.label}
+                  type="button"
+                  onClick={() => handleInsulationFactorChange && handleInsulationFactorChange(preset.value)}
+                  style={{
+                    padding: '0.6rem 0.75rem',
+                    borderRadius: '8px',
+                    backgroundColor: isSelected ? 'var(--primary-glow, rgba(0, 180, 216, 0.15))' : 'var(--bg-tertiary, rgba(255,255,255,0.03))',
+                    border: isSelected ? '2px solid var(--primary, #00b4d8)' : '1px solid var(--border-color, rgba(255,255,255,0.1))',
+                    color: isSelected ? 'var(--primary, #00b4d8)' : 'var(--text-primary)',
+                    cursor: 'pointer',
+                    fontSize: '0.8rem',
+                    fontWeight: isSelected ? 700 : 500,
+                    textAlign: 'center',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  {preset.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {!isInherited && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginTop: '0.25rem' }}>
+              <input
+                type="range"
+                min="0.40"
+                max="0.95"
+                step="0.05"
+                value={currentVal}
+                onChange={(e) => handleInsulationFactorChange && handleInsulationFactorChange(parseFloat(e.target.value))}
+                style={{ flex: 1, accentColor: 'var(--primary, #00b4d8)' }}
+              />
+              <span style={{
+                fontSize: '0.85rem',
+                fontWeight: 700,
+                padding: '3px 8px',
+                borderRadius: '6px',
+                backgroundColor: 'var(--bg-input)',
+                border: '1px solid var(--border-color)',
+                minWidth: '50px',
+                textAlign: 'center'
+              }}>
+                {currentVal.toFixed(2)}
+              </span>
+            </div>
+          )}
+        </Card>
+      )}
 
       {/* Measuring Device (Heating only) */}
       {!isDhw && (
