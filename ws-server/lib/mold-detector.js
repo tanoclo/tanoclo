@@ -138,38 +138,39 @@ function calculateVttStep(currentM, surfaceTemp, surfaceHum, dtHours = 1.0, sens
 
     if (t <= 0.1 || rh < 10.0) {
         // Dormancy / dry retreat
-        return Math.max(0.0, parseFloat((m - 0.002 * dt).toFixed(3)));
+        return Math.max(0.0, Math.min(6.0, m - (0.002 / 24.0) * dt));
     }
 
     const rhCrit = calculateRhCrit(t);
 
     if (rh >= rhCrit) {
-        // Growth phase
+        // Growth phase (Hukka & Viitanen 1999 / VTT Mold Model)
         const ratio = (rhCrit - rh) / (rhCrit - 100.0);
         const mMax = Math.max(0.0, Math.min(6.0, 1.0 + 7.0 * ratio - 2.0 * ratio * ratio));
 
         if (m < mMax) {
-            const k2 = Math.max(0.0, 1.0 - Math.exp(1.7 * (m - mMax)));
             const k1 = sensitivityClass;
+            const k2 = m < 1.0 ? 1.0 : Math.max(0.0, 1.0 - Math.exp(1.7 * (m - mMax)));
             const lnT = Math.log(Math.max(0.1, t));
-            const lnRh = Math.log(Math.max(0.01, rh / 100.0));
-            const exponent = -0.68 * lnT - 13.9 * lnRh + 66.02;
+            const lnRh = Math.log(Math.max(1.0, rh));
+            const lnTm = -0.68 * lnT - 13.9 * lnRh + 66.02;
 
-            // Clamped daily growth rate to avoid runaway overflow
-            const clampedExponent = Math.min(25.0, exponent);
-            const rateDaily = (k1 * k2 / 7.0) * Math.exp(clampedExponent);
+            // Germination time tm in days
+            const tmDays = Math.max(0.5, Math.exp(Math.min(25.0, Math.max(-10.0, lnTm))));
+            const rateDaily = (k1 * k2) / (7.0 * tmDays);
             const rateHourly = rateDaily / 24.0;
 
-            m = Math.min(6.0, m + rateHourly * dt);
+            m = Math.min(mMax, m + rateHourly * dt);
         }
     } else {
         // Unfavorable decline phase (dry spell)
         const dryness = Math.max(0.1, 1.0 - (rh / rhCrit));
-        const declineRateHourly = 0.002 * dryness;
+        const declineRateDaily = 0.002 * dryness;
+        const declineRateHourly = declineRateDaily / 24.0;
         m = Math.max(0.0, m - declineRateHourly * dt);
     }
 
-    return parseFloat(m.toFixed(3));
+    return Math.max(0.0, Math.min(6.0, m));
 }
 
 /**
@@ -189,12 +190,51 @@ async function evaluateZoneMold(homeId, zoneId, pool) {
     const effectiveInsulation = getEffectiveInsulationFactor(homeFactor, zoneFactor);
     const isInherited = zoneFactor === null || zoneFactor === undefined;
 
-    // 2. Query outdoor temperature
+    // 2. Query outdoor temperature (current latest and 14-day history)
     const [weatherRows] = await pool.execute(
         'SELECT outside_temp_celsius FROM home_weather WHERE home_id = ? ORDER BY timestamp DESC LIMIT 1',
         [homeId]
     );
-    const currentOutsideTemp = weatherRows.length > 0 ? weatherRows[0].outside_temp_celsius : null;
+    const currentOutsideTemp = weatherRows.length > 0 ? parseFloat(weatherRows[0].outside_temp_celsius) : null;
+
+    const [weatherHistory] = await pool.execute(
+        `SELECT outside_temp_celsius, timestamp
+         FROM home_weather
+         WHERE home_id = ? AND timestamp >= DATE_SUB(NOW(), INTERVAL 14 DAY)
+         ORDER BY timestamp ASC`,
+        [homeId]
+    );
+
+    const parsedWeather = weatherHistory
+        .map(w => ({
+            time: new Date(w.timestamp).getTime(),
+            temp: parseFloat(w.outside_temp_celsius)
+        }))
+        .filter(w => !isNaN(w.time) && !isNaN(w.temp));
+
+    const getHistoricalOutsideTemp = (ts) => {
+        if (parsedWeather.length === 0) return currentOutsideTemp;
+        let low = 0;
+        let high = parsedWeather.length - 1;
+        while (low <= high) {
+            const mid = Math.floor((low + high) / 2);
+            if (parsedWeather[mid].time === ts) return parsedWeather[mid].temp;
+            if (parsedWeather[mid].time < ts) low = mid + 1;
+            else high = mid - 1;
+        }
+        let closest = null;
+        let minDiff = Infinity;
+        for (const idx of [high, low]) {
+            if (idx >= 0 && idx < parsedWeather.length) {
+                const diff = Math.abs(parsedWeather[idx].time - ts);
+                if (diff < minDiff) {
+                    minDiff = diff;
+                    closest = parsedWeather[idx].temp;
+                }
+            }
+        }
+        return minDiff <= 4 * 3600 * 1000 ? closest : currentOutsideTemp;
+    };
 
     // 3. Query historical hourly readings (up to 14 days)
     const [measurements] = await pool.execute(
@@ -228,8 +268,9 @@ async function evaluateZoneMold(homeId, zoneId, pool) {
         }
         prevTime = rowTime;
 
-        // Apply thermal bridge surface conditions
-        const surf = calculateSurfaceConditions(t, rh, currentOutsideTemp, effectiveInsulation);
+        // Apply thermal bridge surface conditions with timestamp-matched historical outdoor temp
+        const outTemp = getHistoricalOutsideTemp(rowTime);
+        const surf = calculateSurfaceConditions(t, rh, outTemp, effectiveInsulation);
         m = calculateVttStep(m, surf.surfaceTemp, surf.surfaceHumidity, dtHours);
         hoursEvaluated += dtHours;
     }
@@ -246,9 +287,9 @@ async function evaluateZoneMold(homeId, zoneId, pool) {
     const progressPercentage = Math.min(100, Math.round((hoursEvaluated / MIN_CALIBRATION_HOURS) * 100));
 
     let riskLevel = 'LOW';
-    if (m >= 2.0) {
+    if (m >= 2.0 || currentSurface.condensationRisk) {
         riskLevel = 'HIGH';
-    } else if (m >= 1.0) {
+    } else if (m >= 1.0 || (currentSurface.surfaceHumidity >= 80.0 && currentSurface.surfaceHumidity >= rhCrit)) {
         riskLevel = 'ELEVATED';
     }
 
