@@ -3,7 +3,7 @@
  * @brief Unit tests for balancing and PID tuning snapshot retention pruning.
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import db from '../lib/db';
 import {
     pruneBalancingSnapshots,
@@ -11,6 +11,9 @@ import {
 } from '../lib/snapshot-cleanup';
 
 describe('Snapshot Retention Pruning', () => {
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
     it('prunes balancing snapshots older than maxDays and beyond maxKeep while preserving latest applied', async () => {
         const deletedIds = [];
         const now = Date.now();
@@ -43,8 +46,6 @@ describe('Snapshot Retention Pruning', () => {
                 return [[]];
             }
         };
-
-        vi.spyOn(db, 'getPool').mockReturnValue(mockPool);
 
         await pruneBalancingSnapshots(123, { pool: mockPool, maxKeep: 5, maxDays: 3 });
 

@@ -31,12 +31,10 @@ INSERT INTO `zones` (
   `id`, `home_id`, `name`, `type`, `open_window_enabled`, `open_window_timeout`, 
   `dazzle_enabled`, `early_start_enabled`, `min_temp`, `max_temp`, `step_temp`, 
   `default_overlay_type`, `config_etag`
-) VALUES (
-  1, 999999, 'Living Room', 'HEATING', 0, 900, 
-  0, 0, 5.0, 25.0, 0.5, 
-  'MANUAL', UNHEX('7a6f6e65636f6e666967657461673132')
-)
-ON DUPLICATE KEY UPDATE `name`='Living Room';
+) VALUES 
+  (1, 1, 'Template Living Room', 'HEATING', 0, 900, 0, 0, 5.0, 25.0, 0.5, 'MANUAL', UNHEX('7a6f6e65636f6e666967657461673132')),
+  (1, 999999, 'Living Room', 'HEATING', 0, 900, 0, 0, 5.0, 25.0, 0.5, 'MANUAL', UNHEX('7a6f6e65636f6e666967657461673132'))
+ON DUPLICATE KEY UPDATE `name`=VALUES(`name`);
 
 -- Synthetic test devices (IB, VA, RU)
 INSERT INTO `devices` (
@@ -52,9 +50,9 @@ ON DUPLICATE KEY UPDATE `current_fw_version`=VALUES(`current_fw_version`);
 -- Synthetic test heating circuit
 INSERT INTO `heating_circuits` (
   `home_id`, `number`, `driver_serial_no`, `config_etag`, `config_etag_real`
-) VALUES (
-  999999, 1, 'IB0000000001', UNHEX('63697263756974657461673132333435'), UNHEX('63697263756974657461673132333435')
-)
+) VALUES 
+  (1, 1, 'IB0000000001', UNHEX('63697263756974657461673132333435'), UNHEX('63697263756974657461673132333435')),
+  (999999, 1, 'IB0000000001', UNHEX('63697263756974657461673132333435'), UNHEX('63697263756974657461673132333435'))
 ON DUPLICATE KEY UPDATE `driver_serial_no`=VALUES(`driver_serial_no`);
 
 -- Synthetic test admin user

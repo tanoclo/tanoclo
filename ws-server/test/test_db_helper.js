@@ -60,6 +60,7 @@ const bcrypt = require('bcryptjs');
       `, [apiUser || 'admin', passwordHash, homeId]);
   
       // 3. Copy Zone
+      let zoneCopied = false;
       if (sourceHomeId) {
           const [zoneRows] = await pool.execute('SELECT * FROM zones WHERE home_id = ? ORDER BY (type = "HEATING") DESC LIMIT 1', [sourceHomeId]);
           if (zoneRows.length > 0) {
@@ -74,15 +75,17 @@ const bcrypt = require('bcryptjs');
               const keys = Object.keys(zoneData);
               const placeholders = keys.map(() => '?').join(', ');
               await pool.execute(`INSERT INTO zones (${keys.join(', ')}) VALUES (${placeholders})`, Object.values(zoneData));
+              zoneCopied = true;
           }
-      } else {
+      }
+      if (!zoneCopied) {
           // Fallback if no source zone
           await pool.execute(`
               INSERT INTO zones (
                   id, home_id, name, type, open_window_enabled, open_window_timeout, 
                   dazzle_enabled, early_start_enabled, min_temp, max_temp, step_temp, 
-                  default_overlay_type
-              ) VALUES (?, ?, 'Test Zone', 'HEATING', 0, 900, 0, 0, 5, 25, 0.5, 'MANUAL')
+                  default_overlay_type, config_etag
+              ) VALUES (?, ?, 'Test Zone', 'HEATING', 0, 900, 0, 0, 5, 25, 0.5, 'MANUAL', UNHEX('7a6f6e65636f6e666967657461673132'))
           `, [zoneId, homeId]);
       }
   
@@ -122,6 +125,7 @@ const bcrypt = require('bcryptjs');
       }
   
       // 5. Copy Heating Circuit
+      let circuitCopied = false;
       if (sourceHomeId) {
           const [circuitRows] = await pool.execute('SELECT * FROM heating_circuits WHERE home_id = ? LIMIT 1', [sourceHomeId]);
           if (circuitRows.length > 0) {
@@ -137,11 +141,13 @@ const bcrypt = require('bcryptjs');
               const keys = Object.keys(circuitData);
               const placeholders = keys.map(() => '?').join(', ');
               await pool.execute(`INSERT INTO heating_circuits (${keys.join(', ')}) VALUES (${placeholders})`, Object.values(circuitData));
+              circuitCopied = true;
           }
-      } else {
+      }
+      if (!circuitCopied) {
           await pool.execute(`
               INSERT INTO heating_circuits (home_id, number, driver_serial_no, config_etag, config_etag_real)
-              VALUES (?, 1, ?, 'circuitetag12345', 'circuitetag12345')
+              VALUES (?, 1, ?, UNHEX('63697263756974657461673132333435'), UNHEX('63697263756974657461673132333435'))
           `, [homeId, deviceId]);
       }
   

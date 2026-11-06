@@ -246,8 +246,12 @@ test('legacy test suite runs successfully', async () => {
               testFailed = true;
           } finally {
               try {
-                  await pool.execute('DELETE FROM homes WHERE id = ?', [testHomeId]);
-                  console.log('Cleanup: deleted mock home from DB.');
+                  if (Number(testHomeId) === 999999) {
+                      await pool.execute('UPDATE homes SET allow_commands_in_proxy = 1, zone_config_readonly = 0 WHERE id = ?', [testHomeId]);
+                  } else {
+                      await pool.execute('DELETE FROM homes WHERE id = ?', [testHomeId]);
+                  }
+                  console.log('Cleanup: restored mock home in DB.');
               } catch (cleanupErr) {
                   console.error('Cleanup failed:', cleanupErr.message);
               }
