@@ -162,7 +162,7 @@ node tanoclo-stream-receiver/stream_receiver.js [--stats]
 ```
 
 #### Command Line Flags
-- `--stats`: Periodically prints detailed packet status statistics.
+- `--stats`: Periodically prints detailed packet status statistics, including decryption outcomes per source address and frame shape with a few raw samples of failing frames. Per-source counts, without shapes or samples, are published to `tado/sniffer/receiver/decrypt_stats` every 30 s when MQTT is on. Counts are cumulative since the receiver started; the first 64 source addresses seen get their own rows and later ones are grouped as `OTHER`.
 - `--port <port>`: Overrides the TCP listening port (default: `9999`).
 - `--host <ip>`: Overrides the TCP listening bind address (default: `0.0.0.0`).
 - `--keys <name=hex,name2=hex...>`: Provides comma-separated name-key pairs for AES decryption.
