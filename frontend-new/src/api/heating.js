@@ -65,3 +65,59 @@ export function updateHeatingCircuitDriver(homeId, circuitNumber, serialNo) {
     body: { serialNo }
   });
 }
+
+/**
+ * Gets gas energy usage and costs breakdown
+ * @param {string|number} homeId
+ * @param {object} params - { from, to, days }
+ */
+export function getGasEnergyUsage(homeId, params = {}) {
+  const query = new URLSearchParams();
+  if (params.from) query.append('from', params.from);
+  if (params.to) query.append('to', params.to);
+  if (params.days) query.append('days', String(params.days));
+
+  const qs = query.toString();
+  return apiFetch(`/api/v2/homes/${homeId}/energy/gas${qs ? `?${qs}` : ''}`);
+}
+
+/**
+ * Gets daily gas summary history
+ * @param {string|number} homeId
+ * @param {number} [days=30]
+ */
+export function getGasEnergyDaily(homeId, days = 30) {
+  return apiFetch(`/api/v2/homes/${homeId}/energy/gas/daily?days=${days}`);
+}
+
+/**
+ * Gets gas energy settings and topics
+ * @param {string|number} homeId
+ */
+export function getGasEnergySettings(homeId) {
+  return apiFetch(`/api/v2/homes/${homeId}/energy/settings`);
+}
+
+/**
+ * Updates gas energy settings and topics
+ * @param {string|number} homeId
+ * @param {object} settings
+ */
+export function updateGasEnergySettings(homeId, settings) {
+  return apiFetch(`/api/v2/homes/${homeId}/energy/settings`, {
+    method: 'PUT',
+    body: settings
+  });
+}
+
+/**
+ * Manually posts a gas meter reading
+ * @param {string|number} homeId
+ * @param {object} data - { meter_m3, unit_cost }
+ */
+export function postGasMeterReading(homeId, data) {
+  return apiFetch(`/api/v2/homes/${homeId}/energy/gas/reading`, {
+    method: 'POST',
+    body: data
+  });
+}

@@ -7,6 +7,7 @@
 
 const { getLocalParts, parseLocalTimeInTimezone } = require('./utils');
 const { overlayModeFor, parsePresetCommand } = require('./overlay-codes');
+const gasEnergy = require('./gas-energy-analyzer');
 
 let mqttClient = null;
 let db = null;
@@ -17,6 +18,7 @@ let onStateChange = null;
 
 const emulatedStates = new Map();
 const pendingEsp32Retries = new Map();
+const customEnergyTopics = new Map();
 
 function init(_mqttClient, _db, _commandApi, _mqttPublisher, _log, _onStateChange) {
     mqttClient = _mqttClient;
@@ -51,6 +53,24 @@ function init(_mqttClient, _db, _commandApi, _mqttPublisher, _log, _onStateChang
             if (log) log('error', `[mqtt-commands] Error handling emulated telemetry for topic ${topic}: ${err.message}`);
         });
     });
+
+    // Subscribe to home gas energy measurements (cumulative m³)
+    mqttClient.subscribe('tado/tanoclo/h/+/energy/gas_meter', (topic, payload) => {
+        handleGasMeterPayload(topic, payload).catch(err => {
+            if (log) log('error', `[mqtt-commands] Error handling gas meter topic ${topic}: ${err.message}`);
+        });
+    });
+
+    // Subscribe to home gas unit costs / tariffs (€/m³)
+    mqttClient.subscribe('tado/tanoclo/h/+/energy/gas_cost_per_m3', (topic, payload) => {
+        handleGasCostPayload(topic, payload).catch(err => {
+            if (log) log('error', `[mqtt-commands] Error handling gas cost topic ${topic}: ${err.message}`);
+        });
+    });
+
+    if (db && db.getPool) {
+        preloadCustomEnergyTopics();
+    }
 
     // Preload persisted emulated device states from DB (prioritize latest real measurements)
     if (db && db.getPool) {
@@ -843,6 +863,107 @@ function getEmulatedState(serial) {
     return emulatedStates.get(serial) || null;
 }
 
+function parseNumericPayload(payload) {
+    if (payload === null || payload === undefined) return null;
+    let str = typeof payload === 'string' ? payload.trim() : String(payload).trim();
+    if (!str) return null;
+
+    if (str.startsWith('{') && str.endsWith('}')) {
+        try {
+            const data = JSON.parse(str);
+            const candidates = [data.value, data.state, data.meter_m3, data.gas_meter, data.cost, data.price];
+            for (const c of candidates) {
+                if (c !== undefined && !isNaN(parseFloat(c))) {
+                    return parseFloat(c);
+                }
+            }
+        } catch (e) {}
+    }
+
+    const num = parseFloat(str);
+    return isNaN(num) ? null : num;
+}
+
+async function handleGasMeterPayload(topic, payload, explicitHomeId = null) {
+    let homeId = explicitHomeId;
+    if (!homeId) {
+        const segs = topic.split('/');
+        if (segs.length >= 4 && segs[2] === 'h') {
+            homeId = parseInt(segs[3], 10);
+        }
+    }
+    if (!homeId || isNaN(homeId)) return;
+
+    const val = parseNumericPayload(payload);
+    if (val === null || val < 0) return;
+
+    const pool = db.getPool();
+    await gasEnergy.recordGasMeterReading(pool, homeId, val, null, 'mqtt');
+    if (log) log('info', `[mqtt-energy] Recorded gas meter reading for home ${homeId}: ${val} m3`);
+}
+
+async function handleGasCostPayload(topic, payload, explicitHomeId = null) {
+    let homeId = explicitHomeId;
+    if (!homeId) {
+        const segs = topic.split('/');
+        if (segs.length >= 4 && segs[2] === 'h') {
+            homeId = parseInt(segs[3], 10);
+        }
+    }
+    if (!homeId || isNaN(homeId)) return;
+
+    const val = parseNumericPayload(payload);
+    if (val === null || val < 0) return;
+
+    const pool = db.getPool();
+    await pool.execute(
+        `INSERT INTO home_energy_settings (home_id, gas_unit_cost)
+         VALUES (?, ?)
+         ON DUPLICATE KEY UPDATE gas_unit_cost = VALUES(gas_unit_cost), updated_at = CURRENT_TIMESTAMP`,
+        [homeId, val]
+    );
+    if (log) log('info', `[mqtt-energy] Updated gas tariff for home ${homeId}: ${val}`);
+}
+
+function registerCustomEnergyTopic(homeId, topic, type) {
+    if (!mqttClient || !topic || !homeId) return;
+    if (topic.includes('+') || topic.includes('#')) return;
+    if (customEnergyTopics.has(topic)) return;
+
+    customEnergyTopics.set(topic, { homeId, type });
+    mqttClient.subscribe(topic, (t, payload) => {
+        const meta = customEnergyTopics.get(t);
+        if (meta) {
+            if (meta.type === 'meter') {
+                handleGasMeterPayload(t, payload, meta.homeId).catch(err => {
+                    if (log) log('error', `[mqtt-energy] Custom gas meter error: ${err.message}`);
+                });
+            } else if (meta.type === 'cost') {
+                handleGasCostPayload(t, payload, meta.homeId).catch(err => {
+                    if (log) log('error', `[mqtt-energy] Custom gas cost error: ${err.message}`);
+                });
+            }
+        }
+    });
+}
+
+async function preloadCustomEnergyTopics() {
+    try {
+        const pool = db.getPool();
+        const [rows] = await pool.execute('SELECT home_id, gas_meter_topic, gas_cost_topic FROM home_energy_settings');
+        for (const r of rows) {
+            if (r.gas_meter_topic && !r.gas_meter_topic.includes('{homeId}')) {
+                registerCustomEnergyTopic(r.home_id, r.gas_meter_topic, 'meter');
+            }
+            if (r.gas_cost_topic && !r.gas_cost_topic.includes('{homeId}')) {
+                registerCustomEnergyTopic(r.home_id, r.gas_cost_topic, 'cost');
+            }
+        }
+    } catch (e) {
+        if (log) log('warn', `[mqtt-energy] Failed to preload custom energy topics: ${e.message}`);
+    }
+}
+
 function _pub(topic, value) {
     if (mqttClient) {
         mqttClient.publish(topic, String(value), { retain: true, qos: 0 });
@@ -851,5 +972,8 @@ function _pub(topic, value) {
 
 module.exports = {
     init,
-    getEmulatedState
+    getEmulatedState,
+    registerCustomEnergyTopic,
+    handleGasMeterPayload,
+    handleGasCostPayload
 };

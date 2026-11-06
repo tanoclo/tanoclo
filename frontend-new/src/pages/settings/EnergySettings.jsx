@@ -15,6 +15,7 @@ import Spinner from '../../components/common/Spinner';
 const HeatingActivityChart = lazy(() => import('../../components/charts/HeatingActivityChart'));
 const CombinedTelemetryChart = lazy(() => import('../../components/charts/CombinedTelemetryChart'));
 const CircuitTelemetryChart = lazy(() => import('../../components/charts/CircuitTelemetryChart'));
+import GasEnergySection from '../../components/energy/GasEnergySection';
 import { getRunningTimes } from '../../api/heating';
 import { getCircuits, getCircuitDayReport } from '../../api/tanoclo';
 import { apiFetch } from '../../api/client';
@@ -88,6 +89,11 @@ export default function EnergySettings({ homeId, zones }) {
           {t('settings.heating_activity_desc')}
         </p>
       </div>
+
+      {/* Gas Energy & Cost Analytics */}
+      <GasEnergySection homeId={homeId} zones={zones} />
+
+      <hr style={{ border: 'none', borderTop: '1px solid var(--border-color)', margin: '0.5rem 0' }} />
 
       <div style={{
         display: 'flex',

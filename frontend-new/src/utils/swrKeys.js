@@ -57,4 +57,7 @@ export const SWR_KEYS = {
   supplyTempHistory: (homeId) => `/homes/${homeId}/supplyTemperatureHistory`,
   balancingHistory: (homeId) => `/homes/${homeId}/balancing/history`,
   pidTuningHistory: (homeId) => `/homes/${homeId}/pid-tuning/history`,
+  gasEnergyUsage: (homeId, from, to) => `/homes/${homeId}/energy/gas?from=${from}&to=${to}`,
+  gasEnergyDaily: (homeId, days) => `/homes/${homeId}/energy/gas/daily?days=${days}`,
+  gasEnergySettings: (homeId) => `/homes/${homeId}/energy/settings`,
 };
