@@ -30,7 +30,7 @@ export function calculatePidPreset({ roomSizeSqm = 20, heatingType = 'RADIATOR',
   const isUfh = heatingType === 'UNDERFLOOR';
   const isDrySystem = isUfh && underfloorMass === 'DRY_SYSTEM';
 
-  let tier = 'MEDIUM';
+  let tier;
   if (size < 15) {
     tier = 'SMALL';
   } else if (size <= 28) {
@@ -42,8 +42,8 @@ export function calculatePidPreset({ roomSizeSqm = 20, heatingType = 'RADIATOR',
   }
 
   let kp, ki, kd;
-  let explanationKey = '';
-  let defaultExplanation = '';
+  let explanationKey;
+  let defaultExplanation;
 
   if (isUfh) {
     if (isDrySystem) {
