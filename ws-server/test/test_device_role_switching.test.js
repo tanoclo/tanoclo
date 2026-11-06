@@ -7,10 +7,21 @@ const { getZoneBindingsForDevice } = require('../lib/db-zones/state');
 
 describe('RU Device Role & Zone Bindings', () => {
     let mockDev = null;
+    const p = dbBase.getPool();
+    const originalExecute = p.execute;
+
+    afterEach(() => {
+        p.execute = originalExecute;
+        vi.restoreAllMocks();
+    });
+
+    afterAll(() => {
+        p.execute = originalExecute;
+        vi.restoreAllMocks();
+    });
 
     beforeEach(() => {
         mockDev = null;
-        const p = dbBase.getPool();
         p.execute = vi.fn().mockImplementation(async (sql, params) => {
             if (sql.includes('FROM devices') && mockDev) {
                 return [[mockDev]];
