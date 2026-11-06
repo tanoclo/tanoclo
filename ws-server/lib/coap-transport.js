@@ -30,7 +30,7 @@ const QUEUE_TTL_MS = 2 * 60 * 60 * 1000;
 // Per-bridge downlink burst pacing queue: prevents 802.15.4 CSL preamble collisions and 6LoWPAN queue overflow
 const _bridgePacingQueues = new Map(); // bridgeId -> Array of queued items
 const _bridgePacingActive = new Map(); // bridgeId -> boolean
-let _downlinkPacingMs = 200;
+let _downlinkPacingMs = (process.env.VITEST || process.env.NODE_ENV === 'test') ? 0 : 200;
 
 const RETRY_INTERVALS = [6000, 13000, 26000, 50000, 90000];
 const QUERY_TIMEOUT_MS = 5000;
@@ -317,6 +317,8 @@ function clearPendingRetries() {
     _tanocloMids.clear();
     _sleepyDownlinkQueue.clear();
     _deviceLastSeen.clear();
+    _bridgePacingQueues.clear();
+    _bridgePacingActive.clear();
     if (_tanocloMidsSweepInterval) {
         clearInterval(_tanocloMidsSweepInterval);
         _tanocloMidsSweepInterval = null;

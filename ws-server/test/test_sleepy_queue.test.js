@@ -102,23 +102,27 @@ test('Sleepy Device Downlink Queue operations', async () => {
     assert.strictEqual(coapMsg.ok, true);
     assert.strictEqual(coap.uriPath(coapMsg), 'd/config');
 
-    // 4. immediately sends downlink config to awake VA devices
-    sentFrames = [];
-    commandApi.recordDeviceActivity('VA0000000001');
-    assert.strictEqual(commandApi.isDeviceAwake('VA0000000001'), true);
+    try {
+        // 4. immediately sends downlink config to awake VA devices
+        sentFrames = [];
+        commandApi.recordDeviceActivity('VA0000000001');
+        assert.strictEqual(commandApi.isDeviceAwake('VA0000000001'), true);
 
-    const mid2 = await commandApi.internalPushViabridge(
-        'VA0000000001',
-        coap.CODE_PUT,
-        'd/config',
-        Buffer.from([0x03, 0x04])
-    );
+        const mid2 = await commandApi.internalPushViabridge(
+            'VA0000000001',
+            coap.CODE_PUT,
+            'd/config',
+            Buffer.from([0x03, 0x04])
+        );
 
-    assert.ok(mid2 > 0);
-    assert.strictEqual(sentFrames.length, 1);
-    assert.strictEqual(sentFrames[0].bridgeId, 'IB0000000001');
+        assert.ok(mid2 > 0);
+        assert.strictEqual(sentFrames.length, 1);
+        assert.strictEqual(sentFrames[0].bridgeId, 'IB0000000001');
 
-    const parsed2 = wsBridge.parse(sentFrames[0].frame);
-    assert.strictEqual(parsed2.ok, true);
-    assert.strictEqual(parsed2.ipv6, 'fd00:0:0:0:0:0:0:2');
+        const parsed2 = wsBridge.parse(sentFrames[0].frame);
+        assert.strictEqual(parsed2.ok, true);
+        assert.strictEqual(parsed2.ipv6, 'fd00:0:0:0:0:0:0:2');
+    } finally {
+        commandApi.initialize({ db: require('../lib/db'), clients: new Map(), sendToDevice: () => {} });
+    }
 });

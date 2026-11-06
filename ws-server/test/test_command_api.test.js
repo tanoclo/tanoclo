@@ -429,6 +429,7 @@ test('legacy test suite runs successfully', async () => {
       });
   
       console.log(`\n═══ command-api.js Tests Completed: Passed ${passed}/${passed + failed} ═══`);
+      commandApi.initialize({ db: db, clients: new Map(), sendToDevice: () => {} });
       if (!process.env.VITEST) await db.close();
       if (failed > 0) throw new Error('Some tests failed');
   }
