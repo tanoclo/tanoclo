@@ -10,17 +10,21 @@ INSERT INTO `server_settings` (`key`, `value`) VALUES
   ('carto_api_key', 'ci_test_carto_key')
 ON DUPLICATE KEY UPDATE `value`=VALUES(`value`);
 
--- Synthetic baseline test home
+-- Synthetic baseline test home and template home (so id != 999999 queries succeed)
 INSERT INTO `homes` (
   `id`, `name`, `temperature_unit`, `installation_completed`, `simple_smart_schedule_enabled`, 
   `away_radius_in_meters`, `installation_method`, `incident_detection_enabled`, `latitude`, `longitude`, 
   `presence`, `presence_locked`, `is_proxied`, `allow_commands_in_proxy`, `ha_discovery_enabled`, `insulation_factor`
-) VALUES (
-  999999, 'Test Home', 'CELSIUS', 1, 1, 
-  400.00, 'MANUAL', 0, 50.8503, 4.3517, 
-  'HOME', 0, 0, 1, 1, 0.70
-)
-ON DUPLICATE KEY UPDATE `name`='Test Home';
+) VALUES 
+  (1, 'Template Home', 'CELSIUS', 1, 1, 400.00, 'MANUAL', 0, 50.8503, 4.3517, 'HOME', 0, 0, 1, 1, 0.70),
+  (999999, 'Test Home', 'CELSIUS', 1, 1, 400.00, 'MANUAL', 0, 50.8503, 4.3517, 'HOME', 0, 0, 1, 1, 0.70)
+ON DUPLICATE KEY UPDATE `name`=VALUES(`name`);
+
+-- Synthetic heating systems (for canonical config generation)
+INSERT INTO `heating_systems` (`home_id`, `field_015d`) VALUES
+  (1, 71),
+  (999999, 71)
+ON DUPLICATE KEY UPDATE `field_015d`=VALUES(`field_015d`);
 
 -- Synthetic test heating zone
 INSERT INTO `zones` (

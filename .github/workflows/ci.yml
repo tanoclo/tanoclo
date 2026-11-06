@@ -41,6 +41,7 @@ jobs:
 
       - name: Initialize Database Schema and Test Fixtures
         run: |
+          mkdir -p ws-server/log
           mysql -h 127.0.0.1 -P 3306 -u tanoclo -ppassword tanoclo < ws-server/tanoclo.sql
           mysql -h 127.0.0.1 -P 3306 -u tanoclo -ppassword tanoclo < ws-server/test/ci_seed.sql
 
@@ -48,6 +49,17 @@ jobs:
         run: |
           cd ws-server
           npm ci || npm install
+
+      - name: Run Database Migrations
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_NAME: tanoclo
+          DB_USER: tanoclo
+          DB_PASS: password
+        run: |
+          cd ws-server
+          node scripts/migrate.js up
 
       - name: Run Acorn AST static check
         run: |

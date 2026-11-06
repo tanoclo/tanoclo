@@ -46,8 +46,9 @@ const bcrypt = require('bcryptjs');
                   id, name, temperature_unit, presence, presence_locked, is_proxied, 
                   log_uploads_enabled, proxy_logging, allow_commands_in_proxy, 
                   zone_config_readonly, ha_discovery_enabled, dev_bypass, installation_completed,
-                  simple_smart_schedule_enabled
-              ) VALUES (?, 'Test Home', 'CELSIUS', 'HOME', 0, 0, 0, 0, 1, 0, 0, 0, 1, 1)
+                  simple_smart_schedule_enabled, away_radius_in_meters, installation_method,
+                  incident_detection_enabled, latitude, longitude
+              ) VALUES (?, 'Test Home', 'CELSIUS', 'HOME', 0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 400.00, 'MANUAL', 0, 50.8503, 4.3517)
           `, [homeId]);
       }
   
