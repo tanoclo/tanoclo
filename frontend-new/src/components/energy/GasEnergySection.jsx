@@ -49,10 +49,9 @@ export default function GasEnergySection({ homeId, zones = [] }) {
   const [manualCost, setManualCost] = useState('');
 
   // Bulk monthly readings generator & state
-  const generateMonthlyRows = () => {
+  const generateMonthlyRows = (defaultCost = 1.45) => {
     const rows = [];
     const today = new Date();
-    const defaultCost = (energySettings && energySettings.gas_unit_cost !== undefined) ? energySettings.gas_unit_cost : 1.45;
     for (let i = 5; i >= 0; i--) {
       const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
       const yyyy = d.getFullYear();
@@ -65,7 +64,7 @@ export default function GasEnergySection({ homeId, zones = [] }) {
     }
     return rows;
   };
-  const [monthlyRows, setMonthlyRows] = useState(generateMonthlyRows);
+  const [monthlyRows, setMonthlyRows] = useState(() => generateMonthlyRows(1.45));
 
   const { data: usageData, error: usageError, isLoading: isUsageLoading } = useSWR(
     homeId && fromDate && toDate ? SWR_KEYS.gasEnergyUsage(homeId, fromDate, toDate) : null,
@@ -114,7 +113,8 @@ export default function GasEnergySection({ homeId, zones = [] }) {
     setManualReadingDate(getTodayStr());
     setManualReading('');
     setManualCost('');
-    setMonthlyRows(generateMonthlyRows());
+    const currentCost = (energySettings && energySettings.gas_unit_cost !== undefined) ? energySettings.gas_unit_cost : 1.45;
+    setMonthlyRows(generateMonthlyRows(currentCost));
     setShowReadingModal(true);
   };
 
