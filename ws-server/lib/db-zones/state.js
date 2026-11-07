@@ -242,41 +242,42 @@ async function insertMergedZoneMeasurement(homeId, zoneId, updates) {
     const resumeScheduleEvent = (updates['0x6440'] !== undefined ? updates['0x6440'] : (updates.field_6440 !== undefined ? updates.field_6440 : prev.field_6440)) ?? null;
     const openWindowDetected = updates.open_window_detected !== undefined ? updates.open_window_detected : (prev.open_window_detected ?? 0);
 
-    // Rows also carry control state. Comparing only sensor readings discards
-    // immediate target corrections while the room temperature stays unchanged.
-    const numericState = {
-        field_012d: tempCelsius,
-        field_0135: humidityPct,
-        field_40a0: heatingPower,
-        field_61e0: zoneEnabled,
-        field_6160: homeAway,
-        field_6240: overlayMode,
-        field_6280: overlayTargetTemp,
-        field_6200: scheduleTemp,
-        field_6260: overlayHasSetpoint,
-        field_6020: zoneServiceType,
-        field_6180: zoneStateFlag,
-        field_62e0: overlayStateAux,
-        field_6440: resumeScheduleEvent,
-        open_window_detected: openWindowDetected
-    };
-    const sameNumericState = Object.entries(numericState).every(([field, value]) => {
-        const previous = prev[field];
-        // SQL decimal strings and numbers are equivalent, but null is not zero.
-        return (value == null || previous == null)
-            ? value == null && previous == null
-            : Number(value) === Number(previous);
-    });
-
     // Deduplicate only complete identical sensor and control state within 15 seconds.
     if (rows.length > 0 && prev.timestamp) {
         const prevMs = new Date(prev.timestamp).getTime();
         const nowMs = new Date(now).getTime();
-        if (Math.abs(nowMs - prevMs) <= 15000 &&
-            sameNumericState &&
-            linkState === (prev.link_state ?? 'ONLINE') &&
-            tadoMode === (prev.tado_mode ?? 'HOME')) {
-            return;
+        if (Math.abs(nowMs - prevMs) <= 15000) {
+            // Rows also carry control state. Comparing only sensor readings discards
+            // immediate target corrections while the room temperature stays unchanged.
+            const numericState = {
+                field_012d: tempCelsius,
+                field_0135: humidityPct,
+                field_40a0: heatingPower,
+                field_61e0: zoneEnabled,
+                field_6160: homeAway,
+                field_6240: overlayMode,
+                field_6280: overlayTargetTemp,
+                field_6200: scheduleTemp,
+                field_6260: overlayHasSetpoint,
+                field_6020: zoneServiceType,
+                field_6180: zoneStateFlag,
+                field_62e0: overlayStateAux,
+                field_6440: resumeScheduleEvent,
+                open_window_detected: openWindowDetected
+            };
+            const sameNumericState = Object.entries(numericState).every(([field, value]) => {
+                const previous = prev[field];
+                // SQL decimal strings and numbers are equivalent, but null is not zero.
+                return (value == null || previous == null)
+                    ? value == null && previous == null
+                    : Number(value) === Number(previous);
+            });
+
+            if (sameNumericState &&
+                linkState === (prev.link_state ?? 'ONLINE') &&
+                tadoMode === (prev.tado_mode ?? 'HOME')) {
+                return;
+            }
         }
     }
 

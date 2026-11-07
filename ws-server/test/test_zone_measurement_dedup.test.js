@@ -108,7 +108,9 @@ describe('zone measurement deduplication', () => {
     });
 
     test('unchanged samples outside the deduplication window are still stored', async () => {
-        const fixture = measurementFixture({ timestamp: new Date(Date.now() - 30000).toISOString() });
+        const fixture = measurementFixture({
+            timestamp: new Date(Date.now() - 30000).toISOString().replace('T', ' ').replace(/\.\d+Z$/, '')
+        });
         await fixture.state.insertMergedZoneMeasurement(1, 1, { '0x012d': 20 });
         expect(fixture.inserts).toHaveLength(1);
     });
