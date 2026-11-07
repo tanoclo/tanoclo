@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-07
+
+- feat(stream-receiver): log source and destination MACs in file logs
+- Merge pull request #10 from gmaclennan/feat/decrypt-stats-by-source
+- fix(sx1276): Port #7 to tado_emulator and tado_pairing
+- docs(stream-receiver): describe finding the bridge without the per-source stats
+- fix(sniffer): run the SX1276 SPI bus at 2 MHz by default
+- fix(esphome): require AES-CCM from the pairing and emulator components
+- feat(stream-receiver): publish heat demand and call for heat
+- fix(stream-receiver): recognise the bridge by a configurable MAC
+
 ## [0.5.1] - 2026-10-24
 
 - chore: update node to v26
