@@ -8,6 +8,9 @@ import {
     getHomeEnergySettings,
     saveHomeEnergySettings,
     recordGasMeterReading,
+    recordBulkGasMeterReadings,
+    getGasMeterReadings,
+    deleteGasMeterReading,
     getGasUsageAndCosts,
     getDailyGasSummary
 } from '../lib/gas-energy-analyzer';
@@ -94,6 +97,66 @@ describe('Gas Energy Analyzer', () => {
             expect(reading.id).toBe(42);
             expect(reading.meterM3).toBe(1500.55);
             expect(reading.unitCost).toBe(1.35);
+            expect(mockPool.execute).toHaveBeenCalledTimes(2);
+        });
+
+        it('records reading with custom past timestamp without overriding current settings', async () => {
+            mockPool.execute
+                .mockResolvedValueOnce([{ insertId: 43 }]); // insert only
+
+            const pastTs = '2026-08-01 00:00:00';
+            const reading = await recordGasMeterReading(mockPool, 1, 1200.0, 1.20, 'historical', pastTs);
+            expect(reading.id).toBe(43);
+            expect(reading.timestamp).toBe(pastTs);
+            // Only 1 query (insert reading) since customTimestamp is older than 24 hours
+            expect(mockPool.execute).toHaveBeenCalledTimes(1);
+        });
+    });
+
+    describe('getGasMeterReadings and deleteGasMeterReading', () => {
+        it('fetches recent readings list mapped properly', async () => {
+            mockPool.execute.mockResolvedValueOnce([[{
+                id: 10,
+                home_id: 1,
+                timestamp: '2026-11-01 00:00:00',
+                meter_m3: '1450.25',
+                unit_cost: '1.40',
+                source: 'historical'
+            }]]);
+
+            const readings = await getGasMeterReadings(mockPool, 1, 20);
+            expect(readings.length).toBe(1);
+            expect(readings[0].id).toBe(10);
+            expect(readings[0].meterM3).toBe(1450.25);
+            expect(readings[0].unitCost).toBe(1.40);
+        });
+
+        it('deletes reading and returns boolean result', async () => {
+            mockPool.execute.mockResolvedValueOnce([{ affectedRows: 1 }]);
+            const ok = await deleteGasMeterReading(mockPool, 1, 10);
+            expect(ok).toBe(true);
+            expect(mockPool.execute).toHaveBeenCalledWith(
+                'DELETE FROM gas_meter_readings WHERE id = ? AND home_id = ?',
+                [10, 1]
+            );
+        });
+    });
+
+    describe('recordBulkGasMeterReadings', () => {
+        it('inserts multiple valid readings in batch', async () => {
+            mockPool.execute
+                .mockResolvedValueOnce([{ insertId: 101 }])
+                .mockResolvedValueOnce([{ insertId: 102 }]);
+
+            const items = [
+                { meter_m3: 1100, unit_cost: 1.20, timestamp: '2026-08-01 00:00:00' },
+                { meter_m3: 1250, unit_cost: 1.30, timestamp: '2026-09-01 00:00:00' }
+            ];
+
+            const results = await recordBulkGasMeterReadings(mockPool, 1, items);
+            expect(results.length).toBe(2);
+            expect(results[0].id).toBe(101);
+            expect(results[1].id).toBe(102);
             expect(mockPool.execute).toHaveBeenCalledTimes(2);
         });
     });

@@ -116,21 +116,80 @@ router.put('/:homeId/energy/settings', async (req, res) => {
     }
 });
 
-// POST /api/v2/homes/{homeId}/energy/gas/reading — manually post a meter reading
+// GET /api/v2/homes/{homeId}/energy/gas/readings — list historical meter readings
+router.get('/:homeId/energy/gas/readings', async (req, res) => {
+    try {
+        const homeId = parseInt(req.params.homeId, 10);
+        const pool = db.getPool();
+        const limit = parseInt(req.query.limit, 10) || 50;
+
+        const readings = await gasEnergy.getGasMeterReadings(pool, homeId, limit);
+        res.json({ readings });
+    } catch (err) {
+        _log('error', `get gas readings error: ${err.message}`);
+        res.status(500).json({ error: 'internal_error' });
+    }
+});
+
+// POST /api/v2/homes/{homeId}/energy/gas/reading — manually post a single meter reading
 router.post('/:homeId/energy/gas/reading', async (req, res) => {
     try {
         const homeId = parseInt(req.params.homeId, 10);
         const pool = db.getPool();
-        const { meter_m3, unit_cost } = req.body || {};
+        const { meter_m3, unit_cost, timestamp, source } = req.body || {};
 
         if (meter_m3 === undefined || meter_m3 === null || isNaN(parseFloat(meter_m3))) {
             return res.status(400).json({ error: 'meter_m3_required' });
         }
 
-        const reading = await gasEnergy.recordGasMeterReading(pool, homeId, meter_m3, unit_cost, 'manual');
+        const reading = await gasEnergy.recordGasMeterReading(
+            pool,
+            homeId,
+            meter_m3,
+            unit_cost !== undefined ? unit_cost : null,
+            source || 'manual',
+            timestamp || null
+        );
         res.status(201).json(reading);
     } catch (err) {
         _log('error', `post gas reading error: ${err.message}`);
+        res.status(500).json({ error: 'internal_error' });
+    }
+});
+
+// POST /api/v2/homes/{homeId}/energy/gas/readings/bulk — bulk post historical meter readings
+router.post('/:homeId/energy/gas/readings/bulk', async (req, res) => {
+    try {
+        const homeId = parseInt(req.params.homeId, 10);
+        const pool = db.getPool();
+        const { readings } = req.body || {};
+
+        if (!Array.isArray(readings) || readings.length === 0) {
+            return res.status(400).json({ error: 'readings_array_required' });
+        }
+
+        const inserted = await gasEnergy.recordBulkGasMeterReadings(pool, homeId, readings);
+        res.status(201).json({ count: inserted.length, readings: inserted });
+    } catch (err) {
+        _log('error', `bulk post gas readings error: ${err.message}`);
+        res.status(500).json({ error: 'internal_error' });
+    }
+});
+
+// DELETE /api/v2/homes/{homeId}/energy/gas/readings/:readingId — delete a meter reading
+router.delete('/:homeId/energy/gas/readings/:readingId', async (req, res) => {
+    try {
+        const homeId = parseInt(req.params.homeId, 10);
+        const readingId = parseInt(req.params.readingId, 10);
+        const pool = db.getPool();
+
+        const success = await gasEnergy.deleteGasMeterReading(pool, homeId, readingId);
+        if (!success) {
+            return res.status(404).json({ error: 'reading_not_found' });
+        }
+        res.json({ success: true, readingId });
+    } catch (err) {
+        _log('error', `delete gas reading error: ${err.message}`);
         res.status(500).json({ error: 'internal_error' });
     }
 });

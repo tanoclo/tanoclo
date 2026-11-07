@@ -893,7 +893,19 @@
       "estimated_badge": "Estimated",
       "meter_badge": "Meter Verified",
       "opentherm_dhw": "OpenTherm",
-      "room_breakdown": "Space Heating Breakdown by Room"
+      "room_breakdown": "Space Heating Breakdown by Room",
+      "reading_date": "Reading Date / Time",
+      "tab_single": "Single Reading",
+      "tab_monthly": "Monthly Setup",
+      "tab_history": "Reading History",
+      "quick_monthly_desc": "Set past monthly meter readings and tariffs to calculate historical gas usage and costs immediately.",
+      "month": "Month",
+      "reading_m3": "Reading (m³)",
+      "tariff_unit": "Tariff",
+      "add_month_row": "Add Month Row",
+      "no_readings": "No recorded meter readings yet",
+      "delete_confirm": "Delete this meter reading?",
+      "reading_source": "Source"
     },
     "device_settings": {
       "toast_updated": "Device updated",

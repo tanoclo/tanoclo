@@ -1038,7 +1038,19 @@
       "estimated_badge": "Stimato",
       "meter_badge": "Contatore verificato",
       "opentherm_dhw": "OpenTherm",
-      "room_breakdown": "Ripartizione riscaldamento per stanza"
+      "room_breakdown": "Ripartizione riscaldamento per stanza",
+      "reading_date": "Data / Ora lettura",
+      "tab_single": "Singola lettura",
+      "tab_monthly": "Configurazione mensile",
+      "tab_history": "Cronologia letture",
+      "quick_monthly_desc": "Imposta le letture mensili e le tariffe passate per calcolare immediatamente i consumi e i costi storici del gas.",
+      "month": "Mese",
+      "reading_m3": "Lettura (m³)",
+      "tariff_unit": "Tariffa",
+      "add_month_row": "Aggiungi riga mese",
+      "no_readings": "Nessuna lettura registrata finora",
+      "delete_confirm": "Eliminare questa lettura del contatore?",
+      "reading_source": "Origine"
     },
     "device_settings": {
       "toast_updated": "Dispositivo aggiornato",

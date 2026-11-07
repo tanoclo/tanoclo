@@ -113,11 +113,43 @@ export function updateGasEnergySettings(homeId, settings) {
 /**
  * Manually posts a gas meter reading
  * @param {string|number} homeId
- * @param {object} data - { meter_m3, unit_cost }
+ * @param {object} data - { meter_m3, unit_cost, timestamp, source }
  */
 export function postGasMeterReading(homeId, data) {
   return apiFetch(`/api/v2/homes/${homeId}/energy/gas/reading`, {
     method: 'POST',
     body: data
+  });
+}
+
+/**
+ * Gets recent historical meter readings
+ * @param {string|number} homeId
+ * @param {number} [limit=50]
+ */
+export function getGasMeterReadings(homeId, limit = 50) {
+  return apiFetch(`/api/v2/homes/${homeId}/energy/gas/readings?limit=${limit}`);
+}
+
+/**
+ * Bulk posts historical meter readings
+ * @param {string|number} homeId
+ * @param {Array} readings - Array of { meter_m3, unit_cost, timestamp }
+ */
+export function postBulkGasMeterReadings(homeId, readings) {
+  return apiFetch(`/api/v2/homes/${homeId}/energy/gas/readings/bulk`, {
+    method: 'POST',
+    body: { readings }
+  });
+}
+
+/**
+ * Deletes a recorded gas meter reading
+ * @param {string|number} homeId
+ * @param {number} readingId
+ */
+export function deleteGasMeterReading(homeId, readingId) {
+  return apiFetch(`/api/v2/homes/${homeId}/energy/gas/readings/${readingId}`, {
+    method: 'DELETE'
   });
 }

@@ -1038,7 +1038,19 @@
       "estimated_badge": "Estimé",
       "meter_badge": "Compteur vérifié",
       "opentherm_dhw": "OpenTherm",
-      "room_breakdown": "Répartition du chauffage par pièce"
+      "room_breakdown": "Répartition du chauffage par pièce",
+      "reading_date": "Date / Heure de relevé",
+      "tab_single": "Relevé unique",
+      "tab_monthly": "Saisie mensuelle",
+      "tab_history": "Historique des relevés",
+      "quick_monthly_desc": "Saisissez les index mensuels et tarifs passés pour calculer immédiatement la consommation et les coûts historiques de gaz.",
+      "month": "Mois",
+      "reading_m3": "Index (m³)",
+      "tariff_unit": "Tarif",
+      "add_month_row": "Ajouter un mois",
+      "no_readings": "Aucun relevé enregistré pour l'instant",
+      "delete_confirm": "Supprimer ce relevé ?",
+      "reading_source": "Source"
     },
     "device_settings": {
       "toast_updated": "Appareil mis à jour",

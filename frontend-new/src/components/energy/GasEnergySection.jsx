@@ -11,7 +11,16 @@ import Button from '../common/Button';
 import Badge from '../common/Badge';
 import Modal from '../common/Modal';
 import Spinner from '../common/Spinner';
-import { getGasEnergyUsage, getGasEnergySettings, updateGasEnergySettings, postGasMeterReading } from '../../api/heating';
+import { Trash2, Plus } from 'lucide-react';
+import {
+  getGasEnergyUsage,
+  getGasEnergySettings,
+  updateGasEnergySettings,
+  postGasMeterReading,
+  getGasMeterReadings,
+  postBulkGasMeterReadings,
+  deleteGasMeterReading
+} from '../../api/heating';
 import { SWR_KEYS } from '../../utils/swrKeys';
 
 export default function GasEnergySection({ homeId, zones = [] }) {
@@ -28,12 +37,35 @@ export default function GasEnergySection({ homeId, zones = [] }) {
   const [toDate, setToDate] = useState(getTodayStr());
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [showReadingModal, setShowReadingModal] = useState(false);
+  const [readingTab, setReadingTab] = useState('single'); // 'single' | 'monthly' | 'history'
   const [isSaving, setIsSaving] = useState(false);
 
   // Settings form states
   const [formSettings, setFormSettings] = useState(null);
+
+  // Manual single reading states
+  const [manualReadingDate, setManualReadingDate] = useState(getTodayStr());
   const [manualReading, setManualReading] = useState('');
   const [manualCost, setManualCost] = useState('');
+
+  // Bulk monthly readings generator & state
+  const generateMonthlyRows = () => {
+    const rows = [];
+    const today = new Date();
+    const defaultCost = (energySettings && energySettings.gas_unit_cost !== undefined) ? energySettings.gas_unit_cost : 1.45;
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      rows.push({
+        date: `${yyyy}-${mm}-01`,
+        meter_m3: '',
+        unit_cost: defaultCost
+      });
+    }
+    return rows;
+  };
+  const [monthlyRows, setMonthlyRows] = useState(generateMonthlyRows);
 
   const { data: usageData, error: usageError, isLoading: isUsageLoading } = useSWR(
     homeId && fromDate && toDate ? SWR_KEYS.gasEnergyUsage(homeId, fromDate, toDate) : null,
@@ -59,6 +91,11 @@ export default function GasEnergySection({ homeId, zones = [] }) {
     }
   );
 
+  const { data: readingsList, mutate: mutateReadings, isLoading: isReadingsLoading } = useSWR(
+    homeId && showReadingModal ? SWR_KEYS.gasMeterReadings(homeId) : null,
+    () => getGasMeterReadings(homeId, 50)
+  );
+
   const handleOpenConfig = () => {
     if (energySettings) {
       setFormSettings({
@@ -71,6 +108,14 @@ export default function GasEnergySection({ homeId, zones = [] }) {
       });
     }
     setShowConfigModal(true);
+  };
+
+  const handleOpenReadingModal = () => {
+    setManualReadingDate(getTodayStr());
+    setManualReading('');
+    setManualCost('');
+    setMonthlyRows(generateMonthlyRows());
+    setShowReadingModal(true);
   };
 
   const handleSaveSettings = async (e) => {
@@ -97,10 +142,13 @@ export default function GasEnergySection({ homeId, zones = [] }) {
     try {
       await postGasMeterReading(homeId, {
         meter_m3: val,
-        unit_cost: manualCost ? parseFloat(manualCost) : null
+        unit_cost: manualCost ? parseFloat(manualCost) : null,
+        timestamp: `${manualReadingDate} 12:00:00`,
+        source: 'manual'
       });
       await mutate(SWR_KEYS.gasEnergySettings(homeId));
       await mutate(SWR_KEYS.gasEnergyUsage(homeId, fromDate, toDate));
+      await mutate(SWR_KEYS.gasMeterReadings(homeId));
       setManualReading('');
       setManualCost('');
       setShowReadingModal(false);
@@ -109,6 +157,68 @@ export default function GasEnergySection({ homeId, zones = [] }) {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handlePostBulkMonthly = async (e) => {
+    e.preventDefault();
+    const validRows = monthlyRows
+      .filter(r => r.meter_m3 !== '' && !isNaN(parseFloat(r.meter_m3)))
+      .map(r => ({
+        timestamp: `${r.date} 00:00:00`,
+        meter_m3: parseFloat(r.meter_m3),
+        unit_cost: r.unit_cost !== '' && !isNaN(parseFloat(r.unit_cost)) ? parseFloat(r.unit_cost) : null,
+        source: 'historical'
+      }));
+
+    if (validRows.length === 0) return;
+    setIsSaving(true);
+    try {
+      await postBulkGasMeterReadings(homeId, validRows);
+      await mutate(SWR_KEYS.gasEnergySettings(homeId));
+      await mutate(SWR_KEYS.gasEnergyUsage(homeId, fromDate, toDate));
+      await mutate(SWR_KEYS.gasMeterReadings(homeId));
+      setShowReadingModal(false);
+    } catch (err) {
+      console.error('Failed to post bulk monthly readings:', err);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeleteReading = async (readingId) => {
+    if (!window.confirm(t('settings.energy.delete_confirm', 'Delete this meter reading?'))) return;
+    try {
+      await deleteGasMeterReading(homeId, readingId);
+      await mutate(SWR_KEYS.gasMeterReadings(homeId));
+      await mutate(SWR_KEYS.gasEnergyUsage(homeId, fromDate, toDate));
+    } catch (err) {
+      console.error('Failed to delete reading:', err);
+    }
+  };
+
+  const updateMonthRow = (index, field, value) => {
+    setMonthlyRows(prev => {
+      const next = [...prev];
+      next[index] = { ...next[index], [field]: value };
+      return next;
+    });
+  };
+
+  const addMonthRow = () => {
+    const today = new Date();
+    const defaultCost = (energySettings && energySettings.gas_unit_cost !== undefined) ? energySettings.gas_unit_cost : 1.45;
+    setMonthlyRows(prev => [
+      ...prev,
+      {
+        date: getTodayStr(),
+        meter_m3: '',
+        unit_cost: defaultCost
+      }
+    ]);
+  };
+
+  const removeMonthRow = (index) => {
+    setMonthlyRows(prev => prev.filter((_, i) => i !== index));
   };
 
   const totals = usageData?.totals || {};
@@ -174,7 +284,7 @@ export default function GasEnergySection({ homeId, zones = [] }) {
           <Button variant="secondary" size="sm" onClick={handleOpenConfig} style={{ fontSize: '0.75rem' }}>
             ⚙️ {t('settings.energy.title', 'Tariff & MQTT')}
           </Button>
-          <Button variant="secondary" size="sm" onClick={() => setShowReadingModal(true)} style={{ fontSize: '0.75rem' }}>
+          <Button variant="secondary" size="sm" onClick={handleOpenReadingModal} style={{ fontSize: '0.75rem' }}>
             📝 {t('settings.energy.record_reading', 'Log Meter')}
           </Button>
         </div>
@@ -518,68 +628,337 @@ export default function GasEnergySection({ homeId, zones = [] }) {
         </Modal>
       )}
 
-      {/* Manual Reading Modal */}
+      {/* Gas Meter Readings & History Modal */}
       {showReadingModal && (
         <Modal
           isOpen={showReadingModal}
           onClose={() => setShowReadingModal(false)}
-          title={t('settings.energy.record_reading', 'Log Manual Gas Meter Reading')}
+          title={t('settings.energy.record_reading', 'Gas Meter Readings & History')}
+          style={{ maxWidth: '640px' }}
         >
-          <form onSubmit={handlePostReading} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.3rem' }}>
-                {t('settings.energy.meter_reading', 'Current Meter Reading (m³)')}
-              </label>
-              <input
-                type="number"
-                step="0.001"
-                required
-                value={manualReading}
-                onChange={(e) => setManualReading(e.target.value)}
-                placeholder="e.g. 1542.840"
-                style={{
-                  width: '100%',
-                  padding: '0.5rem',
-                  backgroundColor: 'var(--bg-input)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: 'var(--radius-sm)',
-                  color: 'var(--text-primary)',
-                  fontSize: '0.85rem'
-                }}
-              />
-            </div>
+          {/* Navigation Subtabs */}
+          <div style={{
+            display: 'flex',
+            borderBottom: '1px solid var(--border-color)',
+            marginBottom: '1.25rem',
+            gap: '0.5rem'
+          }}>
+            <button
+              type="button"
+              onClick={() => setReadingTab('single')}
+              style={{
+                padding: '0.45rem 0.85rem',
+                background: 'none',
+                border: 'none',
+                borderBottom: readingTab === 'single' ? '2px solid var(--color-primary, #3b82f6)' : '2px solid transparent',
+                color: readingTab === 'single' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                fontWeight: 600,
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+                transition: 'all var(--transition-fast)'
+              }}
+            >
+              {t('settings.energy.tab_single', 'Single Reading')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setReadingTab('monthly')}
+              style={{
+                padding: '0.45rem 0.85rem',
+                background: 'none',
+                border: 'none',
+                borderBottom: readingTab === 'monthly' ? '2px solid var(--color-primary, #3b82f6)' : '2px solid transparent',
+                color: readingTab === 'monthly' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                fontWeight: 600,
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+                transition: 'all var(--transition-fast)'
+              }}
+            >
+              {t('settings.energy.tab_monthly', 'Monthly Setup')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setReadingTab('history')}
+              style={{
+                padding: '0.45rem 0.85rem',
+                background: 'none',
+                border: 'none',
+                borderBottom: readingTab === 'history' ? '2px solid var(--color-primary, #3b82f6)' : '2px solid transparent',
+                color: readingTab === 'history' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                fontWeight: 600,
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+                transition: 'all var(--transition-fast)'
+              }}
+            >
+              {t('settings.energy.tab_history', 'Reading History')}
+            </button>
+          </div>
 
-            <div>
-              <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.3rem' }}>
-                {t('settings.energy.unit_cost', 'Current Tariff / Unit Cost (optional)')}
-              </label>
-              <input
-                type="number"
-                step="0.0001"
-                value={manualCost}
-                onChange={(e) => setManualCost(e.target.value)}
-                placeholder="Leave blank to use current setting"
-                style={{
-                  width: '100%',
-                  padding: '0.5rem',
-                  backgroundColor: 'var(--bg-input)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: 'var(--radius-sm)',
-                  color: 'var(--text-primary)',
-                  fontSize: '0.85rem'
-                }}
-              />
-            </div>
+          {/* Tab 1: Single Reading */}
+          {readingTab === 'single' && (
+            <form onSubmit={handlePostReading} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.3rem' }}>
+                  {t('settings.energy.reading_date', 'Reading Date')}
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={manualReadingDate}
+                  onChange={(e) => setManualReadingDate(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem',
+                    backgroundColor: 'var(--bg-input)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 'var(--radius-sm)',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.85rem'
+                  }}
+                />
+              </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.5rem' }}>
-              <Button type="button" variant="secondary" onClick={() => setShowReadingModal(false)}>
-                {t('common.cancel', 'Cancel')}
-              </Button>
-              <Button type="submit" variant="primary" disabled={isSaving}>
-                {isSaving ? <Spinner size={16} /> : t('common.submit', 'Submit')}
-              </Button>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.3rem' }}>
+                  {t('settings.energy.meter_reading', 'Meter Reading (m³)')}
+                </label>
+                <input
+                  type="number"
+                  step="0.001"
+                  required
+                  value={manualReading}
+                  onChange={(e) => setManualReading(e.target.value)}
+                  placeholder="e.g. 1542.840"
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem',
+                    backgroundColor: 'var(--bg-input)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 'var(--radius-sm)',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.85rem'
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.3rem' }}>
+                  {t('settings.energy.unit_cost', 'Tariff / Unit Cost (optional)')}
+                </label>
+                <input
+                  type="number"
+                  step="0.0001"
+                  value={manualCost}
+                  onChange={(e) => setManualCost(e.target.value)}
+                  placeholder={energySettings?.gas_unit_cost !== undefined ? `Current: ${currency}${energySettings.gas_unit_cost}/m³` : 'Default 1.45'}
+                  style={{
+                    width: '100%',
+                    padding: '0.5rem',
+                    backgroundColor: 'var(--bg-input)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 'var(--radius-sm)',
+                    color: 'var(--text-primary)',
+                    fontSize: '0.85rem'
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem', marginTop: '0.5rem' }}>
+                <Button type="button" variant="secondary" onClick={() => setShowReadingModal(false)}>
+                  {t('common.cancel', 'Cancel')}
+                </Button>
+                <Button type="submit" variant="primary" disabled={isSaving}>
+                  {isSaving ? <Spinner size={16} /> : t('common.submit', 'Submit')}
+                </Button>
+              </div>
+            </form>
+          )}
+
+          {/* Tab 2: Monthly Historical Setup */}
+          {readingTab === 'monthly' && (
+            <form onSubmit={handlePostBulkMonthly} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', margin: 0 }}>
+                {t('settings.energy.quick_monthly_desc', 'Set past monthly meter readings and tariffs to calculate historical gas usage and costs immediately.')}
+              </p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '320px', overflowY: 'auto' }}>
+                {monthlyRows.map((row, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1.2fr 1fr 1fr auto',
+                      gap: '0.5rem',
+                      alignItems: 'center',
+                      padding: '0.4rem 0.5rem',
+                      backgroundColor: 'var(--bg-input)',
+                      borderRadius: 'var(--radius-sm)',
+                      border: '1px solid var(--border-color)'
+                    }}
+                  >
+                    <div>
+                      <input
+                        type="date"
+                        value={row.date}
+                        onChange={(e) => updateMonthRow(idx, 'date', e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '0.35rem 0.45rem',
+                          backgroundColor: 'var(--bg-card)',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: 'var(--radius-sm)',
+                          color: 'var(--text-primary)',
+                          fontSize: '0.8rem'
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <input
+                        type="number"
+                        step="0.001"
+                        placeholder="m³ reading"
+                        value={row.meter_m3}
+                        onChange={(e) => updateMonthRow(idx, 'meter_m3', e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '0.35rem 0.45rem',
+                          backgroundColor: 'var(--bg-card)',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: 'var(--radius-sm)',
+                          color: 'var(--text-primary)',
+                          fontSize: '0.8rem'
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <input
+                        type="number"
+                        step="0.0001"
+                        placeholder="Tariff"
+                        value={row.unit_cost}
+                        onChange={(e) => updateMonthRow(idx, 'unit_cost', e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '0.35rem 0.45rem',
+                          backgroundColor: 'var(--bg-card)',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: 'var(--radius-sm)',
+                          color: 'var(--text-primary)',
+                          fontSize: '0.8rem'
+                        }}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeMonthRow(idx)}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: 'var(--danger, #ef4444)',
+                        cursor: 'pointer',
+                        padding: '4px',
+                        display: 'flex',
+                        alignItems: 'center'
+                      }}
+                      title="Remove"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem' }}>
+                <Button type="button" variant="secondary" size="sm" onClick={addMonthRow} style={{ fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                  <Plus size={14} /> {t('settings.energy.add_month_row', 'Add Month Row')}
+                </Button>
+
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <Button type="button" variant="secondary" onClick={() => setShowReadingModal(false)}>
+                    {t('common.cancel', 'Cancel')}
+                  </Button>
+                  <Button type="submit" variant="primary" disabled={isSaving}>
+                    {isSaving ? <Spinner size={16} /> : t('common.save', 'Save Historical Readings')}
+                  </Button>
+                </div>
+              </div>
+            </form>
+          )}
+
+          {/* Tab 3: Reading History */}
+          {readingTab === 'history' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              {isReadingsLoading ? (
+                <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}>
+                  <Spinner size={24} />
+                </div>
+              ) : !readingsList || readingsList.length === 0 ? (
+                <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '2rem', fontSize: '0.85rem' }}>
+                  {t('settings.energy.no_readings', 'No recorded meter readings yet')}
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', maxHeight: '340px', overflowY: 'auto' }}>
+                  {readingsList.map((r) => (
+                    <div
+                      key={r.id}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '0.5rem 0.75rem',
+                        backgroundColor: 'var(--bg-input)',
+                        borderRadius: 'var(--radius-sm)',
+                        border: '1px solid var(--border-color)',
+                        fontSize: '0.85rem'
+                      }}
+                    >
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                        <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                          {r.meterM3.toFixed(3)} m³
+                        </span>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                          {typeof r.timestamp === 'string' ? r.timestamp.replace('T', ' ').slice(0, 19) : ''}
+                        </span>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
+                          {r.unitCost !== null ? `${currency}${r.unitCost.toFixed(2)}/m³` : '—'}
+                        </span>
+                        <Badge variant="neutral" style={{ fontSize: '0.7rem' }}>
+                          {r.source || 'manual'}
+                        </Badge>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteReading(r.id)}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: 'var(--danger, #ef4444)',
+                            cursor: 'pointer',
+                            padding: '4px',
+                            display: 'flex',
+                            alignItems: 'center'
+                          }}
+                          title={t('common.delete', 'Delete')}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+                <Button type="button" variant="secondary" onClick={() => setShowReadingModal(false)}>
+                  {t('common.close', 'Close')}
+                </Button>
+              </div>
             </div>
-          </form>
+          )}
         </Modal>
       )}
     </div>

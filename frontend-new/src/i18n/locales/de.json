@@ -1045,7 +1045,19 @@
       "estimated_badge": "Geschätzt",
       "meter_badge": "Zähler verifiziert",
       "opentherm_dhw": "OpenTherm",
-      "room_breakdown": "Aufteilung Raumheizung nach Räumen"
+      "room_breakdown": "Aufteilung Raumheizung nach Räumen",
+      "reading_date": "Ablesedatum / Zeit",
+      "tab_single": "Einzelne Ablesung",
+      "tab_monthly": "Monatliche Erfassung",
+      "tab_history": "Ablesehistorie",
+      "quick_monthly_desc": "Monatliche Zählerstände und Tarife der Vergangenheit erfassen, um historische Gasverbräuche und -kosten sofort zu berechnen.",
+      "month": "Monat",
+      "reading_m3": "Zählerstand (m³)",
+      "tariff_unit": "Tarif",
+      "add_month_row": "Monatszeile hinzufügen",
+      "no_readings": "Noch keine Zählerstände erfasst",
+      "delete_confirm": "Diesen Zählerstand löschen?",
+      "reading_source": "Quelle"
     },
     "device_settings": {
       "toast_updated": "Gerät aktualisiert",

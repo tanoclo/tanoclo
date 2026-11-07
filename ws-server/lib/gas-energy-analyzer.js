@@ -83,23 +83,30 @@ async function saveHomeEnergySettings(pool, homeId, settings) {
 /**
  * Record a new gas meter reading into gas_meter_readings.
  */
-async function recordGasMeterReading(pool, homeId, meterM3, unitCost = null, source = 'mqtt') {
+async function recordGasMeterReading(pool, homeId, meterM3, unitCost = null, source = 'mqtt', customTimestamp = null) {
     const val = parseFloat(meterM3);
     if (isNaN(val) || val < 0) {
         throw new Error(`Invalid meter reading: ${meterM3}`);
     }
 
-    const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    let ts = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    if (customTimestamp) {
+        const d = parseUtcDate(customTimestamp);
+        if (d && !isNaN(d.getTime())) {
+            ts = d.toISOString().slice(0, 19).replace('T', ' ');
+        }
+    }
+
     const costVal = (unitCost !== null && !isNaN(parseFloat(unitCost))) ? parseFloat(unitCost) : null;
 
     const [res] = await pool.execute(
         `INSERT INTO gas_meter_readings (home_id, timestamp, meter_m3, unit_cost, source)
          VALUES (?, ?, ?, ?, ?)`,
-        [homeId, now, val, costVal, source]
+        [homeId, ts, val, costVal, source]
     );
 
-    // If unit cost is specified, update settings
-    if (costVal !== null) {
+    // If unit cost is specified and it's a current reading (or no unit cost in settings yet), update settings
+    if (costVal !== null && (!customTimestamp || new Date(customTimestamp) >= new Date(Date.now() - 24 * 60 * 60 * 1000))) {
         await pool.execute(
             `INSERT INTO home_energy_settings (home_id, gas_unit_cost)
              VALUES (?, ?)
@@ -108,7 +115,65 @@ async function recordGasMeterReading(pool, homeId, meterM3, unitCost = null, sou
         );
     }
 
-    return { id: res.insertId, homeId, timestamp: now, meterM3: val, unitCost: costVal, source };
+    return { id: res.insertId, homeId, timestamp: ts, meterM3: val, unitCost: costVal, source };
+}
+
+/**
+ * Retrieve recent gas meter readings for a home.
+ */
+async function getGasMeterReadings(pool, homeId, limit = 50) {
+    const lim = Math.max(1, Math.min(parseInt(limit, 10) || 50, 500));
+    const [rows] = await pool.execute(
+        `SELECT id, home_id, timestamp, meter_m3, unit_cost, source 
+         FROM gas_meter_readings 
+         WHERE home_id = ? 
+         ORDER BY timestamp DESC 
+         LIMIT ${lim}`,
+        [homeId]
+    );
+    return rows.map(r => ({
+        id: r.id,
+        homeId: r.home_id,
+        timestamp: r.timestamp,
+        meterM3: parseFloat(r.meter_m3),
+        unitCost: r.unit_cost !== null ? parseFloat(r.unit_cost) : null,
+        source: r.source
+    }));
+}
+
+/**
+ * Delete a specific gas meter reading.
+ */
+async function deleteGasMeterReading(pool, homeId, readingId) {
+    const [res] = await pool.execute(
+        'DELETE FROM gas_meter_readings WHERE id = ? AND home_id = ?',
+        [readingId, homeId]
+    );
+    return res.affectedRows > 0;
+}
+
+/**
+ * Bulk insert multiple historical readings.
+ */
+async function recordBulkGasMeterReadings(pool, homeId, readingsArray) {
+    if (!Array.isArray(readingsArray) || readingsArray.length === 0) {
+        return [];
+    }
+    const inserted = [];
+    for (const item of readingsArray) {
+        if (item && item.meter_m3 !== undefined && !isNaN(parseFloat(item.meter_m3))) {
+            const res = await recordGasMeterReading(
+                pool,
+                homeId,
+                item.meter_m3,
+                item.unit_cost !== undefined ? item.unit_cost : null,
+                item.source || 'historical',
+                item.timestamp || null
+            );
+            inserted.push(res);
+        }
+    }
+    return inserted;
 }
 
 /**
@@ -246,7 +311,15 @@ async function getGasUsageAndCosts(pool, homeId, from, to) {
     const dhwM3 = Math.round(totalM3 * dhwRatio * 1000) / 1000;
     const heatingM3 = Math.round((totalM3 - dhwM3) * 1000) / 1000;
 
-    const unitCost = settings.gas_unit_cost;
+    let unitCost = settings.gas_unit_cost;
+    const readingsWithCost = readings.filter(r => r.unit_cost !== null && !isNaN(parseFloat(r.unit_cost)));
+    if (readingsWithCost.length > 0) {
+        unitCost = parseFloat(readingsWithCost[readingsWithCost.length - 1].unit_cost);
+    } else if (endReading && endReading.unit_cost !== null && !isNaN(parseFloat(endReading.unit_cost))) {
+        unitCost = parseFloat(endReading.unit_cost);
+    } else if (startReading && startReading.unit_cost !== null && !isNaN(parseFloat(startReading.unit_cost))) {
+        unitCost = parseFloat(startReading.unit_cost);
+    }
     const totalCost = Math.round(totalM3 * unitCost * 100) / 100;
     const dhwCost = Math.round(dhwM3 * unitCost * 100) / 100;
     const heatingCost = Math.round((totalCost - dhwCost) * 100) / 100;
@@ -420,6 +493,9 @@ module.exports = {
     getHomeEnergySettings,
     saveHomeEnergySettings,
     recordGasMeterReading,
+    recordBulkGasMeterReadings,
+    getGasMeterReadings,
+    deleteGasMeterReading,
     getLatestGasReading,
     getGasUsageAndCosts,
     getDailyGasSummary

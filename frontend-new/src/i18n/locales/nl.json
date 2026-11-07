@@ -1038,7 +1038,19 @@
       "estimated_badge": "Geschat",
       "meter_badge": "Meter geverifieerd",
       "opentherm_dhw": "OpenTherm",
-      "room_breakdown": "Verdeling ruimteverwarming per kamer"
+      "room_breakdown": "Verdeling ruimteverwarming per kamer",
+      "reading_date": "Meteropname datum / tijd",
+      "tab_single": "Enkele stand",
+      "tab_monthly": "Maandelijkse invoer",
+      "tab_history": "Meterstandhistorie",
+      "quick_monthly_desc": "Voer eerdere maandelijkse meterstanden en tarieven in om direct historisch gasverbruik en kosten te berekenen.",
+      "month": "Maand",
+      "reading_m3": "Meterstand (m³)",
+      "tariff_unit": "Tarief",
+      "add_month_row": "Maandrij toevoegen",
+      "no_readings": "Nog geen meterstanden vastgelegd",
+      "delete_confirm": "Deze meterstand verwijderen?",
+      "reading_source": "Bron"
     },
     "device_settings": {
       "toast_updated": "Apparaat bijgewerkt",
