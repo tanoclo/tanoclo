@@ -205,8 +205,10 @@ Now we capture the dynamic, active operational states of the valves as they comm
 1. **Enable Proxy Mode:** Log into the Setup Portal, navigate to the Home settings dashboard, and toggle **Proxy to cloud**. This forces TaNoClo to transparently relay incoming Internet Bridge signals to the official Tado Cloud while capturing the data flow.
 2. **Start State Capture:** Go to the **State Snapshot** tab and click **Start Capture**.
 3. **Wait for sync:** Let the Internet Bridge and devices communicate through the proxy for a couple of hours. This ensures all schedules, limits, and dynamic settings from the devices are successfully recorded by the local engine.
-4. **Disable Proxy Mode:** Once the backup state indicates all devices have checked in and their states are verified, turn **off** proxy mode.
+4. **Verify and finish capture:** Check that all required configuration and state records have been captured, finalize the snapshot, and verify that it is complete. Devices being online is not sufficient on its own. Only then turn **off** proxy mode.
 5. Your Tado heating system is now running **100% offline**, decoupled from the Tado cloud.
+
+The **capturing** status means recording is active, not that the snapshot is complete. Configuration responses may arrive in one packet or several CoAP Block2 fragments. Multipart records are decoded and saved only after the complete response has been assembled.
 
 ---
 
