@@ -423,7 +423,7 @@ export default function GasEnergySection({ homeId, zones = [] }) {
               </span>
             </div>
 
-            {usageData?.zones && usageData.zones.length > 0 ? (
+            {Array.isArray(usageData?.zones) && usageData.zones.length > 0 ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 {usageData.zones.map((z) => (
                   <div
@@ -888,77 +888,80 @@ export default function GasEnergySection({ homeId, zones = [] }) {
           )}
 
           {/* Tab 3: Reading History */}
-          {readingTab === 'history' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              {isReadingsLoading ? (
-                <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}>
-                  <Spinner size={24} />
-                </div>
-              ) : !readingsList || readingsList.length === 0 ? (
-                <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '2rem', fontSize: '0.85rem' }}>
-                  {t('settings.energy.no_readings', 'No recorded meter readings yet')}
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', maxHeight: '340px', overflowY: 'auto' }}>
-                  {readingsList.map((r) => (
-                    <div
-                      key={r.id}
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        padding: '0.5rem 0.75rem',
-                        backgroundColor: 'var(--bg-input)',
-                        borderRadius: 'var(--radius-sm)',
-                        border: '1px solid var(--border-color)',
-                        fontSize: '0.85rem'
-                      }}
-                    >
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
-                        <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
-                          {r.meterM3.toFixed(3)} m³
-                        </span>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                          {typeof r.timestamp === 'string' ? r.timestamp.replace('T', ' ').slice(0, 19) : ''}
-                        </span>
-                      </div>
+          {readingTab === 'history' && (() => {
+            const readings = Array.isArray(readingsList) ? readingsList : (readingsList?.readings || []);
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                {isReadingsLoading ? (
+                  <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}>
+                    <Spinner size={24} />
+                  </div>
+                ) : readings.length === 0 ? (
+                  <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '2rem', fontSize: '0.85rem' }}>
+                    {t('settings.energy.no_readings', 'No recorded meter readings yet')}
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', maxHeight: '340px', overflowY: 'auto' }}>
+                    {readings.map((r) => (
+                      <div
+                        key={r.id}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '0.5rem 0.75rem',
+                          backgroundColor: 'var(--bg-input)',
+                          borderRadius: 'var(--radius-sm)',
+                          border: '1px solid var(--border-color)',
+                          fontSize: '0.85rem'
+                        }}
+                      >
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                          <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                            {r.meterM3 !== undefined ? r.meterM3.toFixed(3) : '0.000'} m³
+                          </span>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                            {typeof r.timestamp === 'string' ? r.timestamp.replace('T', ' ').slice(0, 19) : ''}
+                          </span>
+                        </div>
 
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
-                          {r.unitCost !== null ? `${currency}${r.unitCost.toFixed(2)}/m³` : '—'}
-                        </span>
-                        <Badge variant="neutral" style={{ fontSize: '0.7rem' }}>
-                          {r.source || 'manual'}
-                        </Badge>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteReading(r.id)}
-                          style={{
-                            background: 'transparent',
-                            border: 'none',
-                            color: 'var(--danger, #ef4444)',
-                            cursor: 'pointer',
-                            padding: '4px',
-                            display: 'flex',
-                            alignItems: 'center'
-                          }}
-                          title={t('common.delete', 'Delete')}
-                        >
-                          <Trash2 size={15} />
-                        </button>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                          <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
+                            {r.unitCost !== null && r.unitCost !== undefined ? `${currency}${r.unitCost.toFixed(2)}/m³` : '—'}
+                          </span>
+                          <Badge variant="neutral" style={{ fontSize: '0.7rem' }}>
+                            {r.source || 'manual'}
+                          </Badge>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteReading(r.id)}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: 'var(--danger, #ef4444)',
+                              cursor: 'pointer',
+                              padding: '4px',
+                              display: 'flex',
+                              alignItems: 'center'
+                            }}
+                            title={t('common.delete', 'Delete')}
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    ))}
+                  </div>
+                )}
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
-                <Button type="button" variant="secondary" onClick={() => setShowReadingModal(false)}>
-                  {t('common.close', 'Close')}
-                </Button>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+                  <Button type="button" variant="secondary" onClick={() => setShowReadingModal(false)}>
+                    {t('common.close', 'Close')}
+                  </Button>
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
         </Modal>
       )}
     </div>

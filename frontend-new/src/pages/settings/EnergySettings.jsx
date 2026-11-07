@@ -300,7 +300,7 @@ export default function EnergySettings({ homeId, zones }) {
                 minWidth: '180px'
               }}
             >
-              {circuits && circuits.length > 0 ? (
+              {Array.isArray(circuits) && circuits.length > 0 ? (
                 circuits.map(c => (
                   <option key={c.number} value={c.number}>
                     {t('settings.circuit_no', 'Circuit')} #{c.number} {c.driver_serial_no ? `(${c.driver_serial_no})` : ''}
