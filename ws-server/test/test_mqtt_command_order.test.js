@@ -85,6 +85,17 @@ describe('per-resource command queue', () => {
         expect(commandScope(mode)).not.toBe(commandScope('tado/tanoclo/h/1/set/presence'));
     });
 
+    test.each([
+        'tado/tanoclo/h/1',
+        'tado/tanoclo/h/1/foo',
+        'tado/tanoclo/h/1/foo/',
+        'tado/tanoclo/h/1//device',
+        'tado/tanoclo/h/1/d',
+        'tado/tanoclo/h/1/z'
+    ])('incomplete topic retains its exact identity: %s', topic => {
+        expect(commandScope(topic)).toBe(topic);
+    });
+
     test('numeric aliases share the same handler resource', () => {
         expect(commandScope('tado/tanoclo/h/01/z/002/set/mode'))
             .toBe(commandScope('tado/tanoclo/h/1/z/2/set/target_temperature'));

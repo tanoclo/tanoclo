@@ -47,6 +47,7 @@ function commandScope(topic) {
         const zoneId = parseInt(parts[5], 10);
         return isNaN(zoneId) ? topic : 'h:' + homeId + ':z:' + zoneId;
     }
+    if (!parts[4] || !parts[5]) return topic;
     return ['h', homeId, parts[4], parts[5]].join(':');
 }
 
