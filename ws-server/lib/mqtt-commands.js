@@ -8,6 +8,7 @@
 const { getLocalParts, parseLocalTimeInTimezone } = require('./utils');
 const { overlayModeFor, parsePresetCommand } = require('./overlay-codes');
 const gasEnergy = require('./gas-energy-analyzer');
+const { SerialCommandQueue, commandScope } = require('./serial-command-queue');
 
 let mqttClient = null;
 let db = null;
@@ -16,6 +17,8 @@ let mqttPublisher = null;
 let log = null;
 let onStateChange = null;
 
+// Await each complete handler for a resource, not just the MQTT publish order.
+const commandQueue = new SerialCommandQueue();
 const emulatedStates = new Map();
 const pendingEsp32Retries = new Map();
 const customEnergyTopics = new Map();
@@ -30,13 +33,13 @@ function init(_mqttClient, _db, _commandApi, _mqttPublisher, _log, _onStateChang
 
     // Subscribe to home-scoped commands
     mqttClient.subscribe('tado/tanoclo/h/+/set/#', (topic, payload) => {
-        handleCommand(topic, payload).catch(err => {
+        return commandQueue.run(commandScope(topic), () => handleCommand(topic, payload)).catch(err => {
             if (log) log('error', `[mqtt-commands] Error handling command for topic ${topic}: ${err.message}`);
         });
     });
 
     mqttClient.subscribe('tado/tanoclo/h/+/+/+/set/#', (topic, payload) => {
-        handleCommand(topic, payload).catch(err => {
+        return commandQueue.run(commandScope(topic), () => handleCommand(topic, payload)).catch(err => {
             if (log) log('error', `[mqtt-commands] Error handling command for topic ${topic}: ${err.message}`);
         });
     });
