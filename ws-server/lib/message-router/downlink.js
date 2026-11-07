@@ -17,7 +17,7 @@ const stateSnapshot = require('../state-snapshot');
 const commandLog = require('../command-log');
 const messageCache = require('../message-cache');
 const configCapture = require('../config-capture');
-const { collectConfigBlock2 } = require('../config-block2');
+const { collectConfigBlock2, clearExpiredConfigBlock2Sessions } = require('../config-block2');
 const { reconstructBuffers, parseResourceIds } = require('../utils');
 const WebSocket = require('ws');
 const proxyManager = require('../proxy-manager');
@@ -28,8 +28,15 @@ const logProxyMessage = proxyManager.logProxyMessage;
 // ==========================================
 // 2. In-Memory Session and Reassembly State
 // ==========================================
+// Capture state is independent of the outbound resource snapshots used by
+// coap-helpers. Capture expiry or capacity eviction must never affect serving.
+const configCaptureSessions = new Map();
+const configCaptureCleanupTimer = setInterval(() => {
+    clearExpiredConfigBlock2Sessions(configCaptureSessions);
+}, 30000);
+configCaptureCleanupTimer.unref();
+
 // In-memory CoAP transfer/address tables
-let downlinkBlockSessions;
 let blockReassembly;
 let ipv6ToDevice;
 const MAX_BLOCK_REASSEMBLY = 100;
@@ -65,7 +72,6 @@ function init(opts) {
     if (opts.TADO_ROOT_CA !== undefined) TADO_ROOT_CA = opts.TADO_ROOT_CA;
     if (opts.extractShortSerial !== undefined) extractShortSerial = opts.extractShortSerial;
     if (opts.ipv6ToDevice !== undefined) ipv6ToDevice = opts.ipv6ToDevice;
-    if (opts.downlinkBlockSessions !== undefined) downlinkBlockSessions = opts.downlinkBlockSessions;
     if (opts.blockReassembly !== undefined) blockReassembly = opts.blockReassembly;
 }
 
@@ -150,16 +156,15 @@ async function captureDownlinkConfig(coapMsg, displayPath, activeDeviceId, pathI
         const blockOpt = coap.optionFirst(coapMsg, coap.OPT_BLOCK2);
         const block = blockOpt ? coap.decodeBlock(blockOpt.length ? blockOpt : Buffer.from([0])) : null;
         if (blockOpt && !block) return; // Malformed option: never capture partial bytes.
-        const payload = collectConfigBlock2(downlinkBlockSessions, activeDeviceId + '|' + displayPath, {
+        const capture = collectConfigBlock2(configCaptureSessions, activeDeviceId + '|' + displayPath, {
             payload: coapMsg.payload, block,
-            etag: coap.optionFirst(coapMsg, coap.OPT_ETAG), token: coapMsg.token
+            etag: coap.optionFirst(coapMsg, coap.OPT_ETAG)
         });
-        if (!payload) return;
+        if (!capture) return;
+        const { payload, etag: captureEtag } = capture;
         log('info', `PROXY: Captured config response for ${displayPath} (${activeDeviceId})`);
         const decoded = await workerPool.tlvDecode(payload);
         if (decoded.ok) {
-            const captureEtag = coap.optionFirst(coapMsg, coap.OPT_ETAG);
-
             let canonicalPath = displayPath;
             if (displayPath.includes('hvac') && !displayPath.endsWith('/config') && !displayPath.includes('hvac/')) {
                 canonicalPath = `${displayPath}/config`;

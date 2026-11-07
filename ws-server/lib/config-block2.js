@@ -12,25 +12,43 @@ const TTL_MS = 120_000;
 
 /**
  * @typedef {{ num: number, more: 0|1, szx: number, blockSize: number }} Block2
- * @typedef {{ version: string, parts: Map<number, Buffer>, length: number, expiresAt: number }} CaptureSession
+ * @typedef {{ etag: Buffer|null, parts: Map<number, Buffer>, length: number, expiresAt: number }} CaptureSession
+ * @typedef {{ payload: Buffer, etag: Buffer|null }} CompleteConfig
  */
 
 /**
- * Collect one configuration response without exposing partial data to a decoder.
- * The router also cleans this shared map using each session's expiresAt value.
+ * Remove expired capture sessions during periodic maintenance or capacity pressure.
  *
- * @param {Map<string, CaptureSession>} sessions Incomplete transfers by resource.
- * @param {string} key Stable device and resource identity.
- * @param {{ payload: Buffer, block: Block2|null, etag: Buffer|null, token: Buffer|null }} part
+ * @param {Map<string, CaptureSession>} sessions Capture-only state, never outbound sessions.
  * @param {number} [now=Date.now()] Millisecond clock, injectable for expiry tests.
- * @returns {Buffer|null} A complete representation, or null for an incomplete or rejected transfer.
+ */
+function clearExpiredConfigBlock2Sessions(sessions, now = Date.now()) {
+    for (const [key, session] of sessions) {
+        if (session.expiresAt <= now) sessions.delete(key);
+    }
+}
+
+/**
+ * Collect one configuration response without exposing partial data to a decoder.
+ * Tokens correlate individual exchanges, not the representation across blocks.
+ * Compare ETags whenever supplied and retain the first available one for storage.
+ * Without ETags, continuity is best-effort by device/resource and byte offset.
+ *
+ * @param {Map<string, CaptureSession>} sessions Incomplete capture transfers by resource.
+ * @param {string} key Stable device and resource identity.
+ * @param {{ payload: Buffer, block: Block2|null, etag: Buffer|null }} part
+ * @param {number} [now=Date.now()] Millisecond clock, injectable for expiry tests.
+ * @returns {CompleteConfig|null} Complete data and metadata, or null for an incomplete or rejected transfer.
  */
 function collectConfigBlock2(sessions, key, part, now = Date.now()) {
-    for (const [id, session] of sessions) {
-        if (session.expiresAt <= now) sessions.delete(id);
+    let session = sessions.get(key);
+    if (session && session.expiresAt <= now) {
+        sessions.delete(key);
+        session = null;
     }
 
-    const { payload, block, etag, token } = part;
+    const { payload, block, etag } = part;
+    const receivedEtag = etag?.length ? Buffer.from(etag) : null;
     const reject = () => {
         sessions.delete(key);
         return null;
@@ -41,7 +59,7 @@ function collectConfigBlock2(sessions, key, part, now = Date.now()) {
     }
     if (block === null) {
         sessions.delete(key);
-        return Buffer.from(payload);
+        return { payload: Buffer.from(payload), etag: receivedEtag };
     }
     if (!Number.isInteger(block.num) || block.num < 0 || block.num > 0xfffff ||
         !Number.isInteger(block.szx) || block.szx < 0 || block.szx > 6 ||
@@ -57,29 +75,27 @@ function collectConfigBlock2(sessions, key, part, now = Date.now()) {
     if (offset === 0 && block.more === 0) {
         sessions.delete(key);
         // The Block2 option is valid even when the entire body fits in one reply.
-        return Buffer.from(payload);
+        return { payload: Buffer.from(payload), etag: receivedEtag };
     }
 
-    // ETag identifies a representation across block requests. Use the request
-    // token only when no ETag is available. Never splice different versions.
-    const version = etag?.length
-        ? 'etag:' + etag.toString('hex')
-        : 'token:' + (token?.toString('hex') || '');
-    let session = sessions.get(key);
-
     if (offset === 0) {
+        const differentEtag = session?.etag && receivedEtag && !session.etag.equals(receivedEtag);
+        const newlyVersioned = session && !session.etag && receivedEtag;
         // Repeated first blocks must not discard later blocks already received.
-        // A different first block or representation starts a fresh assembly.
-        if (!session || session.version !== version || !session.parts.get(0)?.equals(payload)) {
+        // A changed first block or newly identified representation starts afresh.
+        if (!session || differentEtag || newlyVersioned || !session.parts.get(0)?.equals(payload)) {
             if (!sessions.has(key) && sessions.size >= MAX_SESSIONS) {
-                sessions.delete(sessions.keys().next().value);
+                clearExpiredConfigBlock2Sessions(sessions, now);
+                if (sessions.size >= MAX_SESSIONS) sessions.delete(sessions.keys().next().value);
             }
-            session = { version, parts: new Map(), length: 0, expiresAt: now + TTL_MS };
+            session = { etag: receivedEtag, parts: new Map(), length: 0, expiresAt: now + TTL_MS };
             sessions.set(key, session);
         }
     }
 
-    if (!session || session.version !== version) return reject();
+    if (!session) return reject();
+    if (session.etag && receivedEtag && !session.etag.equals(receivedEtag)) return reject();
+    if (!session.etag && receivedEtag) session.etag = receivedEtag;
     session.expiresAt = now + TTL_MS;
     if (offset < session.length) {
         return session.parts.get(offset)?.equals(payload) ? null : reject();
@@ -91,9 +107,11 @@ function collectConfigBlock2(sessions, key, part, now = Date.now()) {
     session.length += payload.length;
     if (block.more === 1) return null;
 
-    const result = Buffer.concat([...session.parts.values()], session.length);
+    // Accepted offsets strictly increase. Map insertion order therefore already
+    // matches byte order, and retransmissions never reinsert an earlier offset.
+    const result = { payload: Buffer.concat([...session.parts.values()], session.length), etag: session.etag };
     sessions.delete(key);
     return result;
 }
 
-module.exports = { collectConfigBlock2 };
+module.exports = { collectConfigBlock2, clearExpiredConfigBlock2Sessions };
