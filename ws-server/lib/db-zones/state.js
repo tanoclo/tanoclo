@@ -765,6 +765,19 @@ async function updateCircuitConfig(homeId, circuitNumber, fields) {
             [homeId, circuitNumber, etag, newFlow, newMode]
         );
     }
+
+    // Invalidate the circuit driver device's config ETag so its hourly poll receives 2.05 Content
+    const [cDevRows] = await p.execute(
+        'SELECT driver_serial_no FROM heating_circuits WHERE home_id=? AND number=? LIMIT 1',
+        [homeId, circuitNumber]
+    );
+    if (cDevRows.length > 0 && cDevRows[0].driver_serial_no) {
+        const devEtag = generateEtag();
+        await p.execute(
+            'UPDATE devices SET config_etag=?, config_etag_real=NULL WHERE serial_no=? AND home_id=?',
+            [devEtag, cDevRows[0].driver_serial_no, homeId]
+        );
+    }
 }
 
 async function upsertHeatingSystem(homeId, fields, fullConfigJson = null) {

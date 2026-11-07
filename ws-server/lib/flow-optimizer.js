@@ -12,6 +12,7 @@ const weather = require('./weather');
 let _db = null;
 let _commandApi = null;
 let _mqttPublisher = null;
+const _lastDriverPushTimes = new Map();
 
 function init(db, commandApi, mqttPublisher) {
     _db = db;
@@ -316,6 +317,28 @@ async function evaluateHome(homeId) {
             // Update circuit configs dynamically in DB and invalidate ETag so RU / bridge picks it up
             for (const cNum of targetCircuitNumbers) {
                 await _db.updateCircuitConfig(homeId, cNum, { '0x2040': effectiveFlow, '0x2090': targetMode });
+            }
+
+            // Automated live config resync with rate limiting
+            const driverSerial = circRows.length > 0 ? circRows[0].driver_serial_no : null;
+            if (driverSerial) {
+                const now = Date.now();
+                const lastPush = _lastDriverPushTimes.get(homeId) || 0;
+                const minDelayMs = 15 * 60 * 1000; // 15-minute cooldown between flow tweaks
+
+                // Push immediately on operating mode change, or when cooldown has expired for flow changes
+                if (modeChanged || (now - lastPush >= minDelayMs)) {
+                    try {
+                        const cmdApi = _commandApi || require('./command-api');
+                        log('info', `[flow-optimizer] Triggering live config resync for circuit driver ${driverSerial} (flow=${effectiveFlow}°C, mode=${targetMode})`);
+                        await cmdApi.pushConfigRefresh(driverSerial);
+                        _lastDriverPushTimes.set(homeId, now);
+                    } catch (pushErr) {
+                        log('warn', `[flow-optimizer] Live config resync failed for ${driverSerial}: ${pushErr.message}`);
+                    }
+                } else {
+                    log('debug', `[flow-optimizer] Live config resync for ${driverSerial} deferred by cooldown (${Math.round((minDelayMs - (now - lastPush)) / 60000)}m remaining)`);
+                }
             }
         }
 
