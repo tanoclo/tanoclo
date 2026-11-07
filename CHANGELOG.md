@@ -6,6 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-07
+
+- fix(energy): safely resolve readings array from API response object
+- fix: isolate capture sessions and retain Block2 representation metadata
+- fix(energy): resolve TDZ ReferenceError on energySettings in GasEnergySection
+- feat(energy): add historical monthly gas readings, bulk setup & reading log
+- docs: clarify capture readiness and align comments and tests with project style
+- fix: capture complete and multipart Block2 configuration responses
+- feat(energy): add gas usage, costs, DHW split & MQTT ingestion
+- fix(test): restore pool.execute after test_device_role_switching
+- fix(mold-detector): fix VTT growth rate formula and correlate historical weather
+- fix(test): fix CI test isolation and fixture seeding for api routes and config sync
+- fix(ci): run migrations in CI, add template home fixture, and ensure log dir
+- fix(ci): track ws-server/check.js for CI Acorn AST validation
+- fix(ci): fix MariaDB COMMENT syntax in tanoclo.sql and ESLint in pidPresets
+- feat(zones): add room size and instant PID presets
+- feat(heating): auto-derive underfloor presence and remove legacy UI toggle
+- ci: add GitHub Actions test workflow and fix lint
+- feat(zones): add per-room underfloor heating and auto-assist integration - Add heating_type and underfloor_mass to zones schema and API - Clamp flow temperature ceiling to 45C when UFH active - Separate radiator and UFH cohorts in hydraulic balancing - Calibrate PID suggestions with UFH gain clamping and preset - Scale early start lookahead dynamically for high slab thermal lag - Add schedule advisory engine for slab setbacks and inertia - Expose emitter configuration, indicators, and advisories in UI
+- feat(airComfort): add mold detection and insulation factor
+- fix(ws-server): isolate bridge pacing and db in tests
+- fix(circuit): suppress 0x2040 in standby mode
+
 ## [0.8.4] - 2026-10-24
 
 - feat(telemetry): upsert and merge circuit measurements
