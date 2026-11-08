@@ -7,7 +7,7 @@
 
 require('./test_config');
 const assert = require('assert');
-const { computeOptimalFlowTemperature } = require('../lib/flow-optimizer');
+const { computeOptimalFlowTemperature, evaluateCircuitThermalLoad } = require('../lib/flow-optimizer');
 
 describe('Flow Temperature Optimizer Engine', () => {
     test('Idle / Standby drops to minFlow when no demand and rooms satisfied', () => {
@@ -218,6 +218,109 @@ describe('Flow Temperature Optimizer Engine', () => {
         assert.strictEqual(result.reason, 'cold_recovery');
         assert.strictEqual(result.demandBoost, 5.0);
         assert.ok(result.targetFlow > 50);
+    });
+
+    test('Generic Thermal Load Gating: single radiator micro-demand is suppressed to avoid micro-burn', () => {
+        const thermal = evaluateCircuitThermalLoad({
+            callingRadiators: 1,
+            callingUfh: 0,
+            circuitDemandPct: 18,
+            maxZoneError: 0.2,
+            inLockout: false
+        });
+
+        assert.strictEqual(thermal.allowHeating, false);
+        assert.strictEqual(thermal.circuitOperatingMode, 0);
+        assert.strictEqual(thermal.reason, 'suppress_micro_burn_low_thermal_load');
+    });
+
+    test('Generic Thermal Load Gating: multi-room coincidence (>=2 radiator zones) enables heating', () => {
+        const thermal = evaluateCircuitThermalLoad({
+            callingRadiators: 2,
+            callingUfh: 0,
+            circuitDemandPct: 20,
+            maxZoneError: 0.25,
+            inLockout: false
+        });
+
+        assert.strictEqual(thermal.allowHeating, true);
+        assert.strictEqual(thermal.circuitOperatingMode, 1);
+        assert.strictEqual(thermal.reason, 'multi_zone_coincidence');
+    });
+
+    test('Generic Thermal Load Gating: single radiator zone with significant deficit enables heating', () => {
+        const thermal = evaluateCircuitThermalLoad({
+            callingRadiators: 1,
+            callingUfh: 0,
+            circuitDemandPct: 45,
+            maxZoneError: 0.6,
+            inLockout: false
+        });
+
+        assert.strictEqual(thermal.allowHeating, true);
+        assert.strictEqual(thermal.circuitOperatingMode, 1);
+        assert.strictEqual(thermal.reason, 'single_zone_significant_load');
+    });
+
+    test('Generic Thermal Load Gating: underfloor heating thermal mass always enables heating', () => {
+        const thermal = evaluateCircuitThermalLoad({
+            callingRadiators: 0,
+            callingUfh: 1,
+            circuitDemandPct: 15,
+            maxZoneError: 0.25,
+            inLockout: false
+        });
+
+        assert.strictEqual(thermal.allowHeating, true);
+        assert.strictEqual(thermal.circuitOperatingMode, 1);
+        assert.strictEqual(thermal.reason, 'underfloor_thermal_mass');
+    });
+
+    test('Generic Thermal Load Gating: anti-flapping lockout blocks marginal demand', () => {
+        const thermal = evaluateCircuitThermalLoad({
+            callingRadiators: 1,
+            callingUfh: 0,
+            circuitDemandPct: 25,
+            maxZoneError: 0.3,
+            inLockout: true
+        });
+
+        assert.strictEqual(thermal.allowHeating, false);
+        assert.strictEqual(thermal.circuitOperatingMode, 0);
+        assert.strictEqual(thermal.reason, 'anti_flapping_lockout');
+    });
+
+    test('Flow Temperature Floor: enforces minimum 38°C for active radiator heating', () => {
+        const result = computeOptimalFlowTemperature({
+            outsideTemp: 14,
+            minFlow: 25,
+            maxFlowLimit: 75,
+            currentMaxFlow: 35,
+            maxZoneError: 0.5,
+            circuitDemandPct: 50,
+            callingRadiators: 2,
+            callingUfh: 0
+        });
+
+        assert.strictEqual(result.circuitOperatingMode, 1);
+        assert.ok(result.effectiveFlow >= 38, `Expected effectiveFlow >= 38, got ${result.effectiveFlow}`);
+    });
+
+    test('Flow Temperature Floor: underfloor heating allowed below 38°C down to minFlow', () => {
+        const result = computeOptimalFlowTemperature({
+            outsideTemp: 14,
+            minFlow: 25,
+            maxFlowLimit: 45,
+            currentMaxFlow: 30,
+            maxZoneError: 0.5,
+            circuitDemandPct: 50,
+            callingRadiators: 0,
+            callingUfh: 1,
+            activeDemandType: 'ONLY_UNDERFLOOR'
+        });
+
+        assert.strictEqual(result.circuitOperatingMode, 1);
+        assert.ok(result.effectiveFlow <= 35, `Expected effectiveFlow <= 35, got ${result.effectiveFlow}`);
     });
 });
 

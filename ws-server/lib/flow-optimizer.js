@@ -13,12 +13,78 @@ let _db = null;
 let _commandApi = null;
 let _mqttPublisher = null;
 const _lastDriverPushTimes = new Map();
+const _lastBurnEndTimes = new Map();
+const _pendingEvals = new Map();
 
 function init(db, commandApi, mqttPublisher) {
     _db = db;
     _commandApi = commandApi;
     _mqttPublisher = mqttPublisher;
     log('info', 'TaNoClo Flow Temperature Optimizer initialized');
+}
+
+/**
+ * Schedules a debounced reactive flow optimization evaluation for a home.
+ * 
+ * @param {number|string} homeId
+ * @param {number} [delayMs=3000]
+ */
+function scheduleEvaluation(homeId, delayMs = 3000) {
+    if (_pendingEvals.has(homeId)) {
+        clearTimeout(_pendingEvals.get(homeId));
+    }
+    const timer = setTimeout(async () => {
+        _pendingEvals.delete(homeId);
+        try {
+            await evaluateHome(homeId);
+        } catch (err) {
+            log('warn', `Scheduled evaluation failed for home ${homeId}: ${err.message}`);
+        }
+    }, delayMs);
+    _pendingEvals.set(homeId, timer);
+}
+
+/**
+ * Evaluates whether the calling heating circuit has sufficient thermal dissipation
+ * capacity to absorb the boiler's minimum burner output without short-cycling.
+ * 
+ * @param {Object} params
+ * @param {number} [params.callingRadiators=0] Count of radiator zones calling with active demand
+ * @param {number} [params.callingUfh=0] Count of underfloor zones calling with active demand
+ * @param {number} [params.circuitDemandPct=0] Aggregate demand percentage across the circuit
+ * @param {number} [params.maxZoneError=0] Maximum error (°C) across calling zones
+ * @param {boolean} [params.inLockout=false] Whether circuit is in anti-flapping lockout
+ * @returns {{ allowHeating: boolean, circuitOperatingMode: number, reason: string }}
+ */
+function evaluateCircuitThermalLoad({ callingRadiators = 0, callingUfh = 0, circuitDemandPct = 0, maxZoneError = 0, inLockout = false }) {
+    // 1. Underfloor heating has massive screed thermal mass - always safe to absorb boiler output
+    if (callingUfh > 0 && (circuitDemandPct >= 10 || maxZoneError >= 0.2)) {
+        return { allowHeating: true, circuitOperatingMode: 1, reason: 'underfloor_thermal_mass' };
+    }
+
+    // 2. Multi-room coincidence: >= 2 radiator zones calling with active demand
+    // Combined radiator surface and water loop volume can dissipate minimum burner power
+    if (callingRadiators >= 2 && circuitDemandPct >= 15) {
+        return { allowHeating: true, circuitOperatingMode: 1, reason: 'multi_zone_coincidence' };
+    }
+
+    // 3. Significant single-zone load: valve opened wide (>=35%) and meaningful deficit (>=0.4°C)
+    if (callingRadiators === 1 && circuitDemandPct >= 35 && maxZoneError >= 0.4) {
+        return { allowHeating: true, circuitOperatingMode: 1, reason: 'single_zone_significant_load' };
+    }
+
+    // 4. High aggregate demand across the circuit (e.g. general recovery)
+    if (circuitDemandPct >= 40) {
+        return { allowHeating: true, circuitOperatingMode: 1, reason: 'high_aggregate_demand' };
+    }
+
+    // 5. Anti-flapping lockout: if recently in STANDBY, suppress marginal ignition attempts
+    if (inLockout) {
+        return { allowHeating: false, circuitOperatingMode: 0, reason: 'anti_flapping_lockout' };
+    }
+
+    // 6. Insufficient thermal load: single radiator low-demand drift (<35% demand or <0.4°C error)
+    return { allowHeating: false, circuitOperatingMode: 0, reason: 'suppress_micro_burn_low_thermal_load' };
 }
 
 /**
@@ -45,7 +111,10 @@ function computeOptimalFlowTemperature({
     circuitDemandPct = 0,
     modulationPct = null,
     forecastHourly = null,
-    activeDemandType = 'ANY'
+    activeDemandType = 'ANY',
+    callingRadiators = 0,
+    callingUfh = 0,
+    inLockout = false
 }) {
     // 1. Guardrail sanity checks
     const isOnlyUfh = activeDemandType === 'ONLY_UNDERFLOOR';
@@ -130,19 +199,46 @@ function computeOptimalFlowTemperature({
         changed = nextFlow !== currentMaxFlow;
     }
 
-    // Operating mode (0x2090): 0 = STANDBY (burner disabled), 1 = SCHEDULE (burner active)
-    let circuitOperatingMode = 1;
-    if (circuitDemandPct < 25 && maxZoneError < 0.4) {
-        circuitOperatingMode = 0;
+    // Operating mode (0x2090) and thermal load gating
+    // If calling counts are not explicitly provided (e.g. basic unit tests), infer from demand & activeDemandType
+    let radCount = callingRadiators;
+    let ufhCount = callingUfh;
+    if (radCount === 0 && ufhCount === 0) {
+        if (activeDemandType === 'ONLY_UNDERFLOOR') {
+            ufhCount = circuitDemandPct > 0 ? 1 : 0;
+        } else if (circuitDemandPct >= 25 || maxZoneError >= 0.4) {
+            radCount = (circuitDemandPct >= 25 || maxZoneError >= 0.4) ? 2 : 1;
+        }
+    }
+
+    const thermal = evaluateCircuitThermalLoad({
+        callingRadiators: radCount,
+        callingUfh: ufhCount,
+        circuitDemandPct,
+        maxZoneError,
+        inLockout
+    });
+    const circuitOperatingMode = thermal.circuitOperatingMode;
+
+    // Emitter-specific flow temperature floor when heating is active:
+    // Radiators need >= 38°C to radiate heat and prevent instantaneous anti-cycling trip on minimum modulation.
+    // Underfloor heating operates safely at lower minFlow floor.
+    let effectiveFlow = 0;
+    if (circuitOperatingMode === 1) {
+        const flowFloor = (ufhCount === 0 && radCount > 0) ? Math.max(minFlow, 38) : minFlow;
+        effectiveFlow = Math.max(nextFlow, flowFloor);
+        effectiveFlow = Math.min(effectiveFlow, maxFlowLimit);
     }
 
     return {
         targetFlow: nextFlow,
+        effectiveFlow,
         baseFlow: Math.round(baseFlow * 10) / 10,
         demandBoost,
         forecastAdj,
         modAdj,
         reason,
+        thermalReason: thermal.reason,
         changed,
         circuitOperatingMode
     };
@@ -275,7 +371,12 @@ async function evaluateHome(homeId) {
             activeDemandType = 'ONLY_RADIATOR';
         }
 
-        // 7. Calculate optimal flow temperature
+        // 7. Calculate optimal flow temperature and evaluate thermal load
+        const lastBurnEnd = _lastBurnEndTimes.get(homeId) || 0;
+        const now = Date.now();
+        const lockoutMs = 10 * 60 * 1000; // 10 minutes anti-flapping lockout on small loads
+        const inLockout = (now - lastBurnEnd < lockoutMs);
+
         const opt = computeOptimalFlowTemperature({
             outsideTemp,
             minFlow,
@@ -285,12 +386,15 @@ async function evaluateHome(homeId) {
             circuitDemandPct,
             modulationPct,
             forecastHourly,
-            activeDemandType
+            activeDemandType,
+            callingRadiators,
+            callingUfh,
+            inLockout
         });
 
         const newFlow = opt.targetFlow;
         const targetMode = opt.circuitOperatingMode ?? 1;
-        const effectiveFlow = targetMode === 0 ? 0 : newFlow;
+        const effectiveFlow = opt.effectiveFlow ?? (targetMode === 0 ? 0 : newFlow);
         const nowIso = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
         const currentMode = circRows.length > 0 && circRows[0].field_2090 !== null && circRows[0].field_2090 !== undefined
@@ -299,6 +403,11 @@ async function evaluateHome(homeId) {
         const currentFlow = circRows.length > 0 && circRows[0].field_2040 !== null
             ? parseFloat(circRows[0].field_2040)
             : null;
+
+        // Track when circuit turns off to enforce anti-flapping lockout
+        if (currentMode === 1 && targetMode === 0) {
+            _lastBurnEndTimes.set(homeId, now);
+        }
 
         const modeChanged = currentMode !== targetMode;
         const flowChanged = currentFlow !== effectiveFlow;
@@ -403,6 +512,8 @@ async function evaluateAllHomes() {
 module.exports = {
     init,
     computeOptimalFlowTemperature,
+    evaluateCircuitThermalLoad,
+    scheduleEvaluation,
     evaluateHome,
     evaluateAllHomes
 };

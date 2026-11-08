@@ -304,6 +304,14 @@ async function insertMergedZoneMeasurement(homeId, zoneId, updates) {
     } else {
         _log('debug', `zone_measurements: home=${homeId} zone=${zoneId} [DHW] sch=${scheduleTemp}°C ovr=${overlayMode} enabled=${zoneEnabled}`);
     }
+
+    // Trigger debounced flow optimization evaluation on demand / temp update
+    try {
+        const flowOptimizer = require('../flow-optimizer');
+        if (typeof flowOptimizer.scheduleEvaluation === 'function') {
+            flowOptimizer.scheduleEvaluation(homeId);
+        }
+    } catch (_) {}
 }
 
 async function insertDeviceMeasurement(serial, homeId, zoneId, fields) {
