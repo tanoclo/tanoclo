@@ -23,7 +23,7 @@ import {
 } from '../../api/heating';
 import { SWR_KEYS } from '../../utils/swrKeys';
 
-export default function GasEnergySection({ homeId, zones = [] }) {
+export default function GasEnergySection({ homeId, zones: _zones = [] }) {
   const { t } = useTranslation();
 
   const getPastDateStr = (daysAgo) => {
@@ -90,7 +90,7 @@ export default function GasEnergySection({ homeId, zones = [] }) {
     }
   );
 
-  const { data: readingsList, mutate: mutateReadings, isLoading: isReadingsLoading } = useSWR(
+  const { data: readingsList, isLoading: isReadingsLoading } = useSWR(
     homeId && showReadingModal ? SWR_KEYS.gasMeterReadings(homeId) : null,
     () => getGasMeterReadings(homeId, 50)
   );
@@ -205,7 +205,6 @@ export default function GasEnergySection({ homeId, zones = [] }) {
   };
 
   const addMonthRow = () => {
-    const today = new Date();
     const defaultCost = (energySettings && energySettings.gas_unit_cost !== undefined) ? energySettings.gas_unit_cost : 1.45;
     setMonthlyRows(prev => [
       ...prev,

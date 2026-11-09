@@ -7,7 +7,7 @@
  * concurrent zone heating demands, showing how zone heat requests contribute to circuit heating.
  */
 
-import React, { useState, useContext, useMemo } from 'react';
+import React, { useState, useContext } from 'react';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -337,11 +337,6 @@ function CircuitTelemetryChart({ circuitDayReportData }) {
       }
     }
   };
-
-  // Compute summary stats for the day
-  const maxFlow = Math.max(...flowTemps.filter(v => v !== null && v !== undefined), 0);
-  const maxMod = Math.max(...modulationValues.filter(v => v !== null && v !== undefined), 0);
-  const activeFlamePoints = (flameState?.dataIntervals || []).filter(i => i.value);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', width: '100%' }}>

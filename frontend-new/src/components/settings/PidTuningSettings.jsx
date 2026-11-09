@@ -7,7 +7,7 @@
  * Emphasizes performing hydraulic balancing first before fine-tuning PID parameters.
  */
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import useSWR from 'swr';
 import Card from '../common/Card';
 import Button from '../common/Button';
@@ -20,13 +20,10 @@ import {
 } from '../../api/pidTuning';
 import {
   Activity,
-  Sliders,
   CheckCircle2,
   AlertTriangle,
-  RotateCcw,
   History,
   TrendingUp,
-  HelpCircle,
   ShieldAlert,
   ArrowRight
 } from 'lucide-react';
@@ -34,7 +31,7 @@ import { useTranslation } from 'react-i18next';
 import { useToast } from '../../context/ToastContext';
 import logger from '../../utils/logger';
 
-export default function PidTuningSettings({ homeId, zones = [], isReadOnly = false }) {
+export default function PidTuningSettings({ homeId, zones: _zones = [], isReadOnly = false }) {
   const { t } = useTranslation();
   const { showToast } = useToast();
 

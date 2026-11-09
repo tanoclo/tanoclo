@@ -12,8 +12,8 @@ import Card from '../common/Card';
 import Button from '../common/Button';
 import {
   ShieldAlert, Wrench, Bug, Sliders, Database,
-  Cpu, Wifi, Key, Lock, CheckCircle2, AlertCircle,
-  HelpCircle, RefreshCw, Zap, Radio, Layers
+  Lock, CheckCircle2, AlertCircle,
+  HelpCircle, RefreshCw
 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import {
@@ -684,7 +684,6 @@ export default function DeviceAdvancedSettings({
     setAutoExerciseEnabled(checked);
     try {
       await updateValveExercise(homeId, targetSerial, checked);
-      if (device) device.autoValveExerciseEnabled = checked;
       showToast(t('settings.device_advanced.toast_valve_exercise_updated', 'Valve exercise preference saved.'));
     } catch (e) {
       setAutoExerciseEnabled(!checked);
@@ -1075,7 +1074,7 @@ export default function DeviceAdvancedSettings({
         const numPos1 = Number(device?.actuatorLimits?.position1) || null;
         const numPos2 = Number(device?.actuatorLimits?.position2) || null;
         const calibMode = device?.actuatorLimits?.mode; // 01fa: 0 idle, 1 started, 2 done, 3 failed
-        const calibErr = device?.actuatorLimits?.flags;  // 01fb: 0 none, 1 no pin, 2 no end stop, 3 <300 steps, 6 low voltage
+        const _calibErr = device?.actuatorLimits?.flags;  // 01fb: 0 none, 1 no pin, 2 no end stop, 3 <300 steps, 6 low voltage
 
         const strokeLength = (numClosed !== null && numOpen !== null && numClosed > numOpen) ? (numClosed - numOpen) : null;
         const maxTrack = Math.max(3000, (numClosed || 0) + 200, (numPos1 || 0) + 200, (numPos2 || 0) + 200);

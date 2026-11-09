@@ -3,7 +3,7 @@
  * @brief Renders the Heating Schedule Profiles manager and Zone Schedule picker list.
  */
 
-import React, { useState } from 'react';
+import { useState } from 'react';
 import useSWR from 'swr';
 import { ArrowLeft, Calendar, Plus, Sliders, Layers } from 'lucide-react';
 import Button from '../common/Button';

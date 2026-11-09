@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { renderToString } from 'react-dom/server';
 import DeviceAdvancedSettings, {
-  DIAG_FIDS, NVM_SLOTS, formatFriendlyValue, parseFriendlyToRaw, validateDebugValue
+  DIAG_FIDS, NVM_SLOTS, formatFriendlyValue, validateDebugValue
 } from '../../components/settings/DeviceAdvancedSettings';
 
 vi.mock('../../context/ToastContext', () => ({

@@ -3,11 +3,9 @@
  * @brief Renders a seasonal heating schedule profile card with rich visual themes.
  */
 
-import React from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Snowflake,
-  Sun,
   SunMedium,
   Sprout,
   Leaf,

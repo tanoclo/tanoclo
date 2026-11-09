@@ -6,7 +6,7 @@
  * recommendations for valve sensitivity (FID 0x4160) to hydraulically balance the heating system.
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import useSWR from 'swr';
 import Card from '../common/Card';
 import Button from '../common/Button';
@@ -27,9 +27,7 @@ import {
   AlertTriangle,
   RotateCcw,
   History,
-  TrendingUp,
   Gauge,
-  HelpCircle,
   MapPin,
   BatteryLow
 } from 'lucide-react';

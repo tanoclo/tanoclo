@@ -3,7 +3,6 @@
  * @brief Unit tests for SeasonProfileCard and season profile theming.
  */
 
-import React from 'react';
 import { describe, it, expect } from 'vitest';
 import { renderToString } from 'react-dom/server';
 import SeasonProfileCard, { getSeasonTheme, formatMonthDay } from '../../components/schedule/SeasonProfileCard';

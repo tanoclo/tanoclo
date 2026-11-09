@@ -16,7 +16,6 @@
  * - Offline local scheduling syncs.
  */
 
-import React from 'react';
 import Card from '../common/Card';
 import Button from '../common/Button';
 import Toggle from '../common/Toggle';

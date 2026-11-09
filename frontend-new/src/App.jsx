@@ -137,7 +137,7 @@ function AuthenticatedShell({ mobileDeviceId, setMobileDeviceId }) {
 
 export default function App() {
   const { isAuthenticated, isLoading } = useAuth();
-  const { activeHomeId, isLoading: isHomeLoading } = useHome();
+  const { activeHomeId } = useHome();
 
   // Local storage mobile device registration pointer
   const [mobileDeviceId, setMobileDeviceId] = useState(() => localStorage.getItem('tanoclo_mobile_device_id'));
