@@ -296,6 +296,43 @@ async function setValveSensitivity(req, res) {
     }
 }
 
+async function getValveExercise(req, res) {
+    try {
+        const { deviceId } = req.params;
+        const homeId = await verifyDeviceHome(req, deviceId);
+        const pool = db.getPool();
+        const [devices] = await pool.execute('SELECT auto_valve_exercise_enabled, last_exercised_at FROM devices WHERE serial_no = ? AND home_id = ?', [deviceId, homeId]);
+        if (devices.length === 0) return res.status(404).json({ error: 'Device not found' });
+
+        res.json({
+            autoValveExerciseEnabled: devices[0].auto_valve_exercise_enabled !== 0,
+            lastExercisedAt: devices[0].last_exercised_at
+        });
+    } catch (err) {
+        if (err.statusCode) return res.status(err.statusCode).json({ error: err.message.toLowerCase() });
+        res.status(500).json({ error: 'internal_error' });
+    }
+}
+
+async function setValveExercise(req, res) {
+    try {
+        const { deviceId } = req.params;
+        const homeId = await verifyDeviceHome(req, deviceId);
+        const enabled = req.body.enabled ?? req.body.autoValveExerciseEnabled ?? true;
+        const pool = db.getPool();
+
+        const [existing] = await pool.execute('SELECT * FROM devices WHERE serial_no = ? AND home_id = ?', [deviceId, homeId]);
+        if (existing.length === 0) return res.status(404).json({ error: 'Device not found' });
+
+        await pool.execute('UPDATE devices SET auto_valve_exercise_enabled = ? WHERE serial_no = ? AND home_id = ?', [enabled ? 1 : 0, deviceId, homeId]);
+
+        res.json({ autoValveExerciseEnabled: Boolean(enabled) });
+    } catch (err) {
+        if (err.statusCode) return res.status(err.statusCode).json({ error: err.message.toLowerCase() });
+        res.status(500).json({ error: 'internal_error' });
+    }
+}
+
 async function setOrientation(req, res) {
     try {
         const { deviceId } = req.params;
@@ -670,6 +707,43 @@ async function triggerSelftest(req, res) {
     }
 }
 
+async function exerciseDevice(req, res) {
+    try {
+        const { deviceId } = req.params;
+        const homeId = await verifyDeviceHome(req, deviceId);
+        const force = Boolean(req.body && req.body.force);
+        const valveExercise = require('../../lib/valve-exercise');
+        const result = await valveExercise.exerciseValve(deviceId, homeId, { force });
+        if (!result.ok) {
+            return res.status(400).json({ ok: false, error: result.reason, message: `Valve exercise skipped: ${result.reason}` });
+        }
+        res.json({ ok: true, message: `Valve exercise triggered for ${deviceId}`, exercisedAt: result.exercisedAt });
+    } catch (err) {
+        if (err.statusCode) return res.status(err.statusCode).json({ error: err.message.toLowerCase() });
+        _log('error', `Trigger valve exercise error: ${err.message}`);
+        res.status(500).json({ error: 'internal_error' });
+    }
+}
+
+async function exerciseHomeValvesHandler(req, res) {
+    try {
+        const homeId = parseInt(req.params.homeId, 10);
+        if (isNaN(homeId)) return res.status(400).json({ error: 'invalid_home_id' });
+        const force = Boolean(req.body && req.body.force);
+        const staggerMs = req.body && req.body.staggerMs !== undefined ? Number(req.body.staggerMs) : undefined;
+        const valveExercise = require('../../lib/valve-exercise');
+        if (req.body && req.body.async) {
+            valveExercise.exerciseHomeValves(homeId, { force, staggerMs }).catch(e => _log('error', `Async valve exercise error: ${e.message}`));
+            return res.json({ ok: true, message: `Batch valve exercise initiated in background for home ${homeId}` });
+        }
+        const result = await valveExercise.exerciseHomeValves(homeId, { force, staggerMs });
+        res.json({ ok: true, result });
+    } catch (err) {
+        _log('error', `Batch valve exercise error: ${err.message}`);
+        res.status(500).json({ error: 'internal_error' });
+    }
+}
+
 async function triggerDeviceDebug(req, res) {
     try {
         const { deviceId } = req.params;
@@ -985,6 +1059,10 @@ router.put('/:homeId/tanoclo/devices/:deviceId/friendlyName', setFriendlyName);
 router.post('/:homeId/devices/:deviceId/unassociate-neighbor', unassociateNeighbor);
 router.post('/:homeId/devices/:deviceId/mount', triggerMount);
 router.post('/:homeId/devices/:deviceId/selftest', triggerSelftest);
+router.post('/:homeId/devices/:deviceId/exercise', exerciseDevice);
+router.get('/:homeId/devices/:deviceId/valveExercise', getValveExercise);
+router.put('/:homeId/devices/:deviceId/valveExercise', setValveExercise);
+router.post('/:homeId/exercise-valves', exerciseHomeValvesHandler);
 router.post('/:homeId/devices/:deviceId/debug', triggerDeviceDebug);
 router.post('/:homeId/devices/:deviceId/debug/dump/start', startMemoryDump);
 router.get('/:homeId/devices/:deviceId/debug/dump/status', getMemoryDumpStatus);
@@ -1013,6 +1091,9 @@ router.put('/tanoclo/devices/:deviceId/friendlyName', setFriendlyName);
 router.post('/:deviceId/unassociate-neighbor', unassociateNeighbor);
 router.post('/:deviceId/mount', triggerMount);
 router.post('/:deviceId/selftest', triggerSelftest);
+router.post('/:deviceId/exercise', exerciseDevice);
+router.get('/:deviceId/valveExercise', getValveExercise);
+router.put('/:deviceId/valveExercise', setValveExercise);
 router.post('/:deviceId/debug', triggerDeviceDebug);
 router.post('/:deviceId/reboot', rebootDevice);
 router.post('/:deviceId/rfkey/refresh', refreshRfKey);

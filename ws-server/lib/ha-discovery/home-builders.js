@@ -145,6 +145,30 @@ function buildHomeDiscovery(publishEntity, homes, profilesByHome = new Map()) {
 
         // Remove HA Discovery Enabled Switch configuration
         publishEntity('switch', `tanoclo_h${home.id}_ha_discovery_enabled`, null);
+
+        // Auto Valve Exercise Switch
+        publishEntity('switch', `tanoclo_h${home.id}_auto_valve_exercise`, {
+            unique_id: `tanoclo_h${home.id}_auto_valve_exercise`,
+            name: 'Auto Valve Exercise',
+            icon: 'mdi:valve',
+            state_topic: `tado/tanoclo/h/${home.id}/auto_valve_exercise`,
+            command_topic: `tado/tanoclo/h/${home.id}/set/auto_valve_exercise`,
+            payload_on: 'ON',
+            payload_off: 'OFF',
+            availability_topic: 'tado/tanoclo/status',
+            device: homeDev
+        });
+
+        // Exercise All Valves Button
+        publishEntity('button', `tanoclo_h${home.id}_exercise_valves`, {
+            unique_id: `tanoclo_h${home.id}_exercise_valves`,
+            name: 'Exercise All Valves',
+            icon: 'mdi:valve',
+            command_topic: `tado/tanoclo/h/${home.id}/set/exercise_valves`,
+            payload_press: 'PRESS',
+            availability_topic: 'tado/tanoclo/status',
+            device: homeDev
+        });
     }
 }
 

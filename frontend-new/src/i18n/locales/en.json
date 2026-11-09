@@ -1071,7 +1071,16 @@
       "toast_calibration_started": "Mount calibration sequence started.",
       "toast_self_test_sent": "Hardware self-test request sent.",
       "toast_downloading_dump": "Downloading dump file...",
-      "toast_download_complete": "Download complete"
+      "toast_download_complete": "Download complete",
+      "valve_exercise": "Anti-Seize Valve Exercise",
+      "valve_exercise_desc": "Cycles the valve actuator full stroke to prevent calcification and pin seizure.",
+      "exercise_valve": "Exercise Valve",
+      "last_exercised": "Last Exercised",
+      "toast_valve_exercise_started": "Anti-seize valve exercise initiated.",
+      "auto_exercise_toggle": "Enable Automated Monthly Exercise",
+      "auto_exercise_toggle_desc": "Include this valve in automated 1st-of-month anti-seize stroke cycles.",
+      "toast_valve_exercise_updated": "Valve exercise preference saved.",
+      "seat_seal": "Seat Seal"
     },
     "zone_advanced": {
       "warning_title": "DANGEROUS SETTINGS WARNING",

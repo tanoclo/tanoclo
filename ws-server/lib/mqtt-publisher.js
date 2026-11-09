@@ -605,6 +605,10 @@ async function publishDeviceTelemetry(shortSerial, homeId, zoneId, sensorFields,
             if (pct !== null) {
                 _pub(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/valve_position_pct`, pct);
             }
+
+            if (dev.last_exercised_at) {
+                _pub(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/last_exercised_at`, new Date(dev.last_exercised_at).toISOString());
+            }
         }
     }
 }
@@ -778,6 +782,7 @@ async function publishHomeTelemetry(homeId, homeData = null) {
         _pub(`${BASE_TOPIC}/h/${homeId}/log_uploads_enabled`, (home.log_uploads_enabled === 1 || home.log_uploads_enabled === true) ? 'ON' : 'OFF');
         _pub(`${BASE_TOPIC}/h/${homeId}/allow_commands_in_proxy`, (home.allow_commands_in_proxy === 1 || home.allow_commands_in_proxy === true) ? 'ON' : 'OFF');
         _pub(`${BASE_TOPIC}/h/${homeId}/zone_config_readonly`, (home.zone_config_readonly === 1 || home.zone_config_readonly === true) ? 'ON' : 'OFF');
+        _pub(`${BASE_TOPIC}/h/${homeId}/auto_valve_exercise`, (home.auto_valve_exercise_enabled === 1 || home.auto_valve_exercise_enabled === true || home.auto_valve_exercise_enabled === undefined || home.auto_valve_exercise_enabled === null) ? 'ON' : 'OFF');
 
         // Publish Schedule Profile state
         let activeProfileName = '';
@@ -941,9 +946,10 @@ async function publishOpenWindow(zoneId, active) {
 /**
  * Publish Mounting State
  */
-async function publishMountingState(shortSerial, state) {
-    let homeId = null;
-    if (db) {
+async function publishMountingState(shortSerial, stateOrHomeId, maybeState) {
+    let state = maybeState !== undefined ? maybeState : stateOrHomeId;
+    let homeId = maybeState !== undefined ? stateOrHomeId : null;
+    if (!homeId && db) {
         const dev = await db.getDeviceBySerial(shortSerial).catch(() => null);
         if (dev) {
             homeId = dev.home_id;
@@ -952,6 +958,25 @@ async function publishMountingState(shortSerial, state) {
     }
     if (homeId) {
         _pub(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/mounting_state`, state);
+    }
+}
+
+/**
+ * Publish Device Last Exercised Timestamp
+ */
+async function publishDeviceLastExercised(shortSerial, stateOrHomeId, maybeTime) {
+    let lastExercisedAt = maybeTime !== undefined ? maybeTime : stateOrHomeId;
+    let homeId = maybeTime !== undefined ? stateOrHomeId : null;
+    if (!homeId && db) {
+        const dev = await db.getDeviceBySerial(shortSerial).catch(() => null);
+        if (dev) {
+            homeId = dev.home_id;
+            shortSerial = dev.serial_no;
+        }
+    }
+    if (homeId && lastExercisedAt) {
+        const iso = new Date(lastExercisedAt).toISOString();
+        _pub(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/last_exercised_at`, iso);
     }
 }
 
@@ -986,6 +1011,7 @@ module.exports = {
     publishValveSensitivity,
     publishOpenWindow,
     publishMountingState,
+    publishDeviceLastExercised,
     publishMobileDeviceTelemetry,
     getFriendlyResetReason,
     getFriendlyErrorFlags

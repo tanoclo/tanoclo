@@ -567,7 +567,16 @@
       "toast_calibration_started": "Montagekalibratiesequentie gestart.",
       "toast_self_test_sent": "Hardware zelftestverzoek verzonden.",
       "toast_downloading_dump": "Dumpbestand downloaden...",
-      "toast_download_complete": "Download voltooid"
+      "toast_download_complete": "Download voltooid",
+      "valve_exercise": "Anti-vastloop ventieloefening",
+      "valve_exercise_desc": "Beweegt de ventielmotor over de volledige slag om verkalking en vastzittende ventielstiften te voorkomen.",
+      "exercise_valve": "Ventiel oefenen",
+      "last_exercised": "Laatst geoefend",
+      "toast_valve_exercise_started": "Anti-vastloop ventieloefening gestart.",
+      "auto_exercise_toggle": "Automatische maandelijkse oefening inschakelen",
+      "auto_exercise_toggle_desc": "Neem dit ventiel op in de automatische anti-vastloopcycli op de 1e van de maand.",
+      "toast_valve_exercise_updated": "Voorkeur voor ventieloefening opgeslagen.",
+      "seat_seal": "Zittingafdichting"
     },
     "save_display": "Scherminstellingen opslaan",
     "low_steps": "Lage stappen (Sluitgrens)",

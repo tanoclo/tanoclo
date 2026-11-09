@@ -567,7 +567,16 @@
       "toast_calibration_started": "Séquence d'étalonnage de montage démarrée.",
       "toast_self_test_sent": "Demande d'auto-test matériel envoyée.",
       "toast_downloading_dump": "Téléchargement du fichier d'extraction...",
-      "toast_download_complete": "Téléchargement terminé"
+      "toast_download_complete": "Téléchargement terminé",
+      "valve_exercise": "Exercice anti-grippage de vanne",
+      "valve_exercise_desc": "Actionne le moteur sur toute la course pour éviter l'entartrage et le grippage de la tige de vanne.",
+      "exercise_valve": "Actionner la vanne",
+      "last_exercised": "Dernier exercice",
+      "toast_valve_exercise_started": "Exercice de vanne initié.",
+      "auto_exercise_toggle": "Activer l'exercice mensuel automatique",
+      "auto_exercise_toggle_desc": "Inclure cette vanne dans les cycles automatiques anti-grippage le 1er du mois.",
+      "toast_valve_exercise_updated": "Préférence d'exercice de vanne enregistrée.",
+      "seat_seal": "Joint de siège"
     },
     "save_display": "Enregistrer les paramètres d'affichage",
     "low_steps": "Pas inférieurs (Limite de fermeture)",

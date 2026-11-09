@@ -248,6 +248,28 @@ function buildDeviceDiscovery(publishEntity, devices, config) {
                 device: hwDev
             });
 
+            // Anti-Seize Valve Exercise Button
+            publishEntity('button', `tanoclo_${serial}_exercise`, {
+                unique_id: `tanoclo_${serial}_exercise`,
+                name: 'Exercise Valve',
+                command_topic: `tado/tanoclo/h/${dev.home_id}/d/${shortSerial}/set/exercise`,
+                payload_press: 'PRESS',
+                icon: 'mdi:valve',
+                availability_topic: devAvailTopic,
+                device: hwDev
+            });
+
+            // Last Exercised Timestamp Sensor
+            publishEntity('sensor', `tanoclo_${serial}_last_exercised`, {
+                unique_id: `tanoclo_${serial}_last_exercised`,
+                name: 'Last Exercised',
+                state_topic: `tado/tanoclo/h/${dev.home_id}/d/${shortSerial}/last_exercised_at`,
+                device_class: 'timestamp',
+                icon: 'mdi:calendar-clock',
+                availability_topic: devAvailTopic,
+                device: hwDev
+            });
+
             // Actuator Low Steps Number
             publishEntity('number', `tanoclo_${serial}_actuator_limit_low`, {
                 unique_id: `tanoclo_${serial}_actuator_limit_low`,

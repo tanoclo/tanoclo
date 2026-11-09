@@ -567,7 +567,16 @@
       "toast_calibration_started": "Montagekalibrierungssequenz gestartet.",
       "toast_self_test_sent": "Hardware-Selbsttestanforderung gesendet.",
       "toast_downloading_dump": "Dump-Datei wird heruntergeladen...",
-      "toast_download_complete": "Download abgeschlossen"
+      "toast_download_complete": "Download abgeschlossen",
+      "valve_exercise": "Ventil-Schutzübung (Anti-Blockier)",
+      "valve_exercise_desc": "Fährt den Stellantrieb über den gesamten Hub, um Verkalkung und Festsetzen des Ventilstößels zu verhindern.",
+      "exercise_valve": "Ventil bewegen",
+      "last_exercised": "Zuletzt bewegt",
+      "toast_valve_exercise_started": "Ventil-Schutzübung gestartet.",
+      "auto_exercise_toggle": "Automatische monatliche Übung aktivieren",
+      "auto_exercise_toggle_desc": "Dieses Ventil in die automatischen Anti-Blockier-Zyklen am 1. des Monats einbeziehen.",
+      "toast_valve_exercise_updated": "Einstellung für Ventil-Schutzübung gespeichert.",
+      "seat_seal": "Ventilsitz-Dichtung"
     },
     "save_display": "Display-Einstellungen speichern",
     "low_steps": "Untere Schritte (Schließgrenze)",

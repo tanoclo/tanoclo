@@ -18,7 +18,8 @@ import {
 import { useToast } from '../../context/ToastContext';
 import {
   triggerSelftest, triggerMountCalibration, triggerDeviceDebug,
-  startMemoryDump, getMemoryDumpStatus, cancelMemoryDump, downloadMemoryDumpFile
+  startMemoryDump, getMemoryDumpStatus, cancelMemoryDump, downloadMemoryDumpFile,
+  exerciseDevice, updateValveExercise
 } from '../../api/devices';
 
 export const DIAG_FIDS = [
@@ -667,6 +668,31 @@ export default function DeviceAdvancedSettings({
   const isStat = device?.deviceType?.startsWith('SU') || device?.deviceType?.startsWith('WR') || device?.deviceType?.startsWith('RU');
   const isIB = device?.deviceType?.startsWith('IB') || device?.deviceType?.startsWith('GW');
   const [isCalibrating, setIsCalibrating] = useState(false);
+  const [isExercising, setIsExercising] = useState(false);
+  const [autoExerciseEnabled, setAutoExerciseEnabled] = useState(device?.autoValveExerciseEnabled ?? true);
+  const [isUpdatingAutoExercise, setIsUpdatingAutoExercise] = useState(false);
+
+  useEffect(() => {
+    if (device?.autoValveExerciseEnabled !== undefined) {
+      setAutoExerciseEnabled(Boolean(device.autoValveExerciseEnabled));
+    }
+  }, [device?.autoValveExerciseEnabled]);
+
+  const handleToggleAutoExercise = async (checked) => {
+    if (isReadOnly || isUpdatingAutoExercise) return;
+    setIsUpdatingAutoExercise(true);
+    setAutoExerciseEnabled(checked);
+    try {
+      await updateValveExercise(homeId, targetSerial, checked);
+      if (device) device.autoValveExerciseEnabled = checked;
+      showToast(t('settings.device_advanced.toast_valve_exercise_updated', 'Valve exercise preference saved.'));
+    } catch (e) {
+      setAutoExerciseEnabled(!checked);
+      showToast(e.message || 'Failed to update valve exercise preference.', 'error');
+    } finally {
+      setIsUpdatingAutoExercise(false);
+    }
+  };
 
   // Default address based on hardware platform
   const defaultAddr = isValve ? '00000000' : '20000000';
@@ -1043,67 +1069,72 @@ export default function DeviceAdvancedSettings({
       </Card>
 
       {/* Actuator & Motor Calibration (Radiator Valves only) */}
-      {isValve && (
-        <Card style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.75rem' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-              <h3 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <Wrench size={16} />
-                {t('settings.device_advanced.actuator_motor_title', 'Actuator & Motor Calibration')}
-              </h3>
-              <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.4' }}>
-                {t('settings.device_advanced.stepper_desc', 'Autonomous mechanical valve stroke calibration and real-time motor telemetry.')}
-              </p>
+      {isValve && (() => {
+        const numOpen = Number(device?.actuatorLimits?.referencePoint ?? device?.actuatorLimits?.openPoint) || (device?.actuatorLimits?.position1 ? 200 : null);
+        const numClosed = Number(device?.actuatorLimits?.seatPoint ?? device?.actuatorLimits?.closedPoint) || null;
+        const numPos1 = Number(device?.actuatorLimits?.position1) || null;
+        const numPos2 = Number(device?.actuatorLimits?.position2) || null;
+        const calibMode = device?.actuatorLimits?.mode; // 01fa: 0 idle, 1 started, 2 done, 3 failed
+        const calibErr = device?.actuatorLimits?.flags;  // 01fb: 0 none, 1 no pin, 2 no end stop, 3 <300 steps, 6 low voltage
+
+        const strokeLength = (numClosed !== null && numOpen !== null && numClosed > numOpen) ? (numClosed - numOpen) : null;
+        const maxTrack = Math.max(3000, (numClosed || 0) + 200, (numPos1 || 0) + 200, (numPos2 || 0) + 200);
+
+        const getPct = (val) => {
+          if (val === null || val === undefined || isNaN(val)) return 0;
+          return Math.min(100, Math.max(0, (val / maxTrack) * 100));
+        };
+
+        const openPct = getPct(numOpen);
+        const closedPct = getPct(numClosed);
+        const spanLeft = Math.min(openPct, closedPct);
+        const spanWidth = Math.max(2, Math.abs(closedPct - openPct));
+
+        const isSeatSealOverdrive = numPos1 !== null && numClosed !== null && numPos1 > numClosed;
+        const seatSealOverdriveSteps = isSeatSealOverdrive ? (numPos1 - numClosed) : 0;
+        const livePct = getPct(numPos1);
+        const overdriveSpanLeft = Math.min(closedPct, livePct);
+        const overdriveSpanWidth = Math.max(2, Math.abs(livePct - closedPct));
+
+        const motorLoad = device?.actuatorLimits?.motorLoadMv ?? device?.field_0273;
+        const motorRunMin = device?.actuatorLimits?.motorRunMinMv ?? device?.field_027c;
+
+        return (
+          <Card style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.75rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                <h3 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Wrench size={16} />
+                  {t('settings.device_advanced.actuator_motor_title', 'Actuator & Motor Calibration')}
+                </h3>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.4' }}>
+                  {t('settings.device_advanced.stepper_desc', 'Autonomous mechanical valve stroke calibration and real-time motor telemetry.')}
+                </p>
+              </div>
+
+              <Button
+                variant="secondary"
+                disabled={isReadOnly || isCalibrating}
+                onClick={async () => {
+                  setIsCalibrating(true);
+                  try {
+                    await triggerMountCalibration(homeId, targetSerial, 'start');
+                    showToast(t('settings.device_advanced.toast_calibration_started', 'Mount calibration requested successfully.'));
+                  } catch (e) {
+                    showToast(e.message || 'Failed to start mount calibration.', 'error');
+                  } finally {
+                    setIsCalibrating(false);
+                  }
+                }}
+                style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', padding: '0.4rem 0.8rem' }}
+              >
+                <RefreshCw size={14} className={isCalibrating ? 'animate-spin' : ''} />
+                {t('settings.device_advanced.start_calibration', 'Start Mount Calibration')}
+              </Button>
             </div>
 
-            <Button
-              variant="secondary"
-              disabled={isReadOnly || isCalibrating}
-              onClick={async () => {
-                setIsCalibrating(true);
-                try {
-                  await triggerMountCalibration(homeId, targetSerial, 'start');
-                  showToast(t('settings.device_advanced.toast_calibration_started', 'Mount calibration requested successfully.'));
-                } catch (e) {
-                  showToast(e.message || 'Failed to start mount calibration.', 'error');
-                } finally {
-                  setIsCalibrating(false);
-                }
-              }}
-              style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', padding: '0.4rem 0.8rem' }}
-            >
-              <RefreshCw size={14} className={isCalibrating ? 'animate-spin' : ''} />
-              {t('settings.device_advanced.start_calibration', 'Start Mount Calibration')}
-            </Button>
-          </div>
-
-          {/* Stepper Stroke Timeline & Motor Telemetry */}
-          {(() => {
-            const numOpen = Number(device?.actuatorLimits?.referencePoint ?? device?.actuatorLimits?.openPoint) || (device?.actuatorLimits?.position1 ? 200 : null);
-            const numClosed = Number(device?.actuatorLimits?.seatPoint ?? device?.actuatorLimits?.closedPoint) || null;
-            const numPos1 = Number(device?.actuatorLimits?.position1) || null;
-            const numPos2 = Number(device?.actuatorLimits?.position2) || null;
-            const calibMode = device?.actuatorLimits?.mode; // 01fa: 0 idle, 1 started, 2 done, 3 failed
-            const calibErr = device?.actuatorLimits?.flags;  // 01fb: 0 none, 1 no pin, 2 no end stop, 3 <300 steps, 6 low voltage
-
-            const strokeLength = (numClosed !== null && numOpen !== null && numClosed > numOpen) ? (numClosed - numOpen) : null;
-            const maxTrack = Math.max(3000, (numClosed || 0) + 200, (numPos1 || 0) + 200, (numPos2 || 0) + 200);
-
-            const getPct = (val) => {
-              if (val === null || val === undefined || isNaN(val)) return 0;
-              return Math.min(100, Math.max(0, (val / maxTrack) * 100));
-            };
-
-            const openPct = getPct(numOpen);
-            const closedPct = getPct(numClosed);
-            const spanLeft = Math.min(openPct, closedPct);
-            const spanWidth = Math.max(2, Math.abs(closedPct - openPct));
-
-            const motorLoad = device?.actuatorLimits?.motorLoadMv ?? device?.field_0273;
-            const motorRunMin = device?.actuatorLimits?.motorRunMinMv ?? device?.field_027c;
-
-            return (
-              <div style={{
+            {/* Stepper Stroke Timeline & Motor Telemetry */}
+            <div style={{
                 backgroundColor: 'var(--bg-input)',
                 borderRadius: 'var(--radius-md)',
                 padding: '1.25rem',
@@ -1116,7 +1147,7 @@ export default function DeviceAdvancedSettings({
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                      {t('settings.device_advanced.stepper_axis', `Mechanical Stroke Axis (0 → ${maxTrack} steps)`)}
+                      {t('settings.device_advanced.stepper_axis', { steps: maxTrack, defaultValue: `Linear Stepper Axis (0 → ${maxTrack} steps)` })}
                     </span>
                     {strokeLength !== null && (
                       <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--primary)', backgroundColor: 'var(--bg-card)', padding: '0.15rem 0.5rem', borderRadius: '4px', border: '1px solid var(--border-color)' }}>
@@ -1172,6 +1203,22 @@ export default function DeviceAdvancedSettings({
                       borderBottom: '2px solid #ef4444',
                       borderRadius: '2px',
                       boxShadow: '0 0 10px rgba(34, 197, 94, 0.2)'
+                    }} />
+                  )}
+
+                  {/* Overdrive / Positive Seat Compression Span (Closed Endstop -> Live) */}
+                  {isSeatSealOverdrive && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '46px',
+                      left: `${overdriveSpanLeft}%`,
+                      width: `${overdriveSpanWidth}%`,
+                      height: '10px',
+                      background: 'repeating-linear-gradient(45deg, rgba(236, 72, 153, 0.35), rgba(236, 72, 153, 0.35) 4px, rgba(236, 72, 153, 0.1) 4px, rgba(236, 72, 153, 0.1) 8px)',
+                      borderTop: '2px dashed #ec4899',
+                      borderBottom: '2px dashed #ec4899',
+                      borderRadius: '2px',
+                      boxShadow: '0 0 8px rgba(236, 72, 153, 0.3)'
                     }} />
                   )}
 
@@ -1319,7 +1366,9 @@ export default function DeviceAdvancedSettings({
                         borderRadius: '4px',
                         boxShadow: '0 0 6px rgba(236, 72, 153, 0.3)'
                       }}>
-                        Live: {numPos1}
+                        {isSeatSealOverdrive 
+                          ? `${t('settings.device_advanced.live', 'Live')}: ${numPos1} (${t('settings.device_advanced.seat_seal', 'Seat Seal')} +${seatSealOverdriveSteps})`
+                          : `${t('settings.device_advanced.live', 'Live')}: ${numPos1}`}
                       </span>
                     </div>
                   )}
@@ -1363,8 +1412,6 @@ export default function DeviceAdvancedSettings({
                   </div>
                 </div>
               </div>
-            );
-          })()}
 
           {/* Actuator & Calibration Diagnostics Table */}
           <div style={{
@@ -1391,7 +1438,16 @@ export default function DeviceAdvancedSettings({
               <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.02)', paddingBottom: '0.25rem' }}>
                 <span style={{ color: 'var(--text-secondary)' }}>Live / Target Steps</span>
                 <span style={{ fontWeight: 600, fontFamily: 'monospace' }}>
-                  {device?.actuatorLimits?.position1 !== null ? device.actuatorLimits.position1 : '-'} / {device?.actuatorLimits?.position2 !== null ? device.actuatorLimits.position2 : '-'}
+                  {device?.actuatorLimits?.position1 !== null ? (
+                    <>
+                      {device.actuatorLimits.position1}
+                      {isSeatSealOverdrive && (
+                        <span style={{ fontSize: '0.75rem', color: '#ec4899', marginLeft: '0.25rem', fontWeight: 700 }}>
+                          ({t('settings.device_advanced.seat_seal', 'Seat Seal')} +{seatSealOverdriveSteps})
+                        </span>
+                      )}
+                    </>
+                  ) : '-'} / {device?.actuatorLimits?.position2 !== null ? device.actuatorLimits.position2 : '-'}
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.02)', paddingBottom: '0.25rem' }}>
@@ -1430,11 +1486,89 @@ export default function DeviceAdvancedSettings({
               </div>
             </div>
             <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', margin: 0 }}>
-              <em>{t('settings.device_advanced.diag_interp_title', 'Interpretation of Diagnostics')}</em>: {t('settings.device_advanced.diag_interp_desc', 'Mounting state reports structural coupling. Seat point details the physical contact depth. A high positive/negative deviation value (e.g. > 100) indicates valve adaptation binding, stuck pins, or low battery motor slips.')}
+              <em>{t('settings.device_advanced.diag_interp_title', 'Interpretation of Diagnostics')}</em>: {t('settings.device_advanced.diag_interp_desc', 'Mounting state reports structural coupling. Seat point details the physical contact depth. When fully closing, live steps intentionally slightly exceed the closed endstop to compress the rubber valve washer for positive sealing. A high positive/negative deviation value (e.g. > 100) indicates valve adaptation binding, stuck pins, or low battery motor slips.')}
             </p>
+
+            {/* Anti-Seize Valve Exercise Section */}
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.75rem',
+              borderTop: '1px solid var(--border-color)',
+              paddingTop: '0.75rem'
+            }}>
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '0.5rem'
+              }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.15rem' }}>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                    {t('settings.device_advanced.valve_exercise', 'Anti-Seize Valve Exercise')}
+                  </span>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                    {t('settings.device_advanced.valve_exercise_desc', 'Cycles the valve actuator full stroke to prevent calcification and pin seizure.')}
+                  </span>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                    {t('settings.device_advanced.last_exercised', 'Last Exercised')}: {device?.lastExercisedAt ? new Date(device.lastExercisedAt).toLocaleString() : t('common.never', 'Never')}
+                  </span>
+                </div>
+                <Button
+                  variant="secondary"
+                  disabled={isReadOnly || isExercising}
+                  onClick={async () => {
+                    setIsExercising(true);
+                    try {
+                      await exerciseDevice(homeId, targetSerial, { force: true });
+                      showToast(t('settings.device_advanced.toast_valve_exercise_started', 'Anti-seize valve exercise initiated.'));
+                    } catch (e) {
+                      showToast(e.message || 'Failed to start valve exercise.', 'error');
+                    } finally {
+                      setIsExercising(false);
+                    }
+                  }}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', padding: '0.4rem 0.8rem' }}
+                >
+                  <RefreshCw size={14} className={isExercising ? 'animate-spin' : ''} />
+                  {t('settings.device_advanced.exercise_valve', 'Exercise Valve')}
+                </Button>
+              </div>
+
+              {/* Auto-Exercise Toggle */}
+              <label style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.75rem',
+                cursor: isReadOnly || isUpdatingAutoExercise ? 'not-allowed' : 'pointer',
+                backgroundColor: 'var(--bg-card)',
+                padding: '0.6rem 0.85rem',
+                borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--border-color)',
+                opacity: isReadOnly ? 0.7 : 1
+              }}>
+                <input
+                  type="checkbox"
+                  checked={autoExerciseEnabled}
+                  disabled={isReadOnly || isUpdatingAutoExercise}
+                  onChange={(e) => handleToggleAutoExercise(e.target.checked)}
+                  style={{ width: '16px', height: '16px', accentColor: 'var(--primary)', cursor: isReadOnly ? 'not-allowed' : 'pointer' }}
+                />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                    {t('settings.device_advanced.auto_exercise_toggle', 'Enable Automated Monthly Exercise')}
+                  </span>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
+                    {t('settings.device_advanced.auto_exercise_toggle_desc', 'Include this valve in automated 1st-of-month anti-seize stroke cycles.')}
+                  </span>
+                </div>
+              </label>
+            </div>
           </div>
         </Card>
-      )}
+      );
+    })()}
 
       {/* Hardware Self-Test (Room Units & Thermostats only) */}
       {isStat && (

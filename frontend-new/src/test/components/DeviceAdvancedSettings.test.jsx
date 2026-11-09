@@ -15,7 +15,10 @@ vi.mock('../../api/devices', () => ({
   startMemoryDump: vi.fn().mockResolvedValue({}),
   getMemoryDumpStatus: vi.fn().mockResolvedValue({}),
   cancelMemoryDump: vi.fn().mockResolvedValue({}),
-  downloadMemoryDumpFile: vi.fn().mockResolvedValue({})
+  downloadMemoryDumpFile: vi.fn().mockResolvedValue({}),
+  exerciseDevice: vi.fn().mockResolvedValue({}),
+  getValveExercise: vi.fn().mockResolvedValue({}),
+  updateValveExercise: vi.fn().mockResolvedValue({})
 }));
 
 describe('DeviceAdvancedSettings Component', () => {
@@ -26,6 +29,7 @@ describe('DeviceAdvancedSettings Component', () => {
     device: {
       serialNo: 'VA1234567890',
       deviceType: 'VA02',
+      autoValveExerciseEnabled: true,
       actuatorLimits: {
         active: 1,
         mountingState: 'CALIBRATING',
@@ -43,7 +47,7 @@ describe('DeviceAdvancedSettings Component', () => {
       }
     },
     isReadOnly: false,
-    t: (key, def) => def || key
+    t: (key, def) => (typeof def === 'object' && def !== null ? (def.defaultValue || key) : (def || key))
   };
 
   it('renders firmware-true actuator & motor calibration and telemetry correctly', () => {
@@ -53,7 +57,7 @@ describe('DeviceAdvancedSettings Component', () => {
     expect(html).not.toContain('settings.device_advanced.display_screensaver_title');
 
     // Check stroke axis timeline & calibration
-    expect(html).toContain('Mechanical Stroke Axis');
+    expect(html).toContain('Linear Stepper Axis');
     expect(html).toContain('0 (Origin)');
     expect(html).toContain('Open / Seat');
     expect(html).toContain('Closed Endstop');
@@ -72,10 +76,35 @@ describe('DeviceAdvancedSettings Component', () => {
     expect(html).toContain('1704');
     expect(html).toContain('Deviation');
 
+    // Check auto valve exercise section & toggle
+    expect(html).toContain('Anti-Seize Valve Exercise');
+    expect(html).toContain('Enable Automated Monthly Exercise');
+
     // Verify nonexistent fictitious controls are purged
     expect(html).not.toContain('Save Display Settings');
     expect(html).not.toContain('Save Limits');
     expect(html).not.toContain('Drive Constant (Nominal baseline)');
+  });
+
+  it('renders seat seal overdrive badge and timeline span when live steps exceed closed endstop', () => {
+    const overdriveProps = {
+      ...defaultProps,
+      device: {
+        ...defaultProps.device,
+        actuatorLimits: {
+          ...defaultProps.device.actuatorLimits,
+          position1: 1968,
+          closedPoint: 1895,
+          seatPoint: 1895
+        }
+      }
+    };
+    const html = renderToString(<DeviceAdvancedSettings {...overdriveProps} />);
+
+    // Live: 1968 (Seat Seal +73)
+    expect(html).toContain('Seat Seal');
+    expect(html).toContain('+73');
+    expect(html).toContain('1968');
   });
 
   it('renders disabled inputs when isReadOnly is true', () => {

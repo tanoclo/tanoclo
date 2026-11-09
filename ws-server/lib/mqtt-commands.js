@@ -152,8 +152,13 @@ async function handleCommand(topic, payload) {
             } else {
                 if (log) log('warn', `[mqtt-commands] Schedule profile ${target} not found for home ${homeId}`);
             }
-        } else if (['is_proxied', 'proxy_logging', 'log_uploads_enabled', 'allow_commands_in_proxy', 'zone_config_readonly', 'ha_discovery_enabled'].includes(command)) {
-            const ALLOWED_HOME_COLUMNS = new Set(['is_proxied', 'proxy_logging', 'log_uploads_enabled', 'allow_commands_in_proxy', 'zone_config_readonly', 'ha_discovery_enabled']);
+        } else if (command === 'exercise_valves') {
+            const valveExercise = require('./valve-exercise');
+            valveExercise.exerciseHomeValves(homeId, { force: true }).catch(err => {
+                if (log) log('warn', `[mqtt-commands] Home valve exercise failed for home ${homeId}: ${err.message}`);
+            });
+        } else if (['is_proxied', 'proxy_logging', 'log_uploads_enabled', 'allow_commands_in_proxy', 'zone_config_readonly', 'ha_discovery_enabled', 'auto_valve_exercise'].includes(command)) {
+            const ALLOWED_HOME_COLUMNS = new Set(['is_proxied', 'proxy_logging', 'log_uploads_enabled', 'allow_commands_in_proxy', 'zone_config_readonly', 'ha_discovery_enabled', 'auto_valve_exercise']);
             if (!ALLOWED_HOME_COLUMNS.has(command)) return; // Redundant safety guard
             const enabled = String(payload).toUpperCase() === 'ON' ? 1 : 0;
             // Use explicit column mapping to prevent SQL injection — never interpolate topic segments into SQL
@@ -163,7 +168,8 @@ async function handleCommand(topic, payload) {
                 'log_uploads_enabled': 'UPDATE homes SET log_uploads_enabled = ? WHERE id = ?',
                 'allow_commands_in_proxy': 'UPDATE homes SET allow_commands_in_proxy = ? WHERE id = ?',
                 'zone_config_readonly': 'UPDATE homes SET zone_config_readonly = ? WHERE id = ?',
-                'ha_discovery_enabled': 'UPDATE homes SET ha_discovery_enabled = ? WHERE id = ?'
+                'ha_discovery_enabled': 'UPDATE homes SET ha_discovery_enabled = ? WHERE id = ?',
+                'auto_valve_exercise': 'UPDATE homes SET auto_valve_exercise_enabled = ? WHERE id = ?'
             };
             await pool.execute(HOME_COLUMN_MAP[command], [enabled, homeId]);
 
@@ -622,6 +628,11 @@ async function handleCommand(topic, payload) {
                 });
 
                 await mqttPublisher.publishChildLock(shortSerial, enabled);
+            } else if (command === 'exercise' && isVA) {
+                const valveExercise = require('./valve-exercise');
+                await valveExercise.exerciseValve(dev.serial_no, homeId, { force: true }).catch(err => {
+                    if (log) log('warn', `[mqtt-commands] Valve exercise failed for ${dev.serial_no}: ${err.message}`);
+                });
             }
         }
     }

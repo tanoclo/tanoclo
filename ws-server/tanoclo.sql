@@ -23075,7 +23075,9 @@ CREATE TABLE `devices` (
   `field_015d` int(11) DEFAULT NULL COMMENT 'device_type/role: 71=Wired Thermostat, 200=Wireless Sensor, 112/113=VA',
   `valve_sensitivity` int(11) NOT NULL DEFAULT 100 COMMENT 'Valve demand scale denominator (0x4160): 50-100 (default 100)',
   `battery_curve_custom` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL COMMENT 'Custom discharge curve [[mv, pct], ...] overrides default for battery_type' CHECK (json_valid(`battery_curve_custom`)),
-  `va_motor_error_detection` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Enable low-battery inference from persistent motor errors (VA only)'
+  `va_motor_error_detection` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Enable low-battery inference from persistent motor errors (VA only)',
+  `last_exercised_at` datetime DEFAULT NULL COMMENT 'Timestamp of last anti-seize stroke exercise',
+  `auto_valve_exercise_enabled` tinyint(1) NOT NULL DEFAULT 1 COMMENT 'Per-device automated valve exercise enable toggle'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `balancing_snapshots` (
@@ -23259,7 +23261,8 @@ CREATE TABLE `homes` (
   `contact_name` varchar(255) DEFAULT '',
   `contact_email` varchar(255) DEFAULT '',
   `contact_phone` varchar(50) DEFAULT '',
-  `email_low_battery_reminder` tinyint(1) DEFAULT 1
+  `email_low_battery_reminder` tinyint(1) DEFAULT 1,
+  `auto_valve_exercise_enabled` tinyint(1) NOT NULL DEFAULT 1 COMMENT 'Automated monthly anti-seize valve exercise'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `home_weather` (

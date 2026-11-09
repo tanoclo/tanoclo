@@ -124,6 +124,8 @@ function mapDevice(d) {
 
     if (d.device_type && d.device_type.startsWith('VA')) {
         mapped.valveSensitivity = d.valve_sensitivity !== null && d.valve_sensitivity !== undefined ? parseInt(d.valve_sensitivity, 10) : 100;
+        mapped.lastExercisedAt = d.last_exercised_at ? (typeof d.last_exercised_at === 'string' ? d.last_exercised_at : d.last_exercised_at.toISOString()) : null;
+        mapped.autoValveExerciseEnabled = d.auto_valve_exercise_enabled !== undefined && d.auto_valve_exercise_enabled !== null ? Boolean(d.auto_valve_exercise_enabled) : true;
     }
 
     if (d.device_type === 'IB01' || (d.device_type && d.device_type.startsWith('IB'))) {

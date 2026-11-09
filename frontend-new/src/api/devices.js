@@ -317,3 +317,50 @@ export async function downloadMemoryDumpFile(homeId, deviceId, fileName) {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+
+/**
+ * Triggers anti-seize motor exercise for a valve device
+ * @param {string|number} homeId
+ * @param {string} deviceId
+ * @param {object} options - { force: boolean }
+ */
+export function exerciseDevice(homeId, deviceId, options = {}) {
+  return apiFetch(`/api/v2/homes/${homeId}/devices/${deviceId}/exercise`, {
+    method: 'POST',
+    body: options
+  });
+}
+
+/**
+ * Triggers anti-seize exercise for all valves in home
+ * @param {string|number} homeId
+ * @param {object} options - { force: boolean }
+ */
+export function exerciseHomeValves(homeId, options = {}) {
+  return apiFetch(`/api/v2/homes/${homeId}/exercise-valves`, {
+    method: 'POST',
+    body: options
+  });
+}
+
+/**
+ * Gets anti-seize valve exercise status and settings for a device
+ * @param {string|number} homeId
+ * @param {string} deviceId
+ */
+export function getValveExercise(homeId, deviceId) {
+  return apiFetch(`/api/v2/homes/${homeId}/devices/${deviceId}/valveExercise`);
+}
+
+/**
+ * Updates anti-seize valve exercise toggle for a device
+ * @param {string|number} homeId
+ * @param {string} deviceId
+ * @param {boolean} enabled
+ */
+export function updateValveExercise(homeId, deviceId, enabled) {
+  return apiFetch(`/api/v2/homes/${homeId}/devices/${deviceId}/valveExercise`, {
+    method: 'PUT',
+    body: { autoValveExerciseEnabled: enabled }
+  });
+}

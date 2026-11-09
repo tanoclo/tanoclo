@@ -16,6 +16,7 @@ const log = getLogger('cron');
 const meshRecovery = require('./mesh-recovery');
 const { pruneAllSnapshots } = require('./snapshot-cleanup');
 const moldDetector = require('./mold-detector');
+const valveExercise = require('./valve-exercise');
 
 let _broadcastTimeFn = null;
 let _broadcastRfKeyFn = null;
@@ -143,6 +144,11 @@ function start({ broadcastTime, broadcastRfKey, pushZoneOverlayDelete, pushSched
     // 13. Auto Schedule Profile Check (Every 1 hour)
     _intervals.push(setInterval(evaluateAllHomesAutoProfiles, 60 * 60 * 1000));
 
+    // 14. Monthly Anti-Seize Valve Exercise Check (Every 1 hour)
+    _intervals.push(setInterval(() => {
+        valveExercise.checkMonthlyValveExercise(db.getPool(), _mqttPublisher).catch(e => log('debug', `[cron] Valve exercise error: ${e.message}`));
+    }, 60 * 60 * 1000));
+
     // Prevent cron intervals from keeping the process alive during crash paths
     for (const id of _intervals) id.unref();
 
@@ -151,6 +157,7 @@ function start({ broadcastTime, broadcastRfKey, pushZoneOverlayDelete, pushSched
     checkZones();
     evaluateAllHomesPresence().catch(() => { });
     evaluateAllHomesAutoProfiles().catch(() => { });
+    valveExercise.checkMonthlyValveExercise(db.getPool(), _mqttPublisher).catch(() => { });
 
     (async () => {
         await weather.updateAllHomesWeather();

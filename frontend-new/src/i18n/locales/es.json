@@ -567,7 +567,16 @@
       "toast_calibration_started": "Secuencia de calibración de montaje iniciada.",
       "toast_self_test_sent": "Solicitud de autodiagnóstico de hardware enviada.",
       "toast_downloading_dump": "Descargando archivo de volcado...",
-      "toast_download_complete": "Descarga completada"
+      "toast_download_complete": "Descarga completada",
+      "valve_exercise": "Ejercicio antibloqueo de válvula",
+      "valve_exercise_desc": "Mueve el actuador por toda su carrera para evitar la calcificación y el bloqueo del vástago.",
+      "exercise_valve": "Ejercitar válvula",
+      "last_exercised": "Último ejercicio",
+      "toast_valve_exercise_started": "Ejercicio de válvula iniciado.",
+      "auto_exercise_toggle": "Habilitar ejercicio mensual automático",
+      "auto_exercise_toggle_desc": "Incluir esta válvula en los ciclos automáticos antibloqueo el 1 de cada mes.",
+      "toast_valve_exercise_updated": "Preferencia de ejercicio de válvula guardada.",
+      "seat_seal": "Cierre hermético"
     },
     "save_display": "Guardar ajustes de pantalla",
     "low_steps": "Pasos inferiores (Límite de cierre)",

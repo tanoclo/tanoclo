@@ -567,7 +567,16 @@
       "toast_calibration_started": "Sequenza di calibrazione montaggio avviata.",
       "toast_self_test_sent": "Richiesta di autodiagnosi hardware inviata.",
       "toast_downloading_dump": "Download file di dump in corso...",
-      "toast_download_complete": "Download completato"
+      "toast_download_complete": "Download completato",
+      "valve_exercise": "Esercizio antibloccaggio valvola",
+      "valve_exercise_desc": "Aziona l'attuatore per l'intera corsa per prevenire calcare e bloccaggio dello spillo della valvola.",
+      "exercise_valve": "Esercita valvola",
+      "last_exercised": "Ultimo esercizio",
+      "toast_valve_exercise_started": "Esercizio della valvola avviato.",
+      "auto_exercise_toggle": "Abilita esercizio mensile automatico",
+      "auto_exercise_toggle_desc": "Includi questa valvola nei cicli automatici antibloccaggio il primo del mese.",
+      "toast_valve_exercise_updated": "Preferenza per l'esercizio della valvola salvata.",
+      "seat_seal": "Tenuta sede"
     },
     "save_display": "Salva impostazioni display",
     "low_steps": "Passi inferiori (Limite di chiusura)",
