@@ -1550,6 +1550,10 @@
     "not_applied": "Conseil uniquement",
     "apply_zone_btn": "Appliquer",
     "zone_applied_success": "Paramètres PID mis à jour pour {{name}} !",
-    "apply_failed": "Échec de l'application des paramètres PID"
+    "apply_failed": "Échec de l'application des paramètres PID",
+    "diagnosis_micro_burning": "Cycles courts / Micro-brûlages",
+    "home_micro_burns": "{{count}} micro-brûlages détectés ({{ratio}}%)",
+    "micro_burns_label": "Micro-brûlages",
+    "avg_burn_label": "Durée moyenne de chauffe"
   }
 }

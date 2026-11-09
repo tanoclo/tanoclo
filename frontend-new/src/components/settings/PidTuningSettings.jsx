@@ -124,6 +124,8 @@ export default function PidTuningSettings({ homeId, zones = [], isReadOnly = fal
         return <span style={{ padding: '0.2rem 0.6rem', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 600, background: 'rgba(234, 179, 8, 0.15)', color: '#eab308' }}>{t('pid_tuning.diagnosis_droop', { defaultValue: 'Steady-State Droop' })}</span>;
       case 'HUNTING':
         return <span style={{ padding: '0.2rem 0.6rem', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 600, background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444' }}>{t('pid_tuning.diagnosis_hunting', { defaultValue: 'Hunting / Oscillating' })}</span>;
+      case 'MICRO_BURNING':
+        return <span style={{ padding: '0.2rem 0.6rem', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 600, background: 'rgba(244, 63, 94, 0.15)', color: '#f43f5e' }}>{t('pid_tuning.diagnosis_micro_burning', { defaultValue: 'Micro-Burns / Cycling' })}</span>;
       case 'SLUGGISH':
         return <span style={{ padding: '0.2rem 0.6rem', borderRadius: '999px', fontSize: '0.75rem', fontWeight: 600, background: 'rgba(59, 130, 246, 0.15)', color: '#3b82f6' }}>{t('pid_tuning.diagnosis_sluggish', { defaultValue: 'Sluggish' })}</span>;
       default:
@@ -258,6 +260,15 @@ export default function PidTuningSettings({ homeId, zones = [], isReadOnly = fal
                   windows: analysisResult.totalTransientWindows,
                   hours: analysisResult.analyzedHours
                 })}
+                {analysisResult.homeMicroBurnCount > 0 && (
+                  <span style={{ marginLeft: '0.5rem', color: '#f43f5e', fontWeight: 600 }}>
+                    • {t('pid_tuning.home_micro_burns', {
+                      defaultValue: '{{count}} micro-burns detected ({{ratio}}%)',
+                      count: analysisResult.homeMicroBurnCount,
+                      ratio: Math.round(analysisResult.homeMicroBurnRatio * 100)
+                    })}
+                  </span>
+                )}
               </p>
             </div>
 
@@ -348,6 +359,12 @@ export default function PidTuningSettings({ homeId, zones = [], isReadOnly = fal
                   <div>Steady-State Error: <strong style={{ color: 'var(--text-primary)' }}>{zone.metrics.avgSteadyStateError}°C</strong></div>
                   <div>Oscillation Score: <strong style={{ color: 'var(--text-primary)' }}>{zone.metrics.oscillationScore}</strong></div>
                   <div>Avg Rise Time: <strong style={{ color: 'var(--text-primary)' }}>{zone.metrics.avgRiseTimeMinutes}m</strong></div>
+                  {zone.metrics.totalBurns > 0 && (
+                    <div>Micro-Burns: <strong style={{ color: zone.metrics.microBurnCount > 0 ? '#f43f5e' : 'var(--text-primary)' }}>{zone.metrics.microBurnCount} / {zone.metrics.totalBurns} ({Math.round(zone.metrics.microBurnRatio * 100)}%)</strong></div>
+                  )}
+                  {zone.metrics.avgBurnDurationMinutes > 0 && (
+                    <div>Avg Burn: <strong style={{ color: 'var(--text-primary)' }}>{zone.metrics.avgBurnDurationMinutes}m</strong></div>
+                  )}
                 </div>
 
                 {/* Gains Comparison */}

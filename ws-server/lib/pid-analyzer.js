@@ -152,12 +152,218 @@ function extractTransientWindows(rows, maxWindowMinutes = 120, options = {}) {
 }
 
 /**
+ * Extract discrete boiler burn intervals from circuit measurements.
+ * 
+ * @param {Array<Object>} circuitRows - Chronologically sorted circuit measurements
+ * @param {number} [maxGapMinutes=3] - Maximum gap to merge continuous burn
+ * @param {number} [microBurnThresholdMinutes=10] - Threshold below which a burn is flagged as a micro-burn
+ * @returns {Array<Object>} Extracted burn events [{ circuitNumber, startTime, endTime, durationMinutes, isMicroBurn }]
+ */
+function extractBurnEvents(circuitRows, maxGapMinutes = 15, microBurnThresholdMinutes = 10) {
+    if (!Array.isArray(circuitRows) || circuitRows.length === 0) return [];
+
+    const sorted = [...circuitRows].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    const burnEvents = [];
+    let currentBurn = null;
+
+    for (const row of sorted) {
+        const t = new Date(row.timestamp).getTime();
+        if (isNaN(t)) continue;
+
+        const cNum = Number(row.circuit_number) || 1;
+        const hasFlameTelemetry = (row.field_0457 !== null && row.field_0457 !== undefined) ||
+                                  (row.field_0452 !== null && row.field_0452 !== undefined);
+        const isFlameOn = Boolean(row.field_0457) || (Number(row.field_0452) > 0);
+        const isActive = hasFlameTelemetry ? isFlameOn : (Number(row.field_4080) > 0);
+
+        if (isActive) {
+            if (!currentBurn) {
+                currentBurn = {
+                    circuitNumber: cNum,
+                    startTime: t,
+                    endTime: t
+                };
+            } else {
+                const gapMin = (t - currentBurn.endTime) / 60000;
+                if (gapMin <= maxGapMinutes && currentBurn.circuitNumber === cNum) {
+                    currentBurn.endTime = t;
+                } else {
+                    const durMin = Math.max(1, Math.round((currentBurn.endTime - currentBurn.startTime) / 60000));
+                    const effectiveDurMin = (currentBurn.startTime === currentBurn.endTime) ? 3 : durMin;
+                    burnEvents.push({
+                        circuitNumber: currentBurn.circuitNumber,
+                        startTime: currentBurn.startTime,
+                        endTime: currentBurn.endTime,
+                        durationMinutes: effectiveDurMin,
+                        isMicroBurn: effectiveDurMin < microBurnThresholdMinutes
+                    });
+                    currentBurn = {
+                        circuitNumber: cNum,
+                        startTime: t,
+                        endTime: t
+                    };
+                }
+            }
+        } else if (currentBurn) {
+            const durMin = Math.max(1, Math.round((currentBurn.endTime - currentBurn.startTime) / 60000));
+            const effectiveDurMin = (currentBurn.startTime === currentBurn.endTime) ? 3 : durMin;
+            burnEvents.push({
+                circuitNumber: currentBurn.circuitNumber,
+                startTime: currentBurn.startTime,
+                endTime: currentBurn.endTime,
+                durationMinutes: effectiveDurMin,
+                isMicroBurn: effectiveDurMin < microBurnThresholdMinutes
+            });
+            currentBurn = null;
+        }
+    }
+
+    if (currentBurn) {
+        const durMin = Math.max(1, Math.round((currentBurn.endTime - currentBurn.startTime) / 60000));
+        const effectiveDurMin = (currentBurn.startTime === currentBurn.endTime) ? 3 : durMin;
+        burnEvents.push({
+            circuitNumber: currentBurn.circuitNumber,
+            startTime: currentBurn.startTime,
+            endTime: currentBurn.endTime,
+            durationMinutes: effectiveDurMin,
+            isMicroBurn: effectiveDurMin < microBurnThresholdMinutes
+        });
+    }
+
+    return burnEvents;
+}
+
+/**
+ * Correlate zone demand telemetry with circuit burn events (or identify proxy demand pulses if flame telemetry is absent).
+ * 
+ * @param {Array<Object>} zoneRows - Chronological zone measurements
+ * @param {Array<Object>} [burnEvents=[]] - Extracted circuit burn events
+ * @param {number} [totalAnalysisHours=72] - Analysis duration in hours
+ * @param {Object} [options={}] - Configurable thresholds
+ * @returns {Object} Burn metrics { totalBurns, microBurnCount, microBurnRatio, avgBurnDurationMinutes, shortCyclesPerHour }
+ */
+function correlateZoneBurns(zoneRows, burnEvents = [], totalAnalysisHours = 72, options = {}) {
+    const minDemand = typeof options.minDemand === 'number' ? options.minDemand : 10;
+    const microBurnThresholdMinutes = typeof options.microBurnThresholdMinutes === 'number' ? options.microBurnThresholdMinutes : 10;
+
+    if (!Array.isArray(zoneRows) || zoneRows.length === 0) {
+        return {
+            totalBurns: 0,
+            microBurnCount: 0,
+            microBurnRatio: 0,
+            avgBurnDurationMinutes: 0,
+            shortCyclesPerHour: 0
+        };
+    }
+
+    const sortedZone = [...zoneRows].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+    // Case 1: Circuit burn events available
+    if (Array.isArray(burnEvents) && burnEvents.length > 0) {
+        let correlatedBurns = 0;
+        let microBurns = 0;
+        let totalDuration = 0;
+
+        for (const burn of burnEvents) {
+            const hadDemand = sortedZone.some(r => {
+                const t = new Date(r.timestamp).getTime();
+                return t >= burn.startTime && t <= burn.endTime && (Number(r.field_40a0) >= minDemand);
+            });
+
+            if (hadDemand) {
+                correlatedBurns++;
+                totalDuration += burn.durationMinutes;
+                if (burn.isMicroBurn) {
+                    microBurns++;
+                }
+            }
+        }
+
+        const ratio = correlatedBurns > 0 ? Math.round((microBurns / correlatedBurns) * 100) / 100 : 0;
+        const avgDur = correlatedBurns > 0 ? Math.round(totalDuration / correlatedBurns) : 0;
+        const cyclesPerHour = totalAnalysisHours > 0 ? Math.round((microBurns / totalAnalysisHours) * 10) / 10 : 0;
+
+        return {
+            totalBurns: correlatedBurns,
+            microBurnCount: microBurns,
+            microBurnRatio: ratio,
+            avgBurnDurationMinutes: avgDur,
+            shortCyclesPerHour: cyclesPerHour
+        };
+    }
+
+    // Case 2: Proxy zone-level demand pulses
+    let proxyBurns = 0;
+    let proxyMicroBurns = 0;
+    let totalProxyDuration = 0;
+    let currentPulse = null;
+
+    for (const r of sortedZone) {
+        const t = new Date(r.timestamp).getTime();
+        if (isNaN(t)) continue;
+        const demand = Number(r.field_40a0) || 0;
+
+        if (demand >= minDemand) {
+            if (!currentPulse) {
+                currentPulse = { startTime: t, endTime: t };
+            } else {
+                const gapMin = (t - currentPulse.endTime) / 60000;
+                if (gapMin <= 15) {
+                    currentPulse.endTime = t;
+                } else {
+                    const durMin = Math.max(3, Math.round((currentPulse.endTime - currentPulse.startTime) / 60000));
+                    proxyBurns++;
+                    totalProxyDuration += durMin;
+                    if (durMin < microBurnThresholdMinutes) proxyMicroBurns++;
+                    currentPulse = { startTime: t, endTime: t };
+                }
+            }
+        } else if (currentPulse) {
+            const durMin = Math.max(3, Math.round((currentPulse.endTime - currentPulse.startTime) / 60000));
+            proxyBurns++;
+            totalProxyDuration += durMin;
+            if (durMin < microBurnThresholdMinutes) proxyMicroBurns++;
+            currentPulse = null;
+        }
+    }
+
+    if (currentPulse) {
+        const durMin = Math.max(3, Math.round((currentPulse.endTime - currentPulse.startTime) / 60000));
+        proxyBurns++;
+        totalProxyDuration += durMin;
+        if (durMin < microBurnThresholdMinutes) proxyMicroBurns++;
+    }
+
+    const ratio = proxyBurns > 0 ? Math.round((proxyMicroBurns / proxyBurns) * 100) / 100 : 0;
+    const avgDur = proxyBurns > 0 ? Math.round(totalProxyDuration / proxyBurns) : 0;
+    const cyclesPerHour = totalAnalysisHours > 0 ? Math.round((proxyMicroBurns / totalAnalysisHours) * 10) / 10 : 0;
+
+    return {
+        totalBurns: proxyBurns,
+        microBurnCount: proxyMicroBurns,
+        microBurnRatio: ratio,
+        avgBurnDurationMinutes: avgDur,
+        shortCyclesPerHour: cyclesPerHour
+    };
+}
+
+/**
  * Compute thermodynamic transient metrics for a single zone.
  * 
  * @param {Array<Object>} windows - Extracted transient response windows
+ * @param {Object} [burnMetrics={}] - Correlated burn metrics
  * @returns {Object} Calculated metrics
  */
-function evaluateZoneTransients(windows) {
+function evaluateZoneTransients(windows, burnMetrics = {}) {
+    const defaultBurn = {
+        totalBurns: 0,
+        microBurnCount: 0,
+        microBurnRatio: 0,
+        avgBurnDurationMinutes: 0,
+        shortCyclesPerHour: 0
+    };
+    const bMetrics = { ...defaultBurn, ...burnMetrics };
+
     if (!windows || windows.length === 0) {
         return {
             validWindowsCount: 0,
@@ -165,7 +371,8 @@ function evaluateZoneTransients(windows) {
             maxOvershoot: 0,
             avgSteadyStateError: 0,
             oscillationScore: 0,
-            avgRiseTimeMinutes: 0
+            avgRiseTimeMinutes: 0,
+            ...bMetrics
         };
     }
 
@@ -257,7 +464,8 @@ function evaluateZoneTransients(windows) {
         maxOvershoot: Math.round(maxOvershoot * 100) / 100,
         avgSteadyStateError: Math.round((totalSteadyStateError / count) * 100) / 100,
         oscillationScore: Math.round((totalOscillationEvents / count) * 10) / 10,
-        avgRiseTimeMinutes: riseTimeCount > 0 ? Math.round(totalRiseTime / riseTimeCount) : 0
+        avgRiseTimeMinutes: riseTimeCount > 0 ? Math.round(totalRiseTime / riseTimeCount) : 0,
+        ...bMetrics
     };
 }
 
@@ -380,6 +588,8 @@ function derivePidSuggestions(metrics, currentGains, heatingType = 'RADIATOR', o
     const reasons = [];
 
     const { avgOvershoot, maxOvershoot, avgSteadyStateError, oscillationScore, validWindowsCount } = metrics;
+    const isMicroBurnProne = (metrics.microBurnRatio >= 0.30 && metrics.microBurnCount >= 2) ||
+                             (metrics.shortCyclesPerHour >= 1.5 && metrics.microBurnCount >= 3);
 
     if (validWindowsCount < 2) {
         return {
@@ -407,6 +617,15 @@ function derivePidSuggestions(metrics, currentGains, heatingType = 'RADIATOR', o
             suggestedKi = Math.max(0.8, Math.min(1.8, Math.round(curKi * 0.75 * 10) / 10));
             suggestedKd = Math.min(35.0, Math.max(20.0, Math.round(curKd * 1.25 * 10) / 10));
             reasons.push('Underfloor slab hunting. Dampening Kp and Ki, and boosting Kd derivative braking to arrest thermal inertia.');
+            if (isMicroBurnProne) {
+                reasons.push(`Coupled with frequent short-cycling (${metrics.microBurnCount} micro-burns, ${Math.round(metrics.microBurnRatio * 100)}% ratio).`);
+            }
+        } else if (isMicroBurnProne) {
+            diagnosis = 'MICRO_BURNING';
+            suggestedKp = Math.max(2.0, Math.min(4.0, Math.round(curKp * 0.75 * 10) / 10));
+            suggestedKi = Math.max(0.8, Math.min(1.8, Math.round(curKi * 0.70 * 10) / 10));
+            suggestedKd = Math.min(35.0, Math.max(20.0, Math.round(curKd * 1.30 * 10) / 10));
+            reasons.push(`Underfloor heating triggers frequent short-cycling (${metrics.microBurnCount} burns < 10m, ${Math.round(metrics.microBurnRatio * 100)}% of burns). Reducing Kp and Ki to prevent rapid demand pulsing, and boosting Kd derivative braking.`);
         } else if (maxOvershoot >= 0.35 || avgOvershoot >= 0.25) {
             diagnosis = 'OVERSHOOT';
             suggestedKp = Math.max(2.0, Math.min(4.0, Math.round(curKp * 0.80 * 10) / 10));
@@ -437,21 +656,32 @@ function derivePidSuggestions(metrics, currentGains, heatingType = 'RADIATOR', o
             suggestedKi = Math.max(2.0, Math.round(curKi * 0.80 * 10) / 10);
             suggestedKd = Math.min(30.0, Math.round(curKd * 1.20 * 10) / 10);
             reasons.push(`Temperature hunts/oscillates around target (${oscillationScore} direction reversals). Decreasing Kp and Ki, and increasing Kd damping to stabilize loop.`);
+            if (isMicroBurnProne) {
+                reasons.push(`Also causing frequent short-cycling (${metrics.microBurnCount} micro-burns, ${Math.round(metrics.microBurnRatio * 100)}% ratio).`);
+            }
         }
-        // 2. Check for Thermal Overshoot
+        // 2. Check for Short-Cycling / Micro-Burning
+        else if (isMicroBurnProne) {
+            diagnosis = 'MICRO_BURNING';
+            suggestedKp = Math.max(3.0, Math.round(curKp * 0.80 * 10) / 10);
+            suggestedKi = Math.max(1.5, Math.round(curKi * 0.75 * 10) / 10);
+            suggestedKd = Math.min(35.0, Math.round(curKd * 1.25 * 10) / 10);
+            reasons.push(`Room causes frequent boiler micro-burns (${metrics.microBurnCount} burns < 10m, ${Math.round(metrics.microBurnRatio * 100)}% of burns, avg ${metrics.avgBurnDurationMinutes || 0}m). Reducing Kp and Ki to prevent bursty demand on small temperature dips, and boosting Kd damping to steady the valve.`);
+        }
+        // 3. Check for Thermal Overshoot
         else if (maxOvershoot >= 0.50 || avgOvershoot >= 0.35) {
             diagnosis = 'OVERSHOOT';
             suggestedKp = Math.max(3.0, Math.round(curKp * 0.85 * 10) / 10);
             suggestedKd = Math.min(35.0, Math.round(curKd * 1.25 * 10) / 10);
             reasons.push(`Room overshoots target temperature by up to ${maxOvershoot.toFixed(2)}°C. Reducing Kp to soften initial surge and boosting Kd dynamic braking.`);
         }
-        // 3. Check for Steady-State Droop (Under-heating)
+        // 4. Check for Steady-State Droop (Under-heating)
         else if (avgSteadyStateError >= 0.30) {
             diagnosis = 'DROOP';
             suggestedKi = Math.min(18.0, Math.round(curKi * 1.35 * 10) / 10);
             reasons.push(`Room consistently settles ${avgSteadyStateError.toFixed(2)}°C below setpoint. Increasing Ki integral gain to eliminate steady-state shortfall.`);
         }
-        // 4. Check for Sluggish Rise
+        // 5. Check for Sluggish Rise
         else if (metrics.avgRiseTimeMinutes > 75 && avgOvershoot < 0.15 && oscillationScore < 1.0) {
             diagnosis = 'SLUGGISH';
             suggestedKp = Math.min(25.0, Math.round(curKp * 1.25 * 10) / 10);
@@ -523,8 +753,12 @@ async function analyzePidTuning(homeId, options = {}) {
         [homeId, cutoffStr]
     );
 
-    // 3. Query circuit measurements to track active heating circuit intervals
+    // 3. Query circuit measurements to track active heating circuit intervals and burn events
     const circuitIntervalsByCircuit = new Map();
+    const burnEventsByCircuit = new Map();
+    let totalHomeBurns = 0;
+    let totalHomeMicroBurns = 0;
+
     try {
         const [circuitRows] = await pool.execute(
             `SELECT timestamp, circuit_number, field_4080, field_0457, field_0452 
@@ -550,6 +784,15 @@ async function analyzePidTuning(homeId, options = {}) {
                         }
                     }
                 }
+            }
+
+            const extractedBurns = extractBurnEvents(circuitRows);
+            for (const b of extractedBurns) {
+                totalHomeBurns++;
+                if (b.isMicroBurn) totalHomeMicroBurns++;
+                const cNum = b.circuitNumber || 1;
+                if (!burnEventsByCircuit.has(cNum)) burnEventsByCircuit.set(cNum, []);
+                burnEventsByCircuit.get(cNum).push(b);
             }
         }
     } catch (e) {
@@ -592,6 +835,7 @@ async function analyzePidTuning(homeId, options = {}) {
         const zId = Number(zone.id);
         const cNum = Number(zone.heating_circuit) || 1;
         const circuitIntervals = circuitIntervalsByCircuit.get(cNum) || null;
+        const circuitBurns = burnEventsByCircuit.get(cNum) || [];
         const heatingType = zone.heating_type || 'RADIATOR';
         const underfloorMass = zone.underfloor_mass || 'SCREED';
 
@@ -600,7 +844,8 @@ async function analyzePidTuning(homeId, options = {}) {
         const windows = extractTransientWindows(rows, maxWinMinutes, { circuitIntervals });
         totalWindows += windows.length;
 
-        const metrics = evaluateZoneTransients(windows);
+        const burnMetrics = correlateZoneBurns(rows, circuitBurns, hours);
+        const metrics = evaluateZoneTransients(windows, burnMetrics);
         const roomSizeSqm = zone.room_size_sqm !== null && zone.room_size_sqm !== undefined ? parseFloat(zone.room_size_sqm) : null;
         const defaultKp = heatingType === 'UNDERFLOOR' ? 4.00 : 10.00;
         const defaultKi = heatingType === 'UNDERFLOOR' ? 1.50 : 5.00;
@@ -643,6 +888,8 @@ async function analyzePidTuning(homeId, options = {}) {
         analysisTimestamp: new Date().toISOString(),
         analyzedHours: hours,
         totalTransientWindows: totalWindows,
+        homeMicroBurnCount: totalHomeMicroBurns,
+        homeMicroBurnRatio: totalHomeBurns > 0 ? Math.round((totalHomeMicroBurns / totalHomeBurns) * 100) / 100 : 0,
         hydraulicBaseline,
         hydraulicRecommendedFirst: hydraulicBaseline === null,
         zones: zoneResults,
@@ -655,5 +902,7 @@ module.exports = {
     evaluateZoneTransients,
     calculatePidPreset,
     derivePidSuggestions,
+    extractBurnEvents,
+    correlateZoneBurns,
     analyzePidTuning
 };

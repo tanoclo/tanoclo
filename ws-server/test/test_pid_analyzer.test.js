@@ -8,7 +8,9 @@ import {
     extractTransientWindows,
     evaluateZoneTransients,
     calculatePidPreset,
-    derivePidSuggestions
+    derivePidSuggestions,
+    extractBurnEvents,
+    correlateZoneBurns
 } from '../lib/pid-analyzer';
 
 describe('Thermodynamic PID Analyzer', () => {
@@ -248,6 +250,155 @@ describe('Thermodynamic PID Analyzer', () => {
             expect(result.kp).toBeLessThanOrEqual(30.0);
             expect(result.ki).toBeLessThanOrEqual(20.0);
             expect(result.kd).toBeGreaterThanOrEqual(5.0);
+        });
+    });
+
+    describe('Micro-Burn (Short-Cycling) Tracking & Tuning', () => {
+        describe('extractBurnEvents', () => {
+            it('returns empty array on empty inputs', () => {
+                expect(extractBurnEvents([])).toEqual([]);
+                expect(extractBurnEvents(null)).toEqual([]);
+            });
+
+            it('identifies continuous burns and flags micro-burns under 10 minutes', () => {
+                const circuitRows = [
+                    // Burn 1: 5 minutes (micro-burn)
+                    { timestamp: '2026-10-10 10:00:00', circuit_number: 1, field_0457: 1, field_0452: 60 },
+                    { timestamp: '2026-10-10 10:02:00', circuit_number: 1, field_0457: 1, field_0452: 50 },
+                    { timestamp: '2026-10-10 10:05:00', circuit_number: 1, field_0457: 1, field_0452: 40 },
+                    // Gap (boiler off)
+                    { timestamp: '2026-10-10 10:15:00', circuit_number: 1, field_0457: 0, field_0452: 0 },
+                    // Burn 2: 25 minutes (normal sustained burn)
+                    { timestamp: '2026-10-10 11:00:00', circuit_number: 1, field_0457: 1, field_0452: 80 },
+                    { timestamp: '2026-10-10 11:10:00', circuit_number: 1, field_0457: 1, field_0452: 70 },
+                    { timestamp: '2026-10-10 11:25:00', circuit_number: 1, field_0457: 1, field_0452: 60 }
+                ];
+
+                const burns = extractBurnEvents(circuitRows);
+                expect(burns).toHaveLength(2);
+
+                expect(burns[0].durationMinutes).toBe(5);
+                expect(burns[0].isMicroBurn).toBe(true);
+
+                expect(burns[1].durationMinutes).toBe(25);
+                expect(burns[1].isMicroBurn).toBe(false);
+            });
+        });
+
+        describe('correlateZoneBurns', () => {
+            it('correlates zone demand with circuit burns', () => {
+                const burnEvents = [
+                    { circuitNumber: 1, startTime: new Date('2026-10-10 10:00:00').getTime(), endTime: new Date('2026-10-10 10:05:00').getTime(), durationMinutes: 5, isMicroBurn: true },
+                    { circuitNumber: 1, startTime: new Date('2026-10-10 11:00:00').getTime(), endTime: new Date('2026-10-10 11:25:00').getTime(), durationMinutes: 25, isMicroBurn: false },
+                    { circuitNumber: 1, startTime: new Date('2026-10-10 12:00:00').getTime(), endTime: new Date('2026-10-10 12:06:00').getTime(), durationMinutes: 6, isMicroBurn: true }
+                ];
+
+                const zoneRows = [
+                    // Calling during burn 1
+                    { timestamp: '2026-10-10 10:02:00', field_40a0: 50 },
+                    // Idle during burn 2
+                    { timestamp: '2026-10-10 11:10:00', field_40a0: 0 },
+                    // Calling during burn 3
+                    { timestamp: '2026-10-10 12:02:00', field_40a0: 60 }
+                ];
+
+                const res = correlateZoneBurns(zoneRows, burnEvents, 24);
+                expect(res.totalBurns).toBe(2);
+                expect(res.microBurnCount).toBe(2);
+                expect(res.microBurnRatio).toBe(1.0);
+                expect(res.avgBurnDurationMinutes).toBe(6);
+                expect(res.shortCyclesPerHour).toBe(0.1);
+            });
+
+            it('identifies proxy micro-pulses when circuit telemetry is absent', () => {
+                const zoneRows = [
+                    // Pulse 1: 4 mins
+                    { timestamp: '2026-10-10 10:00:00', field_40a0: 40 },
+                    { timestamp: '2026-10-10 10:04:00', field_40a0: 40 },
+                    { timestamp: '2026-10-10 10:15:00', field_40a0: 0 },
+                    // Pulse 2: 30 mins
+                    { timestamp: '2026-10-10 11:00:00', field_40a0: 50 },
+                    { timestamp: '2026-10-10 11:15:00', field_40a0: 60 },
+                    { timestamp: '2026-10-10 11:30:00', field_40a0: 40 }
+                ];
+
+                const res = correlateZoneBurns(zoneRows, [], 24);
+                expect(res.totalBurns).toBe(2);
+                expect(res.microBurnCount).toBe(1);
+                expect(res.microBurnRatio).toBe(0.5);
+            });
+        });
+
+        describe('derivePidSuggestions with micro-burning', () => {
+            const defaultGains = { kp: 10.0, ki: 5.0, kd: 15.0 };
+
+            it('diagnoses MICRO_BURNING and dampens Kp/Ki while boosting Kd for radiator', () => {
+                const metrics = {
+                    validWindowsCount: 3,
+                    avgOvershoot: 0.15,
+                    maxOvershoot: 0.20,
+                    avgSteadyStateError: 0.05,
+                    oscillationScore: 0.5,
+                    avgRiseTimeMinutes: 30,
+                    totalBurns: 5,
+                    microBurnCount: 3,
+                    microBurnRatio: 0.60,
+                    avgBurnDurationMinutes: 7,
+                    shortCyclesPerHour: 0.5
+                };
+
+                const res = derivePidSuggestions(metrics, defaultGains, 'RADIATOR');
+                expect(res.diagnosis).toBe('MICRO_BURNING');
+                expect(res.suggestedKp).toBe(8.0); // 10 * 0.8
+                expect(res.suggestedKi).toBe(3.8); // 5 * 0.75
+                expect(res.suggestedKd).toBe(18.8); // 15 * 1.25
+                expect(res.reason).toContain('frequent boiler micro-burns');
+            });
+
+            it('diagnoses MICRO_BURNING for underfloor heating with UFH-specific gain reduction', () => {
+                const ufhGains = { kp: 5.0, ki: 2.0, kd: 20.0 };
+                const metrics = {
+                    validWindowsCount: 3,
+                    avgOvershoot: 0.1,
+                    maxOvershoot: 0.15,
+                    avgSteadyStateError: 0.1,
+                    oscillationScore: 0.4,
+                    avgRiseTimeMinutes: 90,
+                    totalBurns: 6,
+                    microBurnCount: 4,
+                    microBurnRatio: 0.67,
+                    avgBurnDurationMinutes: 6,
+                    shortCyclesPerHour: 0.8
+                };
+
+                const res = derivePidSuggestions(metrics, ufhGains, 'UNDERFLOOR');
+                expect(res.diagnosis).toBe('MICRO_BURNING');
+                expect(res.suggestedKp).toBeLessThan(5.0);
+                expect(res.suggestedKi).toBeLessThan(2.0);
+                expect(res.suggestedKd).toBeGreaterThan(20.0);
+                expect(res.reason).toContain('Underfloor heating triggers frequent short-cycling');
+            });
+
+            it('includes micro-burn note when zone exhibits both HUNTING and micro-burning', () => {
+                const metrics = {
+                    validWindowsCount: 4,
+                    avgOvershoot: 0.35,
+                    maxOvershoot: 0.50,
+                    avgSteadyStateError: 0.1,
+                    oscillationScore: 3.5, // strong hunting
+                    avgRiseTimeMinutes: 20,
+                    totalBurns: 8,
+                    microBurnCount: 5,
+                    microBurnRatio: 0.625,
+                    avgBurnDurationMinutes: 6,
+                    shortCyclesPerHour: 1.2
+                };
+
+                const res = derivePidSuggestions(metrics, defaultGains, 'RADIATOR');
+                expect(res.diagnosis).toBe('HUNTING');
+                expect(res.reason).toContain('hunts/oscillates');
+                expect(res.reason).toContain('frequent short-cycling');
+            });
         });
     });
 });

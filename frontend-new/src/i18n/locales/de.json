@@ -1550,6 +1550,10 @@
     "not_applied": "Nur beratend",
     "apply_zone_btn": "Anwenden",
     "zone_applied_success": "PID-Einstellungen für {{name}} aktualisiert!",
-    "apply_failed": "PID-Einstellungen konnten nicht angewendet werden"
+    "apply_failed": "PID-Einstellungen konnten nicht angewendet werden",
+    "diagnosis_micro_burning": "Kurztaktung / Micro-Burns",
+    "home_micro_burns": "{{count}} Micro-Burns erkannt ({{ratio}}%)",
+    "micro_burns_label": "Micro-Burns",
+    "avg_burn_label": "Durchschn. Brenndauer"
   }
 }

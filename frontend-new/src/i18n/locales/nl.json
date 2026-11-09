@@ -1550,6 +1550,10 @@
     "not_applied": "Enkel advies",
     "apply_zone_btn": "Toepassen",
     "zone_applied_success": "PID-instellingen bijgewerkt voor {{name}}!",
-    "apply_failed": "Kan PID-instellingen niet toepassen"
+    "apply_failed": "Kan PID-instellingen niet toepassen",
+    "diagnosis_micro_burning": "Kortstondige branderstarts (Micro-burns)",
+    "home_micro_burns": "{{count}} micro-burns gedetecteerd ({{ratio}}%)",
+    "micro_burns_label": "Micro-burns",
+    "avg_burn_label": "Gem. brandtijd"
   }
 }

@@ -1550,6 +1550,10 @@
     "not_applied": "Solo informativo",
     "apply_zone_btn": "Aplicar",
     "zone_applied_success": "¡Ajustes PID actualizados para {{name}}!",
-    "apply_failed": "No se pudieron aplicar los ajustes PID"
+    "apply_failed": "No se pudieron aplicar los ajustes PID",
+    "diagnosis_micro_burning": "Ciclos cortos / Microquemados",
+    "home_micro_burns": "{{count}} microquemados detectados ({{ratio}}%)",
+    "micro_burns_label": "Microquemados",
+    "avg_burn_label": "Tiempo medio encendido"
   }
 }

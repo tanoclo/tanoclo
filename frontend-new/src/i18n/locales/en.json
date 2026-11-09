@@ -1550,6 +1550,10 @@
     "not_applied": "Advisory only",
     "apply_zone_btn": "Apply",
     "zone_applied_success": "Updated PID settings for {{name}}!",
-    "apply_failed": "Failed to apply PID settings"
+    "apply_failed": "Failed to apply PID settings",
+    "diagnosis_micro_burning": "Short-Cycling / Micro-Burns",
+    "home_micro_burns": "{{count}} micro-burns detected ({{ratio}}%)",
+    "micro_burns_label": "Micro-Burns",
+    "avg_burn_label": "Avg Burn"
   }
 }

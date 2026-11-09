@@ -1550,6 +1550,10 @@
     "not_applied": "Solo indicativo",
     "apply_zone_btn": "Applica",
     "zone_applied_success": "Impostazioni PID aggiornate per {{name}}!",
-    "apply_failed": "Impossibile applicare le impostazioni PID"
+    "apply_failed": "Impossibile applicare le impostazioni PID",
+    "diagnosis_micro_burning": "Cicli brevi / Micro-accensioni",
+    "home_micro_burns": "{{count}} micro-accensioni rilevate ({{ratio}}%)",
+    "micro_burns_label": "Micro-accensioni",
+    "avg_burn_label": "Durata media accensione"
   }
 }
