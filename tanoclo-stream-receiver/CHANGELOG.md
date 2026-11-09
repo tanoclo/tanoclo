@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-11-09
+
+- refactor(tlv): align FIDs with device firmware
+
 ## [0.9.0] - 2026-11-07
 
 - feat(stream-receiver): log source and destination MACs in file logs
