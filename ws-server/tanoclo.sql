@@ -23077,7 +23077,8 @@ CREATE TABLE `devices` (
   `battery_curve_custom` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL COMMENT 'Custom discharge curve [[mv, pct], ...] overrides default for battery_type' CHECK (json_valid(`battery_curve_custom`)),
   `va_motor_error_detection` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Enable low-battery inference from persistent motor errors (VA only)',
   `last_exercised_at` datetime DEFAULT NULL COMMENT 'Timestamp of last anti-seize stroke exercise',
-  `auto_valve_exercise_enabled` tinyint(1) NOT NULL DEFAULT 1 COMMENT 'Per-device automated valve exercise enable toggle'
+  `auto_valve_exercise_enabled` tinyint(1) NOT NULL DEFAULT 1 COMMENT 'Per-device automated valve exercise enable toggle',
+  `is_virtual_leader` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Flag indicating device is an IB/gateway-hosted virtual zone leader'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `balancing_snapshots` (

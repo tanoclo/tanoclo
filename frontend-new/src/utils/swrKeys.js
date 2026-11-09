@@ -20,6 +20,7 @@ export const SWR_KEYS = {
   zoneState: (homeId, zoneId) => `/homes/${homeId}/zones/${zoneId}/state`,
   defaultOverlay: (homeId, zoneId) => `/homes/${homeId}/zones/${zoneId}/defaultOverlay`,
   zoneControl: (homeId, zoneId) => `/homes/${homeId}/zones/${zoneId}/control`,
+  virtualSensor: (homeId, zoneId) => `/homes/${homeId}/zones/${zoneId}/virtual-sensor`,
 
   // Schedules
   activeTimetable: (homeId, zoneId) => `/homes/${homeId}/zones/${zoneId}/schedule/activeTimetable`,

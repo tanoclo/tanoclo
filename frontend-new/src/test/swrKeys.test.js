@@ -39,6 +39,9 @@ describe('utils/swrKeys.js', () => {
     it('zoneControl', () => {
       expect(SWR_KEYS.zoneControl(2, 4)).toBe('/homes/2/zones/4/control');
     });
+    it('virtualSensor', () => {
+      expect(SWR_KEYS.virtualSensor(2, 4)).toBe('/homes/2/zones/4/virtual-sensor');
+    });
   });
 
   describe('schedule keys', () => {

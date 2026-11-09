@@ -174,4 +174,160 @@ router.put('/:homeId/zones/:zoneId/control/heatingCircuit', async (req, res) => 
     }
 });
 
+// POST /api/v2/homes/:homeId/zones/:zoneId/virtual-sensor
+router.post('/:homeId/zones/:zoneId/virtual-sensor', async (req, res) => {
+    try {
+        const { homeId, zoneId } = req.params;
+        const pool = db.getPool();
+
+        const [zones] = await pool.execute('SELECT * FROM zones WHERE id = ? AND home_id = ?', [zoneId, homeId]);
+        if (zones.length === 0) {
+            return res.status(404).json({ error: 'zone_not_found', message: 'Zone not found' });
+        }
+
+        const [bridgeRows] = await pool.execute(
+            "SELECT serial_no, ipv6_address FROM devices WHERE home_id = ? AND (device_type LIKE 'IB%' OR device_type = 'GATEWAY' OR serial_no LIKE 'IB%') AND ipv6_address IS NOT NULL LIMIT 1",
+            [homeId]
+        );
+        const ibIpv6 = bridgeRows.length > 0 ? bridgeRows[0].ipv6_address : null;
+
+        const serialNo = req.body.serialNo || `IB_VS_${homeId}_${zoneId}`;
+        const friendlyName = req.body.name || `Virtual Sensor Z${zoneId}`;
+
+        await pool.execute(`
+            INSERT INTO devices (
+                serial_no, device_type, home_id, zone_id, current_fw_version,
+                connection_state, battery_state, in_pairing_mode, connection_state_timestamp,
+                ipv6_address, is_virtual_leader, friendly_name
+            ) VALUES (?, 'SU02', ?, ?, '100.1', 1, 'NORMAL', 0, NOW(), ?, 1, ?)
+            ON DUPLICATE KEY UPDATE 
+                zone_id = VALUES(zone_id),
+                ipv6_address = VALUES(ipv6_address),
+                is_virtual_leader = 1,
+                connection_state = 1,
+                friendly_name = VALUES(friendly_name)
+        `, [serialNo, homeId, zoneId, ibIpv6, friendlyName]);
+
+        await pool.execute('UPDATE zones SET measuring_device_serial = ? WHERE id = ? AND home_id = ?', [serialNo, zoneId, homeId]);
+
+        const dbUtils = require('../../../lib/db-utils');
+        await dbUtils.syncZoneConfig(homeId, zoneId).catch(err => {
+            _log('warn', `Failed to sync zone config after adding virtual sensor: ${err.message}`);
+        });
+
+        const commandApi = require('../../../lib/command-api');
+        const [zoneDevs] = await pool.execute(
+            'SELECT serial_no FROM devices WHERE zone_id = ? AND home_id = ? AND serial_no != ?',
+            [zoneId, homeId, serialNo]
+        );
+        for (const dev of zoneDevs) {
+            commandApi.pushConfigRefresh(dev.serial_no).catch(err => {
+                _log('warn', `Failed to push config refresh to ${dev.serial_no}: ${err.message}`);
+            });
+        }
+
+        const [created] = await pool.execute('SELECT * FROM devices WHERE serial_no = ? AND home_id = ?', [serialNo, homeId]);
+        res.status(201).json(mapDevice(created[0]));
+    } catch (err) {
+        _log('error', `Error creating virtual sensor: ${err.message}\n${err.stack}`);
+        res.status(500).json({ error: 'internal_error' });
+    }
+});
+
+// DELETE /api/v2/homes/:homeId/zones/:zoneId/virtual-sensor
+router.delete('/:homeId/zones/:zoneId/virtual-sensor', async (req, res) => {
+    try {
+        const { homeId, zoneId } = req.params;
+        const pool = db.getPool();
+
+        const [zones] = await pool.execute('SELECT measuring_device_serial FROM zones WHERE id = ? AND home_id = ?', [zoneId, homeId]);
+        if (zones.length === 0) {
+            return res.status(404).json({ error: 'zone_not_found', message: 'Zone not found' });
+        }
+
+        const currentLeader = zones[0].measuring_device_serial;
+        const [vDevs] = await pool.execute(
+            'SELECT serial_no FROM devices WHERE serial_no = ? AND is_virtual_leader = 1 AND home_id = ?',
+            [currentLeader, homeId]
+        );
+
+        const [otherDevs] = await pool.execute(
+            'SELECT serial_no FROM devices WHERE zone_id = ? AND home_id = ? AND (is_virtual_leader = 0 OR is_virtual_leader IS NULL)',
+            [zoneId, homeId]
+        );
+        const fallbackMeasurer = otherDevs.length > 0 ? otherDevs[0].serial_no : null;
+
+        await pool.execute('UPDATE zones SET measuring_device_serial = ? WHERE id = ? AND home_id = ?', [fallbackMeasurer, zoneId, homeId]);
+
+        if (vDevs.length > 0) {
+            await pool.execute('DELETE FROM devices WHERE serial_no = ? AND home_id = ?', [currentLeader, homeId]);
+        }
+
+        const dbUtils = require('../../../lib/db-utils');
+        await dbUtils.syncZoneConfig(homeId, zoneId).catch(err => {
+            _log('warn', `Failed to sync zone config after removing virtual sensor: ${err.message}`);
+        });
+
+        const commandApi = require('../../../lib/command-api');
+        for (const dev of otherDevs) {
+            commandApi.pushConfigRefresh(dev.serial_no).catch(err => {
+                _log('warn', `Failed to push config refresh to ${dev.serial_no}: ${err.message}`);
+            });
+        }
+
+        res.json({ success: true, newMeasuringDevice: fallbackMeasurer });
+    } catch (err) {
+        _log('error', `Error deleting virtual sensor: ${err.message}\n${err.stack}`);
+        res.status(500).json({ error: 'internal_error' });
+    }
+});
+
+// GET /api/v2/homes/:homeId/zones/:zoneId/virtual-sensor
+router.get('/:homeId/zones/:zoneId/virtual-sensor', async (req, res) => {
+    try {
+        const { homeId, zoneId } = req.params;
+        const pool = db.getPool();
+
+        const [zones] = await pool.execute('SELECT measuring_device_serial FROM zones WHERE id = ? AND home_id = ?', [zoneId, homeId]);
+        if (zones.length === 0) {
+            return res.status(404).json({ error: 'zone_not_found', message: 'Zone not found' });
+        }
+
+        const measuringSerial = zones[0].measuring_device_serial;
+        const [devs] = await pool.execute(
+            'SELECT * FROM devices WHERE serial_no = ? AND home_id = ?',
+            [measuringSerial, homeId]
+        );
+        const dev = devs.length > 0 ? devs[0] : null;
+        const isVirtual = Boolean(dev && (dev.is_virtual_leader || (dev.serial_no && dev.serial_no.startsWith('IB_VS_'))));
+
+        const zoneCoordinator = require('../../../lib/zone-coordinator');
+        const state = zoneCoordinator.getZoneState(homeId, zoneId);
+        const observers = zoneCoordinator.getObservers(homeId, zoneId).map(o => ({
+            deviceSerial: o.deviceSerial,
+            ipv6: o.ipv6,
+            udpPort: o.udpPort,
+            lastSeq: o.lastSeq,
+            registeredAt: o.registeredAt
+        }));
+
+        res.json({
+            isVirtualLeader: isVirtual,
+            measuringDeviceSerial: measuringSerial,
+            device: dev ? mapDevice(dev) : null,
+            state: state || null,
+            observers: observers || [],
+            mqttTopics: {
+                cmdTemperature: `tado/tanoclo/h/${homeId}/d/${measuringSerial || `IB_VS_${homeId}_${zoneId}`}/cmd/temperature`,
+                cmdHumidity: `tado/tanoclo/h/${homeId}/d/${measuringSerial || `IB_VS_${homeId}_${zoneId}`}/cmd/humidity`,
+                telemetry: `tado/tanoclo/h/${homeId}/d/${measuringSerial || `IB_VS_${homeId}_${zoneId}`}/telemetry`,
+                virtualTelemetry: `tado/tanoclo/virtual/${measuringSerial || `IB_VS_${homeId}_${zoneId}`}/telemetry`
+            }
+        });
+    } catch (err) {
+        _log('error', `Error fetching virtual sensor status: ${err.message}\n${err.stack}`);
+        res.status(500).json({ error: 'internal_error' });
+    }
+});
+
 module.exports = router;

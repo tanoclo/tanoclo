@@ -641,6 +641,8 @@ export default function ZoneSettings({ homeId, zoneId, zone, onBack, mutateZones
 
           {/* General settings (Name, offsets, Measuring Device, Controller, Devices list) */}
           <ZoneSettingsGeneral
+            homeId={homeId}
+            zoneId={zoneId}
             zone={zone}
             isDhw={isDhw}
             name={name}
@@ -669,6 +671,9 @@ export default function ZoneSettings({ homeId, zoneId, zone, onBack, mutateZones
             setKi={setKi}
             setKd={setKd}
             handleSaveAdvancedDetails={handleSaveAdvancedDetails}
+            triggerToast={triggerToast}
+            mutateDevices={mutateDevices}
+            mutateControl={mutateControl}
             t={t}
           />
 

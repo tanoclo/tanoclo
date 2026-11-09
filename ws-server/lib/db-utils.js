@@ -377,9 +377,36 @@ async function buildZoneConfigFields(homeId, zoneId) {
         fields['0x6060'] = 1;
     }
 
-    if (zoneDevs.length > 0) {
+    let isVirtualLeader = false;
+    let virtualLeaderDev = null;
+    if (row.measuring_device_serial) {
+        const [vDevs] = await p.execute(
+            'SELECT serial_no, device_type, ipv6_address, is_virtual_leader FROM devices WHERE serial_no = ? AND home_id = ? LIMIT 1',
+            [row.measuring_device_serial, homeId]
+        );
+        if (vDevs.length > 0 && (vDevs[0].is_virtual_leader || vDevs[0].serial_no.startsWith('IB_VS_'))) {
+            isVirtualLeader = true;
+            virtualLeaderDev = vDevs[0];
+        }
+    }
+
+    let ibIpv6 = null;
+    if (isVirtualLeader) {
+        ibIpv6 = virtualLeaderDev?.ipv6_address;
+        if (!ibIpv6) {
+            const [ibRows] = await p.execute(
+                "SELECT ipv6_address FROM devices WHERE home_id = ? AND (device_type LIKE 'IB%' OR device_type = 'GATEWAY' OR serial_no LIKE 'IB%') AND ipv6_address IS NOT NULL LIMIT 1",
+                [homeId]
+            );
+            if (ibRows.length > 0) ibIpv6 = ibRows[0].ipv6_address;
+        }
+    }
+
+    if (zoneDevs.length > 0 || isVirtualLeader) {
         const measuringSerial = row.measuring_device_serial;
-        const leaderDev = zoneDevs.find(d => d.serial_no === measuringSerial) || zoneDevs[0];
+        const leaderDev = isVirtualLeader 
+            ? { serial_no: measuringSerial, ipv6_address: ibIpv6, is_virtual_leader: 1 }
+            : (zoneDevs.find(d => d.serial_no === measuringSerial) || zoneDevs[0]);
         const vaDevs = zoneDevs.filter(d => d.device_type && d.device_type.startsWith('VA'));
 
         // 1. 0x63a0: Zone State URI (points to measuring leader's /z/s)
@@ -390,6 +417,7 @@ async function buildZoneConfigFields(homeId, zoneId) {
         // 2. 0x8000: Zone Listeners (distinct /z/s endpoints for all member devices + circuit driver)
         const listeners = new Set();
         if (circuitDriverIpv6) listeners.add(`coap://[${circuitDriverIpv6}]/z/s`);
+        if (isVirtualLeader && ibIpv6) listeners.add(`coap://[${ibIpv6}]/z/s`);
         for (const d of zoneDevs) {
             if (d.ipv6_address) listeners.add(`coap://[${d.ipv6_address}]/z/s`);
         }
@@ -406,7 +434,11 @@ async function buildZoneConfigFields(homeId, zoneId) {
         }
 
         // 4. 0x8400: Zone Parameter URLs (/z/p) for all VAs in zone + leader if not already in list
-        if (vaDevs.length > 0) {
+        if (isVirtualLeader && ibIpv6) {
+            const zps = vaDevs.filter(d => d.ipv6_address).map(d => `coap://[${d.ipv6_address}]/z/p`);
+            zps.push(`coap://[${ibIpv6}]/z/p`);
+            fields['0x8400'] = zps.length === 1 ? zps[0] : zps;
+        } else if (vaDevs.length > 0) {
             const zps = vaDevs.filter(d => d.ipv6_address).map(d => `coap://[${d.ipv6_address}]/z/p`);
             if (leaderDev && leaderDev.ipv6_address && !vaDevs.some(d => d.serial_no === leaderDev.serial_no)) {
                 zps.push(`coap://[${leaderDev.ipv6_address}]/z/p`);
@@ -416,8 +448,10 @@ async function buildZoneConfigFields(homeId, zoneId) {
             fields['0x8400'] = `coap://[${leaderDev.ipv6_address}]/z/p`;
         }
 
-        // 5. 0x6040: Zone Driver URI (primary valve /z/p, or leader /z/p if no valves)
-        if (vaDevs.length > 0 && vaDevs[0].ipv6_address) {
+        // 5. 0x6040: Zone Driver URI (primary valve /z/p, or leader /z/p if no valves or virtual leader)
+        if (isVirtualLeader && ibIpv6) {
+            fields['0x6040'] = `coap://[${ibIpv6}]/z/p`;
+        } else if (vaDevs.length > 0 && vaDevs[0].ipv6_address) {
             fields['0x6040'] = `coap://[${vaDevs[0].ipv6_address}]/z/p`;
         } else if (leaderDev && leaderDev.ipv6_address) {
             fields['0x6040'] = `coap://[${leaderDev.ipv6_address}]/z/p`;

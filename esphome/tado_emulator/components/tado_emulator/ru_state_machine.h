@@ -188,7 +188,7 @@ class RUStateMachine {
   // Periodic tick (checks idle fallback and pairing retransmissions)
   void tick(uint32_t now_ms, uint32_t now_s, std::vector<OutboundFrame> &outbound_frames);
 
-  // Firmware-aligned PID control laws (FUN_08031970 periodic, FUN_080319f4 immediate)
+  // PID control laws
   uint8_t calculate_periodic_pid();
   uint8_t calculate_immediate_pid();
 

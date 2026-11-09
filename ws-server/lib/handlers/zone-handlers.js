@@ -10,6 +10,7 @@ const { getLogger } = require('../logger');
 const log = getLogger();
 const coapHelpers = require('./coap-helpers');
 const wsBridge = require('../ws-bridge');
+const zoneCoordinator = require('../zone-coordinator');
 
 let db, coap, tlv, config, ZS_SCHEMA, mqttPublisher;
 let ipv6ToDevice;
@@ -347,25 +348,113 @@ async function handleZoneState(ws, frame, coapMsg, decoded, peerInfo, pathInfo) 
 }
 
 async function handleZoneParams(ws, frame, coapMsg, decoded, peerInfo, pathInfo) {
-    coapHelpers.sendCoAPAck(ws, coapMsg, peerInfo, frame.directionU16);
-    if (!decoded || !decoded.fields) return;
-
     let zoneId = pathInfo.zoneId;
     let homeId = pathInfo.homeId;
     const deviceId = pathInfo.deviceId || (ipv6ToDevice ? ipv6ToDevice.get(peerInfo.ipv6) : null);
+    const shortSerial = extractShortSerial ? extractShortSerial(deviceId) : deviceId;
 
-    if ((zoneId == null || homeId == null) && deviceId) {
-        const shortSerial = extractShortSerial ? extractShortSerial(deviceId) : deviceId;
-        if (shortSerial) {
-            try {
-                const zt = await db.getZoneForDevice(shortSerial);
-                if (zt) {
-                    zoneId = zoneId ?? zt.zoneId;
-                    homeId = homeId ?? zt.homeId;
-                }
-            } catch (e) { /* ignore */ }
-        }
+    if ((zoneId == null || homeId == null) && shortSerial) {
+        try {
+            const zt = await db.getZoneForDevice(shortSerial);
+            if (zt) {
+                zoneId = zoneId ?? zt.zoneId;
+                homeId = homeId ?? zt.homeId;
+            }
+        } catch (e) { /* ignore */ }
     }
+
+    const isGet = coapMsg.code === coap.CODE_GET;
+
+    if (isGet) {
+        const hasObserve = coap.optionFirst(coapMsg, coap.OPT_OBSERVE) !== null;
+        if (hasObserve && homeId != null && zoneId != null && shortSerial) {
+            zoneCoordinator.registerObserver({
+                homeId,
+                zoneId,
+                deviceSerial: shortSerial,
+                ipv6: peerInfo.ipv6,
+                udpPort: peerInfo.udpPort,
+                token: coapMsg.token,
+                ws
+            });
+        }
+
+        let currentTemp = 20.0;
+        let currentDemand = 0;
+        let currentHumidity = null;
+        let targetTemp = 20.0;
+
+        try {
+            const pool = db.getPool();
+            const [mRows] = await pool.execute(
+                'SELECT * FROM zone_measurements WHERE zone_id = ? AND home_id = ? ORDER BY id DESC LIMIT 1',
+                [zoneId, homeId]
+            );
+            if (mRows.length > 0) {
+                if (mRows[0].field_012d != null) currentTemp = parseFloat(mRows[0].field_012d);
+                if (mRows[0].field_40a0 != null) currentDemand = parseInt(mRows[0].field_40a0, 10);
+                if (mRows[0].field_0135 != null) currentHumidity = parseFloat(mRows[0].field_0135);
+            }
+
+            const [zRows] = await pool.execute(
+                'SELECT field_6080, field_60a0, field_60c0 FROM zones WHERE id = ? AND home_id = ?',
+                [zoneId, homeId]
+            );
+            const pidGains = zRows.length > 0 ? {
+                kp: zRows[0].field_6080,
+                ki: zRows[0].field_60a0,
+                kd: zRows[0].field_60c0
+            } : {};
+            const zoneState = zoneCoordinator.getZoneState(homeId, zoneId);
+
+            const [ovRows] = await pool.execute(
+                'SELECT setting_power, setting_temp_celsius FROM zone_overlays WHERE zone_id = ? AND home_id = ? LIMIT 1',
+                [zoneId, homeId]
+            );
+            if (ovRows.length > 0) {
+                if (ovRows[0].setting_power === 'OFF') {
+                    currentDemand = 0;
+                } else if (ovRows[0].setting_temp_celsius != null) {
+                    targetTemp = parseFloat(ovRows[0].setting_temp_celsius);
+                    currentDemand = zoneCoordinator.calculateZoneDemand(currentTemp, targetTemp, true, pidGains, zoneState);
+                }
+            } else {
+                const currentBlock = await db.getCurrentScheduleBlock(homeId, zoneId).catch(() => null);
+                if (currentBlock && currentBlock.setting) {
+                    if (currentBlock.setting.power === 'OFF') {
+                        currentDemand = 0;
+                    } else if (currentBlock.setting.temperature && currentBlock.setting.temperature.celsius != null) {
+                        targetTemp = parseFloat(currentBlock.setting.temperature.celsius);
+                        currentDemand = zoneCoordinator.calculateZoneDemand(currentTemp, targetTemp, true, pidGains, zoneState);
+                    }
+                }
+            }
+        } catch (err) {
+            log('warn', `Failed to load zone state for GET /z/p z=${zoneId}: ${err.message}`);
+        }
+
+        const payload = zoneCoordinator.buildZoneParamsTLV({
+            temp: currentTemp,
+            demand: currentDemand,
+            targetTemp,
+            humidity: currentHumidity
+        });
+
+        const options = [
+            { num: coap.OPT_CONTENT_FORMAT, value: coap.encOptUint(42) }
+        ];
+        if (hasObserve) {
+            options.push({ num: coap.OPT_OBSERVE, value: coap.encOptUint(1) });
+        }
+
+        const ackBytes = coap.buildAckWithOptions(coapMsg, coap.CODE_CONTENT, options, payload);
+        coapHelpers.sendWrappedCoAP(ws, ackBytes, peerInfo, wsBridge.DIR_SERVER_TO_CLIENT);
+        log('debug', `Sent 2.05 Content for GET /z/p z=${zoneId} to ${shortSerial}: temp=${currentTemp}°C demand=${currentDemand}%`);
+        return;
+    }
+
+    coapHelpers.sendCoAPAck(ws, coapMsg, peerInfo, frame.directionU16);
+    if (!decoded || !decoded.fields) return;
 
     log('debug', `ZONE_PARAMS /z/p dev=${deviceId} z=${zoneId} h=${homeId}: ${JSON.stringify(decoded.fields)}`);
 

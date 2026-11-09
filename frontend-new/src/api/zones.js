@@ -340,6 +340,42 @@ export function updateMeasuringDevice(homeId, zoneId, serialNo) {
 }
 
 /**
+ * Creates or assigns an Internet Bridge virtual sensor leader for a zone
+ */
+export function createVirtualSensor(homeId, zoneId, data = {}) {
+  return apiFetch(`/api/v2/homes/${homeId}/zones/${zoneId}/virtual-sensor`, {
+    method: 'POST',
+    body: data
+  });
+}
+
+/**
+ * Removes virtual sensor from a zone
+ */
+export function removeVirtualSensor(homeId, zoneId) {
+  return apiFetch(`/api/v2/homes/${homeId}/zones/${zoneId}/virtual-sensor`, {
+    method: 'DELETE'
+  });
+}
+
+/**
+ * Gets virtual sensor status, observers and MQTT topics for a zone
+ */
+export function getVirtualSensorStatus(homeId, zoneId) {
+  return apiFetch(`/api/v2/homes/${homeId}/zones/${zoneId}/virtual-sensor`);
+}
+
+/**
+ * Injects temperature/humidity to a device (virtual sensor or zone leader)
+ */
+export function injectDeviceTemperature(homeId, deviceId, data) {
+  return apiFetch(`/api/v2/homes/${homeId}/devices/${deviceId}/temperature`, {
+    method: 'POST',
+    body: data
+  });
+}
+
+/**
  * Updates heating circuit of a zone
  * @param {string|number} homeId
  * @param {string|number} zoneId

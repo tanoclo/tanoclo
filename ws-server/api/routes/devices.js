@@ -744,6 +744,49 @@ async function exerciseHomeValvesHandler(req, res) {
     }
 }
 
+async function setDeviceTemperature(req, res) {
+    try {
+        const { deviceId } = req.params;
+        const homeId = await verifyDeviceHome(req, deviceId);
+        const pool = db.getPool();
+
+        const [devs] = await pool.execute(
+            'SELECT serial_no, home_id, zone_id, is_virtual_leader FROM devices WHERE serial_no = ? AND home_id = ?',
+            [deviceId, homeId]
+        );
+        if (devs.length === 0) return res.status(404).json({ error: 'device_not_found' });
+
+        const dev = devs[0];
+        const body = req.body || {};
+        const temp = body.temperature !== undefined ? parseFloat(body.temperature) : (body.temp_celsius !== undefined ? parseFloat(body.temp_celsius) : null);
+        const humidity = body.humidity !== undefined ? parseFloat(body.humidity) : (body.humidity_percent !== undefined ? parseFloat(body.humidity_percent) : null);
+
+        if (temp === null || isNaN(temp)) {
+            return res.status(400).json({ error: 'invalid_temperature', message: 'Valid temperature is required' });
+        }
+
+        if (dev.zone_id == null) {
+            return res.status(400).json({ error: 'device_not_in_zone', message: 'Device is not assigned to any zone' });
+        }
+
+        const zoneCoordinator = require('../../lib/zone-coordinator');
+        await zoneCoordinator.onExternalTelemetry(homeId, dev.zone_id, temp, humidity);
+
+        res.json({
+            ok: true,
+            deviceId,
+            homeId,
+            zoneId: dev.zone_id,
+            temperature: temp,
+            humidity
+        });
+    } catch (err) {
+        if (err.statusCode) return res.status(err.statusCode).json({ error: err.message.toLowerCase() });
+        _log('error', `Set device temperature error: ${err.message}`);
+        res.status(500).json({ error: 'internal_error' });
+    }
+}
+
 async function triggerDeviceDebug(req, res) {
     try {
         const { deviceId } = req.params;
@@ -1069,6 +1112,7 @@ router.get('/:homeId/devices/:deviceId/debug/dump/status', getMemoryDumpStatus);
 router.post('/:homeId/devices/:deviceId/debug/dump/cancel', cancelMemoryDump);
 router.get('/:homeId/devices/:deviceId/debug/dump/download', downloadMemoryDump);
 router.post('/:homeId/devices/:deviceId/reboot', rebootDevice);
+router.post('/:homeId/devices/:deviceId/temperature', setDeviceTemperature);
 router.post('/:homeId/devices/:deviceId/rfkey/refresh', refreshRfKey);
 router.post('/:homeId/devices/:deviceId/config/refresh', refreshConfig);
 
@@ -1095,6 +1139,7 @@ router.post('/:deviceId/exercise', exerciseDevice);
 router.get('/:deviceId/valveExercise', getValveExercise);
 router.put('/:deviceId/valveExercise', setValveExercise);
 router.post('/:deviceId/debug', triggerDeviceDebug);
+router.post('/:deviceId/temperature', setDeviceTemperature);
 router.post('/:deviceId/reboot', rebootDevice);
 router.post('/:deviceId/rfkey/refresh', refreshRfKey);
 router.post('/:deviceId/config/refresh', refreshConfig);
