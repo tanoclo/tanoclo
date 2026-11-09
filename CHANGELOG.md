@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-11-09
+
+- feat(pid): account for micro-burns in PID tuning
+- feat(heating): add interface module table and capability filtering
+- refactor(tlv): align FIDs with device firmware
+- feat(optimizer): add generic thermal load gating and anti-cycling
+- feat(optimizer): automate circuit driver config sync
+- fix: preserve command scope for incomplete MQTT topics
+- fix: address zone measurement deduplication review
+- fix: serialize MQTT command handlers per resource
+- fix: preserve control changes in zone measurement deduplication
+
 ## [0.9.0] - 2026-11-07
 
 - fix(energy): safely resolve readings array from API response object
