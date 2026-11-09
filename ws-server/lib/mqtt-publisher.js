@@ -531,6 +531,7 @@ async function publishDeviceTelemetry(shortSerial, homeId, zoneId, sensorFields,
 
         if (dialInteraction !== undefined && dialInteraction !== null) {
             _pub(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/dial_interaction_result`, dialInteraction);
+            _pub(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/dial_pin_state`, dialInteraction);
         }
         if (dialEncoder !== undefined && dialEncoder !== null) {
             _pub(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/dial_encoder_steps`, dialEncoder);
@@ -584,17 +585,23 @@ async function publishDeviceTelemetry(shortSerial, homeId, zoneId, sensorFields,
                 _pub(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/orientation`, dev.field_0149 || 'VERTICAL');
             }
 
-            // Actuator Limits
-            _pub(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/actuator_limit_low`, dev.field_0273);
-            _pub(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/actuator_limit_high`, dev.field_027c);
+            // Actuator Mechanical Endstops & Motor Electrical Diagnostics
+            _pub(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/open_steps`, dev.field_01b5);
+            _pub(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/closed_steps`, dev.field_01b6);
+            _pub(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/motor_load_mv`, dev.field_0273);
+            _pub(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/motor_run_min_mv`, dev.field_027c);
+            _pub(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/actuator_mode`, dev.field_01fa);
+            _pub(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/actuator_flags`, dev.field_01fb);
             _pub(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/actuator_drive_constant`, dev.field_0280);
 
             if (dev.field_0283 !== undefined && dev.field_0283 !== null && Number(dev.field_0283) !== 32767) {
                 _pub(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/actuator_deviation`, Number(dev.field_0283));
             }
 
-            // Compute valve pct
-            const pct = calculateValvePositionPct(dev.field_0265, dev.field_0273, dev.field_027c);
+            // Compute valve pct using real mechanical stroke endstops (01b6 = closed, 01b5 = open)
+            const closedSteps = dev.field_01b6 != null ? dev.field_01b6 : dev.field_0273;
+            const openSteps = dev.field_01b5 != null ? dev.field_01b5 : dev.field_027c;
+            const pct = calculateValvePositionPct(dev.field_0265, closedSteps, openSteps);
             if (pct !== null) {
                 _pub(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/valve_position_pct`, pct);
             }
@@ -703,14 +710,28 @@ async function publishHvacTelemetry(homeId, fields) {
     _pub(`${BASE_TOPIC}/h/${homeId}/boiler/exhaust_temperature`, exhaustTemp);
     _pub(`${BASE_TOPIC}/h/${homeId}/boiler/dhw_measured_temperature`, dhwMeasured);
     _pub(`${BASE_TOPIC}/h/${homeId}/boiler/dhw_setpoint`, dhwSetpoint);
+    if (dhwSetpoint !== undefined && dhwSetpoint !== null) {
+        _pub(`${BASE_TOPIC}/h/${homeId}/boiler/max_ch_flow_temperature`, dhwSetpoint);
+    }
     if (dhwFlowRate !== undefined && dhwFlowRate !== null) {
         _pub(`${BASE_TOPIC}/h/${homeId}/boiler/dhw_flow_rate_lpm`, dhwFlowRate);
     }
     _pub(`${BASE_TOPIC}/h/${homeId}/boiler/ch_pump_starts`, chPumpStarts);
+    _pub(`${BASE_TOPIC}/h/${homeId}/boiler/dhw_burner_starts`, chPumpStarts);
     _pub(`${BASE_TOPIC}/h/${homeId}/boiler/ch_burner_starts`, chBurnerStarts);
     _pub(`${BASE_TOPIC}/h/${homeId}/boiler/ch_burner_hours`, chBurnerHours);
     _pub(`${BASE_TOPIC}/h/${homeId}/boiler/dhw_burner_hours`, dhwBurnerHours);
     _pub(`${BASE_TOPIC}/h/${homeId}/boiler/fault_flags`, faultFlags);
+    if (faultFlags !== undefined && faultFlags !== null) {
+        _pub(`${BASE_TOPIC}/h/${homeId}/boiler/flame_current_ua`, (Number(faultFlags) / 10).toFixed(1));
+    }
+    if (fields.field_0460 !== undefined || fields['0x0460'] !== undefined) {
+        const rawCodes = Number(fields.field_0460 !== undefined ? fields.field_0460 : fields['0x0460']);
+        if (!isNaN(rawCodes) && rawCodes !== 65535 && rawCodes !== 4294967295) {
+            _pub(`${BASE_TOPIC}/h/${homeId}/boiler/oem_fault_code`, (rawCodes >> 16) & 0xFFFF);
+            _pub(`${BASE_TOPIC}/h/${homeId}/boiler/oem_diagnostic_code`, rawCodes & 0xFFFF);
+        }
+    }
 
     _pubAvailability(`${BASE_TOPIC}/h/${homeId}/boiler/availability`, true);
 }

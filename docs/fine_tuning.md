@@ -27,21 +27,16 @@ TRV radiator valves are **normally open** (an internal return spring pushes the 
       |                        Valve is 100% OPEN (pin fully uncompressed).
       |                        Current Position (e.g. 1897) rests here when no heat is demanded.
       |
-      |-- (e.g. 2244 steps) -> [High Steps / Modulation Limit] (`0x027c`: `va_act_limit_high_steps`)
-      |                        Pin compressed to active flow-regulation / modulation boundary.
-      |
-      v-- (e.g. 2390 steps) -> [Low Steps / Close Limit] (`0x0273`: `va_act_limit_low_steps`)
-                               Piston fully extended. Pin compressed all the way down.
+      v-- (e.g. 2390 steps) -> [Piston Stroke]
+                               Pin compressed down toward full closure.
                                Valve 100% CLOSED (flow completely shut off).
 ```
 
-### 1.2 Calibration Limits & Step Calculations
+### 1.2 Calibration Limits & Motor Diagnostics
 On VA02 hardware, motor step counts are absolute values tracked from internal physical retraction home.
 
-*   **Fully Extended / Closed Limit (`va_act_limit_low_steps` - FID `0x0273`)**: The step position where the piston is fully extended (valve pin pressed down completely, closing the radiator valve). Typical values lie between **2100 and 2600 steps**.
-    *   *Tuning Tip:* If the radiator leaks hot water when set to off, increasing this value (e.g. from 2390 to 2430) drives the stepper further out, compressing the valve pin more tightly.
-*   **Fully Retracted / Open Limit (`va_act_limit_high_steps` - FID `0x027c`)**: The step position representing the upper boundary of the active modulation range. Typical values lie between **1900 and 2500 steps**.
-    *   *Tuning Tip:* Reducing this value constrains the maximum opening aperture, restricting maximum flow rate.
+*   **Motor Load Voltage (`motor_load_mv` - FID `0x0273`)**: Motor drive SAADC voltage in mV ($1.875 \times \text{raw}$, clamped $\le 4800\,\text{mV}$). Used by firmware for motor stall detection and triggering `0x01a3` hardware error codes.
+*   **Running Minimum Motor Voltage (`motor_run_min_mv` - FID `0x027c`)**: Lowest running motor SAADC voltage observed across the stroke in mV ($1.875 \times \text{raw}$).
 *   **Calibration Drive Constant (`va_act_drive_cal_const` - FID `0x0280`)**: An internal mechanical calibration reference value. On VA02 hardware, this typically lies between **1700 and 1900 steps** and represents the baseline calibration offset.
 *   **Learned contact/seat point steps (`va_mount_seatpoint_steps` - FID `0x01b6`)**: Stored in `devices.field_01b6`. The learned stepper count where the piston makes physical contact with the valve pin.
 *   **Learned calibration reference/offset steps (`va_mount_reference_steps` - FID `0x01b5`)**: Stored in `devices.field_01b5`. The learned base reference offset steps.
@@ -60,7 +55,7 @@ On VA02 hardware, motor step counts are absolute values tracked from internal ph
     *   `2`: `MOUNTED` (device attached to bracket, awaiting calibration)
 *   **Mounting Flags (`va_mount_flags` - FID `0x01fb`)**: Stored in `devices.field_01fb` in the database. Tracks internal execution flags during the calibration sequence.
 *   **Current Position (`va_act_position_steps` - FID `0x0265`)**: The primary active step count showing current piston extension (`devices.field_0265`).
-*   **Target Position (`va_act_position2_steps` - FID `0x0294`)**: Secondary target steps commanded by the heating controller (`devices.field_0266`). When idle/no heat demand, target rests at the `Seat Point` (`0x01b6`). When heating, target moves deeper into the modulation band (`0x027c` to `0x0273`).
+*   **Target Position (`va_act_position2_steps` - FID `0x0266`)**: Secondary target steps commanded by the heating controller (`devices.field_0266`). When idle/no heat demand, target rests at the open pin contact point (`0x01b5`). When heating, target modulates between open (`0x01b5`) and fully compressed endstop (`0x01b6`).
 
 ---
 
@@ -70,10 +65,10 @@ In addition to mechanical travel limits, the TaNoClo server supports several hid
 
 ### 2.1 Display & UI Control Settings
 *   **`display_orientation` (FID `0x0149`)**: Stored in `devices.field_0149` in the database. Controls whether the LED matrix renders vertically (`0`) or horizontally (`1`).
-*   **`device_ui_flags_0158` (`0x0158`)**: Big-endian bitmask (`u16be`) controlling screen behaviors:
-    *   **Bit 9 (`0x0200`)**: *Dazzle Mode* (Dynamic Ambient Light-Sensitive Brightness scaling). Enables/disables automatic brightness adjustments based on the photodiode sensor.
-    *   **Bit 10 (`0x0400`)**: *Display Always-On* override.
-*   **`display_active_timeout` (`0x02b2`)**: Timeout duration in minutes before display panel turns off. Default is `0`.
+*   **`device_ui_flags_0158` (`0x0158`)**: Big-endian bitmask (`u16be`) controlling screen wake notification behaviors:
+    *   **Bit 9 (`0x0200`)**: *Dazzle Mode*. Enables/disables waking the display when a manual remote overlay change is received.
+    *   **Bit 10 (`0x0400`)**: Wakes the display when ANY zone change notification is received.
+*   **`utc_offset_minutes` (`0x02b2`)**: Device UTC offset in minutes applied to RTC epoch (`(short)uVar1 * 60000`). Configured to match the home's local timezone.
 
 ### 2.2 Dynamic Open Window Detection (OWD) Tuning
 *   **`zone_open_window_detection_enabled` (`0x60e0`)**: Boolean toggle enabling hardware open window detection on devices in the zone.

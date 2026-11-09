@@ -266,8 +266,12 @@ function processCoapPacket(packet, type, meta = {}) {
         const actDev = f['0x0283'] ?? f.va_act_deviation;
         const childLock = f['0x0290'] ?? f.va_child_lock_enabled ?? f.child_lock;
         const orientation = f['0x0149'] ?? f.display_orientation;
-        const actLow = f['0x0273'] ?? f.actuator_limit_low;
-        const actHigh = f['0x027c'] ?? f.actuator_limit_high;
+        const motorLoadMv = f['0x0273'] ?? f.motor_load_mv;
+        const motorRunMinMv = f['0x027c'] ?? f.motor_run_min_mv;
+        const mountRef = f['0x01b5'] ?? f.va_mount_reference_steps;
+        const mountSeat = f['0x01b6'] ?? f.va_mount_seatpoint_steps;
+        const mountMode = f['0x01fa'] ?? f.va_mount_mode;
+        const mountFlags = f['0x01fb'] ?? f.va_mount_flags;
         const actDrive = f['0x0280'] ?? f.actuator_drive_constant;
 
         if (valvePos !== undefined) updates.valve_position = valvePos;
@@ -276,24 +280,33 @@ function processCoapPacket(packet, type, meta = {}) {
         if (actDev !== undefined && Number(actDev) !== 32767) updates.actuator_deviation = Number(actDev);
         if (childLock !== undefined) updates.child_lock = Number(childLock) === 1;
         if (orientation !== undefined) updates.orientation = tlvDecoder.decodeOrientation(orientation);
-        if (actLow !== undefined) updates.actuator_limit_low = Number(actLow);
-        if (actHigh !== undefined) updates.actuator_limit_high = Number(actHigh);
+        if (motorLoadMv !== undefined) updates.motor_load_mv = Number(motorLoadMv);
+        if (motorRunMinMv !== undefined) updates.motor_run_min_mv = Number(motorRunMinMv);
+        if (mountRef !== undefined) updates.open_steps = Number(mountRef);
+        if (mountSeat !== undefined) updates.closed_steps = Number(mountSeat);
+        if (mountMode !== undefined) updates.mount_mode = Number(mountMode);
+        if (mountFlags !== undefined) updates.mount_flags = Number(mountFlags);
         if (actDrive !== undefined) updates.actuator_drive_constant = Number(actDrive);
 
-        // Calculate valve percentage if steps and limits are known
-        if (updates.valve_position !== undefined && updates.actuator_limit_low !== undefined && updates.actuator_limit_high !== undefined) {
-            updates.valve_position_pct = tlvDecoder.calculateValvePositionPct(updates.valve_position, updates.actuator_limit_low, updates.actuator_limit_high);
+        // Calculate valve percentage using mechanical stroke endstops (01b6 = closed, 01b5 = open)
+        const closedSteps = updates.closed_steps ?? (f['0x0273'] !== undefined ? Number(f['0x0273']) : undefined);
+        const openSteps = updates.open_steps ?? (f['0x027c'] !== undefined ? Number(f['0x027c']) : undefined);
+        if (updates.valve_position !== undefined && closedSteps !== undefined && openSteps !== undefined) {
+            updates.valve_position_pct = tlvDecoder.calculateValvePositionPct(updates.valve_position, closedSteps, openSteps);
         }
 
         // OpenTherm / Boiler parameters
         const flowTemp = f['0x044c'] !== undefined ? f['0x044c'] : f.ot_ch_flow_temperature;
         const retTemp = f['0x044d'] !== undefined ? f['0x044d'] : f.ot_ch_return_temperature;
         const boilerActive = f['0x0457'] !== undefined ? f['0x0457'] : f.boiler_active;
-        const waterPress = f['0x0460'] !== undefined ? f['0x0460'] : f.hvac_water_pressure_mbar;
+        const waterPress = f['0x0462'] !== undefined ? f['0x0462'] : f.ot_ch_water_pressure_bar;
         const dhwTarget = f['0x045b'] !== undefined ? f['0x045b'] : f.dhw_target_temperature;
         const outTemp = f['0x044f'] !== undefined ? f['0x044f'] : f.ot_outside_temperature;
         const exhTemp = f['0x044e'] !== undefined ? f['0x044e'] : f.ot_exhaust_temperature;
         const dhwMeas = f['0x045a'] !== undefined ? f['0x045a'] : f.ot_dhw_temperature;
+        const flameCurrent = f['0x0458'] !== undefined ? f['0x0458'] : f.ot_flame_current;
+        const rawCodes = f['0x0460'] !== undefined ? f['0x0460'] : f.hvac_fault_diagnostic_codes;
+        const dhwStarts = f['0x0464'] !== undefined ? f['0x0464'] : f.ot_dhw_burner_start_count;
 
         if (flowTemp !== undefined) updates.flow_temperature = flowTemp;
         if (retTemp !== undefined) updates.return_temperature = retTemp;
@@ -301,13 +314,24 @@ function processCoapPacket(packet, type, meta = {}) {
         if (waterPress !== undefined && typeof waterPress === 'number') {
             const raw = Number(waterPress);
             if (raw !== 65535 && raw !== 4294967295 && raw !== 4294901760) {
-                updates.water_pressure_bar = parseFloat(((raw & 0xFFFF) / 1000.0).toFixed(3));
+                updates.water_pressure_bar = parseFloat(raw.toFixed(2));
             }
         }
         if (dhwTarget !== undefined) updates.dhw_target_temperature = dhwTarget;
         if (outTemp !== undefined) updates.outside_temperature = outTemp;
         if (exhTemp !== undefined) updates.exhaust_temperature = exhTemp;
         if (dhwMeas !== undefined) updates.dhw_measured_temperature = dhwMeas;
+        if (flameCurrent !== undefined && Number(flameCurrent) !== 65535) {
+            updates.flame_current_ua = parseFloat((Number(flameCurrent) / 10).toFixed(1));
+        }
+        if (rawCodes !== undefined && Number(rawCodes) !== 65535 && Number(rawCodes) !== 4294967295) {
+            const c = Number(rawCodes);
+            updates.oem_fault_code = (c >> 16) & 0xFFFF;
+            updates.oem_diagnostic_code = c & 0xFFFF;
+        }
+        if (dhwStarts !== undefined && Number(dhwStarts) !== 65535) {
+            updates.dhw_burner_starts = Number(dhwStarts);
+        }
     }
 
     // Dynamic Bridge promotion based on short address 0x0000 or CoAP context

@@ -41,16 +41,26 @@ router.get('/:homeId/heatingSystem', async (req, res) => {
                 controlSetpoint: hs.field_0450 !== null && hs.field_0450 !== undefined ? parseFloat(hs.field_0450) : null,
                 modulationPercentage: hs.field_0452 !== null && hs.field_0452 !== undefined ? parseInt(hs.field_0452, 10) : null,
                 flameActive: Boolean(hs.field_0457),
-                waterPressureBar: hs.field_0460 !== null && hs.field_0460 !== undefined ? parseFloat(((Number(hs.field_0460) & 0xFFFF) / 1000).toFixed(2)) : null,
+                waterPressureBar: hs.field_0462 !== null && hs.field_0462 !== undefined
+                    ? parseFloat(Number(hs.field_0462).toFixed(2))
+                    : null,
+                oemFaultCode: hs.field_0460 !== null && hs.field_0460 !== undefined ? ((Number(hs.field_0460) >> 16) & 0xFFFF) : null,
+                oemDiagnosticCode: hs.field_0460 !== null && hs.field_0460 !== undefined ? (Number(hs.field_0460) & 0xFFFF) : null,
                 dhwTargetTemperature: hs.field_045b !== null && hs.field_045b !== undefined ? parseFloat(hs.field_045b) : null,
-                dhwFlowRateLpm: null,
+                dhwFlowRateLpm: hs.field_045e !== null && hs.field_045e !== undefined ? parseFloat(hs.field_045e) : null,
                 burnerStarts: hs.field_0463 !== null && hs.field_0463 !== undefined && parseInt(hs.field_0463, 10) !== 65535 ? parseInt(hs.field_0463, 10) : null,
                 chPumpStarts: hs.field_0464 !== null && hs.field_0464 !== undefined && parseInt(hs.field_0464, 10) !== 65535 ? parseInt(hs.field_0464, 10) : null,
+                dhwBurnerStarts: hs.field_0464 !== null && hs.field_0464 !== undefined && parseInt(hs.field_0464, 10) !== 65535 ? parseInt(hs.field_0464, 10) : null,
                 chBurnerStarts: hs.field_0465 !== null && hs.field_0465 !== undefined && parseInt(hs.field_0465, 10) !== 65535 ? parseInt(hs.field_0465, 10) : null,
                 burnerHoursTotal: hs.field_0466 !== null && hs.field_0466 !== undefined ? parseFloat(hs.field_0466) : null,
                 burnerHoursCh: hs.field_0467 !== null && hs.field_0467 !== undefined ? parseFloat(hs.field_0467) : null,
                 burnerHoursDhw: hs.field_0468 !== null && hs.field_0468 !== undefined ? parseFloat(hs.field_0468) : null,
                 faultFlags: hs.field_0458 !== null && hs.field_0458 !== undefined ? parseInt(hs.field_0458, 10) : 0,
+                flameCurrentUa: hs.field_0458 !== null && hs.field_0458 !== undefined ? parseFloat((Number(hs.field_0458) / 10).toFixed(1)) : null,
+                maxChFlowTemperature: hs.field_046f !== null && hs.field_046f !== undefined ? parseFloat(hs.field_046f) : null,
+                dhwSetpointUpperBound: hs.field_0471 !== null && hs.field_0471 !== undefined ? parseFloat(hs.field_0471) : null,
+                dhwStorageTank: hs.field_046c !== null && hs.field_046c !== undefined ? Boolean(hs.field_046c) : null,
+                dhwInstantaneous: hs.field_046d !== null && hs.field_046d !== undefined ? Boolean(hs.field_046d) : null,
                 updatedAt: hs.hvac_updated_at || null
             }
         });

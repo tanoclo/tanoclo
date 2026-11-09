@@ -659,22 +659,6 @@ export default function DeviceAdvancedSettings({
   deviceId,
   isValve,
   device,
-  lowSteps,
-  setLowSteps,
-  highSteps,
-  setHighSteps,
-  driveConstant,
-  setDriveConstant,
-  handleSaveActuatorLimits,
-  isSavingLimits,
-  displayBrightness,
-  setDisplayBrightness,
-  displayContrast,
-  setDisplayContrast,
-  displayActiveTimeout,
-  setDisplayActiveTimeout,
-  handleSaveDisplay,
-  isSavingDisplay,
   isReadOnly,
   t
 }) {
@@ -682,6 +666,7 @@ export default function DeviceAdvancedSettings({
   const targetSerial = device?.serialNo || deviceId;
   const isStat = device?.deviceType?.startsWith('SU') || device?.deviceType?.startsWith('WR') || device?.deviceType?.startsWith('RU');
   const isIB = device?.deviceType?.startsWith('IB') || device?.deviceType?.startsWith('GW');
+  const [isCalibrating, setIsCalibrating] = useState(false);
 
   // Default address based on hardware platform
   const defaultAddr = isValve ? '00000000' : '20000000';
@@ -1057,130 +1042,65 @@ export default function DeviceAdvancedSettings({
         </p>
       </Card>
 
-      {/* Display & Screensaver Settings Card */}
-      {!isIB && (
+      {/* Actuator & Motor Calibration (Radiator Valves only) */}
+      {isValve && (
         <Card style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-          <h3 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0 }}>{t('settings.device_advanced.display_screensaver_title')}</h3>
-
-          {/* Brightness */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <strong>{t('settings.device_advanced.display_brightness')}</strong>
-              <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--primary)' }}>
-                {Math.round((displayBrightness / 255) * 100)}% ({displayBrightness})
-              </span>
-            </div>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.4' }}>
-              {t('settings.device_advanced.display_brightness_desc')}
-              <br />
-              • <em>{t('common.interpretation')}</em>: {t('settings.device_advanced.display_brightness_interp')}
-            </p>
-            <input
-              type="range"
-              min="0"
-              max="255"
-              value={displayBrightness}
-              onChange={(e) => setDisplayBrightness(Number(e.target.value))}
-              disabled={isReadOnly}
-              style={{ width: '100%', cursor: 'pointer', marginTop: '0.25rem' }}
-            />
-          </div>
-
-          {/* Contrast */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', borderTop: '1px solid var(--border-color)', paddingTop: '1.25rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <strong>{t('settings.device_advanced.display_contrast', 'Display Contrast')}</strong>
-              <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--primary)' }}>
-                {displayContrast}
-              </span>
-            </div>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.4' }}>
-              {t('settings.device_advanced.display_contrast_desc')}
-              <br />
-              • <em>{t('common.interpretation')}</em>: {t('settings.device_advanced.display_contrast_interp')}
-            </p>
-            <input
-              type="range"
-              min="0"
-              max="255"
-              value={displayContrast}
-              onChange={(e) => setDisplayContrast(Number(e.target.value))}
-              disabled={isReadOnly}
-              style={{ width: '100%', cursor: 'pointer', marginTop: '0.25rem' }}
-            />
-          </div>
-
-          {/* Screensaver Standby Timeout */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-color)', paddingTop: '1.25rem', gap: '1rem' }}>
-            <div style={{ flex: 1 }}>
-              <strong>{t('settings.device_advanced.display_off_timeout')}</strong>
-              <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '2px 0 0', lineHeight: '1.4' }}>
-                {t('settings.device_advanced.display_timeout_desc')}
-                <br />
-                • <em>{t('common.interpretation')}</em>: {t('settings.device_advanced.display_timeout_interp')}
-                <br />
-                • <strong>{t('common.warning')}</strong>: {t('settings.device_advanced.display_timeout_warning')}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+              <h3 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Wrench size={16} />
+                {t('settings.device_advanced.actuator_motor_title', 'Actuator & Motor Calibration')}
+              </h3>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.4' }}>
+                {t('settings.device_advanced.stepper_desc', 'Autonomous mechanical valve stroke calibration and real-time motor telemetry.')}
               </p>
             </div>
-            <input
-              type="number"
-              min="0"
-              max="255"
-              value={displayActiveTimeout}
-              onChange={(e) => setDisplayActiveTimeout(Number(e.target.value))}
-              disabled={isReadOnly}
-              style={{
-                backgroundColor: 'var(--bg-input)',
-                border: '1px solid var(--border-color)',
-                color: 'var(--text-primary)',
-                padding: '0.4rem 0.6rem',
-                borderRadius: 'var(--radius-sm)',
-                width: '80px',
-                textAlign: 'center',
-                fontWeight: 600
-              }}
-            />
-          </div>
 
-          <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
             <Button
-              onClick={handleSaveDisplay}
-              disabled={isSavingDisplay || isReadOnly}
-              variant="primary"
+              variant="secondary"
+              disabled={isReadOnly || isCalibrating}
+              onClick={async () => {
+                setIsCalibrating(true);
+                try {
+                  await triggerMountCalibration(homeId, targetSerial, 'start');
+                  showToast(t('settings.device_advanced.toast_calibration_started', 'Mount calibration requested successfully.'));
+                } catch (e) {
+                  showToast(e.message || 'Failed to start mount calibration.', 'error');
+                } finally {
+                  setIsCalibrating(false);
+                }
+              }}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem', padding: '0.4rem 0.8rem' }}
             >
-              {isSavingDisplay ? t('settings.saving', 'Saving...') : t('settings.save_display', 'Save Display Settings')}
+              <RefreshCw size={14} className={isCalibrating ? 'animate-spin' : ''} />
+              {t('settings.device_advanced.start_calibration', 'Start Mount Calibration')}
             </Button>
           </div>
-        </Card>
-      )}
 
-      {/* Actuator Limits (VA devices only) */}
-      {isValve && (
-        <Card style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <h3 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0 }}>{t('settings.device_advanced.actuator_motor_title')}</h3>
-          <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.4' }}>
-            {t('settings.device_advanced.stepper_desc')}
-          </p>
-
-          {/* Multi-step Visual Motor Range Bar & Interactive Sliders */}
+          {/* Stepper Stroke Timeline & Motor Telemetry */}
           {(() => {
-            const numLow = Number(lowSteps) || 2400;
-            const numHigh = Number(highSteps) || 2200;
-            const numDrive = Number(driveConstant) || 1800;
-            const numSeat = Number(device?.actuatorLimits?.seatPoint) || null;
-            const numRef = Number(device?.actuatorLimits?.referencePoint) || null;
+            const numOpen = Number(device?.actuatorLimits?.referencePoint ?? device?.actuatorLimits?.openPoint) || (device?.actuatorLimits?.position1 ? 200 : null);
+            const numClosed = Number(device?.actuatorLimits?.seatPoint ?? device?.actuatorLimits?.closedPoint) || null;
             const numPos1 = Number(device?.actuatorLimits?.position1) || null;
-            const maxTrack = Math.max(3000, numLow + 200, (numPos1 || 0) + 200);
+            const numPos2 = Number(device?.actuatorLimits?.position2) || null;
+            const calibMode = device?.actuatorLimits?.mode; // 01fa: 0 idle, 1 started, 2 done, 3 failed
+            const calibErr = device?.actuatorLimits?.flags;  // 01fb: 0 none, 1 no pin, 2 no end stop, 3 <300 steps, 6 low voltage
+
+            const strokeLength = (numClosed !== null && numOpen !== null && numClosed > numOpen) ? (numClosed - numOpen) : null;
+            const maxTrack = Math.max(3000, (numClosed || 0) + 200, (numPos1 || 0) + 200, (numPos2 || 0) + 200);
 
             const getPct = (val) => {
-              if (val === null || isNaN(val)) return 0;
+              if (val === null || val === undefined || isNaN(val)) return 0;
               return Math.min(100, Math.max(0, (val / maxTrack) * 100));
             };
 
-            const highPct = getPct(numHigh);
-            const lowPct = getPct(numLow);
-            const spanLeft = Math.min(highPct, lowPct);
-            const spanWidth = Math.max(2, Math.abs(lowPct - highPct));
+            const openPct = getPct(numOpen);
+            const closedPct = getPct(numClosed);
+            const spanLeft = Math.min(openPct, closedPct);
+            const spanWidth = Math.max(2, Math.abs(closedPct - openPct));
+
+            const motorLoad = device?.actuatorLimits?.motorLoadMv ?? device?.field_0273;
+            const motorRunMin = device?.actuatorLimits?.motorRunMinMv ?? device?.field_027c;
 
             return (
               <div style={{
@@ -1192,107 +1112,192 @@ export default function DeviceAdvancedSettings({
                 flexDirection: 'column',
                 gap: '1.25rem'
               }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                    {t('settings.device_advanced.stepper_axis', `Linear Stepper Axis (0 → ${maxTrack} steps)`)}
-                  </span>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                    {t('settings.device_advanced.stepper_outward')}
-                  </span>
+                {/* Calibration Status Badge Bar */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                      {t('settings.device_advanced.stepper_axis', `Mechanical Stroke Axis (0 → ${maxTrack} steps)`)}
+                    </span>
+                    {strokeLength !== null && (
+                      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--primary)', backgroundColor: 'var(--bg-card)', padding: '0.15rem 0.5rem', borderRadius: '4px', border: '1px solid var(--border-color)' }}>
+                        Stroke: {strokeLength} steps
+                      </span>
+                    )}
+                  </div>
+
+                  <div>
+                    {calibMode === 1 ? (
+                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#38bdf8', backgroundColor: 'rgba(56, 189, 248, 0.15)', border: '1px solid #38bdf8', padding: '0.2rem 0.6rem', borderRadius: '4px' }}>
+                        ● Calibrating...
+                      </span>
+                    ) : calibMode === 2 || device?.actuatorLimits?.active ? (
+                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--success, #22c55e)', backgroundColor: 'rgba(34, 197, 94, 0.15)', border: '1px solid var(--success, #22c55e)', padding: '0.2rem 0.6rem', borderRadius: '4px' }}>
+                        ✓ Calibrated & Active
+                      </span>
+                    ) : calibMode === 3 ? (
+                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--danger, #ef4444)', backgroundColor: 'rgba(239, 68, 68, 0.15)', border: '1px solid var(--danger, #ef4444)', padding: '0.2rem 0.6rem', borderRadius: '4px' }}>
+                        ✕ Calibration Failed
+                      </span>
+                    ) : (
+                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--warning, #f59e0b)', backgroundColor: 'rgba(245, 158, 11, 0.15)', border: '1px solid var(--warning, #f59e0b)', padding: '0.2rem 0.6rem', borderRadius: '4px' }}>
+                        ⚠ Uncalibrated / Idle
+                      </span>
+                    )}
+                  </div>
                 </div>
 
-                {/* Visual Timeline Track */}
-                <div style={{ position: 'relative', height: '54px', margin: '1.25rem 0.5rem 0.75rem' }}>
+                {/* Non-Colliding Stroke Timeline Track */}
+                <div style={{ position: 'relative', height: '110px', margin: '0.5rem 1rem 0.25rem', userSelect: 'none' }}>
                   {/* Track Base */}
                   <div style={{
                     position: 'absolute',
-                    top: '22px',
+                    top: '46px',
                     left: 0,
                     right: 0,
-                    height: '8px',
-                    backgroundColor: 'rgba(255,255,255,0.08)',
-                    borderRadius: '4px'
+                    height: '10px',
+                    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+                    borderRadius: '5px'
                   }} />
 
-                  {/* Active Modulation Range Highlight */}
-                  <div style={{
-                    position: 'absolute',
-                    top: '22px',
-                    left: `${spanLeft}%`,
-                    width: `${spanWidth}%`,
-                    height: '8px',
-                    backgroundColor: 'rgba(245, 158, 11, 0.45)',
-                    borderTop: '1px solid #f59e0b',
-                    borderBottom: '1px solid #f59e0b',
-                    borderRadius: '2px'
-                  }} />
-
-                  {/* Reference Point Marker */}
-                  {numRef !== null && (
+                  {/* Active Modulation Stroke Span (Open Seat -> Closed Endstop) */}
+                  {numOpen !== null && numClosed !== null && (
                     <div style={{
                       position: 'absolute',
-                      left: `${getPct(numRef)}%`,
-                      top: '-18px',
-                      transform: 'translateX(-50%)',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      pointerEvents: 'none'
-                    }}>
-                      <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#38bdf8', whiteSpace: 'nowrap' }}>
-                        {t('settings.device_advanced.ref')} ({numRef})
-                      </span>
-                      <div style={{ width: '2px', height: '40px', backgroundColor: '#38bdf8', opacity: 0.8 }} />
-                    </div>
+                      top: '46px',
+                      left: `${spanLeft}%`,
+                      width: `${spanWidth}%`,
+                      height: '10px',
+                      backgroundColor: 'rgba(34, 197, 94, 0.25)',
+                      borderTop: '2px solid #22c55e',
+                      borderBottom: '2px solid #ef4444',
+                      borderRadius: '2px',
+                      boxShadow: '0 0 10px rgba(34, 197, 94, 0.2)'
+                    }} />
                   )}
 
-                  {/* Drive Constant Marker */}
+                  {/* --- UPPER TIER (top: 2px): Physical Calibration Endstops --- */}
+                  {/* 0 Origin */}
                   <div style={{
                     position: 'absolute',
-                    left: `${getPct(numDrive)}%`,
-                    top: '-18px',
-                    transform: 'translateX(-50%)',
+                    left: '0%',
+                    top: '2px',
+                    transform: 'translateX(0)',
                     display: 'flex',
                     flexDirection: 'column',
-                    alignItems: 'center',
+                    alignItems: 'flex-start',
                     pointerEvents: 'none'
                   }}>
-                    <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#818cf8', whiteSpace: 'nowrap' }}>
-                      {t('settings.device_advanced.drive')} ({numDrive})
+                    <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-muted)' }}>
+                      0 (Origin)
                     </span>
-                    <div style={{ width: '2px', height: '40px', backgroundColor: '#818cf8', opacity: 0.8 }} />
+                    <div style={{ width: '1px', height: '36px', backgroundColor: 'var(--text-muted)', opacity: 0.5 }} />
                   </div>
 
-                  {/* Seat Point Marker (100% Open) */}
-                  {numSeat !== null && (
+                  {/* Open Position (Pin Contact / Seat Point 01b5) */}
+                  {numOpen !== null && (
                     <div style={{
                       position: 'absolute',
-                      left: `${getPct(numSeat)}%`,
-                      top: '-18px',
+                      left: `${openPct}%`,
+                      top: '2px',
                       transform: 'translateX(-50%)',
                       display: 'flex',
                       flexDirection: 'column',
                       alignItems: 'center',
-                      pointerEvents: 'none'
+                      pointerEvents: 'none',
+                      zIndex: 3
                     }}>
-                      <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--success, #22c55e)', whiteSpace: 'nowrap' }}>
-                        {t('settings.device_advanced.seat')} ({numSeat})
+                      <span style={{
+                        fontSize: '0.65rem',
+                        fontWeight: 700,
+                        color: 'var(--success, #22c55e)',
+                        whiteSpace: 'nowrap',
+                        backgroundColor: 'rgba(34, 197, 94, 0.15)',
+                        border: '1px solid #22c55e',
+                        padding: '1px 5px',
+                        borderRadius: '4px'
+                      }}>
+                        Open / Seat ({numOpen})
                       </span>
-                      <div style={{ width: '2px', height: '40px', backgroundColor: 'var(--success, #22c55e)', opacity: 0.9 }} />
+                      <div style={{ width: '2px', height: '36px', backgroundColor: 'var(--success, #22c55e)', opacity: 0.9 }} />
                     </div>
                   )}
 
-                  {/* Current Position Marker */}
+                  {/* Closed Position (Fully Compressed Endstop 01b6) */}
+                  {numClosed !== null && (
+                    <div style={{
+                      position: 'absolute',
+                      left: `${closedPct}%`,
+                      top: '2px',
+                      transform: 'translateX(-50%)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      pointerEvents: 'none',
+                      zIndex: 3
+                    }}>
+                      <span style={{
+                        fontSize: '0.65rem',
+                        fontWeight: 700,
+                        color: '#ef4444',
+                        whiteSpace: 'nowrap',
+                        backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                        border: '1px solid #ef4444',
+                        padding: '1px 5px',
+                        borderRadius: '4px'
+                      }}>
+                        Closed Endstop ({numClosed})
+                      </span>
+                      <div style={{ width: '2px', height: '36px', backgroundColor: '#ef4444', opacity: 0.9 }} />
+                    </div>
+                  )}
+
+                  {/* --- LOWER TIER 1 (top: 62px): Target Position (0266) --- */}
+                  {numPos2 !== null && (
+                    <div style={{
+                      position: 'absolute',
+                      left: `${getPct(numPos2)}%`,
+                      top: '47px',
+                      transform: 'translateX(-50%)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      zIndex: 4,
+                      pointerEvents: 'none'
+                    }}>
+                      <div style={{
+                        width: '8px',
+                        height: '8px',
+                        borderRadius: '50%',
+                        backgroundColor: '#f59e0b',
+                        border: '2px solid var(--bg-card)'
+                      }} />
+                      <div style={{ width: '2px', height: '8px', backgroundColor: '#f59e0b' }} />
+                      <span style={{
+                        fontSize: '0.65rem',
+                        fontWeight: 700,
+                        color: '#f59e0b',
+                        whiteSpace: 'nowrap',
+                        backgroundColor: 'rgba(245, 158, 11, 0.2)',
+                        border: '1px solid #f59e0b',
+                        padding: '1px 5px',
+                        borderRadius: '4px'
+                      }}>
+                        Target: {numPos2}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* --- LOWER TIER 2 (top: 86px): Live Position (0265) --- */}
                   {numPos1 !== null && (
                     <div style={{
                       position: 'absolute',
                       left: `${getPct(numPos1)}%`,
-                      top: '32px',
+                      top: '46px',
                       transform: 'translateX(-50%)',
                       display: 'flex',
                       flexDirection: 'column',
                       alignItems: 'center',
-                      zIndex: 3,
+                      zIndex: 5,
                       pointerEvents: 'none'
                     }}>
                       <div style={{
@@ -1300,239 +1305,111 @@ export default function DeviceAdvancedSettings({
                         height: '10px',
                         borderRadius: '50%',
                         backgroundColor: '#ec4899',
-                        boxShadow: '0 0 8px #ec4899'
+                        boxShadow: '0 0 10px #ec4899'
                       }} />
-                      <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#ec4899', whiteSpace: 'nowrap', marginTop: '2px' }}>
-                        {t('settings.device_advanced.live')} {numPos1}
+                      <div style={{ width: '2px', height: '32px', backgroundColor: '#ec4899', opacity: 0.7 }} />
+                      <span style={{
+                        fontSize: '0.65rem',
+                        fontWeight: 800,
+                        color: '#ec4899',
+                        whiteSpace: 'nowrap',
+                        backgroundColor: 'rgba(236, 72, 153, 0.2)',
+                        border: '1px solid #ec4899',
+                        padding: '1px 5px',
+                        borderRadius: '4px',
+                        boxShadow: '0 0 6px rgba(236, 72, 153, 0.3)'
+                      }}>
+                        Live: {numPos1}
                       </span>
                     </div>
                   )}
+                </div>
 
-                  {/* High Steps Marker */}
-                  <div style={{
-                    position: 'absolute',
-                    left: `${getPct(numHigh)}%`,
-                    top: '-18px',
-                    transform: 'translateX(-50%)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    pointerEvents: 'none'
-                  }}>
-                    <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#f59e0b', whiteSpace: 'nowrap' }}>
-                      {t('settings.device_advanced.high')} ({numHigh})
+                {/* Motor Electrical Diagnostics (0x0273 and 0x027c) */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                  gap: '0.75rem',
+                  borderTop: '1px solid var(--border-color)',
+                  paddingTop: '0.75rem'
+                }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', backgroundColor: 'var(--bg-card)', padding: '0.6rem 0.75rem', borderRadius: 'var(--radius-sm)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{t('settings.device_advanced.motor_load', 'Motor Drive Load (0x0273)')}</span>
+                      {motorLoad !== null && motorLoad !== undefined && motorLoad <= 2149 && (
+                        <span style={{ fontSize: '0.65rem', color: 'var(--danger)', fontWeight: 700 }}>STALL WARN</span>
+                      )}
+                    </div>
+                    <strong style={{ fontSize: '0.95rem', fontFamily: 'monospace', color: (motorLoad !== null && motorLoad <= 2149) ? 'var(--danger)' : 'var(--text-primary)' }}>
+                      {motorLoad !== null && motorLoad !== undefined ? `${motorLoad} mV` : '--'}
+                    </strong>
+                    <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                      SAADC motor voltage during stroke (threshold &le; 2149 mV flags stall code 13)
                     </span>
-                    <div style={{ width: '2px', height: '40px', backgroundColor: '#f59e0b', opacity: 0.9 }} />
                   </div>
-
-                  {/* Low Steps Marker (Closed Limit) */}
-                  <div style={{
-                    position: 'absolute',
-                    left: `${getPct(numLow)}%`,
-                    top: '-18px',
-                    transform: 'translateX(-50%)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    pointerEvents: 'none'
-                  }}>
-                    <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#ef4444', whiteSpace: 'nowrap' }}>
-                      {t('settings.device_advanced.low_closed')} ({numLow})
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', backgroundColor: 'var(--bg-card)', padding: '0.6rem 0.75rem', borderRadius: 'var(--radius-sm)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{t('settings.device_advanced.motor_run_min', 'Running Min Voltage (0x027c)')}</span>
+                      {motorRunMin !== null && motorRunMin !== undefined && motorRunMin <= 2149 && (
+                        <span style={{ fontSize: '0.65rem', color: 'var(--danger)', fontWeight: 700 }}>LOW VOLT</span>
+                      )}
+                    </div>
+                    <strong style={{ fontSize: '0.95rem', fontFamily: 'monospace', color: (motorRunMin !== null && motorRunMin <= 2149) ? 'var(--danger)' : 'var(--text-primary)' }}>
+                      {motorRunMin !== null && motorRunMin !== undefined ? `${motorRunMin} mV` : '--'}
+                    </strong>
+                    <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
+                      Minimum averaged motor voltage recorded during last travel
                     </span>
-                    <div style={{ width: '2px', height: '40px', backgroundColor: '#ef4444', opacity: 0.9 }} />
                   </div>
                 </div>
-
-                {/* Sliders & Synchronized Numeric Inputs */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
-                  {/* Drive Constant */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#818cf8' }}>
-                        {t('settings.device_advanced.drive_constant')}
-                      </span>
-                      <input
-                        type="number"
-                        min="1000"
-                        max="2600"
-                        value={driveConstant}
-                        onChange={(e) => setDriveConstant(e.target.value)}
-                        disabled={isReadOnly}
-                        style={{
-                          width: '75px',
-                          padding: '0.25rem 0.4rem',
-                          borderRadius: 'var(--radius-sm)',
-                          backgroundColor: 'var(--bg-card)',
-                          border: '1px solid var(--border-color)',
-                          color: 'var(--text-primary)',
-                          textAlign: 'center',
-                          fontSize: '0.8rem',
-                          fontWeight: 700
-                        }}
-                      />
-                    </div>
-                    <input
-                      type="range"
-                      min="1000"
-                      max="2600"
-                      value={Number(driveConstant) || 1786}
-                      onChange={(e) => setDriveConstant(Number(e.target.value))}
-                      disabled={isReadOnly}
-                      style={{ width: '100%', cursor: 'pointer', accentColor: '#818cf8' }}
-                    />
-                  </div>
-
-                  {/* High Steps */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#f59e0b' }}>
-                        {t('settings.device_advanced.high_steps')}
-                      </span>
-                      <input
-                        type="number"
-                        min="1500"
-                        max="2800"
-                        value={highSteps}
-                        onChange={(e) => setHighSteps(e.target.value)}
-                        disabled={isReadOnly}
-                        style={{
-                          width: '75px',
-                          padding: '0.25rem 0.4rem',
-                          borderRadius: 'var(--radius-sm)',
-                          backgroundColor: 'var(--bg-card)',
-                          border: '1px solid var(--border-color)',
-                          color: 'var(--text-primary)',
-                          textAlign: 'center',
-                          fontSize: '0.8rem',
-                          fontWeight: 700
-                        }}
-                      />
-                    </div>
-                    <input
-                      type="range"
-                      min="1500"
-                      max="2800"
-                      value={Number(highSteps) || 2244}
-                      onChange={(e) => setHighSteps(Number(e.target.value))}
-                      disabled={isReadOnly}
-                      style={{ width: '100%', cursor: 'pointer', accentColor: '#f59e0b' }}
-                    />
-                  </div>
-
-                  {/* Low Steps */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#ef4444' }}>
-                        {t('settings.device_advanced.low_steps')}
-                      </span>
-                      <input
-                        type="number"
-                        min="1800"
-                        max="3000"
-                        value={lowSteps}
-                        onChange={(e) => setLowSteps(e.target.value)}
-                        disabled={isReadOnly}
-                        style={{
-                          width: '75px',
-                          padding: '0.25rem 0.4rem',
-                          borderRadius: 'var(--radius-sm)',
-                          backgroundColor: 'var(--bg-card)',
-                          border: '1px solid var(--border-color)',
-                          color: 'var(--text-primary)',
-                          textAlign: 'center',
-                          fontSize: '0.8rem',
-                          fontWeight: 700
-                        }}
-                      />
-                    </div>
-                    <input
-                      type="range"
-                      min="1800"
-                      max="3000"
-                      value={Number(lowSteps) || 2390}
-                      onChange={(e) => setLowSteps(Number(e.target.value))}
-                      disabled={isReadOnly}
-                      style={{ width: '100%', cursor: 'pointer', accentColor: '#ef4444' }}
-                    />
-                  </div>
-                </div>
-
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', lineHeight: '1.4', backgroundColor: 'var(--bg-card)', padding: '0.75rem', borderRadius: 'var(--radius-sm)' }}>
-                  <h4 style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: '0.25rem', color: 'var(--text-primary)' }}>{t('settings.device_advanced.understanding_stepper')}</h4>
-                  • {t('settings.device_advanced.stepper_rule_1')}
-                  <br />
-                  • {t('settings.device_advanced.stepper_rule_seat')}
-                  <br />
-                  • {t('settings.device_advanced.stepper_rule_mod')}
-                  <br />
-                  • {t('settings.device_advanced.stepper_rule_low')}
-                </div>
-
-                {/* Validation Warnings */}
-                {(numLow < numHigh || numHigh < numDrive || numLow < numDrive) && (
-                  <div style={{
-                    padding: '0.6rem 0.75rem',
-                    backgroundColor: 'rgba(239, 68, 68, 0.15)',
-                    border: '1px solid var(--danger, #ef4444)',
-                    borderRadius: 'var(--radius-sm)',
-                    color: 'var(--danger, #ef4444)',
-                    fontSize: '0.75rem',
-                    fontWeight: 600,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '0.25rem'
-                  }}>
-                    {numLow < numHigh && (
-                      <span>• {t('settings.device_advanced.stepper_rule_err1', `Low Steps (closed limit: ${numLow}) cannot be lower than High Steps (open modulation limit: ${numHigh}).`)}</span>
-                    )}
-                    {(numHigh < numDrive || numLow < numDrive) && (
-                      <span>• {t('settings.device_advanced.stepper_rule_err2', `High/Low steps cannot be lower than Drive Constant baseline (${numDrive}).`)}</span>
-                    )}
-                  </div>
-                )}
               </div>
             );
           })()}
 
-          {/* Actuator Diagnostics */}
+          {/* Actuator & Calibration Diagnostics Table */}
           <div style={{
             borderTop: '1px solid var(--border-color)',
-            paddingTop: '1rem',
-            marginTop: '0.5rem',
+            paddingTop: '0.75rem',
             display: 'flex',
             flexDirection: 'column',
             gap: '0.75rem'
           }}>
-            <h4 style={{ fontSize: '0.85rem', fontWeight: 600, margin: 0 }}>{t('settings.device_advanced.actuator_diag_title')}</h4>
+            <h4 style={{ fontSize: '0.85rem', fontWeight: 600, margin: 0 }}>{t('settings.device_advanced.actuator_diag_title', 'Calibration & Adaptation Diagnostics')}</h4>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem', fontSize: '0.8rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.02)', paddingBottom: '0.25rem' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>{t('common.status')}</span>
+                <span style={{ color: 'var(--text-secondary)' }}>{t('common.status', 'Status')}</span>
                 <span style={{ fontWeight: 600, color: device?.actuatorLimits?.active ? 'var(--success)' : 'var(--text-muted)' }}>
                   {device?.actuatorLimits?.active ? t('settings.device_advanced.calibrated_active', 'Active (Calibrated)') : t('settings.device_advanced.uncalibrated_inactive', 'Inactive (Uncalibrated)')}
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.02)', paddingBottom: '0.25rem' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>{t('settings.device_advanced.mounting_state')}</span>
+                <span style={{ color: 'var(--text-secondary)' }}>{t('settings.device_advanced.mounting_state', 'Mounting State')}</span>
                 <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
                   {device?.actuatorLimits?.mountingState || 'UNKNOWN'}
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.02)', paddingBottom: '0.25rem' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>Position 1 / 2</span>
+                <span style={{ color: 'var(--text-secondary)' }}>Live / Target Steps</span>
                 <span style={{ fontWeight: 600, fontFamily: 'monospace' }}>
                   {device?.actuatorLimits?.position1 !== null ? device.actuatorLimits.position1 : '-'} / {device?.actuatorLimits?.position2 !== null ? device.actuatorLimits.position2 : '-'}
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.02)', paddingBottom: '0.25rem' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>Seat / Reference</span>
+                <span style={{ color: 'var(--text-secondary)' }}>Open Point / Closed Endstop</span>
                 <span style={{ fontWeight: 600, fontFamily: 'monospace' }}>
-                  {device?.actuatorLimits?.seatPoint !== null ? device.actuatorLimits.seatPoint : '-'} / {device?.actuatorLimits?.referencePoint !== null ? device.actuatorLimits.referencePoint : '-'}
+                  {device?.actuatorLimits?.referencePoint !== null ? device.actuatorLimits.referencePoint : '-'} / {device?.actuatorLimits?.seatPoint !== null ? device.actuatorLimits.seatPoint : '-'}
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.02)', paddingBottom: '0.25rem' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>Mode / Flags</span>
+                <span style={{ color: 'var(--text-secondary)' }}>Calibration State (01fa / 01fb)</span>
                 <span style={{ fontWeight: 600, fontFamily: 'monospace' }}>
-                  {device?.actuatorLimits?.mode !== null ? device.actuatorLimits.mode : '-'} / {device?.actuatorLimits?.flags !== null ? device.actuatorLimits.flags : '-'}
+                  {(() => {
+                    const mode = device?.actuatorLimits?.mode;
+                    const err = device?.actuatorLimits?.flags;
+                    const errText = err === 1 ? 'No Pin Contact' : err === 2 ? 'No Endstop' : err === 3 ? 'Travel < 300' : err === 6 ? 'Low Voltage' : (err ? `Err ${err}` : 'OK');
+                    const modeText = mode === 2 ? 'Done' : mode === 1 ? 'Started' : mode === 3 ? 'Failed' : 'Idle';
+                    return `${modeText} (${errText})`;
+                  })()}
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.02)', paddingBottom: '0.25rem' }}>
@@ -1553,46 +1430,8 @@ export default function DeviceAdvancedSettings({
               </div>
             </div>
             <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', margin: 0 }}>
-              <em>{t('settings.device_advanced.diag_interp_title')}</em>: {t('settings.device_advanced.diag_interp_desc')}
+              <em>{t('settings.device_advanced.diag_interp_title', 'Interpretation of Diagnostics')}</em>: {t('settings.device_advanced.diag_interp_desc', 'Mounting state reports structural coupling. Seat point details the physical contact depth. A high positive/negative deviation value (e.g. > 100) indicates valve adaptation binding, stuck pins, or low battery motor slips.')}
             </p>
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.25rem' }}>
-            <Button
-              variant="primary"
-              onClick={handleSaveActuatorLimits}
-              disabled={isSavingLimits || isReadOnly || Number(lowSteps) < Number(highSteps) || Number(highSteps) < Number(driveConstant) || Number(lowSteps) < Number(driveConstant)}
-            >
-              <span>{isSavingLimits ? t('settings.saving') : t('settings.save_limits', 'Save Limits')}</span>
-            </Button>
-          </div>
-        </Card>
-      )}
-
-      {/* Valve Mount Calibration (Radiator Valves only) */}
-      {isValve && (
-        <Card style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <h3 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Wrench size={16} />
-            {t('settings.device_advanced.calibrate_title')}
-          </h3>
-          <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0, lineHeight: '1.4' }}>
-            {t('settings.device_advanced.calibrate_desc')}
-          </p>
-          <div style={{ display: 'flex' }}>
-            <Button
-              variant="secondary"
-              onClick={async () => {
-                try {
-                  await triggerMountCalibration(homeId, targetSerial, 'start');
-                  showToast(t('settings.device_advanced.toast_calibration_started'));
-                } catch (e) {
-                  showToast(e.message || 'Failed to start mount calibration.', 'error');
-                }
-              }}
-            >
-              {t('settings.device_advanced.start_calibration')}
-            </Button>
           </div>
         </Card>
       )}

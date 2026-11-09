@@ -38,7 +38,10 @@ const FRIENDLY_LABELS = {
   field_012e: 'Aux Temperature 1',
   field_01c8: 'Aux Temperature 2',
   field_0137: 'Dial Encoder Steps',
-  field_027a: 'Dial Interaction Result',
+  field_0273: 'Motor Load (mV)',
+  field_027a: 'Dial Pin State',
+  field_027c: 'Motor Run Min (mV)',
+  field_02b2: 'Timezone Offset (min)',
   field_0160: 'Reset Reason',
   field_0161: 'HVAC Link Status Flags',
   field_0162: 'Battery Voltage (mV)',
@@ -58,7 +61,14 @@ const FRIENDLY_LABELS = {
   field_0450: 'Control Setpoint (°C)',
   field_0452: 'Relative Modulation %',
   field_0457: 'Burner Flame Active',
-  field_0460: 'Water Pressure (mbar)'
+  field_0458: 'Flame Current (0.1 µA)',
+  field_0460: 'OEM Fault / Diag Code',
+  field_0462: 'Water Pressure (bar)',
+  field_0464: 'DHW Burner Starts',
+  field_046c: 'DHW Storage Tank',
+  field_046d: 'DHW Instantaneous',
+  field_046f: 'Max CH Setpoint (°C)',
+  field_0471: 'DHW Setpoint Upper Bound (°C)'
 };
 
 const parseTimestampToDate = (ts) => {

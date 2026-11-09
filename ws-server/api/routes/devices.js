@@ -18,11 +18,6 @@ const { mapDevice } = require('../../lib/mappers');
 const router = express.Router();
 const _log = getLogger('devices-api');
 
-const ALLOWED_DEVICE_ROUTE_COLS = new Set([
-    'field_0273', 'field_027c', 'field_0280',
-    'field_019e', 'field_019d', 'field_0149', 'field_02b2'
-]);
-
 router.use(authMiddleware);
 router.use(homeAccessMiddleware);
 
@@ -586,49 +581,10 @@ async function deleteDevice(req, res) {
     }
 }
 
-async function setActuatorLimits(req, res) {
-    try {
-        const { deviceId } = req.params;
-        const { lowSteps, highSteps, driveConstant } = req.body;
-        const homeId = await verifyDeviceHome(req, deviceId);
-        const pool = db.getPool();
-
-        const [existing] = await pool.execute('SELECT * FROM devices WHERE serial_no = ? AND home_id = ?', [deviceId, homeId]);
-        if (existing.length === 0) return res.status(404).json({ error: 'Device not found' });
-
-        await commandApi.pushActuatorLimits(deviceId, { lowSteps, highSteps, driveConstant }).catch(err => {
-            if (err.statusCode === 400) throw err;
-            _log('warn', `Failed to push actuator limits for ${deviceId}: ${err.message}`);
-        });
-
-        const updates = [];
-        const params = [];
-        if (lowSteps !== undefined && lowSteps !== null) { updates.push('field_0273 = ?'); params.push(Number(lowSteps)); }
-        if (highSteps !== undefined && highSteps !== null) { updates.push('field_027c = ?'); params.push(Number(highSteps)); }
-        if (driveConstant !== undefined && driveConstant !== null) { updates.push('field_0280 = ?'); params.push(Number(driveConstant)); }
-
-        if (updates.length > 0) {
-            params.push(deviceId);
-            params.push(homeId);
-            db.assertAllowedColumns(updates, ALLOWED_DEVICE_ROUTE_COLS);
-            await pool.execute(`UPDATE devices SET ${updates.join(', ')} WHERE serial_no = ? AND home_id = ?`, params);
-        }
-
-        const mqttHaDiscovery = require('../../lib/mqtt-ha-discovery');
-        mqttHaDiscovery.publishAllDiscovery().catch(e => _log('debug', `[devices] Discovery publish failed: ${e.message}`));
-
-        res.json({ success: true });
-    } catch (err) {
-        if (err.statusCode) return res.status(err.statusCode).json({ error: err.message.toLowerCase() });
-        _log('error', `Actuator limits update error: ${err.message}`);
-        res.status(500).json({ error: 'internal_error' });
-    }
-}
-
 async function setDisplaySettings(req, res) {
     try {
         const { deviceId } = req.params;
-        const { displayBrightness, displayContrast, displayActiveTimeout, brightness, wakeSensitivity, temperatureUnit } = req.body;
+        const { brightness, wakeSensitivity, temperatureUnit } = req.body;
         const homeId = await verifyDeviceHome(req, deviceId);
         const pool = db.getPool();
 
@@ -642,41 +598,7 @@ async function setDisplaySettings(req, res) {
             return res.json({ success: true });
         }
 
-        const updates = [];
-        const params = [];
-        const configFields = {};
-
-        if (displayBrightness !== undefined && displayBrightness !== null) {
-            updates.push('field_019e = ?');
-            params.push(Number(displayBrightness));
-            configFields['0x019e'] = Number(displayBrightness);
-        }
-        if (displayContrast !== undefined && displayContrast !== null) {
-            updates.push('field_019d = ?');
-            params.push(Number(displayContrast));
-            configFields['0x019d'] = Number(displayContrast);
-        }
-        if (displayActiveTimeout !== undefined && displayActiveTimeout !== null) {
-            updates.push('field_02b2 = ?');
-            params.push(Number(displayActiveTimeout));
-            configFields['0x02b2'] = Number(displayActiveTimeout);
-        }
-
-        if (updates.length > 0) {
-            params.push(deviceId);
-            params.push(homeId);
-            db.assertAllowedColumns(updates, ALLOWED_DEVICE_ROUTE_COLS);
-            await pool.execute(`UPDATE devices SET ${updates.join(', ')} WHERE serial_no = ? AND home_id = ?`, params);
-
-            // Merge into config
-            await db.updateDeviceConfig(deviceId, configFields);
-        }
-
-        await commandApi.pushConfigRefresh(deviceId).catch(err => {
-            _log('warn', `Failed to push config refresh for ${deviceId}: ${err.message}`);
-        });
-
-        res.json({ success: true });
+        return res.status(400).json({ error: 'No valid display settings provided' });
     } catch (err) {
         if (err.statusCode) return res.status(err.statusCode).json({ error: err.message.toLowerCase() });
         _log('error', `Display settings update error: ${err.message}`);
@@ -1056,7 +978,6 @@ router.put('/:homeId/devices/:deviceId/valveSensitivity', setValveSensitivity);
 router.post('/:homeId/devices/:deviceId/orientation', setOrientation);
 router.post('/:homeId/devices/:deviceId/pairing', setPairing);
 router.delete('/:homeId/devices/:deviceId/pairing', deletePairing);
-router.put('/:homeId/devices/:deviceId/actuatorLimits', setActuatorLimits);
 router.put('/:homeId/devices/:deviceId/displaySettings', setDisplaySettings);
 router.put('/:homeId/tanoclo/devices/:deviceId/friendlyName', setFriendlyName);
 router.post('/:homeId/devices/:deviceId/unassociate-neighbor', unassociateNeighbor);
@@ -1085,7 +1006,6 @@ router.put('/:deviceId/valveSensitivity', setValveSensitivity);
 router.post('/:deviceId/orientation', setOrientation);
 router.post('/:deviceId/pairing', setPairing);
 router.delete('/:deviceId/pairing', deletePairing);
-router.put('/:deviceId/actuatorLimits', setActuatorLimits);
 router.put('/:deviceId/displaySettings', setDisplaySettings);
 router.put('/tanoclo/devices/:deviceId/friendlyName', setFriendlyName);
 router.post('/:deviceId/unassociate-neighbor', unassociateNeighbor);

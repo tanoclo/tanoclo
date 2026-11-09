@@ -263,7 +263,7 @@ This dictionary consolidates all observed TLV fields, mapping their hex codes, t
 | `0x0149` | `va_orientation` | `u8` | 1.0 | enum | `/d/{id}/config` | `devices` | `field_0149` | Valve layout: `0`=HORIZONTAL, `1`=VERTICAL. |
 | `0x014c` | `fw_active_slot` | `u8` | 1.0 | enum | `/d/{id}/fw/state` | `devices` | `field_014c` | Execution slot index: `0` or `1`. |
 | `0x0155` | `rf_key` | `bytes` | 1.0 | - | `/d/{id}/config` | `devices` | `field_0155` | Operational network AES-128 RF key. |
-| `0x0158` | `device_ui_flags_0158` | `u16be` | 1.0 | bits | `/d/{id}/config` | `devices` | `field_0158` | UI settings bitfield. Bit 9 (`0x0200`)=Dazzle mode, Bit 10 (`0x0400`)=Display Always-On. |
+| `0x0158` | `device_ui_flags_0158` | `u16be` | 1.0 | bits | `/d/{id}/config` | `devices` | `field_0158` | UI notify flags: Bit 9 (`0x0200`)=Dazzle Mode (wakes display on remote overlay change), Bit 10 (`0x0400`)=wakes display on any zone change. |
 | `0x015a` | `device_config` | `bytes` | 1.0 | hash | `/d/{id}/config` | `devices` | `field_015a` | ETag determinants block configuration hash. |
 | `0x015c` | `home_id` | `u32be` | 1.0 | - | `/d/{id}/config` | `devices` | `home_id` | Unique 4-byte Home ID. |
 | `0x015d` | `device_type` | `u16be` | 1.0 | - | `/d/{id}/config`, `/codes`| `devices`, `heating_systems` | `field_015d` | Device type / role index (RU Wired=71, RU Wireless Sensor=200, VA Horizontal=112, VA Vertical=113). |
@@ -281,8 +281,8 @@ This dictionary consolidates all observed TLV fields, mapping their hex codes, t
 | `0x0183` | `config_field_0183` | `bytes` | 1.0 | - | `/d/{id}/config` | `tlv_labels` | - | Device configuration payload field. |
 | `0x0197` | `temp_drop_rate_trigger` | `s16be` | 0.01 | °C | `/z/p` | `tlv_labels` | - | Rapid temperature drop trigger threshold in centi-degrees Celsius. |
 | `0x019a` | `firmware_table_fid_019a` | `bytes` | 1.0 | - | `/d/{id}/fw` | `tlv_labels` | - | Firmware table manifest field metadata. |
-| `0x019d` | `display_contrast` | `u8` | 1.0 | - | `/d/{id}/config` | `devices` | `field_019d` | Device display contrast level. |
-| `0x019e` | `display_brightness` | `u8` | 1.0 | - | `/d/{id}/config` | `devices` | `field_019e` | Device display brightness level. |
+| `0x019d` | `unused_whitelist_019d` | `u8` | 1.0 | - | `/d/{id}/config` | `devices` | `field_019d` | Dead whitelist entry; no handler in VA or RU firmware. |
+| `0x019e` | `unused_whitelist_019e` | `u8` | 1.0 | - | `/d/{id}/config` | `devices` | `field_019e` | Dead whitelist entry; no handler in VA or RU firmware. |
 | `0x01a0` | `fw_state_status` | `u8` | 1.0 | - | `/d/{id}/fw/state` | `devices` | `field_01a0` | Firmware upgrade sequence status flags. |
 | `0x01a3` | `error_flags_u32` | `u32be` | 1.0 | bits | `/d/{id}/err` | `devices` | `field_01a3` | Hardware error states bitmask. |
 | `0x01a8` | `fw_offer_marker_a8` | `flag` | 1.0 | - | `/d/{id}/fw` | `tlv_labels` | - | Zero-length CoAP firmware update offer transaction marker. |
@@ -380,11 +380,11 @@ This dictionary consolidates all observed TLV fields, mapping their hex codes, t
 | `0x0265` | `va_act_position_steps` | `u16be` | 1.0 | steps | `/d/{id}/act` | `devices` | `field_0265` | Motor piston extension distance steps. |
 | `0x0266` | `va_act_position2_steps_unused` | `u16be` | 1.0 | steps | `/d/{id}/act` | `devices` | `field_0266` | Unused / historical placeholder. VA uses 0x0294. |
 | `0x0270` | `config_field_0270` | `bytes` | 1.0 | - | `/d/{id}/config` | `devices` | - | Device configuration raw byte field. |
-| `0x0273` | `va_act_limit_low_steps`| `u16be` | 1.0 | steps | `/d/{id}/act` | `devices` | `field_0273` | Piston closed/zero-level threshold steps. |
+| `0x0273` | `motor_load_mv` | `u16be` | 1.875 | mV | `/d/{id}/act` | `devices` | `field_0273` | Motor load SAADC voltage in mV (stall/error 0x01a3 check). |
 | `0x0275` | `config_field_0275` | `bytes` | 1.0 | - | `/d/{id}/config` | `devices` | - | Device configuration raw byte field. |
 | `0x0276` | `config_field_0276` | `bytes` | 1.0 | - | `/d/{id}/config` | `devices` | - | Device configuration raw byte field. |
-| `0x027a` | `dial_interaction_result`| `u8` | 1.0 | enum | `/d/{id}/sen` | `device_measurements` | `field_027a` | Dial interaction status code (0 = success/idle, 3 = manual temperature override committed on VA). Exposed in API `hardwareDiagnostics.dialInteractionResult` and MQTT `dial_interaction_result`. |
-| `0x027c` | `va_act_limit_high_steps`| `u16be` | 1.0 | steps | `/d/{id}/act` | `devices` | `field_027c` | Piston fully retracted span limit steps. |
+| `0x027a` | `dial_pin_state` | `u8` | 1.0 | bits | `/d/{id}/sen` | `device_measurements` | `field_027a` | Live GPIO pins 25/26 quadrature encoder state at report time (0 in detent). |
+| `0x027c` | `motor_run_min_mv` | `u16be` | 1.875 | mV | `/d/{id}/act` | `devices` | `field_027c` | Running minimum motor SAADC voltage during run in mV. |
 | `0x0280` | `va_act_drive_cal_const`| `u16be` | 1.0 | - | `/d/{id}/act` | `devices` | `field_0280` | Valve actuator mechanical drive constant. |
 | `0x0283` | `va_act_status_flags_unused` | `s16be` | 1.0 | bits | `/d/{id}/act` | `devices` | `field_0283` | Unused / historical placeholder. VA uses 0x028d. |
 | `0x0286` | `config_field_0286` | `u16be` | 1.0 | raw | `/d/{id}/config` | `devices` | - | Device configuration field. |
@@ -396,7 +396,7 @@ This dictionary consolidates all observed TLV fields, mapping their hex codes, t
 | `0x0293` | `config_field_0293` | `bytes` | 1.0 | - | `/d/{id}/config` | `devices` | - | Device configuration field. |
 | `0x0294` | `va_act_position2_steps`| `u16be` | 1.0 | steps | `/d/{id}/act` | `devices` | `field_0266` | Secondary piston movement steps. |
 | `0x0298` | `zone_presence` | `u8` | 1.0 | - | `/z/p` | `tlv_labels` | - | Zone node online/presence registration flag. |
-| `0x02b2` | `display_active_timeout`| `u16be` | 1.0 | min | `/d/{id}/config` | `devices` | `field_02b2` | Timeout duration for display activity / temporary override in minutes. |
+| `0x02b2` | `utc_offset_minutes` | `s16be` | 1.0 | min | `/d/{id}/config` | `devices` | `field_02b2` | Device UTC offset in minutes applied to RTC epoch. |
 | `0x02b3` | `device_config_flag_02b3`| `bool` | 1.0 | - | `/d/{id}/config` | `devices` | -| Offline fallback config schedule toggle. |
 | `0x0312` | `fw_manifest_blob` | `bytes` | 1.0 | blob | `/d/{id}/fw` | `tlv_labels` | - | Firmware upgrade manifest metadata. |
 | `0x044c` | `ot_ch_flow_temperature` | `s16be` | 0.01 | °C | `/h/{id}/hvac/mon` | `heating_systems` | `field_044c` | OpenTherm radiator supply temperature. |
@@ -406,22 +406,22 @@ This dictionary consolidates all observed TLV fields, mapping their hex codes, t
 | `0x0450` | `ot_ch_control_setpoint` | `s16be` | 0.01 | °C | `/h/{id}/hvac/mon` | `heating_systems` | `field_0450` | OpenTherm boiler water flow target temp. |
 | `0x0452` | `ot_relative_modulation_level` | `u16be` | 1.0 | % | `/h/{id}/hvac/mon` | `heating_systems` | `field_0452` | Active burner combustion load percentage. |
 | `0x0457` | `boiler_active` | `bool` | 1.0 | - | `/h/{id}/hvac/mon` | `heating_systems` | `field_0457` | Burner flame presence status. |
-| `0x0458` | `hvac_status_fault_flags`| `u16be` | 1.0 | bits | `/h/{id}/hvac/mon` | `heating_systems` | `field_0458` | HVAC protocol system failure bitfield. |
+| `0x0458` | `ot_flame_current` | `u16be` | 0.1 | µA | `/h/{id}/hvac/mon` | `heating_systems` | `field_0458` | OpenTherm ID 36 Flame Current in 0.1 µA. |
 | `0x045a` | `ot_dhw_temperature`      | `s16be` | 0.01 | °C | `/h/{id}/hvac/mon` | `heating_systems` | - | OpenTherm domestic hot water measured temperature. |
 | `0x045b` | `dhw_target_temperature` | `s16be` | 0.01 | °C | `/h/{id}/hvac/mon/dhw`| `heating_systems` | `field_045b` | Target temperature for Domestic Hot Water. |
 | `0x045e` | `ot_dhw_flow_rate`       | `u16be` | 0.1  | L/min | `/h/{id}/hvac/mon` | `heating_systems` | - | OpenTherm ID 19 domestic hot water flow rate in litres per minute. |
-| `0x0460` | `hvac_water_pressure_mbar`| `u32be` | 1.0 | mbar | `/h/{id}/hvac/codes` | `heating_systems` | `field_0460` | Boiler system water circuit pressure. |
+| `0x0460` | `hvac_fault_diagnostic_codes` | `u32be` | 1.0 | codes | `/h/{id}/hvac/codes` | `heating_systems` | `field_0460` | Packed HVAC codes: 0x0478 OT5 OEM fault code (high 16) and 0x0479 OT115 diagnostic code (low 16). |
 | `0x0462` | `ot_ch_water_pressure_bar`| `s16be` | 0.1  | bar | `/h/{id}/hvac/mon` | `heating_systems` | - | OpenTherm ID 18 central heating system water pressure in bar. |
 | `0x0463` | `ot_burner_start_count` | `u32be` | 1.0 | cyc | `/h/{id}/hvac/maint` | `heating_systems` | `field_0463` | Total cycles of burner combustion ignition. |
-| `0x0464` | `ot_ch_pump_start_count` | `u32be` | 1.0 | cyc | `/h/{id}/hvac/maint` | `heating_systems` | `field_0464` | Total execution cycles of central heating pump. |
+| `0x0464` | `ot_dhw_burner_start_count` | `u32be` | 1.0 | cyc | `/h/{id}/hvac/maint` | `heating_systems` | `field_0464` | OpenTherm-derived DHW burner start counter (OT Data-ID 119). |
 | `0x0465` | `ot_ch_burner_start_count`| `u32be` | 1.0 | cyc | `/h/{id}/hvac/maint` | `heating_systems` | `field_0465` | Derived central heating burner start counter (total - DHW). |
 | `0x0466` | `ot_burner_time_total` | `u32be` | $0.016\overline{6}$| hrs | `/h/{id}/hvac/maint` | `heating_systems` | `field_0466` | Runtime of burner flame (in raw seconds). |
 | `0x0467` | `ot_burner_time_ch` | `u32be` | $0.016\overline{6}$| hrs | `/h/{id}/hvac/maint` | `heating_systems` | `field_0467` | Radiator burner active hours. |
 | `0x0468` | `ot_burner_time_dhw` | `u32be` | $0.016\overline{6}$| hrs | `/h/{id}/hvac/maint` | `heating_systems` | `field_0468` | DHW burner active hours. |
-| `0x046c` | `ot_dhw_supported`       | `bool` | 1.0 | - | `/h/{id}/hvac/config`| `heating_systems` | `field_046c` | OpenTherm slave configuration: DHW supported/enabled capability. |
-| `0x046d` | `ot_dhw_not_supported`   | `bool` | 1.0 | - | `/h/{id}/hvac/config`| `heating_systems` | `field_046d` | OpenTherm slave configuration: DHW not supported capability. |
-| `0x046f` | `dhw_setpoint`           | `u16be` | 0.01 | °C | `/h/{id}/hvac/config`| `heating_systems` | `field_046f` | OpenTherm Data ID 57 domestic hot water target setpoint. |
-| `0x0471` | `dhw_setpoint_max`       | `u16be` | 0.01 | °C | `/h/{id}/hvac/config`| `heating_systems` | `field_0471` | OpenTherm Data ID 48 DHW setpoint upper limit/boundary. |
+| `0x046c` | `ot_dhw_storage_tank` | `bool` | 1.0 | - | `/h/{id}/hvac/config`| `heating_systems` | `field_046c` | OpenTherm ID 3 slave config bit 3: DHW storage tank present (1=storage tank, 0=instantaneous). |
+| `0x046d` | `ot_dhw_instantaneous` | `bool` | 1.0 | - | `/h/{id}/hvac/config`| `heating_systems` | `field_046d` | Inverted OpenTherm ID 3 slave config bit 3: Instantaneous DHW (1=instantaneous, 0=storage tank). |
+| `0x046f` | `ot_max_ch_flow_temperature` | `u16be` | 0.01 | °C | `/h/{id}/hvac/config`| `heating_systems` | `field_046f` | OpenTherm ID 57 Max CH water setpoint / flow ceiling MaxTSet. |
+| `0x0471` | `ot_dhw_setpoint_upper_bound` | `u16be` | 0.01 | °C | `/h/{id}/hvac/config`| `heating_systems` | `field_0471` | OpenTherm ID 48 DHW setpoint upper bound TdhwSet. |
 | `0x0481` | `hvac_field_presence_list` | `bytes` | 1.0 | - | `/h/{id}/hvac/mon` | `heating_systems` | `field_0481` | Supported OpenTherm parameter FID/attribute map (triplets of `[FID_HI, FID_LO, ATTR]`, attr 0x02 = periodic telemetry). |
 | `0x0c00` | `open_window_state` | `u8` | 1.0 | - | `/z/{id}/ow` | `zones` | `open_window_active` | Controls open window state: `0` = cancel/clear, `1` = active/detected. |
 | `0x0d1c` | `server_marker_0d1c` | `empty` | 1.0 | - | - | `tlv_labels` | - | Server-originated empty marker. |

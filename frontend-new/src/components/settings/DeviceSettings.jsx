@@ -21,8 +21,8 @@ import {
   getDevice, getDevices, identifyDevice, updateChildLock,
   updateValveSensitivity,
   updateOrientation, deleteDevice,
-  startPairing, stopPairing, updateActuatorLimits,
-  updateFriendlyName, updateDisplaySettings,
+  startPairing, stopPairing,
+  updateFriendlyName,
   rebootDevice, refreshRfKey, refreshDeviceConfig,
   updateDeviceRole
 } from '../../api/devices';
@@ -114,20 +114,9 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
   const [isIdentifying, setIsIdentifying] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const [lowSteps, setLowSteps] = useState(0);
-  const [highSteps, setHighSteps] = useState(0);
-  const [driveConstant, setDriveConstant] = useState(0);
-  const [isSavingLimits, setIsSavingLimits] = useState(false);
-
   const [friendlyNameInput, setFriendlyNameInput] = useState('');
   const [isSavingFriendlyName, setIsSavingFriendlyName] = useState(false);
   const [isSavingCurve, setIsSavingCurve] = useState(false);
-
-  // Display Settings States
-  const [displayBrightness, setDisplayBrightness] = useState(112);
-  const [displayContrast, setDisplayContrast] = useState(128);
-  const [displayActiveTimeout, setDisplayActiveTimeout] = useState(0);
-  const [isSavingDisplay, setIsSavingDisplay] = useState(false);
 
   // Zone assignment states
   const [assignedZoneId, setAssignedZoneId] = useState('none');
@@ -158,38 +147,13 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
       const zoneIdStr = device.zoneId !== null && device.zoneId !== undefined ? device.zoneId.toString() : 'none';
       setAssignedZoneId(prev => prev !== zoneIdStr ? zoneIdStr : prev);
       setFriendlyNameInput(prev => prev !== (device.friendlyName || '') ? (device.friendlyName || '') : prev);
-      setDisplayBrightness(prev => prev !== (device.displayBrightness ?? 112) ? (device.displayBrightness ?? 112) : prev);
-      setDisplayContrast(prev => prev !== (device.displayContrast ?? 128) ? (device.displayContrast ?? 128) : prev);
-      setDisplayActiveTimeout(prev => prev !== (device.displayActiveTimeout ?? 0) ? (device.displayActiveTimeout ?? 0) : prev);
       if (device.valveSensitivity !== undefined && device.valveSensitivity !== null) {
         setValveSensitivity(prev => prev !== device.valveSensitivity ? device.valveSensitivity : prev);
-      }
-      if (device.actuatorLimits) {
-        setLowSteps(prev => prev !== (device.actuatorLimits.lowSteps ?? 0) ? (device.actuatorLimits.lowSteps ?? 0) : prev);
-        setHighSteps(prev => prev !== (device.actuatorLimits.highSteps ?? 0) ? (device.actuatorLimits.highSteps ?? 0) : prev);
-        setDriveConstant(prev => prev !== (device.actuatorLimits.driveConstant ?? 0) ? (device.actuatorLimits.driveConstant ?? 0) : prev);
       }
     }
   }, [device]);
 
-  const handleSaveDisplay = async () => {
-    if (isReadOnly) return;
-    setIsSavingDisplay(true);
-    try {
-      await updateDisplaySettings(homeId, deviceId, {
-        displayBrightness: Number(displayBrightness),
-        displayContrast: Number(displayContrast),
-        displayActiveTimeout: Number(displayActiveTimeout)
-      });
-      showToast(t('settings.display_saved_success'), 'success');
-      mutate();
-    } catch (e) {
-      logger.error('Failed to save display settings:', e);
-      showToast(t('settings.display_saved_error'), 'error');
-    } finally {
-      setIsSavingDisplay(false);
-    }
-  };
+
 
   const handleSaveFriendlyName = async () => {
     setIsSavingFriendlyName(true);
@@ -442,36 +406,7 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
     }
   };
 
-  const handleSaveActuatorLimits = async () => {
-    const numLow = Number(lowSteps);
-    const numHigh = Number(highSteps);
-    const numDrive = Number(driveConstant);
 
-    if (numLow < numHigh) {
-      showToast(t('settings.actuator_limits.err_low_lt_high', 'Low Steps (close limit) cannot be lower than High Steps (open limit).'), 'error');
-      return;
-    }
-    if (numHigh < numDrive || numLow < numDrive) {
-      showToast(t('settings.actuator_limits.err_lt_drive', 'High and Low Steps cannot be lower than Drive Constant baseline.'), 'error');
-      return;
-    }
-
-    setIsSavingLimits(true);
-    try {
-      await updateActuatorLimits(homeId, deviceId, {
-        lowSteps: numLow,
-        highSteps: numHigh,
-        driveConstant: numDrive
-      });
-      showToast(t('settings.actuator_limits.saved'));
-      mutate();
-    } catch (err) {
-      logger.error('Failed to save actuator limits:', err);
-      showToast(err.message || t('settings.actuator_limits.save_failed'), 'error');
-    } finally {
-      setIsSavingLimits(false);
-    }
-  };
 
   const handleBatteryTypeChange = async (valOrEvent) => {
     const newBatteryType = typeof valOrEvent === 'string' ? valOrEvent : valOrEvent?.target?.value;
@@ -624,22 +559,6 @@ export default function DeviceSettings({ homeId, deviceId, onBack, mutateDevices
           deviceId={deviceId}
           isValve={isValve}
           device={device}
-          lowSteps={lowSteps}
-          setLowSteps={setLowSteps}
-          highSteps={highSteps}
-          setHighSteps={setHighSteps}
-          driveConstant={driveConstant}
-          setDriveConstant={setDriveConstant}
-          handleSaveActuatorLimits={handleSaveActuatorLimits}
-          isSavingLimits={isSavingLimits}
-          displayBrightness={displayBrightness}
-          setDisplayBrightness={setDisplayBrightness}
-          displayContrast={displayContrast}
-          setDisplayContrast={setDisplayContrast}
-          displayActiveTimeout={displayActiveTimeout}
-          setDisplayActiveTimeout={setDisplayActiveTimeout}
-          handleSaveDisplay={handleSaveDisplay}
-          isSavingDisplay={isSavingDisplay}
           isReadOnly={isReadOnly}
           t={t}
         />

@@ -23,8 +23,6 @@ const mqttHaDiscovery = require('../../../lib/mqtt-ha-discovery');
 const battery = require('../../../lib/battery');
 const adminAuth = require('../../middleware/admin-auth');
 
-const ALLOWED_SETUP_DEVICE_COLS = new Set(['field_0273', 'field_027c', 'field_0280']);
-
 const router = express.Router();
 const _log = getLogger('setup-api');
 
@@ -171,36 +169,6 @@ router.get('/tuning/list', adminAuth, async (req, res) => {
         res.json({ devices });
     } catch (err) {
         _log('error', `Tuning list error: ${err.message}`);
-        res.status(500).json({ error: 'internal_error' });
-    }
-});
-
-router.post('/devices/:serial/actuator-limits', adminAuth, async (req, res) => {
-    try {
-        const serial = req.params.serial;
-        const { lowSteps, highSteps, driveConstant } = req.body;
-
-        // 1. Push to device via CoAP
-        const result = await commandApi.pushActuatorLimits(serial, { lowSteps, highSteps, driveConstant });
-
-        // 2. Update devices columns in DB
-        const pool = db.getPool();
-        const updates = [];
-        const params = [];
-        if (lowSteps !== undefined && lowSteps !== null) { updates.push('field_0273 = ?'); params.push(Number(lowSteps)); }
-        if (highSteps !== undefined && highSteps !== null) { updates.push('field_027c = ?'); params.push(Number(highSteps)); }
-        if (driveConstant !== undefined && driveConstant !== null) { updates.push('field_0280 = ?'); params.push(Number(driveConstant)); }
-
-        if (updates.length > 0) {
-            params.push(serial); // For serial_no = ?
-            db.assertAllowedColumns(updates, ALLOWED_SETUP_DEVICE_COLS);
-            await pool.execute(`UPDATE devices SET ${updates.join(', ')} WHERE serial_no = ?`, params);
-        }
-        mqttHaDiscovery.publishAllDiscovery().catch(() => { });
-
-        res.json({ success: true, mid: result });
-    } catch (err) {
-        _log('error', `Actuator limits tuning error: ${err.message}`);
         res.status(500).json({ error: 'internal_error' });
     }
 });

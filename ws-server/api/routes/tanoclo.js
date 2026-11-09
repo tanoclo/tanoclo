@@ -113,7 +113,10 @@ router.get('/:homeId/tanoclo/boiler/raw', async (req, res) => {
         // Fall back to latest non-null metrics from circuit_measurements if missing in heating_systems
         const hvacCols = [
             'field_044c', 'field_044d', 'field_044e', 'field_044f', 'field_0450',
-            'field_0452', 'field_0457', 'field_045a', 'field_045e', 'field_0460', 'field_0462'
+            'field_0452', 'field_0457', 'field_0458', 'field_045a', 'field_045e',
+            'field_0460', 'field_0462', 'field_0463', 'field_0464', 'field_0465',
+            'field_0466', 'field_0467', 'field_0468', 'field_046c', 'field_046d',
+            'field_046f', 'field_0471'
         ];
         const hasMissingHvac = hvacCols.some(col => row[col] === null || row[col] === undefined);
         if (hasMissingHvac) {
@@ -1033,8 +1036,8 @@ router.get('/:homeId/tanoclo/circuits/:circuitId/dayReport', async (req, res) =>
             const ref = Math.round(getInterpolatedValue(cRows, t, 'field_4040', 0, idxRef) * 10) / 10;
             const mod = Math.round(getInterpolatedValue(cRows, t, 'field_0452', 0, idxMod));
             const dem = Math.round(getInterpolatedValue(cRows, t, 'field_4080', 0, idxDemand));
-            const pressMbar = getInterpolatedValue(cRows, t, 'field_0460', 0, idxPress);
-            const pressBar = Math.round(((pressMbar & 0xffff) / 1000.0) * 100) / 100;
+            const rawPress = getInterpolatedValue(cRows, t, 'field_0462', 0, idxPress) || ((getInterpolatedValue(cRows, t, 'field_0460', 0, idxPress) & 0xffff) / 1000.0);
+            const pressBar = Math.round(rawPress * 100) / 100;
             const exh = Math.round(getInterpolatedValue(cRows, t, 'field_044e', 0, idxExhaust) * 10) / 10;
             const dhw = Math.round(getInterpolatedValue(cRows, t, 'field_045a', 0, idxDhw) * 10) / 10;
             const dhwFlow = Math.round(getInterpolatedValue(cRows, t, 'field_045e', 0, idxDhwFlow) * 10) / 10;

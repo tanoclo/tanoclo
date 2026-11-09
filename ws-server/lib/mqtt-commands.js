@@ -622,36 +622,6 @@ async function handleCommand(topic, payload) {
                 });
 
                 await mqttPublisher.publishChildLock(shortSerial, enabled);
-            } else if (['actuator_limit_low', 'actuator_limit_high', 'actuator_drive_constant'].includes(command) && isVA) {
-                const val = parseInt(payload, 10);
-                if (isNaN(val)) return;
-
-                // Use explicit SQL per field to prevent any SQL injection via topic segments
-                const ACTUATOR_SQL_MAP = {
-                    'actuator_limit_low': 'UPDATE devices SET field_0273 = ? WHERE serial_no = ?',
-                    'actuator_limit_high': 'UPDATE devices SET field_027c = ? WHERE serial_no = ?',
-                    'actuator_drive_constant': 'UPDATE devices SET field_0280 = ? WHERE serial_no = ?'
-                };
-                await pool.execute(ACTUATOR_SQL_MAP[command], [val, dev.serial_no]);
-
-                // Query updated device row to get all limits
-                const [updatedDevs] = await pool.execute('SELECT * FROM devices WHERE serial_no = ?', [dev.serial_no]);
-                const updatedDev = updatedDevs[0];
-
-                await mqttPublisher.publishDeviceTelemetry(shortSerial, dev.home_id, dev.zone_id, null, updatedDev);
-            } else if (command === 'actuator_limits_apply' && isVA) {
-                // Fetch the actuator limits from the database and push to physical device
-                const [updatedDevs] = await pool.execute('SELECT * FROM devices WHERE serial_no = ?', [dev.serial_no]);
-                if (updatedDevs.length > 0) {
-                    const updatedDev = updatedDevs[0];
-                    const lowSteps = updatedDev.field_0273;
-                    const highSteps = updatedDev.field_027c;
-                    const driveConstant = updatedDev.field_0280;
-
-                    await commandApi.pushActuatorLimits(dev.serial_no, { lowSteps, highSteps, driveConstant }).catch(err => {
-                        if (log) log('warn', `[mqtt-commands] Actuator limits push failed: ${err.message}`);
-                    });
-                }
             }
         }
     }

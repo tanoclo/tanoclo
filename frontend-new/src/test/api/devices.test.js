@@ -9,8 +9,8 @@ import {
   getDevices, createDevice, getDevice, deleteDevice,
   getTemperatureOffset, updateTemperatureOffset,
   identifyDevice, updateChildLock, updateValveSensitivity, getValveSensitivity, updateOrientation,
-  startPairing, stopPairing, updateActuatorLimits,
-  updateFriendlyName, updateDisplaySettings
+  startPairing, stopPairing,
+  updateFriendlyName
 } from '../../api/devices';
 
 describe('api/devices.js', () => {
@@ -95,26 +95,10 @@ describe('api/devices.js', () => {
     expect(apiFetch).toHaveBeenCalledWith('/api/v2/homes/1/devices/DEV1/pairing', { method: 'DELETE' });
   });
 
-  it('updateActuatorLimits → PUT with limits', async () => {
-    const limits = { lowSteps: 10, highSteps: 200 };
-    await updateActuatorLimits(1, 'DEV1', limits);
-    expect(apiFetch).toHaveBeenCalledWith('/api/v2/homes/1/devices/DEV1/actuatorLimits', {
-      method: 'PUT', body: limits
-    });
-  });
-
   it('updateFriendlyName → PUT to tanoclo endpoint', async () => {
     await updateFriendlyName(1, 'DEV1', 'Living Room');
     expect(apiFetch).toHaveBeenCalledWith('/api/v2/homes/1/tanoclo/devices/DEV1/friendlyName', {
       method: 'PUT', body: { friendlyName: 'Living Room' }
-    });
-  });
-
-  it('updateDisplaySettings → PUT with settings', async () => {
-    const settings = { displayBrightness: 80 };
-    await updateDisplaySettings(1, 'DEV1', settings);
-    expect(apiFetch).toHaveBeenCalledWith('/api/v2/homes/1/devices/DEV1/displaySettings', {
-      method: 'PUT', body: settings
     });
   });
 

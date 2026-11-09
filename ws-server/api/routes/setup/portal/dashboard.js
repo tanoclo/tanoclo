@@ -461,14 +461,14 @@ router.get('/dashboard', adminAuth, async (req, res) => {
                                             <table class="table table-dark table-hover align-middle">
                                                 <thead>
                                                     <tr>
-                                                        <th data-i18n="tuning.col_device">Device (VA)</th>
-                                                        <th data-i18n="tuning.col_home">Home</th>
-                                                        <th data-i18n="tuning.col_limit_low">Fully Extended (Limit Low)</th>
-                                                        <th data-i18n="tuning.col_limit_high">Fully Retracted (Limit High)</th>
-                                                        <th data-i18n="tuning.col_drive_const">Drive Constant</th>
-                                                        <th data-i18n="tuning.col_position">Current Position</th>
-                                                        <th data-i18n="tuning.col_diagnostics">Diagnostics</th>
-                                                        <th data-i18n="tuning.col_action">Action</th>
+                                                        <th>Device (VA)</th>
+                                                        <th>Home</th>
+                                                        <th>Motor Load (0x0273)</th>
+                                                        <th>Running Min (0x027c)</th>
+                                                        <th>Stroke (Open &rarr; Closed)</th>
+                                                        <th>Live / Target Position</th>
+                                                        <th>Calibration Diagnostics</th>
+                                                        <th>Action</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody id="tuning-devices-tbody"></tbody>
@@ -1334,25 +1334,23 @@ router.get('/dashboard', adminAuth, async (req, res) => {
                         let deviceRows = '';
                         if (data.devices && data.devices.length > 0) {
                             data.devices.forEach(d => {
-                                const lowVal = d.field_0273 !== null ? d.field_0273 : '';
-                                const highVal = d.field_027c !== null ? d.field_027c : '';
-                                const calVal = d.field_0280 !== null ? d.field_0280 : '';
+                                const motorLoad = d.field_0273 !== null ? (d.field_0273 + ' mV' + (d.field_0273 <= 2149 ? ' <span class="badge bg-danger">STALL WARN</span>' : '')) : '-';
+                                const motorRun = d.field_027c !== null ? d.field_027c + ' mV' : '-';
+                                const strokeSpan = (d.field_01b5 !== null ? d.field_01b5 : '-') + ' &rarr; ' + (d.field_01b6 !== null ? d.field_01b6 : '-') + ' steps';
                                 const activeBadge = d.field_028c 
                                     ? '<span class="badge bg-success" data-i18n="common.active">' + (window.t ? window.t('common.active', 'Active') : 'Active') + '</span>' 
                                     : '<span class="badge bg-secondary" data-i18n="common.inactive">' + (window.t ? window.t('common.inactive', 'Inactive') : 'Inactive') + '</span>';
-                                const saveText = window.t ? window.t('common.save', 'Save') : 'Save';
 
                                 deviceRows += '<tr>' +
                                     '<td><strong>' + d.serial_no + '</strong></td>' +
                                     '<td>' + (d.home_name || '-') + '</td>' +
-                                    '<td><input type="number" class="form-control form-control-sm bg-dark text-white border-secondary" id="low_' + d.serial_no + '" value="' + lowVal + '" placeholder="steps"></td>' +
-                                    '<td><input type="number" class="form-control form-control-sm bg-dark text-white border-secondary" id="high_' + d.serial_no + '" value="' + highVal + '" placeholder="steps"></td>' +
-                                    '<td><input type="number" class="form-control form-control-sm bg-dark text-white border-secondary" id="cal_' + d.serial_no + '" value="' + calVal + '" placeholder="const"></td>' +
-                                    '<td><code>Pos: ' + (d.field_0265 !== null ? d.field_0265 : '-') + ' | Pos2: ' + (d.field_0266 !== null ? d.field_0266 : '-') + '</code><br/>' + activeBadge + '</td>' +
+                                    '<td><code>' + motorLoad + '</code></td>' +
+                                    '<td><code>' + motorRun + '</code></td>' +
+                                    '<td><code>' + strokeSpan + '</code></td>' +
+                                    '<td><code>Live: ' + (d.field_0265 !== null ? d.field_0265 : '-') + ' | Target: ' + (d.field_0266 !== null ? d.field_0266 : '-') + '</code><br/>' + activeBadge + '</td>' +
                                     '<td>' +
                                         '<div class="small text-white-50" style="font-size: 0.8rem; line-height: 1.2;">' +
                                             '<div><strong>State:</strong> <span class="text-info">' + (d.field_016a || 'UNKNOWN') + '</span></div>' +
-                                            '<div><strong>Seat/Ref:</strong> ' + (d.field_01b6 !== null ? d.field_01b6 : '-') + ' / ' + (d.field_01b5 !== null ? d.field_01b5 : '-') + '</div>' +
                                             '<div><strong>Mode/Flags:</strong> ' + (d.field_01fa !== null ? d.field_01fa : '-') + ' / ' + (d.field_01fb !== null ? d.field_01fb : '-') + '</div>' +
                                             '<div>' + (d.field_0283 !== null && d.field_0283 !== 32767 
                                                 ? ('<span class="' + ( (d.field_0283 < -100 || d.field_0283 > 100) ? 'text-danger fw-bold' : (Math.abs(d.field_0283) > 10 ? 'text-warning' : 'text-success') ) + '">' +
@@ -1362,7 +1360,7 @@ router.get('/dashboard', adminAuth, async (req, res) => {
                                             ) + '</div>' +
                                         '</div>' +
                                     '</td>' +
-                                    '<td><button class="btn btn-sm btn-primary" onclick="saveActuatorLimits(\\\'' + d.serial_no + '\\\')" data-i18n="common.save">' + saveText + '</button></td>' +
+                                    '<td><button class="btn btn-sm btn-outline-primary" onclick="triggerMountCalibration(' + d.home_id + ', \\\'' + d.serial_no + '\\\')">Calibrate</button></td>' +
                                  '</tr>';
                             });
                             deviceTbody.innerHTML = deviceRows;
@@ -1370,28 +1368,19 @@ router.get('/dashboard', adminAuth, async (req, res) => {
                             deviceContainer.style.display = 'block';
                         } else {
                             const emptyMsg = window.t ? window.t('tuning.empty', 'No Valve Actuators found') : 'No Valve Actuators found';
-                            deviceTbody.innerHTML = '<tr><td colspan="7" class="text-center text-white-50" data-i18n="tuning.empty">' + emptyMsg + '</td></tr>';
+                            deviceTbody.innerHTML = '<tr><td colspan="8" class="text-center text-white-50" data-i18n="tuning.empty">' + emptyMsg + '</td></tr>';
                             deviceContainer.style.display = 'block';
                         }
                     }
 
-                    async function saveActuatorLimits(serial) {
-                        const lowSteps = document.getElementById('low_' + serial).value;
-                        const highSteps = document.getElementById('high_' + serial).value;
-                        const driveConstant = document.getElementById('cal_' + serial).value;
-
-                        const body = {
-                            lowSteps: lowSteps !== '' ? parseInt(lowSteps) : null,
-                            highSteps: highSteps !== '' ? parseInt(highSteps) : null,
-                            driveConstant: driveConstant !== '' ? parseInt(driveConstant) : null
-                        };
-
-                        const result = await apiCall('/setup/devices/' + serial + '/actuator-limits', 'POST', body);
-                        if (result && result.success) {
-                            alert((window.t ? window.t('tuning.success', 'Actuator limits successfully pushed and saved!') : 'Actuator limits successfully pushed and saved!') + ' (MID: ' + result.mid + ')');
+                    async function triggerMountCalibration(homeId, serial) {
+                        if (!confirm('Start autonomous mechanical mount calibration for ' + serial + '?')) return;
+                        const result = await apiCall('/devices/' + homeId + '/devices/' + serial + '/mount', 'POST', { action: 'start' });
+                        if (result && result.ok) {
+                            alert('Mount calibration triggered successfully!');
                             loadTuning();
                         } else {
-                            alert(window.t ? window.t('tuning.failed', 'Failed to save actuator limits') : 'Failed to save actuator limits');
+                            alert('Failed to start calibration: ' + (result && result.error ? result.error : 'Request error'));
                         }
                     }
 

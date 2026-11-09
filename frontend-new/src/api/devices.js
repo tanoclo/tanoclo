@@ -166,19 +166,6 @@ export function stopPairing(homeId, deviceId) {
 }
 
 /**
- * Updates actuator limits for a valve device
- * @param {string|number} homeId
- * @param {string} deviceId
- * @param {object} limits - { lowSteps, highSteps, driveConstant }
- */
-export function updateActuatorLimits(homeId, deviceId, limits) {
-  return apiFetch(`/api/v2/homes/${homeId}/devices/${deviceId}/actuatorLimits`, {
-    method: 'PUT',
-    body: limits
-  });
-}
-
-/**
  * Updates the friendly name of a device
  * @param {string|number} homeId
  * @param {string} deviceId
@@ -188,19 +175,6 @@ export function updateFriendlyName(homeId, deviceId, friendlyName) {
   return apiFetch(`/api/v2/homes/${homeId}/tanoclo/devices/${deviceId}/friendlyName`, {
     method: 'PUT',
     body: { friendlyName }
-  });
-}
-
-/**
- * Updates display and screen saver settings of a device
- * @param {string|number} homeId
- * @param {string} deviceId
- * @param {object} settings - { displayBrightness, displayContrast, displayActiveTimeout }
- */
-export function updateDisplaySettings(homeId, deviceId, settings) {
-  return apiFetch(`/api/v2/homes/${homeId}/devices/${deviceId}/displaySettings`, {
-    method: 'PUT',
-    body: settings
   });
 }
 

@@ -31,50 +31,51 @@ describe('DeviceAdvancedSettings Component', () => {
         mountingState: 'CALIBRATING',
         position1: 1700,
         position2: 1704,
-        seatPoint: 1704,
-        referencePoint: 210,
+        seatPoint: 1850,
+        referencePoint: 1200,
+        openPoint: 1200,
+        closedPoint: 1850,
         mode: 2,
         flags: 0,
-        deviation: 3
+        deviation: 3,
+        motorLoadMv: 2450,
+        motorRunMinMv: 2280
       }
     },
-    lowSteps: 2200,
-    setLowSteps: vi.fn(),
-    highSteps: 2100,
-    setHighSteps: vi.fn(),
-    driveConstant: 1750,
-    setDriveConstant: vi.fn(),
-    handleSaveActuatorLimits: vi.fn(),
-    isSavingLimits: false,
-    displayBrightness: 112,
-    setDisplayBrightness: vi.fn(),
-    displayContrast: 128,
-    setDisplayContrast: vi.fn(),
-    displayActiveTimeout: 0,
-    setDisplayActiveTimeout: vi.fn(),
-    handleSaveDisplay: vi.fn(),
-    isSavingDisplay: false,
     isReadOnly: false,
     t: (key, def) => def || key
   };
 
-  it('renders display settings, actuator limits, and telemetry correctly', () => {
+  it('renders firmware-true actuator & motor calibration and telemetry correctly', () => {
     const html = renderToString(<DeviceAdvancedSettings {...defaultProps} />);
 
-    expect(html).toContain('settings.device_advanced.display_screensaver_title');
-    expect(html).toContain('settings.device_advanced.actuator_motor_title');
+    expect(html).toContain('Actuator &amp; Motor Calibration');
+    expect(html).not.toContain('settings.device_advanced.display_screensaver_title');
+
+    // Check stroke axis timeline & calibration
+    expect(html).toContain('Mechanical Stroke Axis');
+    expect(html).toContain('0 (Origin)');
+    expect(html).toContain('Open / Seat');
+    expect(html).toContain('Closed Endstop');
+    expect(html).toContain('Start Mount Calibration');
+
+    // Check motor electrical telemetry
+    expect(html).toContain('Motor Drive Load (0x0273)');
+    expect(html).toContain('2450');
+    expect(html).toContain('Running Min Voltage (0x027c)');
+    expect(html).toContain('2280');
 
     // Check diagnostic telemetry values
     expect(html).toContain('Active (Calibrated)');
     expect(html).toContain('CALIBRATING');
     expect(html).toContain('1700');
     expect(html).toContain('1704');
-    expect(html).toContain('210');
     expect(html).toContain('Deviation');
 
-    // Check save buttons
-    expect(html).toContain('Save Display Settings');
-    expect(html).toContain('Save Limits');
+    // Verify nonexistent fictitious controls are purged
+    expect(html).not.toContain('Save Display Settings');
+    expect(html).not.toContain('Save Limits');
+    expect(html).not.toContain('Drive Constant (Nominal baseline)');
   });
 
   it('renders disabled inputs when isReadOnly is true', () => {

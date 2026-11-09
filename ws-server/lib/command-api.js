@@ -786,17 +786,6 @@ function getRouter(opts) {
                 }
             });
 
-            router.put(`${prefix}/devices/:id/actuatorLimits`, (req, res) => {
-                try {
-                    const body = req.body || {};
-                    module.exports.pushActuatorLimits(req.params.id, body)
-                        .then(mid => jsonResponse(res, 200, { ok: true, mid }))
-                        .catch(e => jsonResponse(res, 500, { error: e.message }));
-                } catch (e) {
-                    jsonResponse(res, 500, { error: e.message });
-                }
-            });
-
             router.put(`${prefix}/homes/:homeId/zones/:zoneId/fallback`, (req, res) => {
                 try {
                     const body = req.body || {};

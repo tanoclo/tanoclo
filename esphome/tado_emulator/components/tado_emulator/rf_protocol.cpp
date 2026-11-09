@@ -1252,8 +1252,8 @@ std::vector<uint8_t> build_d_sen_tlv(float temp_c, float hum_pct, uint16_t batte
   append_tlv_u16(tlv, TLV_HUMIDITY_PERCENT, hum_val);
   // 7. 0x0136: Ambient light level (0-15 scale)
   append_tlv_u8(tlv, TLV_AMBIENT_LIGHT_LEVEL, light_level);
-  // 8. 0x027a: Status / error flags (0 = normal)
-  append_tlv_u8(tlv, TLV_DEVICE_STATUS_FLAGS, status_flags);
+  // 8. 0x027a: Dial pin state / sensor input (0 = normal idle)
+  append_tlv_u8(tlv, TLV_DIAL_PIN_STATE, status_flags);
 
   return tlv;
 }

@@ -861,12 +861,12 @@ async function upsertHeatingSystem(homeId, fields, fullConfigJson = null) {
             if (fields[tlv] !== undefined) {
                 let val = fields[tlv];
                 if (tlv === '0x0460' && val != null) {
-                    if (Number(val) === 4294901760 || (Number(val) & 0xFFFF0000) === 0xFFFF0000) {
+                    if (Number(val) === 4294967295 || Number(val) === 65535) {
                         val = null;
                     } else {
-                        val = Number(val) & 0xFFFF;
+                        val = Number(val);
                     }
-                } else if (Number(val) >= 2000000000) {
+                } else if (Number(val) >= 2000000000 && tlv !== '0x0460') {
                     val = null;
                 }
                 cols.push(col);
@@ -883,12 +883,12 @@ async function upsertHeatingSystem(homeId, fields, fullConfigJson = null) {
             if (fields[tlv] !== undefined) {
                 let val = fields[tlv];
                 if (tlv === '0x0460' && val != null) {
-                    if (Number(val) === 4294901760 || (Number(val) & 0xFFFF0000) === 0xFFFF0000) {
+                    if (Number(val) === 4294967295 || Number(val) === 65535) {
                         val = null;
                     } else {
-                        val = Number(val) & 0xFFFF;
+                        val = Number(val);
                     }
-                } else if (Number(val) >= 2000000000) {
+                } else if (Number(val) >= 2000000000 && tlv !== '0x0460') {
                     val = null;
                 }
                 updates.push(`${col}=?`);

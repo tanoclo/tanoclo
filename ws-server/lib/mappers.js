@@ -60,9 +60,7 @@ function mapDevice(d) {
         zoneId: d.zone_id ? parseInt(d.zone_id, 10) : null,
         errorFlags: d.field_01a3 !== null && d.field_01a3 !== undefined ? parseInt(d.field_01a3, 10) : 0,
         friendlyErrorFlags: getFriendlyErrorFlags(d.field_01a3),
-        displayBrightness: d.field_019e !== null && d.field_019e !== undefined ? parseInt(d.field_019e, 10) : 112,
-        displayContrast: d.field_019d !== null && d.field_019d !== undefined ? parseInt(d.field_019d, 10) : 128,
-        displayActiveTimeout: d.field_02b2 !== null && d.field_02b2 !== undefined ? parseInt(d.field_02b2, 10) : 0,
+        utcOffsetMinutes: d.field_02b2 !== null && d.field_02b2 !== undefined ? parseInt(d.field_02b2, 10) : 0,
         ipv6Address: d.ipv6_address || null,
         isEmulated: Boolean(d.is_emulated || d.emulated_mode),
         emulatedMode: d.emulated_mode || null,
@@ -85,15 +83,16 @@ function mapDevice(d) {
 
     if (d.device_type && d.device_type.startsWith('VA')) {
         mapped.actuatorLimits = {
-            lowSteps: d.field_0273 !== null && d.field_0273 !== undefined ? parseInt(d.field_0273, 10) : null,
-            highSteps: d.field_027c !== null && d.field_027c !== undefined ? parseInt(d.field_027c, 10) : null,
-            driveConstant: d.field_0280 !== null && d.field_0280 !== undefined ? parseInt(d.field_0280, 10) : null,
+            motorLoadMv: d.field_0273 !== null && d.field_0273 !== undefined ? parseInt(d.field_0273, 10) : null,
+            motorRunMinMv: d.field_027c !== null && d.field_027c !== undefined ? parseInt(d.field_027c, 10) : null,
             position1: d.field_0265 !== null && d.field_0265 !== undefined ? parseInt(d.field_0265, 10) : null,
             position2: d.field_0266 !== null && d.field_0266 !== undefined ? parseInt(d.field_0266, 10) : null,
             active: (d.field_028c !== null && d.field_028c !== undefined)
                 ? parseInt(d.field_028c, 10)
                 : ((d.field_016a === 'CALIBRATED' || d.field_016a === 'MOUNTED' || (parseInt(d.field_01b6, 10) > 0 && parseInt(d.field_0273, 10) > 0)) ? 1 : 0),
             mountingState: d.field_016a !== null && d.field_016a !== undefined ? d.field_016a : (parseInt(d.field_01b6, 10) > 0 ? 'CALIBRATED' : null),
+            openPoint: d.field_01b5 !== null && d.field_01b5 !== undefined ? parseInt(d.field_01b5, 10) : null,
+            closedPoint: d.field_01b6 !== null && d.field_01b6 !== undefined ? parseInt(d.field_01b6, 10) : null,
             seatPoint: d.field_01b6 !== null && d.field_01b6 !== undefined ? parseInt(d.field_01b6, 10) : null,
             referencePoint: d.field_01b5 !== null && d.field_01b5 !== undefined ? parseInt(d.field_01b5, 10) : null,
             mode: d.field_01fa !== null && d.field_01fa !== undefined ? parseInt(d.field_01fa, 10) : null,
@@ -144,6 +143,7 @@ function mapDevice(d) {
         stemTemperature: d.field_01c8 !== null && d.field_01c8 !== undefined ? parseFloat(d.field_01c8) : null,
         ambientLightLevel: d.field_0136 !== null && d.field_0136 !== undefined ? parseInt(d.field_0136, 10) : null,
         dialInteractionResult: d.field_027a !== null && d.field_027a !== undefined ? parseInt(d.field_027a, 10) : null,
+        dialPinState: d.field_027a !== null && d.field_027a !== undefined ? parseInt(d.field_027a, 10) : null,
         dialEncoderSteps: d.field_0137 !== null && d.field_0137 !== undefined ? parseInt(d.field_0137, 10) : null,
         hvacLinkStatusFlags: d.field_0161 !== null && d.field_0161 !== undefined ? parseInt(d.field_0161, 10) : null,
         openthermVoltage: d.field_0161 !== null && d.field_0161 !== undefined ? parseFloat(((Number(d.field_0161) & 0x0FFF) / 1000).toFixed(3)) : null,

@@ -86,7 +86,8 @@ enum TLVTag : uint16_t {
   TLV_OPENTHERM_VOLTAGE = 0x0161,// u16be, mV (OpenTherm loop voltage)
   TLV_BATTERY_MV = 0x0162,       // u16be, mV
   TLV_RESET_REASON = 0x0160,     // u8/u16be STM32 CSR reset flags
-  TLV_DEVICE_STATUS_FLAGS = 0x027a, // u8
+  TLV_DIAL_PIN_STATE = 0x027a,      // u8 dial pin state (encoder input bits)
+  TLV_DEVICE_STATUS_FLAGS = 0x027a, // u8 historical alias
   TLV_CHILD_LOCK = 0x0290,       // bool (0x0290 va_child_lock_enabled)
   TLV_FW_BUILD_ID = 0x0210,      // ASCII commit hash string
   TLV_ACTUATOR_ACTIVE = 0x028c,  // bool

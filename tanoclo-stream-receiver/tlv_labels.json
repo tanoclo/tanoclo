@@ -403,24 +403,24 @@
       "notes": "Motor piston extension distance steps"
     },
     "0x0273": {
-      "name": "va_act_limit_low_steps",
+      "name": "motor_load_mv",
       "type": "u16be",
-      "unit": "steps",
-      "scale": 1,
-      "notes": "Piston closed/zero-level threshold steps"
+      "unit": "mV",
+      "scale": 1.875,
+      "notes": "Motor load SAADC voltage in mV. Used for motor stall/mount error 0x01a3 detection."
     },
     "0x027a": {
-      "name": "dial_interaction_result",
+      "name": "dial_pin_state",
       "type": "u8",
-      "unit": "enum",
-      "notes": "Dial interaction result/status. | Seen in: d/VA*/sen | Observed values: 0, 3 | Len: 1 bytes"
+      "unit": "bits",
+      "notes": "Live GPIO pins 25/26 quadrature encoder state at report time (0 in detent)."
     },
     "0x027c": {
-      "name": "va_act_limit_high_steps",
+      "name": "motor_run_min_mv",
       "type": "u16be",
-      "unit": "steps",
-      "scale": 1,
-      "notes": "Piston fully retracted span limit steps"
+      "unit": "mV",
+      "scale": 1.875,
+      "notes": "Running minimum motor SAADC voltage during run in mV."
     },
     "0x0280": {
       "name": "va_act_drive_cal_const",
@@ -491,10 +491,11 @@
       "notes": "Derived runtime flag. Correlates with modulation >0 and elevated flow temp; likely burner/heat-cycle active."
     },
     "0x0458": {
-      "name": "hvac_status_or_fault_flags",
+      "name": "ot_flame_current",
       "type": "u16be",
-      "unit": "bitfield",
-      "notes": "Status/fault flags word. Often 0 during normal operation; may not be raw OpenTherm ID 0."
+      "unit": "0.1 µA",
+      "scale": 10,
+      "notes": "OpenTherm ID 36 Flame Current in 0.1 µA (centi/10)."
     },
     "0x0481": {
       "name": "hvac_field_presence_list",
@@ -529,10 +530,10 @@
       "notes": "Domestic hot water target temperature (°C×100). | Seen in: h/*/hvac/mon/dhw | Len: 2 bytes"
     },
     "0x0460": {
-      "name": "hvac_water_pressure_mbar",
+      "name": "hvac_fault_diagnostic_codes",
       "type": "u32be",
-      "unit": "mbar",
-      "notes": "Observed as 0xFFFFxxxx; low16 tracks plausible CH system pressure in mbar (e.g. 0x0529=1321mbar=1.321bar). High16 often 0xFFFF sentinel. Likely derived from OpenTherm Data-ID 18 (CH water pressure)."
+      "unit": "codes",
+      "notes": "Packed HVAC codes: 0x0478 OT5 OEM fault code (high 16) and 0x0479 OT115 diagnostic code (low 16)."
     },
     "0x0463": {
       "name": "ot_burner_start_count",
@@ -541,10 +542,10 @@
       "notes": "OpenTherm-derived burner start counter (OT Data-ID ~116). Observed as 0x0000FFFF when not supported or unavailable."
     },
     "0x0464": {
-      "name": "ot_ch_pump_start_count",
+      "name": "ot_dhw_burner_start_count",
       "type": "u32be",
       "unit": "cyc",
-      "notes": "OpenTherm-derived central-heating pump start counter (OT Data-ID ~117). Often reported as 0x0000FFFF (not available)."
+      "notes": "OpenTherm-derived DHW burner start counter (OT Data-ID 119)."
     },
     "0x0465": {
       "name": "ot_ch_burner_start_count",
@@ -577,31 +578,31 @@
       "notes": "OpenTherm-derived burner operation time attributed to DHW. 0x0466 = 0x0467 + 0x0468."
     },
     "0x046c": {
-      "name": "ot_dhw_supported",
+      "name": "ot_dhw_storage_tank",
       "type": "bool",
-      "unit": "bool_or_enum",
-      "notes": "HVAC config flag. | Seen in: h/*/hvac/config | Len: 1 bytes"
+      "unit": "bool",
+      "notes": "OpenTherm ID 3 slave config bit 3: DHW storage tank present (1=storage tank, 0=instantaneous)."
     },
     "0x046d": {
-      "name": "ot_dhw_not_supported",
+      "name": "ot_dhw_instantaneous",
       "type": "bool",
-      "unit": "bool_or_enum",
-      "notes": "HVAC config flag. | Seen in: h/*/hvac/config | Len: 1 bytes"
+      "unit": "bool",
+      "notes": "Inverted OpenTherm ID 3 slave config bit 3: Instantaneous DHW (1=instantaneous, 0=storage tank)."
     },
     "0x046f": {
-      "name": "dhw_setpoint",
+      "name": "ot_max_ch_flow_temperature",
       "type": "u16be",
       "unit": "°C",
       "scale": 0.01,
       "decimals": 2,
-      "notes": "OpenTherm domestic hot water target setpoint (Data ID 57)"
+      "notes": "OpenTherm ID 57 Max CH water setpoint / flow ceiling MaxTSet."
     },
     "0x0471": {
-      "name": "dhw_setpoint_max",
+      "name": "ot_dhw_setpoint_upper_bound",
       "type": "u16be",
       "unit": "°C",
       "scale": 0.01,
-      "notes": "OpenTherm domestic hot water setpoint upper limit/boundary (Data ID 48)"
+      "notes": "OpenTherm ID 48 DHW setpoint upper bound TdhwSet."
     },
     "0x2040": {
       "name": "circuit_max_flow_temperature",
@@ -901,12 +902,14 @@
       "unit": "enum"
     },
     "0x019d": {
-      "name": "display_contrast",
-      "type": "u8"
+      "name": "unused_whitelist_019d",
+      "type": "u8",
+      "notes": "Dead whitelist entry in firmware; no handler in VA or RU."
     },
     "0x019e": {
-      "name": "display_brightness",
-      "type": "u8"
+      "name": "unused_whitelist_019e",
+      "type": "u8",
+      "notes": "Dead whitelist entry in firmware; no handler in VA or RU."
     },
     "0x01ac": {
       "name": "fw_state_put",
@@ -1318,13 +1321,13 @@
       "notes": "OpenTherm domestic hot water measured temperature"
     },
     "0x02b2": {
-      "name": "display_active_timeout",
-      "type": "u16be",
+      "name": "utc_offset_minutes",
+      "type": "s16be",
       "unit": "min",
       "scale": 1,
       "decimals": 0,
       "round": 0,
-      "notes": "Timeout duration for display activity/temporary overlay in minutes"
+      "notes": "Timezone UTC offset in minutes applied to realtime clock epoch."
     },
     "0x045e": {
       "name": "ot_dhw_flow_rate",

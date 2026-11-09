@@ -38,21 +38,26 @@ test('mapDevice - Actuator Limits and Diagnostics non-inverted mapping', () => {
     assert.strictEqual(mapped.deviceType, 'VA02');
     assert.strictEqual(mapped.orientation, 'HORIZONTAL');
     assert.strictEqual(mapped.childLockEnabled, true);
-    assert.strictEqual(mapped.displayBrightness, 112);
-    assert.strictEqual(mapped.displayContrast, 128);
-    assert.strictEqual(mapped.displayActiveTimeout, 0);
+    assert.strictEqual(mapped.utcOffsetMinutes, 0);
+    assert.strictEqual(mapped.displayBrightness, undefined);
+    assert.strictEqual(mapped.displayContrast, undefined);
+    assert.strictEqual(mapped.displayActiveTimeout, undefined);
 
     assert.ok(mapped.actuatorLimits);
-    assert.strictEqual(mapped.actuatorLimits.lowSteps, 2403);
-    assert.strictEqual(mapped.actuatorLimits.highSteps, 2244);
-    assert.strictEqual(mapped.actuatorLimits.driveConstant, 1786);
+    assert.strictEqual(mapped.actuatorLimits.motorLoadMv, 2403);
+    assert.strictEqual(mapped.actuatorLimits.motorRunMinMv, 2244);
+    assert.strictEqual(mapped.actuatorLimits.lowSteps, undefined);
+    assert.strictEqual(mapped.actuatorLimits.highSteps, undefined);
+    assert.strictEqual(mapped.actuatorLimits.driveConstant, undefined);
     assert.strictEqual(mapped.actuatorLimits.position1, 1897);
     assert.strictEqual(mapped.actuatorLimits.position2, 1894);
     assert.strictEqual(mapped.actuatorLimits.active, 1);
     assert.strictEqual(mapped.actuatorLimits.mountingState, 'CALIBRATING');
 
     // Verify correct non-inverted diagnostic mapping
-    assert.strictEqual(mapped.actuatorLimits.seatPoint, 1894);    // field_01b6
+    assert.strictEqual(mapped.actuatorLimits.openPoint, 205);      // field_01b5
+    assert.strictEqual(mapped.actuatorLimits.closedPoint, 1894);   // field_01b6
+    assert.strictEqual(mapped.actuatorLimits.seatPoint, 1894);     // field_01b6
     assert.strictEqual(mapped.actuatorLimits.referencePoint, 205); // field_01b5
     assert.strictEqual(mapped.actuatorLimits.mode, 2);             // field_01fa
     assert.strictEqual(mapped.actuatorLimits.flags, 0);            // field_01fb

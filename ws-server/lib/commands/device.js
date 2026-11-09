@@ -104,7 +104,6 @@ async function applyDeviceConfigOverrides(deviceId, fields, updates = null) {
         if (isRU) {
             delete fields['0x019e'];
             delete fields['0x019d'];
-            delete fields['0x02b2'];
             delete fields['0x0149'];
             delete fields['0x021a'];
             delete fields['0x4160'];
@@ -445,71 +444,7 @@ async function pushMountCalibration(deviceId, action = 'start') {
     );
 }
 
-function validateActuatorLimits(limits = {}) {
-    const low = limits.lowSteps !== undefined && limits.lowSteps !== null ? Number(limits.lowSteps) : null;
-    const high = limits.highSteps !== undefined && limits.highSteps !== null ? Number(limits.highSteps) : null;
-    const drive = limits.driveConstant !== undefined && limits.driveConstant !== null ? Number(limits.driveConstant) : null;
 
-    if (low !== null && (isNaN(low) || low < 1000 || low > 4000)) {
-        const err = new Error('Low steps out of range (1000-4000)');
-        err.statusCode = 400;
-        throw err;
-    }
-    if (high !== null && (isNaN(high) || high < 1000 || high > 4000)) {
-        const err = new Error('High steps out of range (1000-4000)');
-        err.statusCode = 400;
-        throw err;
-    }
-    if (drive !== null && (isNaN(drive) || drive < 500 || drive > 3500)) {
-        const err = new Error('Drive constant out of range (500-3500)');
-        err.statusCode = 400;
-        throw err;
-    }
-
-    if (low !== null && high !== null && low < high) {
-        const err = new Error('Low steps (close limit) cannot be lower than High steps (open limit)');
-        err.statusCode = 400;
-        throw err;
-    }
-    if (drive !== null) {
-        if (high !== null && high < drive) {
-            const err = new Error('High steps cannot be lower than Drive constant baseline');
-            err.statusCode = 400;
-            throw err;
-        }
-        if (low !== null && low < drive) {
-            const err = new Error('Low steps cannot be lower than Drive constant baseline');
-            err.statusCode = 400;
-            throw err;
-        }
-    }
-}
-
-async function pushActuatorLimits(deviceId, limits = {}) {
-    validateActuatorLimits(limits);
-
-    const entries = [];
-    if (limits.lowSteps !== undefined && limits.lowSteps !== null) {
-        entries.push({ fid: 0x0273, value: tlv.encodeValue(Number(limits.lowSteps) & 0xFFFF, 'u16be') });
-    }
-    if (limits.highSteps !== undefined && limits.highSteps !== null) {
-        entries.push({ fid: 0x027c, value: tlv.encodeValue(Number(limits.highSteps) & 0xFFFF, 'u16be') });
-    }
-    if (limits.driveConstant !== undefined && limits.driveConstant !== null) {
-        entries.push({ fid: 0x0280, value: tlv.encodeValue(Number(limits.driveConstant) & 0xFFFF, 'u16be') });
-    }
-
-    if (entries.length === 0) throw new Error('No actuator limits specified');
-    const payload = tlv.encode(entries);
-    const extraOptions = [
-        { num: 7, value: Buffer.from([0xff, 0xff]) },
-        { num: 12, value: Buffer.from([0x2a]) }
-    ];
-    return api.internalPushViabridge(
-        deviceId, coap.CODE_PUT, 'd/config',
-        payload, null, extraOptions, true, coap.TYPE_CON, null, `pushActuatorLimits:${deviceId}`
-    );
-}
 
 async function pushSelftestTrigger(deviceId) {
     const payload = tlv.encode([
@@ -922,7 +857,6 @@ module.exports = {
     pushDeviceFallback,
     pushDisplaySettings,
     pushMountCalibration,
-    pushActuatorLimits,
     pushSelftestTrigger,
     handleRfKeyRefresh,
     handleGlobalConfigRefresh,

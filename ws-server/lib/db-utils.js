@@ -102,16 +102,36 @@ async function buildDeviceConfigTLV(deviceId, existingDbDev = null) {
     const offlineScheduleEnabled = zoneRows.length > 0 ? zoneRows[0].offline_schedule_enabled : 0;
     _log('debug', `Building device config from DB columns...`);
     let fields = {};
+    let defaultTzOffset = 0;
+    try {
+        const [homeRows] = await p.execute('SELECT date_time_zone FROM homes WHERE id = ? LIMIT 1', [dbDev.home_id]);
+        const tz = (homeRows.length > 0 && homeRows[0].date_time_zone) ? homeRows[0].date_time_zone : 'Europe/Berlin';
+        const formatter = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'shortOffset' });
+        const parts = formatter.formatToParts(new Date());
+        const tzPart = parts.find(part => part.type === 'timeZoneName')?.value;
+        if (tzPart && tzPart !== 'GMT' && tzPart !== 'UTC') {
+            const match = tzPart.match(/GMT([+-])(\d+)(?::(\d+))?/);
+            if (match) {
+                const sign = match[1] === '-' ? -1 : 1;
+                const hours = parseInt(match[2], 10);
+                const minutes = parseInt(match[3] || '0', 10);
+                defaultTzOffset = sign * (hours * 60 + minutes);
+            }
+        }
+    } catch (e) {
+        defaultTzOffset = 0;
+    }
 
     // Use strictly hex keys
     fields['0x0140'] = parseFloat(dbDev.field_0140) || 0; // field_0140 (temperature offset)
     if (!isRU) {
-        // Omit display brightness, contrast, timeout, orientation, and aux 0x021a for RU
+        // Omit display brightness, contrast, orientation, and aux 0x021a for RU
         fields['0x019e'] = dbDev.field_019e !== null && dbDev.field_019e !== undefined ? dbDev.field_019e : 112; // display_brightness
         fields['0x019d'] = dbDev.field_019d !== null && dbDev.field_019d !== undefined ? dbDev.field_019d : 128; // display_contrast
-        fields['0x02b2'] = dbDev.field_02b2 !== null && dbDev.field_02b2 !== undefined ? dbDev.field_02b2 : 0; // display_active_timeout
         fields['0x0149'] = unmapOrientation(dbDev.field_0149); // display_orientation
     }
+    // 0x02b2: Device UTC offset in minutes applied to RTC epoch (RU and VA firmware)
+    fields['0x02b2'] = dbDev.field_02b2 !== null && dbDev.field_02b2 !== undefined ? Number(dbDev.field_02b2) : defaultTzOffset;
     if (deviceId.startsWith('VA')) {
         fields['0x021a'] = dbDev.field_021a !== null && dbDev.field_021a !== undefined ? Number(dbDev.field_021a) : 0;
     }
@@ -136,7 +156,7 @@ async function buildDeviceConfigTLV(deviceId, existingDbDev = null) {
 
     if (deviceId.startsWith('VA')) {
         const sensitivity = dbDev.valve_sensitivity !== null && dbDev.valve_sensitivity !== undefined ? Number(dbDev.valve_sensitivity) : 100;
-        if (sensitivity >= 25 && sensitivity <= 250) {
+        if (sensitivity >= 25 && sensitivity <= 100) {
             fields['0x4160'] = sensitivity;
         }
     }
