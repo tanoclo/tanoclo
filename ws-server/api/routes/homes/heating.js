@@ -15,6 +15,7 @@ const geoUtils = require('../../../lib/geo-utils');
 const fs = require('fs');
 const path = require('path');
 const { buildHomeDetails, checkZoneConfigReadonly } = require('./helpers');
+const interfaceModules = require('../../../lib/interface-modules');
 
 const router = express.Router();
 const _log = getLogger('homes-api');
@@ -28,6 +29,22 @@ router.get('/:homeId/heatingSystem', async (req, res) => {
         const [ufhRows] = await pool.execute('SELECT 1 FROM zones WHERE home_id = ? AND heating_type = ? LIMIT 1', [homeId, 'UNDERFLOOR']);
         const hasUfh = Boolean(hs.underfloor_heating_present || (ufhRows && ufhRows.length > 0));
 
+        let effectiveField015d = hs.field_015d;
+        if (effectiveField015d === null || effectiveField015d === undefined) {
+            const [driverDevs] = await pool.execute(
+                `SELECT d.field_015d FROM devices d
+                 WHERE d.home_id = ? AND d.device_type IN ('RU01', 'RU02', 'BU01') AND d.field_015d IS NOT NULL
+                 ORDER BY (d.field_015d = 200) ASC LIMIT 1`,
+                [homeId]
+            );
+            if (driverDevs.length > 0 && driverDevs[0].field_015d !== null) {
+                effectiveField015d = driverDevs[0].field_015d;
+            }
+        }
+
+        const modInfo = interfaceModules.getInterfaceModuleInfo(effectiveField015d);
+        const supportedMetrics = interfaceModules.computeSupportedMetrics(effectiveField015d, hs);
+
         res.json({
             boiler: {
                 present: Boolean(hs.boiler_present),
@@ -35,6 +52,8 @@ router.get('/:homeId/heatingSystem', async (req, res) => {
                 found: Boolean(hs.boiler_found)
             },
             underfloorHeating: { present: hasUfh },
+            interfaceModule: modInfo,
+            supportedMetrics,
             telemetry: {
                 flowTemperature: hs.field_044c !== null && hs.field_044c !== undefined ? parseFloat(hs.field_044c) : null,
                 returnTemperature: hs.field_044d !== null && hs.field_044d !== undefined ? parseFloat(hs.field_044d) : null,
@@ -73,20 +92,33 @@ router.get('/:homeId/heatingSystem', async (req, res) => {
 router.put('/:homeId/heatingSystem/boiler', async (req, res) => {
     try {
         const homeId = req.params.homeId;
-        const { present, found, id } = req.body;
+        const { present, found, id, field_015d } = req.body;
         const pool = db.getPool();
 
-        await pool.execute(
-            `INSERT INTO heating_systems (home_id, boiler_present, boiler_found, boiler_id) 
-             VALUES (?, ?, ?, ?) 
-             ON DUPLICATE KEY UPDATE 
-             boiler_present = ?, 
-             boiler_found = ?, 
-             boiler_id = ?`,
-            [homeId, present ? 1 : 0, found ? 1 : 0, id || null, present ? 1 : 0, found ? 1 : 0, id || null]
-        );
+        if (field_015d !== undefined) {
+            await pool.execute(
+                `INSERT INTO heating_systems (home_id, boiler_present, boiler_found, boiler_id, field_015d) 
+                 VALUES (?, ?, ?, ?, ?) 
+                 ON DUPLICATE KEY UPDATE 
+                 boiler_present = ?, 
+                 boiler_found = ?, 
+                 boiler_id = ?,
+                 field_015d = ?`,
+                [homeId, present ? 1 : 0, found ? 1 : 0, id || null, field_015d, present ? 1 : 0, found ? 1 : 0, id || null, field_015d]
+            );
+        } else {
+            await pool.execute(
+                `INSERT INTO heating_systems (home_id, boiler_present, boiler_found, boiler_id) 
+                 VALUES (?, ?, ?, ?) 
+                 ON DUPLICATE KEY UPDATE 
+                 boiler_present = ?, 
+                 boiler_found = ?, 
+                 boiler_id = ?`,
+                [homeId, present ? 1 : 0, found ? 1 : 0, id || null, present ? 1 : 0, found ? 1 : 0, id || null]
+            );
+        }
 
-        res.json({ present: Boolean(present), found: Boolean(found), id: id || null });
+        res.json({ present: Boolean(present), found: Boolean(found), id: id || null, field_015d: field_015d ?? null });
     } catch (err) {
         res.status(500).json({ error: 'internal_error' });
     }

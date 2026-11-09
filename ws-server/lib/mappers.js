@@ -4,6 +4,7 @@
  */
 const geoUtils = require('./geo-utils');
 const { getFriendlyErrorFlags } = require('./mqtt-publisher');
+const interfaceModules = require('./interface-modules');
 
 const deriveMacFromIpv6 = (ipv6) => {
     if (!ipv6 || typeof ipv6 !== 'string') return null;
@@ -69,7 +70,12 @@ function mapDevice(d) {
             : (d.field_015d !== null && d.field_015d !== undefined ? parseInt(d.field_015d, 10) : (d.device_type && d.device_type.startsWith('RU') ? 71 : (d.device_type === 'VA02' ? 112 : null))),
         deviceRole: (Boolean(d.is_emulated || d.emulated_mode) && d.device_type && d.device_type.startsWith('RU')) || (d.field_015d === 200 || d.field_015d === '200')
             ? 'WIRELESS_SENSOR'
-            : (d.device_type && d.device_type.startsWith('RU') ? 'WIRED_THERMOSTAT' : null)
+            : (d.device_type && d.device_type.startsWith('RU') ? 'WIRED_THERMOSTAT' : null),
+        interfaceModule: interfaceModules.getInterfaceModuleInfo(
+            Boolean(d.is_emulated || d.emulated_mode)
+                ? (d.device_type && d.device_type.startsWith('RU') ? 200 : (d.field_015d !== null && d.field_015d !== undefined ? parseInt(d.field_015d, 10) : (d.device_type === 'VA02' ? 112 : 71)))
+                : (d.field_015d !== null && d.field_015d !== undefined ? parseInt(d.field_015d, 10) : (d.device_type && d.device_type.startsWith('RU') ? 71 : (d.device_type === 'VA02' ? 112 : null)))
+        )
     };
 
     if ((d.device_type && d.device_type.startsWith('IB')) || mapped.isEmulated) {

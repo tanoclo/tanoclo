@@ -20,6 +20,7 @@ import { apiFetch } from '../../api/client';
 import logger from '../../utils/logger';
 import { SWR_KEYS } from '../../utils/swrKeys';
 import CircuitTelemetryChart from '../charts/CircuitTelemetryChart';
+import { getInterfaceModuleInfo } from '../../utils/interfaceModules';
 
 
 /**
@@ -95,8 +96,12 @@ export default function BoilerCircuitsSettings() {
   );
 
   const boilerInfo = boilerDetails?.data?.system;
+  const interfaceModule = heatingSystem?.interfaceModule || boilerRaw?.interface_module || getInterfaceModuleInfo(boilerRaw?.field_015d ?? 71);
+  const supportedMetrics = new Set(heatingSystem?.supportedMetrics || boilerRaw?.supported_metrics || []);
+  const isRelayBoiler = Boolean(interfaceModule.isRelay);
+  const isModulating = Boolean(interfaceModule.isModulating);
   const manufacturerName = boilerInfo?.manufacturers?.[0]?.name || 'Generic';
-  const modelName = boilerInfo?.modelName || 'OpenTherm Boiler';
+  const modelName = boilerInfo?.modelName || (interfaceModule.isRelay ? 'Relay Boiler' : (interfaceModule.isOpenTherm ? 'OpenTherm Boiler' : `${interfaceModule.familyName} Boiler`));
 
   // Fetch Manufacturers list for search in Modal
   const fetchManufacturers = async (searchText) => {
@@ -315,7 +320,7 @@ export default function BoilerCircuitsSettings() {
                 {t('heating_activity.boiler_enabled')}
               </span>
               <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                {t('heating_activity.opentherm_desc', 'Configure OpenTherm boiler integration.')}
+                {interfaceModule.description || t('heating_activity.opentherm_desc', 'Configure boiler integration.')}
               </span>
             </div>
 
@@ -368,13 +373,25 @@ export default function BoilerCircuitsSettings() {
             flexWrap: 'wrap',
             gap: '0.75rem'
           }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <span style={{ fontSize: '0.9rem', fontWeight: 600 }}>
                 {t('heating_activity.boiler_model')}
               </span>
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                {manufacturerName} • {modelName}
-              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  {manufacturerName} • {modelName}
+                </span>
+                <span style={{
+                  padding: '0.15rem 0.5rem',
+                  borderRadius: 'var(--radius-sm)',
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  backgroundColor: interfaceModule.badgeBg,
+                  color: interfaceModule.badgeColor
+                }}>
+                  {interfaceModule.familyName} {interfaceModule.id != null ? `(ID ${interfaceModule.id})` : ''}
+                </span>
+              </div>
             </div>
             <Button
               variant="secondary"
@@ -386,8 +403,8 @@ export default function BoilerCircuitsSettings() {
           </div>
         )}
 
-        {/* Boiler OpenTherm System Configuration Settings */}
-        {Boolean(heatingSystem?.boiler?.present) && (
+        {/* Boiler OpenTherm / Digital Bus System Configuration Settings */}
+        {Boolean(heatingSystem?.boiler?.present) && (isModulating || supportedMetrics.has('dhwStorageTank') || supportedMetrics.has('maxChFlowTemperature')) && (
           <div style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
@@ -540,57 +557,71 @@ export default function BoilerCircuitsSettings() {
         </Card>
       )}
 
-      {/* Circular Gauges */}
-      {Boolean(heatingSystem?.boiler?.present) && (
+      {/* Circular Gauges (For Digital Modulating Boilers) */}
+      {Boolean(heatingSystem?.boiler?.present) && isModulating && (
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
           gap: '1.5rem'
         }}>
-          <Card style={{ padding: '1.25rem', display: 'flex', justifyContent: 'center' }}>
-            {renderCircularGauge(
-              boilerRaw.field_044c ? parseFloat(boilerRaw.field_044c) : null,
-              20, 90, t('tanoclo_ex.ch_flow_temp'), '°', 'var(--warning)'
-            )}
-          </Card>
-          <Card style={{ padding: '1.25rem', display: 'flex', justifyContent: 'center' }}>
-            {renderCircularGauge(
-              boilerRaw.field_044d ? parseFloat(boilerRaw.field_044d) : null,
-              20, 90, t('tanoclo_ex.ch_return_temp'), '°', 'var(--info)'
-            )}
-          </Card>
-          <Card style={{ padding: '1.25rem', display: 'flex', justifyContent: 'center' }}>
-            {renderCircularGauge(
-              boilerRaw.field_0450 ? parseFloat(boilerRaw.field_0450) : null,
-              20, 80, t('tanoclo_ex.control_setpoint'), '°', 'var(--primary)'
-            )}
-          </Card>
-          <Card style={{ padding: '1.25rem', display: 'flex', justifyContent: 'center' }}>
-            {renderCircularGauge(
-              boilerRaw.field_044e ? parseFloat(boilerRaw.field_044e) : (boilerRaw.last_config_decoded?.['0x044e'] ? parseFloat(boilerRaw.last_config_decoded['0x044e']) : null),
-              20, 150, t('tanoclo_ex.flue_exhaust_temp'), '°', 'hsl(0, 75%, 55%)'
-            )}
-          </Card>
-          <Card style={{ padding: '1.25rem', display: 'flex', justifyContent: 'center' }}>
-            {renderCircularGauge(
-              boilerRaw.field_045a ? parseFloat(boilerRaw.field_045a) : (boilerRaw.last_config_decoded?.['0x045a'] ? parseFloat(boilerRaw.last_config_decoded['0x045a']) : null),
-              10, 70, t('tanoclo_ex.dhw_temperature'), '°', 'var(--secondary)'
-            )}
-          </Card>
-          <Card style={{ padding: '1.25rem', display: 'flex', justifyContent: 'center' }}>
-            {renderCircularGauge(
-              boilerRaw.field_0452 ? parseInt(boilerRaw.field_0452, 10) : 0,
-              0, 100, t('tanoclo_ex.relative_modulation'), '%', 'var(--warning)'
-            )}
-          </Card>
-          <Card style={{ padding: '1.25rem', display: 'flex', justifyContent: 'center' }}>
-            {renderCircularGauge(
-              boilerRaw.field_0462 != null ? parseFloat(boilerRaw.field_0462) : (boilerRaw.last_config_decoded?.['0x0462'] != null ? parseFloat(boilerRaw.last_config_decoded['0x0462']) : null),
-              0, 4, t('tanoclo_ex.water_pressure'), ' bar',
-              (parseFloat(boilerRaw.field_0462 || boilerRaw.last_config_decoded?.['0x0462'] || 0) < 1.0 ? 'var(--danger)' : 'var(--secondary)')
-            )}
-          </Card>
-          {(boilerRaw.field_045e !== null && boilerRaw.field_045e !== undefined || boilerRaw.last_config_decoded?.['0x045e'] !== undefined) && (
+          {(supportedMetrics.has('flowTemperature') || boilerRaw.field_044c != null) && (
+            <Card style={{ padding: '1.25rem', display: 'flex', justifyContent: 'center' }}>
+              {renderCircularGauge(
+                boilerRaw.field_044c ? parseFloat(boilerRaw.field_044c) : null,
+                20, 90, t('tanoclo_ex.ch_flow_temp'), '°', 'var(--warning)'
+              )}
+            </Card>
+          )}
+          {(supportedMetrics.has('returnTemperature') || boilerRaw.field_044d != null) && (
+            <Card style={{ padding: '1.25rem', display: 'flex', justifyContent: 'center' }}>
+              {renderCircularGauge(
+                boilerRaw.field_044d ? parseFloat(boilerRaw.field_044d) : null,
+                20, 90, t('tanoclo_ex.ch_return_temp'), '°', 'var(--info)'
+              )}
+            </Card>
+          )}
+          {(supportedMetrics.has('controlSetpoint') || boilerRaw.field_0450 != null) && (
+            <Card style={{ padding: '1.25rem', display: 'flex', justifyContent: 'center' }}>
+              {renderCircularGauge(
+                boilerRaw.field_0450 ? parseFloat(boilerRaw.field_0450) : null,
+                20, 80, t('tanoclo_ex.control_setpoint'), '°', 'var(--primary)'
+              )}
+            </Card>
+          )}
+          {(supportedMetrics.has('exhaustTemperature') || boilerRaw.field_044e != null || boilerRaw.last_config_decoded?.['0x044e'] != null) && (
+            <Card style={{ padding: '1.25rem', display: 'flex', justifyContent: 'center' }}>
+              {renderCircularGauge(
+                boilerRaw.field_044e ? parseFloat(boilerRaw.field_044e) : (boilerRaw.last_config_decoded?.['0x044e'] ? parseFloat(boilerRaw.last_config_decoded['0x044e']) : null),
+                20, 150, t('tanoclo_ex.flue_exhaust_temp'), '°', 'hsl(0, 75%, 55%)'
+              )}
+            </Card>
+          )}
+          {(supportedMetrics.has('dhwMeasuredTemperature') || boilerRaw.field_045a != null || boilerRaw.last_config_decoded?.['0x045a'] != null) && (
+            <Card style={{ padding: '1.25rem', display: 'flex', justifyContent: 'center' }}>
+              {renderCircularGauge(
+                boilerRaw.field_045a ? parseFloat(boilerRaw.field_045a) : (boilerRaw.last_config_decoded?.['0x045a'] ? parseFloat(boilerRaw.last_config_decoded['0x045a']) : null),
+                10, 70, t('tanoclo_ex.dhw_temperature'), '°', 'var(--secondary)'
+              )}
+            </Card>
+          )}
+          {(supportedMetrics.has('modulationPercentage') || boilerRaw.field_0452 != null) && (
+            <Card style={{ padding: '1.25rem', display: 'flex', justifyContent: 'center' }}>
+              {renderCircularGauge(
+                boilerRaw.field_0452 ? parseInt(boilerRaw.field_0452, 10) : 0,
+                0, 100, t('tanoclo_ex.relative_modulation'), '%', 'var(--warning)'
+              )}
+            </Card>
+          )}
+          {(supportedMetrics.has('waterPressureBar') || boilerRaw.field_0462 != null || boilerRaw.last_config_decoded?.['0x0462'] != null) && (
+            <Card style={{ padding: '1.25rem', display: 'flex', justifyContent: 'center' }}>
+              {renderCircularGauge(
+                boilerRaw.field_0462 != null ? parseFloat(boilerRaw.field_0462) : (boilerRaw.last_config_decoded?.['0x0462'] != null ? parseFloat(boilerRaw.last_config_decoded['0x0462']) : null),
+                0, 4, t('tanoclo_ex.water_pressure'), ' bar',
+                (parseFloat(boilerRaw.field_0462 || boilerRaw.last_config_decoded?.['0x0462'] || 0) < 1.0 ? 'var(--danger)' : 'var(--secondary)')
+              )}
+            </Card>
+          )}
+          {(supportedMetrics.has('dhwFlowRateLpm') || (boilerRaw.field_045e !== null && boilerRaw.field_045e !== undefined) || boilerRaw.last_config_decoded?.['0x045e'] !== undefined) && (
             <Card style={{ padding: '1.25rem', display: 'flex', justifyContent: 'center' }}>
               {renderCircularGauge(
                 parseFloat(boilerRaw.field_045e ?? boilerRaw.last_config_decoded['0x045e']),
@@ -601,27 +632,85 @@ export default function BoilerCircuitsSettings() {
         </div>
       )}
 
+      {/* Analog Relay Operation Card (For On/Off Relay Boilers) */}
+      {Boolean(heatingSystem?.boiler?.present) && isRelayBoiler && (
+        <Card style={{
+          padding: '1.25rem',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '1rem',
+          background: 'linear-gradient(135deg, rgba(234, 179, 8, 0.05) 0%, rgba(234, 179, 8, 0.01) 100%)',
+          border: '1px solid rgba(234, 179, 8, 0.2)'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <Flame size={24} style={{ color: boilerRaw.field_0457 ? 'var(--warning)' : 'var(--text-muted)' }} />
+              <div>
+                <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700 }}>
+                  {t('settings.relay_system_state', 'Analog Relay Operation')}
+                </h4>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                  {t('settings.relay_system_desc', 'Boiler heat calls are switched via potential-free / switched live contact.')}
+                </span>
+              </div>
+            </div>
+            <span style={{
+              padding: '0.25rem 0.75rem',
+              borderRadius: 'var(--radius-sm)',
+              fontWeight: 700,
+              fontSize: '0.8rem',
+              backgroundColor: boilerRaw.field_0457 ? 'var(--warning-glow)' : 'var(--border-color)',
+              color: boilerRaw.field_0457 ? 'var(--warning)' : 'var(--text-secondary)'
+            }}>
+              {boilerRaw.field_0457 ? t('tanoclo_ex.relay_active', 'RELAY CALL ACTIVE') : t('tanoclo_ex.relay_idle', 'RELAY IDLE (STANDBY)')}
+            </span>
+          </div>
+
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: '1rem',
+            borderTop: '1px solid var(--border-color)',
+            paddingTop: '0.75rem',
+            fontSize: '0.85rem'
+          }}>
+            <div>
+              <span style={{ color: 'var(--text-secondary)' }}>{t('settings.relay_control_interface', 'Interface Module')}: </span>
+              <strong>{interfaceModule.familyName} {interfaceModule.id != null ? `(ID ${interfaceModule.id})` : ''}</strong>
+            </div>
+            <div>
+              <span style={{ color: 'var(--text-secondary)' }}>{t('settings.relay_flow_control', 'Water Temperature')}: </span>
+              <strong>{t('settings.relay_dial_controlled', 'Controlled on Boiler Dial')}</strong>
+            </div>
+          </div>
+        </Card>
+      )}
+
       {/* Stats and Diagnostics split grid */}
       {Boolean(heatingSystem?.boiler?.present) && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.25rem' }}>
-          {/* OpenTherm Burner Cycles */}
-          <Card style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <h3 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0 }}>{t('settings.openthem_cycles')}</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>{t('settings.burner_ignition_starts')}</span>
-                <strong>{boilerRaw.field_0463 !== null && boilerRaw.field_0463 !== undefined && parseInt(boilerRaw.field_0463, 10) !== 65535 ? `${boilerRaw.field_0463} cyc` : '--'}</strong>
+          {/* Burner Cycles */}
+          {(isModulating || supportedMetrics.has('burnerStarts') || (boilerRaw.field_0463 !== null && boilerRaw.field_0463 !== undefined && parseInt(boilerRaw.field_0463, 10) !== 65535)) && (
+            <Card style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <h3 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0 }}>
+                {interfaceModule.isOpenTherm ? t('settings.openthem_cycles') : `${interfaceModule.familyName} ${t('settings.burner_cycles', 'Burner Cycles')}`}
+              </h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>{t('settings.burner_ignition_starts')}</span>
+                  <strong>{boilerRaw.field_0463 !== null && boilerRaw.field_0463 !== undefined && parseInt(boilerRaw.field_0463, 10) !== 65535 ? `${boilerRaw.field_0463} cyc` : '--'}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>{t('settings.ch_burner_starts', 'CH Burner Starts')}</span>
+                  <strong>{boilerRaw.field_0465 !== null && boilerRaw.field_0465 !== undefined && parseInt(boilerRaw.field_0465, 10) !== 65535 ? `${boilerRaw.field_0465} cyc` : '--'}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>{t('settings.dhw_burner_starts', 'DHW Burner Starts')}</span>
+                  <strong>{boilerRaw.field_0464 !== null && boilerRaw.field_0464 !== undefined && parseInt(boilerRaw.field_0464, 10) !== 65535 ? `${boilerRaw.field_0464} cyc` : '--'}</strong>
+                </div>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>{t('settings.ch_burner_starts', 'CH Burner Starts')}</span>
-                <strong>{boilerRaw.field_0465 !== null && boilerRaw.field_0465 !== undefined && parseInt(boilerRaw.field_0465, 10) !== 65535 ? `${boilerRaw.field_0465} cyc` : '--'}</strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>{t('settings.dhw_burner_starts', 'DHW Burner Starts')}</span>
-                <strong>{boilerRaw.field_0464 !== null && boilerRaw.field_0464 !== undefined && parseInt(boilerRaw.field_0464, 10) !== 65535 ? `${boilerRaw.field_0464} cyc` : '--'}</strong>
-              </div>
-            </div>
-          </Card>
+            </Card>
+          )}
 
           {/* Boiler Diagnostics */}
           <Card style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -653,23 +742,25 @@ export default function BoilerCircuitsSettings() {
           </Card>
 
           {/* Boiler Lifetime Hours */}
-          <Card style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <h3 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0 }}>{t('settings.boiler_lifetime_hours')}</h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>{t('settings.total_burner_hours')}</span>
-                <strong>{formatBurnerHours(boilerRaw.field_0466)} hrs</strong>
+          {(isModulating || supportedMetrics.has('burnerHoursTotal') || boilerRaw.field_0466 != null) && (
+            <Card style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <h3 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0 }}>{t('settings.boiler_lifetime_hours')}</h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>{t('settings.total_burner_hours')}</span>
+                  <strong>{formatBurnerHours(boilerRaw.field_0466)} hrs</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>{t('settings.ch_heating_duration')}</span>
+                  <strong>{formatBurnerHours(boilerRaw.field_0467)} hrs</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>{t('settings.dhw_sanitary_duration')}</span>
+                  <strong>{formatBurnerHours(boilerRaw.field_0468)} hrs</strong>
+                </div>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>{t('settings.ch_heating_duration')}</span>
-                <strong>{formatBurnerHours(boilerRaw.field_0467)} hrs</strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>{t('settings.dhw_sanitary_duration')}</span>
-                <strong>{formatBurnerHours(boilerRaw.field_0468)} hrs</strong>
-              </div>
-            </div>
-          </Card>
+            </Card>
+          )}
         </div>
       )}
 
@@ -700,7 +791,7 @@ export default function BoilerCircuitsSettings() {
                     <span style={{ fontWeight: 600 }}>{circ.driver_serial_no || '--'}</span>
                   </td>
                   <td style={{ padding: '0.75rem 1rem', fontWeight: 600 }}>
-                    {circ.field_2040 != null && parseFloat(circ.field_2040) > 0 ? `${parseFloat(circ.field_2040).toFixed(1)}°C` : '--'}
+                    {circ.field_2040 != null && parseFloat(circ.field_2040) > 0 && !isRelayBoiler ? `${parseFloat(circ.field_2040).toFixed(1)}°C` : (isRelayBoiler ? t('common.not_applicable', 'N/A (Relay)') : '--')}
                   </td>
                   <td style={{ padding: '0.75rem 1rem', fontWeight: 600 }}>
                     {circ.field_4040 !== null ? `${parseFloat(circ.field_4040).toFixed(1)}°C` : '--'}

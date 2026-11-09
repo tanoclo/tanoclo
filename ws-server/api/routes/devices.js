@@ -14,6 +14,7 @@ const homeAccessMiddleware = require('../middleware/home-access');
 const commandApi = require('../../lib/command-api');
 const { getLogger } = require('../../lib/logger');
 const { mapDevice } = require('../../lib/mappers');
+const interfaceModules = require('../../lib/interface-modules');
 
 const router = express.Router();
 const _log = getLogger('devices-api');
@@ -822,8 +823,8 @@ async function setDeviceRole(req, res) {
         let { role, field_015d } = req.body || {};
         let targetRole = field_015d !== undefined ? parseInt(field_015d, 10) : (typeof role === 'string' ? (role.toUpperCase() === 'WIRELESS_SENSOR' ? 200 : 71) : parseInt(role, 10));
 
-        if (targetRole !== 71 && targetRole !== 200) {
-            return res.status(400).json({ error: 'invalid_role', message: 'Role must be 71 (Wired Thermostat) or 200 (Wireless Sensor)' });
+        if (isNaN(targetRole) || (!interfaceModules.MODULE_MAP.has(targetRole) && targetRole !== 71 && targetRole !== 200) || targetRole === 112 || targetRole === 202) {
+            return res.status(400).json({ error: 'invalid_role', message: 'Role must be a valid interface module ID (e.g. 71 for OpenTherm, 3 for Relay, 200 for Wireless Sensor)' });
         }
 
         if (targetRole === 200) {
@@ -879,7 +880,8 @@ async function setDeviceRole(req, res) {
             }
         } else {
             // Changing to Wired Thermostat:
-            await pool.execute('UPDATE devices SET field_015d = 71 WHERE serial_no = ? AND home_id = ?', [deviceId, homeId]);
+            await pool.execute('UPDATE devices SET field_015d = ? WHERE serial_no = ? AND home_id = ?', [targetRole, deviceId, homeId]);
+            await pool.execute('UPDATE heating_systems SET field_015d = ? WHERE home_id = ?', [targetRole, homeId]);
 
             // 1. Ensure a heating circuit exists with this device as driver
             const [existingCircuits] = await pool.execute('SELECT number FROM heating_circuits WHERE home_id = ? AND driver_serial_no = ?', [homeId, deviceId]);

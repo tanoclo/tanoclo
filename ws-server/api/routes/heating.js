@@ -11,6 +11,7 @@ const db = require('../../lib/db');
 const authMiddleware = require('../middleware/auth');
 const homeAccessMiddleware = require('../middleware/home-access');
 const { getLogger } = require('../../lib/logger');
+const interfaceModules = require('../../lib/interface-modules');
 
 const router = express.Router();
 const _log = getLogger('heating-api');
@@ -36,8 +37,19 @@ const getFlowTempOpt = async (req, res) => {
         const [settingsRows] = await pool.execute('SELECT * FROM flow_temperature_settings WHERE home_id = ?', [homeId]);
         const settings = settingsRows.length > 0 ? settingsRows[0] : null;
 
-        const [deviceRows] = await pool.execute("SELECT serial_no FROM devices WHERE home_id = ? AND device_type IN ('BU01', 'RU01', 'RU02') LIMIT 1", [homeId]);
+        const [deviceRows] = await pool.execute(
+            "SELECT serial_no, field_015d FROM devices WHERE home_id = ? AND device_type IN ('BU01', 'RU01', 'RU02') ORDER BY (field_015d = 200) ASC LIMIT 1",
+            [homeId]
+        );
         const serialNo = deviceRows.length > 0 ? deviceRows[0].serial_no : null;
+        const devField015d = deviceRows.length > 0 ? deviceRows[0].field_015d : null;
+
+        const [hsRows] = await pool.execute('SELECT field_015d FROM heating_systems WHERE home_id = ? LIMIT 1', [homeId]);
+        const hsField015d = hsRows.length > 0 ? hsRows[0].field_015d : null;
+        const effective015d = hsField015d ?? devField015d;
+
+        const isOpenTherm = interfaceModules.isOpenTherm(effective015d);
+        const isModulating = interfaceModules.isModulatingBus(effective015d);
 
         const maxTemp = settings ? parseInt(settings.max_flow_temperature, 10) : 60;
         const minTemp = settings ? parseInt(settings.min_flow_temperature || 30, 10) : 30;
@@ -66,16 +78,18 @@ const getFlowTempOpt = async (req, res) => {
             maxFlowTemperatureLimit: maxTempLimit,
             maxFlowTemperatureConstraints: { min: minTemp, max: maxTempLimit },
             autoAdaptation: {
-                enabled: autoAdapt,
-                maxFlowTemperature: autoAdapt ? maxTemp : null,
-                currentActualFlowTemperature: liveFlowTemp,
-                currentReturnTemperature: liveReturnTemp,
-                currentModulation: liveModulation,
+                enabled: isOpenTherm ? autoAdapt : false,
+                supported: isOpenTherm,
+                maxFlowTemperature: (isOpenTherm && autoAdapt) ? maxTemp : null,
+                currentActualFlowTemperature: isOpenTherm ? liveFlowTemp : null,
+                currentReturnTemperature: isOpenTherm ? liveReturnTemp : null,
+                currentModulation: isOpenTherm ? liveModulation : null,
                 currentOutsideTemperature: latestHist ? parseFloat(latestHist.outside_temp) : null,
                 lastReason: latestHist ? latestHist.reason : null,
                 lastOptimized: latestHist ? latestHist.timestamp : null
             },
-            openThermDeviceSerialNumber: serialNo
+            openThermDeviceSerialNumber: isOpenTherm ? serialNo : null,
+            interfaceModule: interfaceModules.getInterfaceModuleInfo(effective015d)
         });
     } catch (err) {
         _log('error', `GET flowTemperatureOptimization failed: ${err.message}\n${err.stack}`);

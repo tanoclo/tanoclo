@@ -15,6 +15,7 @@ const battery = require('../../lib/battery');
 const { getFriendlyErrorFlags } = require('../../lib/mqtt-publisher');
 const dbUtils = require('../../lib/db-utils');
 const tlv = require('../../lib/tlv');
+const interfaceModules = require('../../lib/interface-modules');
 
 const router = express.Router();
 const _log = getLogger('tanoclo-api');
@@ -140,6 +141,22 @@ router.get('/:homeId/tanoclo/boiler/raw', async (req, res) => {
         } catch (e) {
             row.last_config_decoded = null;
         }
+
+        let effectiveField015d = row.field_015d;
+        if (effectiveField015d === null || effectiveField015d === undefined) {
+            const [driverDevs] = await pool.execute(
+                `SELECT d.field_015d FROM devices d
+                 WHERE d.home_id = ? AND d.device_type IN ('RU01', 'RU02', 'BU01') AND d.field_015d IS NOT NULL
+                 ORDER BY (d.field_015d = 200) ASC LIMIT 1`,
+                [homeId]
+            );
+            if (driverDevs.length > 0 && driverDevs[0].field_015d !== null) {
+                effectiveField015d = driverDevs[0].field_015d;
+            }
+        }
+        row.interface_module = interfaceModules.getInterfaceModuleInfo(effectiveField015d);
+        row.supported_metrics = interfaceModules.computeSupportedMetrics(effectiveField015d, row);
+
         res.json(row);
     } catch (err) {
         _log('error', `Error fetching raw boiler data: ${err.message}`);

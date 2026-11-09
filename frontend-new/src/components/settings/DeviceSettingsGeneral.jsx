@@ -225,7 +225,11 @@ export default function DeviceSettingsGeneral({
             )}
             {device.hardwareDiagnostics.openthermVoltage !== null && (
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
-                <span style={{ color: 'var(--text-secondary)' }}>{t('settings.ot_bus_voltage', 'OpenTherm Bus Voltage')}</span>
+                <span style={{ color: 'var(--text-secondary)' }}>
+                  {device.interfaceModule?.isOpenTherm
+                    ? t('settings.ot_bus_voltage', 'OpenTherm Bus Voltage')
+                    : `${device.interfaceModule?.familyName || 'Interface'} ${t('settings.bus_voltage', 'Bus Voltage')}`}
+                </span>
                 <strong>{device.hardwareDiagnostics.openthermVoltage.toFixed(3)} V</strong>
               </div>
             )}

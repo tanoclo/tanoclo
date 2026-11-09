@@ -8,6 +8,7 @@
 const { getLogger } = require('./logger');
 const log = getLogger('flow-optimizer');
 const weather = require('./weather');
+const interfaceModules = require('./interface-modules');
 
 let _db = null;
 let _commandApi = null;
@@ -265,6 +266,21 @@ async function evaluateHome(homeId) {
 
         // Skip if auto-adaptation is turned off by the user
         if (!settings.auto_adaptation_enabled) return null;
+
+        // Skip if interface module is non-modulating (e.g. Analog Relay)
+        const [hsModRows] = await pool.execute('SELECT field_015d FROM heating_systems WHERE home_id = ? LIMIT 1', [homeId]);
+        let effectiveMod015d = hsModRows.length > 0 ? hsModRows[0].field_015d : null;
+        if (effectiveMod015d === null || effectiveMod015d === undefined) {
+            const [driverDevs] = await pool.execute(
+                "SELECT field_015d FROM devices WHERE home_id = ? AND device_type IN ('RU01', 'RU02', 'BU01') AND field_015d IS NOT NULL ORDER BY (field_015d = 200) ASC LIMIT 1",
+                [homeId]
+            );
+            if (driverDevs.length > 0) effectiveMod015d = driverDevs[0].field_015d;
+        }
+        if (!interfaceModules.isModulatingBus(effectiveMod015d)) {
+            log('debug', `[flow-optimizer] Home ${homeId}: Skipping flow optimization (non-modulating interface module: ${effectiveMod015d})`);
+            return null;
+        }
 
         const minFlow = settings.min_flow_temperature ? parseInt(settings.min_flow_temperature, 10) : 30;
         const maxFlowLimit = settings.max_flow_temperature_limit ? parseInt(settings.max_flow_temperature_limit, 10) : 80;
