@@ -83,6 +83,13 @@ All settings are managed via environment variables and loaded through [lib/confi
 ### 2.2 Server Port Configuration
 *   **`WS_PORT`** (Integer): The listening port for the binary WebSocket server. Default: `988`.
 *   **`HTTP_API_PORT`** or **`API_PORT`** (Integer): The listening port for the REST API and setup portal. Default: `3111`.
+*   **`API_HOST`** (String, optional): Bind address for the REST API and setup portal.
+    When unset, the server listens on `::` with IPv4-mapped connections enabled,
+    serving both IPv6 and IPv4 on systems that support dual-stack sockets. If IPv6
+    is unavailable, it falls back to `0.0.0.0`. Set `API_HOST=0.0.0.0` for IPv4-only
+    access, `127.0.0.1` for IPv4 loopback, or `::1` for IPv6 loopback. An explicit
+    address is used as-is, without automatic fallback. This setting does not change
+    the bridge WebSocket listener or firewall rules.
 
 ### 2.3 Cryptography & SSL Certificates
 *   **`SSL_KEY_PATH`** (String): Path to the SSL private key for local TLS termination. Default: `'certs/tanoclo_key.pem'`.
