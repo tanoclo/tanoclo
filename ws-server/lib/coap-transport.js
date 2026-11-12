@@ -24,6 +24,7 @@ const _ackCallbacks = new Map();
 const _tanocloMids = new Map(); // mid -> timestamp
 const _sleepyDownlinkQueue = new Map(); // deviceId -> Map(pathKey -> queueItem)
 const _deviceLastSeen = new Map(); // deviceId -> timestamp
+const _latestZoneState = new Map(); // Resource key -> current intent object (not a reusable MID)
 const SLEEPY_AWAKE_WINDOW_MS = 4000;
 const QUEUE_TTL_MS = 2 * 60 * 60 * 1000;
 
@@ -93,8 +94,41 @@ function findBridgeForHome(homeId) {
     return null;
 }
 
+function releaseZoneState(item) {
+    if (item && _latestZoneState.get(item.resourceKey) === item) {
+        _latestZoneState.delete(item.resourceKey);
+    }
+}
+
+function replaceZoneState(item) {
+    const previous = _latestZoneState.get(item.resourceKey);
+    _latestZoneState.set(item.resourceKey, item);
+    if (!previous) return;
+
+    const pending = _pendingCommands.get(previous.mid);
+    if (pending && pending.intent === previous) {
+        clearTimeout(pending.timer);
+        _pendingCommands.delete(previous.mid);
+    }
+    const tracking = _commandTracker.get(_midToTrackingId.get(previous.mid));
+    if (tracking && tracking.status === 'pending') tracking.status = 'superseded';
+
+    const callback = _ackCallbacks.get(previous.mid) || _ackCallbacks.get(String(previous.mid));
+    _ackCallbacks.delete(previous.mid);
+    _ackCallbacks.delete(String(previous.mid));
+    if (callback) {
+        callback.reject(Object.assign(new Error('Superseded by newer zone state'), { code: 'COMMAND_SUPERSEDED' }));
+    }
+
+    const queue = _bridgePacingQueues.get(item.bridgeId);
+    if (queue) {
+        _bridgePacingQueues.set(item.bridgeId, queue.filter(entry => entry.resourceKey !== item.resourceKey));
+    }
+}
+
 function _dispatchDownlinkFrame(item) {
     const { bridgeId, wsFrame, coapBytes, commandLabel, targetIpv6 } = item;
+    if (item.resourceKey && _latestZoneState.get(item.resourceKey) !== item) return;
     _log('debug', `[cmd-api] CoAP TX hex: ${coapBytes.toString('hex')}`);
     _log('debug', `[cmd-api] Raw TX hex: ${wsFrame.toString('hex')}`);
 
@@ -112,7 +146,7 @@ function _dispatchDownlinkFrame(item) {
         if (coapPath && _proxyMidCache) {
             _proxyMidCache.set(mid, { path: coapPath, ts: Date.now() });
         }
-        scheduleRetry(mid, bridgeId, wsFrame, 0);
+        scheduleRetry(mid, bridgeId, wsFrame, 0, item.resourceKey ? item : null);
 
         if (commandLabel) {
             const trackingId = _trackingIdCounter++;
@@ -168,6 +202,20 @@ function sendViaBridge(bridgeId, bridgeClient, targetIpv6, targetPort, coapBytes
     });
 
     const item = { bridgeId, bridgeClient, targetIpv6, targetPort, coapBytes, commandLabel, wsFrame };
+    const parsed = coap.parse(coapBytes);
+    if (parsed.ok && parsed.code === coap.CODE_PUT && coap.uriPath(parsed) === 'z/s') {
+        const query = parsed.options.filter(option => option.num === coap.OPT_URI_QUERY);
+        const fragmented = parsed.options.some(option => option.num === coap.OPT_BLOCK1);
+        // Only complete, unambiguous zone-state writes are replaceable.
+        if (!fragmented && query.length === 1 && /^id=\d+$/.test(query[0].value.toString())) {
+            const zoneId = query[0].value.toString().slice(3).replace(/^0+(?=\d)/, '');
+            item.resourceKey = JSON.stringify([
+                bridgeId, wsBridge.ipv6ToBytes(targetIpv6).toString('hex'), targetPort || 5683, zoneId
+            ]);
+            item.mid = parsed.mid;
+            replaceZoneState(item);
+        }
+    }
 
     if (!bridgeId || _downlinkPacingMs <= 0) {
         _dispatchDownlinkFrame(item);
@@ -192,13 +240,15 @@ function sendViaBridge(bridgeId, bridgeClient, targetIpv6, targetPort, coapBytes
     }
 }
 
-function scheduleRetry(mid, bridgeId, wsFrame, attempt) {
+function scheduleRetry(mid, bridgeId, wsFrame, attempt, intent = null) {
+    if (intent && _latestZoneState.get(intent.resourceKey) !== intent) return;
     const existing = _pendingCommands.get(mid);
     if (existing && existing.timer) clearTimeout(existing.timer);
 
     if (attempt >= RETRY_INTERVALS.length) {
         _log('warn', `[cmd-api] MID ${mid}: Giving up after ${attempt} retries (no ACK received)`);
         _pendingCommands.delete(mid);
+        releaseZoneState(intent);
         metrics.inc('commands_failed');
 
         const cb = _ackCallbacks.get(mid);
@@ -217,7 +267,12 @@ function scheduleRetry(mid, bridgeId, wsFrame, attempt) {
         return;
     }
 
+    const pending = { bridgeId, wsFrame, attempt, intent, timer: null };
     const timer = setTimeout(() => {
+        // A canceled callback may already be runnable. Compare intent identity,
+        // not just MID, since the MID generator eventually wraps.
+        if (_pendingCommands.get(mid) !== pending ||
+            (intent && _latestZoneState.get(intent.resourceKey) !== intent)) return;
         _log('debug', `[cmd-api] MID ${mid}: Retry ${attempt + 1}/${RETRY_INTERVALS.length} (no ACK after ${RETRY_INTERVALS[attempt]}ms)`);
         _sendFn(bridgeId, wsFrame);
         metrics.inc('commands_retried');
@@ -228,10 +283,11 @@ function scheduleRetry(mid, bridgeId, wsFrame, attempt) {
                 entry.retries = attempt + 1;
             }
         }
-        scheduleRetry(mid, bridgeId, wsFrame, attempt + 1);
+        scheduleRetry(mid, bridgeId, wsFrame, attempt + 1, intent);
     }, RETRY_INTERVALS[attempt]);
 
-    _pendingCommands.set(mid, { bridgeId, wsFrame, attempt, timer });
+    pending.timer = timer;
+    _pendingCommands.set(mid, pending);
 }
 
 function handleAckReceived(midInput, deviceIdOrMsg) {
@@ -252,6 +308,7 @@ function handleAckReceived(midInput, deviceIdOrMsg) {
         if (pending.timer) clearTimeout(pending.timer);
         _pendingCommands.delete(mid);
         _pendingCommands.delete(midInput);
+        releaseZoneState(pending.intent);
         metrics.inc('commands_acked');
 
         const trId = _midToTrackingId.get(mid) ?? _midToTrackingId.get(midInput);
@@ -317,6 +374,7 @@ function clearPendingRetries() {
     _tanocloMids.clear();
     _sleepyDownlinkQueue.clear();
     _deviceLastSeen.clear();
+    _latestZoneState.clear();
     _bridgePacingQueues.clear();
     _bridgePacingActive.clear();
     if (_tanocloMidsSweepInterval) {
@@ -542,6 +600,9 @@ module.exports = {
     getSleepyQueue,
     getBridgePacingQueue: (bridgeId) => _bridgePacingQueues.get(bridgeId) || [],
     clearBridgePacingQueue: (bridgeId) => {
+        for (const [id, queue] of _bridgePacingQueues) {
+            if (!bridgeId || id === bridgeId) queue.forEach(releaseZoneState);
+        }
         if (bridgeId) _bridgePacingQueues.delete(bridgeId);
         else _bridgePacingQueues.clear();
         if (bridgeId) _bridgePacingActive.delete(bridgeId);
