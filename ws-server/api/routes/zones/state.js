@@ -125,16 +125,12 @@ router.get('/:homeId/zoneStates', async (req, res) => {
                 }
             }
 
-            let isOffline = false;
-            if (z.measuring_device_serial) {
-                const connState = deviceConnMap.get(z.measuring_device_serial);
-                if (connState === 0) {
-                    isOffline = true;
-                }
-            }
+            const connectionState = z.measuring_device_serial
+                ? (deviceConnMap.get(z.measuring_device_serial) ?? null)
+                : null;
 
             // Map the state
-            const state = mapZoneState(measurement, overlayRow, nextChange, z, isOffline, homePresence);
+            const state = mapZoneState(measurement, overlayRow, nextChange, z, connectionState, homePresence);
 
             if (!overlayRow) {
                 if (homePresence === 'AWAY') {
