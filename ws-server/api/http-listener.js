@@ -25,6 +25,7 @@ async function listenHttp(app, { port, host = null }, log) {
             }
             function onListening() {
                 server.removeListener('error', onError);
+                server.on('error', error => log('error', `[REST-API] Server error: ${error.message}`));
                 resolve();
             }
             server.once('error', onError);

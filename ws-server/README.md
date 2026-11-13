@@ -82,8 +82,9 @@ All settings are managed via environment variables and loaded through [lib/confi
 
 ### 2.2 Server Port Configuration
 *   **`WS_PORT`** (Integer): The listening port for the binary WebSocket server. Default: `988`.
-*   **`HTTP_API_PORT`** or **`API_PORT`** (Integer): The listening port for the REST API and setup portal. Default: `3111`.
-*   **`API_HOST`** (String, optional): Bind address for the REST API and setup portal.
+*   **`HTTP_API_PORT`** or **`API_PORT`** (Integer): The listening port for the REST API and setup portal. Default: `3111`. `API_PORT` takes precedence if both are set.
+*   **`HTTP_API_HOST`** or **`API_HOST`** (String, optional): Bind address for the REST API and setup portal.
+    `API_HOST` takes precedence if both are set.
     When unset, the server listens on `::` with IPv4-mapped connections enabled,
     serving both IPv6 and IPv4 on systems that support dual-stack sockets. If IPv6
     is unavailable, it falls back to `0.0.0.0`. Set `API_HOST=0.0.0.0` for IPv4-only

@@ -566,7 +566,7 @@ function finalizeMiddleware() {
     finalized = true;
 }
 
-const PORT = process.env.API_PORT || 3111;
+const PORT = config.httpApiPort;
 
 app.get('/favicon.ico', (req, res) => {
     const iconFile = path.join(frontendPath, 'favicon.svg');

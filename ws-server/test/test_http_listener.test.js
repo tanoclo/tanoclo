@@ -117,7 +117,7 @@ describe('HTTP listener', () => {
         ]);
         expect(log).toHaveBeenCalledWith('warn', expect.stringContaining(code));
         expect(log).toHaveBeenCalledWith('info', '[REST-API] Listening on 0.0.0.0:3111');
-        expect(server.listenerCount('error')).toBe(0);
+        expect(server.listenerCount('error')).toBe(1);
         expect(server.listenerCount('listening')).toBe(0);
     });
 
@@ -154,8 +154,17 @@ describe('HTTP listener', () => {
         const log = vi.fn();
         expect(await listenHttp(handler, { port: 3111 }, log)).toBe(server);
         expect(log).toHaveBeenCalledWith('info', '[REST-API] Listening on [::]:3111');
-        expect(server.listenerCount('error')).toBe(0);
+        expect(server.listenerCount('error')).toBe(1);
         expect(server.listenerCount('listening')).toBe(0);
+    });
+
+    test('logs runtime server errors after startup without throwing', async () => {
+        const server = mockServer();
+        const log = vi.fn();
+        await listenHttp(handler, { port: 3111 }, log);
+        expect(() => server.emit('error', bindError('EMFILE'))).not.toThrow();
+        expect(log).toHaveBeenCalledWith('error', '[REST-API] Server error: EMFILE');
+        expect(server.listenerCount('error')).toBe(1);
     });
 
     test('cleans up listeners when listen throws synchronously', async () => {
