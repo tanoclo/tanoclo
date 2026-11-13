@@ -45,7 +45,8 @@ function loadDatabaseConfig() {
 
 const config = {
     wsPort: parseInt(process.env.WS_PORT || '988', 10),
-    httpApiPort: parseInt(process.env.HTTP_API_PORT || '3111', 10),
+    httpApiPort: parseInt(process.env.API_PORT || process.env.HTTP_API_PORT || '3111', 10),
+    httpApiHost: process.env.API_HOST || process.env.HTTP_API_HOST || null, // Auto: dual-stack with IPv4 fallback
 
     sslKeyPath: process.env.SSL_KEY_PATH || path.join(__dirname, '..', 'certs', 'tanoclo_key.pem'),
     sslCertPath: process.env.SSL_CERT_PATH || path.join(__dirname, '..', 'certs', 'tanoclo_cert.pem'),
