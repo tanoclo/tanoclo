@@ -557,14 +557,16 @@ async function buildCircuitConfigTLV(homeId, circuitNumber) {
     if (field2090 === 0) {
         fields['0x2040'] = 0.0;
     } else {
-        // Always query flow_temperature_settings to allow user override from TaNoClo frontend
-        const [settingsRows] = await p.execute('SELECT max_flow_temperature FROM flow_temperature_settings WHERE home_id = ?', [homeId]);
-        if (settingsRows.length > 0 && settingsRows[0].max_flow_temperature) {
-            fields['0x2040'] = parseFloat(settingsRows[0].max_flow_temperature);
-        } else if (field2040 !== null && field2040 !== undefined) {
+        if (field2040 !== null && field2040 !== undefined && parseFloat(field2040) > 0) {
             fields['0x2040'] = parseFloat(field2040);
         } else {
-            fields['0x2040'] = 60.0;
+            // Fallback to flow_temperature_settings if circuit column is empty
+            const [settingsRows] = await p.execute('SELECT max_flow_temperature FROM flow_temperature_settings WHERE home_id = ?', [homeId]);
+            if (settingsRows.length > 0 && settingsRows[0].max_flow_temperature) {
+                fields['0x2040'] = parseFloat(settingsRows[0].max_flow_temperature);
+            } else {
+                fields['0x2040'] = 60.0;
+            }
         }
     }
     fields = cleanFriendlyConfig(fields);

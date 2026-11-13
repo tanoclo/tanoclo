@@ -75,11 +75,11 @@ function evaluateCircuitThermalLoad({ callingRadiators = 0, callingUfh = 0, circ
     }
 
     // 4. High aggregate demand across the circuit (e.g. general recovery)
-    if (circuitDemandPct >= 40) {
+    if (circuitDemandPct >= 40 || maxZoneError >= 0.8) {
         return { allowHeating: true, circuitOperatingMode: 1, reason: 'high_aggregate_demand' };
     }
 
-    // 5. Anti-flapping lockout: if recently in STANDBY, suppress marginal ignition attempts
+    // 5. Anti-flapping lockout: if recently burned or in STANDBY, suppress marginal ignition attempts
     if (inLockout) {
         return { allowHeating: false, circuitOperatingMode: 0, reason: 'anti_flapping_lockout' };
     }
@@ -335,12 +335,12 @@ async function evaluateHome(homeId) {
             }
         }
 
-        // 6. Active zone temperatures, heating types and errors
+        // 6. Active zone temperatures, heating types, demand and errors
         const [zoneRows] = await pool.execute(
-            `SELECT z.id, z.name, z.heating_type, zm.field_012d AS current_temp
+            `SELECT z.id, z.name, z.heating_type, zm.field_012d AS current_temp, zm.field_40a0 AS demand
              FROM zones z
              LEFT JOIN (
-                 SELECT zone_id, field_012d
+                 SELECT zone_id, field_012d, field_40a0
                  FROM zone_measurements
                  WHERE id IN (SELECT MAX(id) FROM zone_measurements WHERE home_id = ? GROUP BY zone_id)
              ) zm ON zm.zone_id = z.id
@@ -360,15 +360,17 @@ async function evaluateHome(homeId) {
                     if (enabled) {
                         const targetTemp = parseFloat(zState['0x6280'] ?? zState.field_6280 ?? zState['0x6200'] ?? zState.field_6200 ?? 20);
                         const currentTemp = z.current_temp !== null && z.current_temp !== undefined ? parseFloat(z.current_temp) : null;
+                        const zDemand = parseFloat(zState['0x40a0'] ?? zState.field_40a0 ?? z.demand ?? 0) || 0;
                         if (currentTemp !== null && targetTemp > currentTemp) {
                             const err = targetTemp - currentTemp;
                             if (err > maxZoneError) {
                                 maxZoneError = err;
                             }
+                            // Only count as calling radiator if valve is actively open (>=10%) and room has deficit (>=0.2°C)
                             if (z.heating_type === 'UNDERFLOOR') {
-                                callingUfh++;
+                                if (zDemand >= 10 || err >= 0.2) callingUfh++;
                             } else {
-                                callingRadiators++;
+                                if (zDemand >= 10 && err >= 0.2) callingRadiators++;
                             }
                         }
                     }
@@ -388,10 +390,29 @@ async function evaluateHome(homeId) {
         }
 
         // 7. Calculate optimal flow temperature and evaluate thermal load
-        const lastBurnEnd = _lastBurnEndTimes.get(homeId) || 0;
+        let lastBurnEnd = _lastBurnEndTimes.get(homeId) || 0;
         const now = Date.now();
         const lockoutMs = 10 * 60 * 1000; // 10 minutes anti-flapping lockout on small loads
-        const inLockout = (now - lastBurnEnd < lockoutMs);
+
+        // Check live boiler flame state and recent burn end from DB to prevent memory loss on restart
+        const isFlameOn = (boilerRows.length > 0 && (boilerRows[0].field_0457 === 1 || (boilerRows[0].field_0452 && boilerRows[0].field_0452 > 0)));
+        try {
+            const [recentBurnRows] = await pool.execute(
+                `SELECT timestamp FROM circuit_measurements 
+                 WHERE home_id = ? AND (field_0457 = 1 OR field_0452 > 0) 
+                 ORDER BY id DESC LIMIT 1`,
+                [homeId]
+            );
+            if (recentBurnRows.length > 0 && recentBurnRows[0].timestamp) {
+                const dbBurnTime = new Date(recentBurnRows[0].timestamp).getTime();
+                if (dbBurnTime > lastBurnEnd) {
+                    lastBurnEnd = dbBurnTime;
+                    _lastBurnEndTimes.set(homeId, lastBurnEnd);
+                }
+            }
+        } catch (_) {}
+
+        const inLockout = !isFlameOn && (now - lastBurnEnd < lockoutMs);
 
         const opt = computeOptimalFlowTemperature({
             outsideTemp,
@@ -432,10 +453,11 @@ async function evaluateHome(homeId) {
         if (opt.changed || modeChanged || flowChanged) {
             log('info', `[flow-optimizer] Home ${homeId}: flow=${currentMaxFlow}°C->${newFlow}°C (effective=${effectiveFlow}°C) mode=${currentMode}->${targetMode} (reason=${opt.reason}, outdoor=${outsideTemp.toFixed(1)}°C, maxZoneError=${maxZoneError.toFixed(1)}°C, demand=${circuitDemandPct}%)`);
 
-            if (opt.changed) {
+            if (opt.changed || flowChanged) {
+                const targetFlowToSave = (targetMode === 1 && effectiveFlow > 0) ? effectiveFlow : newFlow;
                 await pool.execute(
                     'UPDATE flow_temperature_settings SET max_flow_temperature = ? WHERE home_id = ?',
-                    [newFlow, homeId]
+                    [targetFlowToSave, homeId]
                 );
             }
 
