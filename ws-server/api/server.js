@@ -25,6 +25,7 @@ const commandLog = require('../lib/command-log');
 const otaSync = require('../lib/ota-sync');
 const rateLimit = require('express-rate-limit');
 const { reconstructBuffers } = require('../lib/utils');
+const { listenHttp } = require('./http-listener');
 
 const app = express();
 
@@ -565,7 +566,7 @@ function finalizeMiddleware() {
     finalized = true;
 }
 
-const PORT = process.env.API_PORT || 3111;
+const PORT = config.httpApiPort;
 
 app.get('/favicon.ico', (req, res) => {
     const iconFile = path.join(frontendPath, 'favicon.svg');
@@ -614,9 +615,7 @@ async function startAPI() {
         _log('error', `[REST-API] Failed booting OTA Sync Manager: ${otaErr.message}`);
     }
 
-    const server = app.listen(PORT, '0.0.0.0', () => {
-        _log('info', `[REST-API] Listening on all interfaces (0.0.0.0) port ${PORT}`);
-    });
+    const server = await listenHttp(app, { port: PORT, host: config.httpApiHost }, _log);
 
     // Graceful shutdown: stop accepting new connections, close DB pool
     const shutdown = () => {
