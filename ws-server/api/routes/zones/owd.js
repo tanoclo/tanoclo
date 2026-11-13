@@ -309,15 +309,13 @@ async function getStateInternal(homeId, zoneId, pool) {
     const [zoneRows] = await pool.execute('SELECT * FROM zones WHERE id = ? AND home_id = ?', [zoneId, homeId]);
     const zone = zoneRows.length > 0 ? zoneRows[0] : null;
 
-    let isOffline = false;
+    let connectionState = null;
     if (zone && zone.measuring_device_serial) {
         const [devRows] = await pool.execute('SELECT connection_state FROM devices WHERE serial_no = ? AND home_id = ?', [zone.measuring_device_serial, homeId]);
-        if (devRows.length > 0 && devRows[0].connection_state === 0) {
-            isOffline = true;
-        }
+        connectionState = devRows[0]?.connection_state ?? null;
     }
 
-    let state = mapZoneState(measurement, overlayRow, nextChange, zone, isOffline, homePresence);
+    let state = mapZoneState(measurement, overlayRow, nextChange, zone, connectionState, homePresence);
 
     if (!overlayRow) {
         if (homePresence === 'AWAY') {

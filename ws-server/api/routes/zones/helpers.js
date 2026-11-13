@@ -376,7 +376,7 @@ function resolveAwaySetting(zone, awayConfig) {
     return { type: 'HEATING', power: 'ON', temperature: { celsius: 15.0, fahrenheit: 59.0 } };
 }
 
-function mapZoneState(measurement, overlay, nextChange, zone, isOffline = false, tadoMode = 'HOME') {
+function mapZoneState(measurement, overlay, nextChange, zone, connectionState = null, tadoMode = 'HOME') {
     let state = {
         tadoMode: tadoMode,
         geolocationOverride: false,
@@ -389,7 +389,9 @@ function mapZoneState(measurement, overlay, nextChange, zone, isOffline = false,
         openWindowDetected: false,
         nextScheduleChange: null,
         nextTimeBlock: null,
-        link: { state: isOffline ? 'OFFLINE' : (measurement?.link_state || 'ONLINE') },
+        // Known measuring-device connectivity outranks cached zone metadata.
+        // Unknown connectivity retains the existing metadata/default fallback.
+        link: { state: connectionState === 0 ? 'OFFLINE' : connectionState === 1 ? 'ONLINE' : (measurement?.link_state || 'ONLINE') },
         runningOfflineSchedule: false,
         activityDataPoints: {},
         sensorDataPoints: {}
