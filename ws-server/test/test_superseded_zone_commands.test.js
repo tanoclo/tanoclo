@@ -15,12 +15,12 @@ const originalPacing = transport.getDownlinkPacingMs();
 function send(mid, overrides = {}) {
     const { bridge = 'IB-test', address = 'fd00::1', port = 5683,
         zone = '1', path = 'z/s', code = coap.CODE_PUT,
-        query = `id=${zone}`, extraOptions = [] } = overrides;
+        query = `id=${zone}`, extraOptions = [], label = `test:${mid}` } = overrides;
     const bytes = coap.buildRequest({
         code, path, query, extraOptions, mid, type: coap.TYPE_CON,
         token: Buffer.alloc(0), payload: Buffer.from([mid & 0xff])
     });
-    transport.sendViaBridge(bridge, null, address, port, bytes, `test:${mid}`);
+    transport.sendViaBridge(bridge, null, address, port, bytes, label);
 }
 
 function mids() { return sent.map(item => item.mid); }
@@ -96,6 +96,75 @@ describe('superseded zone-state commands', () => {
         expect(await result).toEqual({ code: 'COMMAND_SUPERSEDED' });
         transport.handleAckReceived(0x7001, 'VA-test');
         expect(transport._commandTracker.size).toBe(queued ? 1 : 2);
+    });
+
+    test.each([false, true])('late ACK waiters reject immediately for unlabelled superseded commands, queued=%s', async queued => {
+        if (queued) {
+            transport.setDownlinkPacingMs(100);
+            send(0x7000, { zone: '2', label: null });
+        }
+        send(0x7001, { label: null });
+        send(0x7002, { label: null });
+        expect(transport._commandTracker.size).toBe(0);
+        const result = vi.fn();
+        transport.waitForAck(String(0x7001)).then(result, error => result(error.code));
+        await Promise.resolve();
+        expect(result).toHaveBeenCalledWith('COMMAND_SUPERSEDED');
+    });
+
+    test.each([{ path: 'z/s' }, { path: 'd/config', code: coap.CODE_GET }])(
+        'MID reuse does not inherit supersession: %j', async overrides => {
+            send(0x7001);
+            send(0x7002);
+            send(0x7001, overrides);
+            const result = transport.waitForAck(0x7001);
+            transport.handleAckReceived(0x7001, 'VA-test');
+            await expect(result).resolves.toMatchObject({ ok: true, mid: 0x7001 });
+        }
+    );
+
+    test('a paced command without a pending retry can still wait for its ACK', async () => {
+        transport.setDownlinkPacingMs(100);
+        send(0x7000, { zone: '2' });
+        send(0x7001, { label: null });
+        const result = transport.waitForAck(0x7001);
+        vi.advanceTimersByTime(100);
+        transport.handleAckReceived(0x7001, 'VA-test');
+        await expect(result).resolves.toMatchObject({ ok: true, mid: 0x7001 });
+    });
+
+    test('supersession history expires before a later waiter is registered', async () => {
+        send(0x7001);
+        send(0x7002);
+        vi.setSystemTime(Date.now() + 120001);
+        const result = transport.waitForAck(0x7001);
+        transport.handleAckReceived(0x7001, 'VA-test');
+        await expect(result).resolves.toMatchObject({ ok: true, mid: 0x7001 });
+    });
+
+    test('supersession history is bounded while retaining recent cancellations', async () => {
+        for (let i = 0; i <= 501; i++) send(0x7000 + i, { label: null });
+        const oldest = transport.waitForAck(0x7000);
+        transport.handleAckReceived(0x7000, 'VA-test');
+        await expect(oldest).resolves.toMatchObject({ ok: true });
+        await expect(transport.waitForAck(0x7000 + 500)).rejects.toMatchObject({ code: 'COMMAND_SUPERSEDED' });
+    });
+
+    test('clearing transport state clears supersession history', async () => {
+        send(0x7001);
+        send(0x7002);
+        transport.clearPendingRetries();
+        const result = transport.waitForAck(0x7001);
+        transport.handleAckReceived(0x7001, 'VA-test');
+        await expect(result).resolves.toMatchObject({ ok: true });
+    });
+
+    test('transport parses each frame once before dispatch', () => {
+        vi.spyOn(require('../lib/command-log'), 'logWsCommand').mockImplementation(() => {});
+        transport.init({ db: {}, clients: new Map(), log: () => {}, sendFn: () => {} });
+        const parse = vi.spyOn(coap, 'parse');
+        send(0x7001);
+        expect(parse).toHaveBeenCalledTimes(1);
     });
 
     test('an already-scheduled retry cannot send after supersession or MID reuse', () => {

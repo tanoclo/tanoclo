@@ -25,6 +25,9 @@ const _tanocloMids = new Map(); // mid -> timestamp
 const _sleepyDownlinkQueue = new Map(); // deviceId -> Map(pathKey -> queueItem)
 const _deviceLastSeen = new Map(); // deviceId -> timestamp
 const _latestZoneState = new Map(); // Resource key -> current intent object (not a reusable MID)
+const _supersededMids = new Map(); // MID -> time of supersession, including untracked/queued commands
+const SUPERSEDED_TTL_MS = 2 * 60 * 1000;
+const MAX_SUPERSEDED_MIDS = 500;
 const SLEEPY_AWAKE_WINDOW_MS = 4000;
 const QUEUE_TTL_MS = 2 * 60 * 60 * 1000;
 
@@ -61,6 +64,9 @@ function init(deps) {
             const cutoff = Date.now() - 2 * 60 * 1000;
             for (const [mid, ts] of _tanocloMids) {
                 if (ts < cutoff) _tanocloMids.delete(mid);
+            }
+            for (const [mid, ts] of _supersededMids) {
+                if (ts < cutoff) _supersededMids.delete(mid);
             }
         }, 60 * 1000);
         _tanocloMidsSweepInterval.unref();
@@ -100,10 +106,20 @@ function releaseZoneState(item) {
     }
 }
 
+function supersededCommandError() {
+    return Object.assign(new Error('Superseded by newer zone state'), { code: 'COMMAND_SUPERSEDED' });
+}
+
 function replaceZoneState(item) {
     const previous = _latestZoneState.get(item.resourceKey);
     _latestZoneState.set(item.resourceKey, item);
     if (!previous) return;
+
+    _supersededMids.delete(previous.mid);
+    _supersededMids.set(previous.mid, Date.now());
+    if (_supersededMids.size > MAX_SUPERSEDED_MIDS) {
+        _supersededMids.delete(_supersededMids.keys().next().value);
+    }
 
     const pending = _pendingCommands.get(previous.mid);
     if (pending && pending.intent === previous) {
@@ -117,7 +133,7 @@ function replaceZoneState(item) {
     _ackCallbacks.delete(previous.mid);
     _ackCallbacks.delete(String(previous.mid));
     if (callback) {
-        callback.reject(Object.assign(new Error('Superseded by newer zone state'), { code: 'COMMAND_SUPERSEDED' }));
+        callback.reject(supersededCommandError());
     }
 
     const queue = _bridgePacingQueues.get(item.bridgeId);
@@ -132,7 +148,7 @@ function _dispatchDownlinkFrame(item) {
     _log('debug', `[cmd-api] CoAP TX hex: ${coapBytes.toString('hex')}`);
     _log('debug', `[cmd-api] Raw TX hex: ${wsFrame.toString('hex')}`);
 
-    const coapPath = coap.uriPath(coap.parse(coapBytes)) || commandLabel || '';
+    const coapPath = coap.uriPath(item.parsedCoap) || commandLabel || '';
     commandLog.logWsCommand(bridgeId, commandLabel || 'unlabeled', coapPath || 'unlabeled', coapBytes, wsFrame);
 
     if (typeof _sendFn === 'function') {
@@ -201,8 +217,8 @@ function sendViaBridge(bridgeId, bridgeClient, targetIpv6, targetPort, coapBytes
         coapBytes
     });
 
-    const item = { bridgeId, bridgeClient, targetIpv6, targetPort, coapBytes, commandLabel, wsFrame };
     const parsed = coap.parse(coapBytes);
+    const item = { bridgeId, bridgeClient, targetIpv6, targetPort, coapBytes, commandLabel, wsFrame, parsedCoap: parsed };
     if (parsed.ok && parsed.code === coap.CODE_PUT && coap.uriPath(parsed) === 'z/s') {
         const query = parsed.options.filter(option => option.num === coap.OPT_URI_QUERY);
         const fragmented = parsed.options.some(option => option.num === coap.OPT_BLOCK1);
@@ -216,6 +232,9 @@ function sendViaBridge(bridgeId, bridgeClient, targetIpv6, targetPort, coapBytes
             replaceZoneState(item);
         }
     }
+    // A new request may reuse a MID. Clear history after replacement so a
+    // same-MID successor is not mistaken for its superseded predecessor.
+    if (parsed.ok && parsed.code > 0 && parsed.code < 32) _supersededMids.delete(parsed.mid);
 
     if (!bridgeId || _downlinkPacingMs <= 0) {
         _dispatchDownlinkFrame(item);
@@ -375,6 +394,7 @@ function clearPendingRetries() {
     _sleepyDownlinkQueue.clear();
     _deviceLastSeen.clear();
     _latestZoneState.clear();
+    _supersededMids.clear();
     _bridgePacingQueues.clear();
     _bridgePacingActive.clear();
     if (_tanocloMidsSweepInterval) {
@@ -385,6 +405,13 @@ function clearPendingRetries() {
 
 function waitForAck(midInput, timeoutMs = 35000) {
     const mid = Number(midInput);
+    const supersededAt = _supersededMids.get(mid);
+    if (supersededAt !== undefined) {
+        if (Date.now() - supersededAt < SUPERSEDED_TTL_MS) {
+            return Promise.reject(supersededCommandError());
+        }
+        _supersededMids.delete(mid);
+    }
     return new Promise((resolve, reject) => {
         const timer = setTimeout(() => {
             if (_ackCallbacks.has(mid) || _ackCallbacks.has(midInput)) {
