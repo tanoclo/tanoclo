@@ -36,6 +36,58 @@ export default function ZoneCard({ zone, state, deviceErrors, onClick }) {
   const _isOverlay = !!state?.overlay;
   const isPowerOn = state?.setting?.power !== 'OFF';
 
+  const isCircuitEnabled = state?.circuit?.enabled !== false;
+  const isBoilerPresent = Boolean(state?.boiler?.present);
+  const isBoilerActive = Boolean(state?.boiler?.flameActive || (state?.boiler?.modulation > 0));
+  const flameCount = heatingPower >= 67 ? 3 : heatingPower >= 34 ? 2 : 1;
+
+  const getFlameAppearance = () => {
+    if (!isHeating || isOffline) return null;
+
+    if (!isCircuitEnabled) {
+      return {
+        color: 'var(--text-muted, #94a3b8)',
+        fill: 'none',
+        textColor: 'var(--text-muted, #94a3b8)',
+        filter: 'none',
+        animation: 'none',
+        title: `${t('zone.demand', 'Demand')}: ${Math.round(heatingPower)}% (${t('settings.circuit_standby', 'Circuit idle / Optimizer hold')})`
+      };
+    }
+
+    if (isBoilerPresent) {
+      if (isBoilerActive) {
+        return {
+          color: '#ff7a00',
+          fill: '#ff5d00',
+          textColor: '#ff5d00',
+          filter: 'drop-shadow(0 0 6px rgba(255, 93, 0, 0.8))',
+          animation: 'pulse-soft 1.5s infinite',
+          title: `${t('zone.demand', 'Demand')}: ${Math.round(heatingPower)}% (${t('settings.boiler_firing', 'Boiler firing')})`
+        };
+      }
+      return {
+        color: '#eab308',
+        fill: '#facc15',
+        textColor: '#eab308',
+        filter: 'drop-shadow(0 0 4px rgba(234, 179, 8, 0.5))',
+        animation: 'none',
+        title: `${t('zone.demand', 'Demand')}: ${Math.round(heatingPower)}% (${t('settings.boiler_standby', 'Boiler standby / circulating')})`
+      };
+    }
+
+    return {
+      color: '#ff7a00',
+      fill: '#ff5d00',
+      textColor: '#ff5d00',
+      filter: 'drop-shadow(0 0 6px rgba(255, 93, 0, 0.8))',
+      animation: 'pulse-soft 1.5s infinite',
+      title: `${t('zone.demand', 'Demand')}: ${Math.round(heatingPower)}%`
+    };
+  };
+
+  const flameAppearance = getFlameAppearance();
+
   const getTemperatureColor = (temp) => {
     if (temp == null) {
       return 'var(--text-muted)';
@@ -152,16 +204,38 @@ export default function ZoneCard({ zone, state, deviceErrors, onClick }) {
             </div>
           )}
           {isOffline && <ShieldAlert size={16} />}
-          {isHeating && !isOffline && (
-            <Flame
-              size={18}
+          {flameAppearance && (
+            <div
+              title={flameAppearance.title}
               style={{
-                color: '#ff7a00',
-                fill: '#ff5d00',
-                filter: 'drop-shadow(0 0 6px rgba(255, 93, 0, 0.8))',
-                animation: 'pulse-soft 1.5s infinite'
+                display: 'flex',
+                alignItems: 'center',
+                gap: '2px',
+                cursor: 'default',
+                padding: '2px 4px',
+                borderRadius: '8px',
+                backgroundColor: !isCircuitEnabled ? 'transparent' : 'rgba(255, 93, 0, 0.08)'
               }}
-            />
+            >
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                {Array.from({ length: flameCount }).map((_, idx) => (
+                  <Flame
+                    key={idx}
+                    size={flameCount === 1 ? 16 : 12}
+                    style={{
+                      color: flameAppearance.color,
+                      fill: flameAppearance.fill,
+                      filter: flameAppearance.filter,
+                      animation: flameAppearance.animation,
+                      marginLeft: idx > 0 ? '-3px' : '0'
+                    }}
+                  />
+                ))}
+              </div>
+              <span style={{ fontSize: '0.65rem', fontWeight: 700, color: flameAppearance.textColor, marginLeft: '1px' }}>
+                {Math.round(heatingPower)}%
+              </span>
+            </div>
           )}
         </div>
       </div>

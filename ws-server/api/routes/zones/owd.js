@@ -328,6 +328,24 @@ async function getStateInternal(homeId, zoneId, pool) {
         }
     }
 
+    const cNum = zone?.heating_circuit || 1;
+    const [circuits] = await pool.execute('SELECT number, field_4080, field_2090, field_2040 FROM heating_circuits WHERE home_id = ? AND number = ?', [homeId, cNum]);
+    const circ = circuits.length > 0 ? circuits[0] : null;
+
+    const [boilerRows] = await pool.execute('SELECT boiler_present, field_0457, field_0452, field_044c FROM heating_systems WHERE home_id = ? LIMIT 1', [homeId]);
+    state.circuit = {
+        number: cNum,
+        enabled: circ ? (circ.field_2090 !== 0) : true,
+        demand: circ ? (circ.field_4080 || 0) : 0,
+        targetFlow: circ ? parseFloat(circ.field_2040 || 0) : 0
+    };
+    state.boiler = boilerRows.length > 0 ? {
+        present: Boolean(boilerRows[0].boiler_present),
+        flameActive: Boolean(boilerRows[0].field_0457),
+        modulation: boilerRows[0].field_0452 !== null ? parseInt(boilerRows[0].field_0452, 10) : 0,
+        flowTemp: boilerRows[0].field_044c !== null ? parseFloat(boilerRows[0].field_044c) : null
+    } : { present: false, flameActive: false, modulation: 0, flowTemp: null };
+
     return state;
 }
 

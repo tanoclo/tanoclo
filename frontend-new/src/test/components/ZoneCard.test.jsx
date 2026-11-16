@@ -57,4 +57,30 @@ describe('components/zone/ZoneCard', () => {
     expect(html).toContain('Slaapkamer');
     expect(html).toContain('title="VA1234567890: Motor Blocked, Calibration Fault"');
   });
+
+  it('renders muted flame when heating demand exists but circuit is disabled by optimizer', () => {
+    const zone = { id: 1, name: 'Living Room', type: 'HEATING' };
+    const state = {
+      setting: { power: 'ON', temperature: { celsius: 21.0 } },
+      activityDataPoints: { heatingPower: { percentage: 25 } },
+      circuit: { enabled: false }
+    };
+    const html = renderToString(<ZoneCard zone={zone} state={state} />);
+    expect(html).toContain('25%');
+    expect(html).toContain('Circuit idle / Optimizer hold');
+  });
+
+  it('renders active flame when heating demand exists and circuit is enabled', () => {
+    const zone = { id: 1, name: 'Living Room', type: 'HEATING' };
+    const state = {
+      setting: { power: 'ON', temperature: { celsius: 21.0 } },
+      activityDataPoints: { heatingPower: { percentage: 75 } },
+      circuit: { enabled: true },
+      boiler: { present: true, flameActive: true, modulation: 45 }
+    };
+    const html = renderToString(<ZoneCard zone={zone} state={state} />);
+    expect(html).toContain('75%');
+    expect(html).toContain('Boiler firing');
+  });
 });
+

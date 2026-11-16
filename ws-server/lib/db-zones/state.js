@@ -305,8 +305,12 @@ async function insertMergedZoneMeasurement(homeId, zoneId, updates) {
         _log('debug', `zone_measurements: home=${homeId} zone=${zoneId} [DHW] sch=${scheduleTemp}°C ovr=${overlayMode} enabled=${zoneEnabled}`);
     }
 
-    // Trigger debounced flow optimization evaluation on demand / temp update
+    // Update central boiler circuit demand aggregate and trigger debounced flow optimization
     try {
+        const zoneCoordinator = require('../zone-coordinator');
+        if (typeof zoneCoordinator.relayBoilerCircuitDemand === 'function') {
+            zoneCoordinator.relayBoilerCircuitDemand(homeId).catch(() => {});
+        }
         const flowOptimizer = require('../flow-optimizer');
         if (typeof flowOptimizer.scheduleEvaluation === 'function') {
             flowOptimizer.scheduleEvaluation(homeId);

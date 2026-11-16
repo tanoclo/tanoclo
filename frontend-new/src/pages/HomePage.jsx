@@ -347,6 +347,45 @@ export default function HomePage() {
               </div>
             )}
 
+            {/* Live Boiler / Heating Circuit Status Pill */}
+            {zoneStates?.boiler?.present && (
+              <div
+                onClick={() => navigate('/settings?section=boiler-circuits')}
+                title={zoneStates.boiler.flameActive
+                  ? `${t('settings.boiler_firing', 'Boiler Firing')} (${zoneStates.boiler.modulation}% modulation, flow ${zoneStates.boiler.flowTemp || '--'}°C)`
+                  : `${t('settings.boiler_standby', 'Boiler Standby')} (${zoneStates.circuits?.[0]?.enabled ? 'Circuit active' : 'Optimizer hold'})`}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '0.3rem 0.75rem',
+                  borderRadius: '20px',
+                  backgroundColor: zoneStates.boiler.flameActive ? 'rgba(255, 93, 0, 0.12)' : 'var(--bg-app)',
+                  border: `1px solid ${zoneStates.boiler.flameActive ? '#ff5d00' : 'var(--border-color)'}`,
+                  color: zoneStates.boiler.flameActive ? '#ff5d00' : 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  whiteSpace: 'nowrap',
+                  transition: 'all var(--transition-fast)'
+                }}
+              >
+                <Flame
+                  size={14}
+                  style={{
+                    color: zoneStates.boiler.flameActive ? '#ff5d00' : 'var(--text-muted)',
+                    fill: zoneStates.boiler.flameActive ? '#ff5d00' : 'none',
+                    animation: zoneStates.boiler.flameActive ? 'pulse-soft 1.5s infinite' : 'none'
+                  }}
+                />
+                <span>
+                  {zoneStates.boiler.flameActive
+                    ? `${t('settings.boiler_active', 'Boiler')} ${zoneStates.boiler.modulation}%`
+                    : (zoneStates.circuits?.[0]?.enabled ? t('settings.circuit_active', 'Circuit On') : t('settings.circuit_standby_short', 'Hold'))}
+                </span>
+              </div>
+            )}
+
             {/* Home Actions Dropdown */}
             <div style={{ position: 'relative', zIndex: 100 }}>
               <Button

@@ -28,6 +28,56 @@ export default function DHWCard({ zone, state, deviceErrors, onClick }) {
   const _isOverlay = !!state?.overlay;
   const heatingPower = state?.activityDataPoints?.heatingPower?.percentage || 0;
   const isHeating = heatingPower > 0;
+  const isCircuitEnabled = state?.circuit?.enabled !== false;
+  const isBoilerPresent = Boolean(state?.boiler?.present);
+  const isBoilerActive = Boolean(state?.boiler?.flameActive || (state?.boiler?.modulation > 0));
+
+  const getFlameAppearance = () => {
+    if (!isHeating || isOffline) return null;
+
+    if (!isCircuitEnabled) {
+      return {
+        color: 'var(--text-muted, #94a3b8)',
+        fill: 'none',
+        textColor: 'var(--text-muted, #94a3b8)',
+        filter: 'none',
+        animation: 'none',
+        title: `${t('settings.hot_water', 'Hot Water')}: ${Math.round(heatingPower)}% (${t('settings.circuit_standby', 'Circuit idle / Optimizer hold')})`
+      };
+    }
+
+    if (isBoilerPresent) {
+      if (isBoilerActive) {
+        return {
+          color: '#ff7a00',
+          fill: '#ff5d00',
+          textColor: '#ff5d00',
+          filter: 'drop-shadow(0 0 6px rgba(255, 93, 0, 0.8))',
+          animation: 'pulse-soft 1.5s infinite',
+          title: `${t('settings.hot_water', 'Hot Water')}: ${Math.round(heatingPower)}% (${t('settings.boiler_firing', 'Boiler firing')})`
+        };
+      }
+      return {
+        color: '#eab308',
+        fill: '#facc15',
+        textColor: '#eab308',
+        filter: 'drop-shadow(0 0 4px rgba(234, 179, 8, 0.5))',
+        animation: 'none',
+        title: `${t('settings.hot_water', 'Hot Water')}: ${Math.round(heatingPower)}% (${t('settings.boiler_standby', 'Boiler standby / circulating')})`
+      };
+    }
+
+    return {
+      color: '#ff7a00',
+      fill: '#ff5d00',
+      textColor: '#ff5d00',
+      filter: 'drop-shadow(0 0 6px rgba(255, 93, 0, 0.8))',
+      animation: 'pulse-soft 1.5s infinite',
+      title: `${t('settings.hot_water', 'Hot Water')}: ${Math.round(heatingPower)}%`
+    };
+  };
+
+  const flameAppearance = getFlameAppearance();
 
   const getDhwColor = (temp) => {
     if (temp == null) {
@@ -129,16 +179,32 @@ export default function DHWCard({ zone, state, deviceErrors, onClick }) {
             </div>
           )}
           {isOffline && <ShieldAlert size={16} />}
-          {isHeating && !isOffline && (
-            <Flame
-              size={18}
+          {flameAppearance && (
+            <div
+              title={flameAppearance.title}
               style={{
-                color: '#ff7a00',
-                fill: '#ff5d00',
-                filter: 'drop-shadow(0 0 6px rgba(255, 93, 0, 0.8))',
-                animation: 'pulse-soft 1.5s infinite'
+                display: 'flex',
+                alignItems: 'center',
+                gap: '2px',
+                cursor: 'default',
+                padding: '2px 4px',
+                borderRadius: '8px',
+                backgroundColor: !isCircuitEnabled ? 'transparent' : 'rgba(255, 93, 0, 0.08)'
               }}
-            />
+            >
+              <Flame
+                size={16}
+                style={{
+                  color: flameAppearance.color,
+                  fill: flameAppearance.fill,
+                  filter: flameAppearance.filter,
+                  animation: flameAppearance.animation
+                }}
+              />
+              <span style={{ fontSize: '0.65rem', fontWeight: 700, color: flameAppearance.textColor, marginLeft: '1px' }}>
+                {Math.round(heatingPower)}%
+              </span>
+            </div>
           )}
         </div>
       </div>

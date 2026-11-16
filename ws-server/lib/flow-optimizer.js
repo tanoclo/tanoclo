@@ -302,7 +302,7 @@ async function evaluateHome(homeId) {
 
         // 4. Boiler live telemetry
         const [boilerRows] = await pool.execute(
-            'SELECT field_044c, field_044d, field_0452 FROM heating_systems WHERE home_id = ? LIMIT 1',
+            'SELECT field_044c, field_044d, field_0452, field_0457 FROM heating_systems WHERE home_id = ? LIMIT 1',
             [homeId]
         );
         const actualFlowTemp = boilerRows.length > 0 && boilerRows[0].field_044c !== null ? parseFloat(boilerRows[0].field_044c) : null;
@@ -310,7 +310,7 @@ async function evaluateHome(homeId) {
 
         // 5. Dynamic circuit determination & demand %
         const [circRows] = await pool.execute(
-            'SELECT number, field_4080, field_2040, field_2090, driver_serial_no, last_config_json FROM heating_circuits WHERE home_id = ? ORDER BY number ASC',
+            'SELECT number, field_4080, field_2040, field_2090, driver_serial_no FROM heating_circuits WHERE home_id = ? ORDER BY number ASC',
             [homeId]
         );
 
@@ -354,6 +354,13 @@ async function evaluateHome(homeId) {
 
         for (const z of zoneRows) {
             try {
+                if (_db && typeof _db.isZoneAlive === 'function') {
+                    const alive = await _db.isZoneAlive(homeId, z.id).catch(() => true);
+                    if (!alive) {
+                        log('debug', `Zone ${z.id} (${z.name}) is offline (>20m), skipping from thermal load evaluation`);
+                        continue;
+                    }
+                }
                 const zState = await _db.getZoneState(homeId, z.id);
                 if (zState) {
                     const enabled = (zState['0x61e0'] ?? zState.field_61e0 ?? 1) === 1;
@@ -474,14 +481,11 @@ async function evaluateHome(homeId) {
                 const minDelayMs = 15 * 60 * 1000; // 15-minute cooldown between minor flow tweaks
 
                 let ruCachedMismatch = false;
-                if (circRows.length > 0 && circRows[0].last_config_json) {
-                    try {
-                        const lastCfg = JSON.parse(circRows[0].last_config_json);
-                        const cached2040 = lastCfg['0x2040'] !== undefined ? parseFloat(lastCfg['0x2040']) : null;
-                        if (cached2040 !== null && effectiveFlow > 0 && Math.abs(cached2040 - effectiveFlow) >= 2.0) {
-                            ruCachedMismatch = true;
-                        }
-                    } catch (_) {}
+                if (circRows.length > 0 && circRows[0].field_2040 !== null && circRows[0].field_2040 !== undefined) {
+                    const cached2040 = parseFloat(circRows[0].field_2040);
+                    if (effectiveFlow > 0 && Math.abs(cached2040 - effectiveFlow) >= 2.0) {
+                        ruCachedMismatch = true;
+                    }
                 }
 
                 const flowStepUp = effectiveFlow > 0 && currentFlow !== null && (effectiveFlow - currentFlow) >= 3.0;

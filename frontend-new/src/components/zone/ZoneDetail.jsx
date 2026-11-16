@@ -471,7 +471,12 @@ export default function ZoneDetail({ zoneId, isOpen, deviceErrors, onClose }) {
   const maxTemp = isDhw ? 65.0 : TEMP_MAX_DEFAULT;
   const displayTemp = isDhw && targetTemp < TEMP_MIN_DHW ? TEMP_MIN_DHW : targetTemp;
   const _fillHeight = Math.max(0, Math.min(100, ((displayTemp - minTemp) / (maxTemp - minTemp)) * 100));
-  const isHeatingOn = state?.activityDataPoints?.heatingPower?.percentage > 0;
+  const heatingPower = state?.activityDataPoints?.heatingPower?.percentage || 0;
+  const isHeatingOn = heatingPower > 0;
+  const isCircuitEnabled = state?.circuit?.enabled !== false;
+  const isBoilerPresent = Boolean(state?.boiler?.present);
+  const isBoilerActive = Boolean(state?.boiler?.flameActive || (state?.boiler?.modulation > 0));
+  const flameCount = heatingPower >= 67 ? 3 : heatingPower >= 34 ? 2 : 1;
 
   return createPortal(
     <div
@@ -652,9 +657,38 @@ export default function ZoneDetail({ zoneId, isOpen, deviceErrors, onClose }) {
                   currentTemp={state?.sensorDataPoints?.insideTemperature?.celsius}
                 />
                 {isHeatingOn && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#ff5d00', marginTop: '0.5rem', fontWeight: 600, fontSize: '0.9rem' }}>
-                    <Flame size={16} style={{ fill: 'currentColor', animation: 'pulse-soft 1.5s infinite' }} />
-                    <span>{t('zone_detail.heating_active') || 'Heating active'}</span>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    color: !isCircuitEnabled ? 'var(--text-muted)' : (isBoilerPresent && !isBoilerActive ? '#eab308' : '#ff5d00'),
+                    marginTop: '0.5rem',
+                    fontWeight: 600,
+                    fontSize: '0.85rem',
+                    textAlign: 'center'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      {Array.from({ length: flameCount }).map((_, idx) => (
+                        <Flame
+                          key={idx}
+                          size={16}
+                          style={{
+                            fill: !isCircuitEnabled ? 'none' : 'currentColor',
+                            animation: (isCircuitEnabled && (!isBoilerPresent || isBoilerActive)) ? 'pulse-soft 1.5s infinite' : 'none',
+                            marginLeft: idx > 0 ? '-4px' : '0'
+                          }}
+                        />
+                      ))}
+                    </div>
+                    <span>
+                      {!isCircuitEnabled
+                        ? `${t('zone_detail.heat_demand', 'Demand')} ${Math.round(heatingPower)}% • ${t('settings.circuit_standby', 'Circuit idle (Optimizer hold)')}`
+                        : (isBoilerPresent && isBoilerActive)
+                          ? `${t('zone_detail.heating_active', 'Heating active')} (${Math.round(heatingPower)}%) • ${t('settings.boiler_firing', 'Boiler firing')}${state?.boiler?.modulation ? ` (${state.boiler.modulation}%)` : ''}`
+                          : (isBoilerPresent && !isBoilerActive)
+                            ? `${t('zone_detail.heating_requested', 'Heating requested')} (${Math.round(heatingPower)}%) • ${t('settings.boiler_circulating', 'Boiler circulating')}`
+                            : `${t('zone_detail.heating_active', 'Heating active')} (${Math.round(heatingPower)}%)`}
+                    </span>
                   </div>
                 )}
               </div>

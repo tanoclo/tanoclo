@@ -1028,34 +1028,81 @@ export default function BoilerCircuitsSettings() {
           </div>
 
           {/* Running times contribution summary */}
-          {circuitRunningTimes && (
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-              gap: '1rem',
-              padding: '0.85rem',
-              backgroundColor: 'var(--bg-input)',
-              borderRadius: 'var(--radius-md)',
-              border: '1px solid var(--border-color)'
-            }}>
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                  {t('settings.circuit_active_duration', 'Circuit Active Duration')}
-                </span>
-                <strong style={{ fontSize: '1.05rem', color: 'var(--warning)' }}>
-                  {circuitRunningTimes.circuitActiveHours || 0} hrs
-                </strong>
+          {circuitRunningTimes && (() => {
+            const activeSec = circuitRunningTimes.summary?.totalRunningTimeInSeconds
+              ?? circuitRunningTimes.runningTimes?.[0]?.runningTimeInSeconds
+              ?? 0;
+            const activeHours = (activeSec / 3600).toFixed(1);
+            const zonesList = circuitRunningTimes.runningTimes?.[0]?.zones || [];
+            const mappedCount = zonesList.length;
+
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                  gap: '1rem',
+                  padding: '0.85rem',
+                  backgroundColor: 'var(--bg-input)',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--border-color)'
+                }}>
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                      {t('settings.circuit_active_duration', 'Circuit Active Duration')}
+                    </span>
+                    <strong style={{ fontSize: '1.05rem', color: 'var(--warning)' }}>
+                      {activeHours} hrs
+                    </strong>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                      {t('settings.mapped_zones_count', 'Mapped Zones')}
+                    </span>
+                    <strong style={{ fontSize: '1.05rem' }}>
+                      {mappedCount}
+                    </strong>
+                  </div>
+                </div>
+
+                {/* Per-zone heat request contribution breakdown */}
+                {zonesList.length > 0 && (
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.5rem',
+                    padding: '0.75rem 0.85rem',
+                    backgroundColor: 'var(--bg-input)',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--border-color)'
+                  }}>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                      {t('settings.zone_contributions', 'Zone Heat Demand Breakdown')}
+                    </span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+                      {zonesList.map(z => {
+                        const mins = Math.round((z.runningTimeInSeconds || 0) / 60);
+                        const durText = mins >= 60 ? `${(mins / 60).toFixed(1)}h` : `${mins}m`;
+                        const pct = z.contributionPercentage || 0;
+                        return (
+                          <div key={z.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', fontSize: '0.8rem' }}>
+                            <span style={{ fontWeight: 500, minWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{z.name}</span>
+                            <div style={{ flex: 1, backgroundColor: 'var(--border-color)', height: '6px', borderRadius: '3px', overflow: 'hidden' }}>
+                              <div style={{ width: `${Math.min(100, Math.max(0, pct))}%`, height: '100%', backgroundColor: 'var(--primary)', borderRadius: '3px' }} />
+                            </div>
+                            <span style={{ color: 'var(--text-secondary)', minWidth: '80px', textAlign: 'right' }}>
+                              {durText} ({pct}%)
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                  {t('settings.mapped_zones_count', 'Mapped Zones')}
-                </span>
-                <strong style={{ fontSize: '1.05rem' }}>
-                  {circuitRunningTimes.zoneBreakdown?.length || 0}
-                </strong>
-              </div>
-            </div>
-          )}
+            );
+          })()}
+
 
           {/* Chart Display */}
           {isCircuitTelemetryLoading ? (

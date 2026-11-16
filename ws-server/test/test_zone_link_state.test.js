@@ -77,7 +77,7 @@ describe('zone state endpoints', () => {
                 if (!query.startsWith('SELECT ')) throw new Error('Unexpected write in read-only fixture');
                 if (query.includes('FROM homes')) return [[{ date_time_zone: 'Europe/Berlin', presence }]];
                 if (query.includes('FROM zone_measurements')) return [[{ ...measurement, link_state: cached }]];
-                if (query.includes('FROM zone_overlays') || query.includes('FROM zone_timetables') || query.includes('FROM away_configurations')) return [[]];
+                if (query.includes('FROM zone_overlays') || query.includes('FROM zone_timetables') || query.includes('FROM away_configurations') || query.includes('FROM heating_circuits') || query.includes('FROM heating_systems')) return [[]];
                 if (query.includes('FROM zones')) return [[zone]];
                 if (query.includes('FROM devices')) {
                     if (query.includes('WHERE serial_no = ?')) {

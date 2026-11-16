@@ -48,8 +48,20 @@ router.get('/:homeId/zoneStates', async (req, res) => {
         const homePresence = homes[0].presence || 'HOME';
 
         // 2. Fetch all zones
-        const [zones] = await pool.execute('SELECT id, name, type, display_order, open_window_active, open_window_timeout, open_window_expiry, measuring_device_serial FROM zones WHERE home_id = ? ORDER BY display_order ASC', [homeId]);
+        const [zones] = await pool.execute('SELECT id, name, type, display_order, open_window_active, open_window_timeout, open_window_expiry, measuring_device_serial, heating_circuit FROM zones WHERE home_id = ? ORDER BY display_order ASC', [homeId]);
         if (zones.length === 0) return res.json({ zoneStates: {} });
+
+        // Fetch circuits and boiler state
+        const [circuits] = await pool.execute('SELECT number, field_4080, field_2090, field_2040 FROM heating_circuits WHERE home_id = ?', [homeId]);
+        const circuitMap = new Map(circuits.map(c => [c.number, c]));
+
+        const [boilerRows] = await pool.execute('SELECT boiler_present, field_0457, field_0452, field_044c FROM heating_systems WHERE home_id = ? LIMIT 1', [homeId]);
+        const boilerInfo = boilerRows.length > 0 ? {
+            present: Boolean(boilerRows[0].boiler_present),
+            flameActive: Boolean(boilerRows[0].field_0457),
+            modulation: boilerRows[0].field_0452 !== null ? parseInt(boilerRows[0].field_0452, 10) : 0,
+            flowTemp: boilerRows[0].field_044c !== null ? parseFloat(boilerRows[0].field_044c) : null
+        } : { present: false, flameActive: false, modulation: 0, flowTemp: null };
 
         // Fetch devices connection state to determine zone link state
         const [devices] = await pool.execute('SELECT serial_no, connection_state FROM devices WHERE home_id = ?', [homeId]);
@@ -141,6 +153,16 @@ router.get('/:homeId/zoneStates', async (req, res) => {
                 }
             }
 
+            const cNum = z.heating_circuit || 1;
+            const circ = circuitMap.get(cNum);
+            state.circuit = {
+                number: cNum,
+                enabled: circ ? (circ.field_2090 !== 0) : true,
+                demand: circ ? (circ.field_4080 || 0) : 0,
+                targetFlow: circ ? parseFloat(circ.field_2040 || 0) : 0
+            };
+            state.boiler = boilerInfo;
+
             zoneStates[z.id] = state;
         }
 
@@ -152,7 +174,16 @@ router.get('/:homeId/zoneStates', async (req, res) => {
             }
         });
 
-        res.json({ zoneStates: sortedStates });
+        res.json({
+            zoneStates: sortedStates,
+            circuits: circuits.map(c => ({
+                number: c.number,
+                enabled: c.field_2090 !== 0,
+                demand: c.field_4080 || 0,
+                targetFlow: parseFloat(c.field_2040 || 0)
+            })),
+            boiler: boilerInfo
+        });
     } catch (err) {
         _log('error', `Zone States Error: ${err.message}`);
         res.status(500).json({ error: 'internal_error' });

@@ -23030,7 +23030,6 @@ CREATE TABLE `devices` (
   `field_01a3` int(10) UNSIGNED DEFAULT NULL,
   `field_015e` varchar(100) DEFAULT NULL,
   `field_0158` int(11) DEFAULT NULL,
-  `last_config_json` longtext DEFAULT NULL CHECK (json_valid(`last_config_json`)),
   `field_0265` int(11) DEFAULT NULL,
   `field_0266` int(11) DEFAULT NULL,
   `field_0273` int(11) DEFAULT NULL,
@@ -23173,7 +23172,6 @@ CREATE TABLE `heating_circuits` (
   `field_4000` decimal(5,2) DEFAULT NULL,
   `field_4080` int(11) DEFAULT NULL,
   `field_2090` int(11) DEFAULT NULL,
-  `last_config_json` longtext DEFAULT NULL,
   `config_etag` varbinary(16) DEFAULT NULL,
   `config_etag_real` varbinary(16) DEFAULT NULL,
   `field_2040` decimal(5,2) DEFAULT NULL
@@ -23212,7 +23210,6 @@ CREATE TABLE `heating_systems` (
   `field_0462` decimal(5,2) DEFAULT NULL,
   `field_0481` varchar(60) DEFAULT NULL,
   `hvac_updated_at` varchar(64) DEFAULT NULL,
-  `last_config_json` text DEFAULT NULL,
   `boiler_capacity_kw` decimal(5,2) DEFAULT NULL,
   `hvac_etag` varbinary(16) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -24875,7 +24872,6 @@ CREATE TABLE `zones` (
   `open_window_active` tinyint(4) DEFAULT 0,
   `open_window_expiry` datetime DEFAULT NULL,
   `config_etag` varbinary(16) DEFAULT NULL,
-  `last_config_json` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`last_config_json`)),
   `last_schedule_transition_at` varchar(64) DEFAULT NULL,
   `state_etag` varbinary(16) DEFAULT NULL,
   `config_etag_real` varbinary(16) DEFAULT NULL,

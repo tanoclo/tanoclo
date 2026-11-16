@@ -109,7 +109,6 @@ router.get('/:homeId/tanoclo/boiler/raw', async (req, res) => {
         }
 
         const row = rows[0];
-        delete row.last_config_json;
 
         // Fall back to latest non-null metrics from circuit_measurements if missing in heating_systems
         const hvacCols = [
@@ -211,7 +210,6 @@ router.get('/:homeId/tanoclo/devices/:id/raw', async (req, res) => {
         }
 
         const device = deviceRows[0];
-        delete device.last_config_json;
         try {
             const tlvBuf = await dbUtils.buildDeviceConfigTLV(device.serial_no, device);
             device.last_config_decoded = (tlvBuf && tlvBuf.length > 0) ? tlv.decode(tlvBuf).fields : null;
@@ -247,7 +245,6 @@ router.get('/:homeId/tanoclo/zones/:id/raw', async (req, res) => {
         }
 
         const zone = zoneRows[0];
-        delete zone.last_config_json;
         try {
             zone.last_config_decoded = await dbUtils.buildZoneConfigFields(homeId, zoneId);
         } catch (e) {
@@ -277,7 +274,6 @@ router.get('/:homeId/tanoclo/circuits', async (req, res) => {
         );
         const circuitCols = ['field_4040', 'field_4000', 'field_4080', 'field_2090', 'field_2040'];
         for (const row of rows) {
-            delete row.last_config_json;
             const hasMissing = circuitCols.some(col => row[col] === null || row[col] === undefined);
             if (hasMissing) {
                 const [cMeas] = await pool.execute(
@@ -317,7 +313,6 @@ router.get('/:homeId/tanoclo/circuits/:id/raw', async (req, res) => {
         }
 
         const circuit = circuitRows[0];
-        delete circuit.last_config_json;
         try {
             const tlvBuf = await dbUtils.buildCircuitConfigTLV(homeId, circuitNumber);
             circuit.last_config_decoded = (tlvBuf && tlvBuf.length > 0) ? tlv.decode(tlvBuf).fields : null;
@@ -353,7 +348,6 @@ router.get('/:homeId/tanoclo/bridge', async (req, res) => {
         }
 
         const row = rows[0];
-        delete row.last_config_json;
         try {
             const tlvBuf = await dbUtils.buildDeviceConfigTLV(row.serial_no, row);
             row.last_config_decoded = (tlvBuf && tlvBuf.length > 0) ? tlv.decode(tlvBuf).fields : null;
@@ -1107,7 +1101,7 @@ router.get('/:homeId/tanoclo/circuits/:circuitId/dayReport', async (req, res) =>
             cRows.forEach(r => {
                 const ts = parseUtcDate(r.timestamp).toISOString();
                 if (ts > actualEndUtc) return;
-                const active = Boolean(r.field_0457);
+                const active = Boolean(r.field_0457) || (r.field_0452 !== null && r.field_0452 !== undefined && parseFloat(r.field_0452) > 0);
                 if (!lastFlame) {
                     lastFlame = { from: startUtc, to: null, value: active };
                 } else if (lastFlame.value !== active) {

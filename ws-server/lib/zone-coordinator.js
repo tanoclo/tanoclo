@@ -382,7 +382,7 @@ async function relayBoilerCircuitDemand(homeId) {
     );
     if (circuits.length === 0) return;
 
-    // Find maximum current demand across all zones in the home
+    // Find maximum current demand across heating zones in the home (excluding DHW)
     const [demandRows] = await pool.execute(`
         SELECT zm.zone_id, zm.field_40a0 AS demand
         FROM zone_measurements zm
@@ -392,11 +392,17 @@ async function relayBoilerCircuitDemand(homeId) {
             WHERE home_id = ? 
             GROUP BY zone_id
         ) latest ON zm.id = latest.max_id
-    `, [homeId]);
+        INNER JOIN zones z ON zm.zone_id = z.id AND z.home_id = ?
+        WHERE z.type NOT IN ('HOT_WATER', 'DHW')
+    `, [homeId, homeId]);
 
     let maxDemand = 0;
     for (const r of demandRows) {
         if (r.demand != null && !isNaN(r.demand)) {
+            if (_db && typeof _db.isZoneAlive === 'function') {
+                const alive = await _db.isZoneAlive(homeId, r.zone_id).catch(() => true);
+                if (!alive) continue;
+            }
             maxDemand = Math.max(maxDemand, Number(r.demand));
         }
     }
