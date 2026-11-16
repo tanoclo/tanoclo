@@ -310,7 +310,7 @@ async function evaluateHome(homeId) {
 
         // 5. Dynamic circuit determination & demand %
         const [circRows] = await pool.execute(
-            'SELECT number, field_4080, field_2040, field_2090, driver_serial_no FROM heating_circuits WHERE home_id = ? ORDER BY number ASC',
+            'SELECT number, field_4080, field_2040, field_2090, driver_serial_no, last_config_json FROM heating_circuits WHERE home_id = ? ORDER BY number ASC',
             [homeId]
         );
 
@@ -471,13 +471,29 @@ async function evaluateHome(homeId) {
             if (driverSerial) {
                 const now = Date.now();
                 const lastPush = _lastDriverPushTimes.get(homeId) || 0;
-                const minDelayMs = 15 * 60 * 1000; // 15-minute cooldown between flow tweaks
+                const minDelayMs = 15 * 60 * 1000; // 15-minute cooldown between minor flow tweaks
 
-                // Push immediately on operating mode change, or when cooldown has expired for flow changes
-                if (modeChanged || (now - lastPush >= minDelayMs)) {
+                let ruCachedMismatch = false;
+                if (circRows.length > 0 && circRows[0].last_config_json) {
+                    try {
+                        const lastCfg = JSON.parse(circRows[0].last_config_json);
+                        const cached2040 = lastCfg['0x2040'] !== undefined ? parseFloat(lastCfg['0x2040']) : null;
+                        if (cached2040 !== null && effectiveFlow > 0 && Math.abs(cached2040 - effectiveFlow) >= 2.0) {
+                            ruCachedMismatch = true;
+                        }
+                    } catch (_) {}
+                }
+
+                const flowStepUp = effectiveFlow > 0 && currentFlow !== null && (effectiveFlow - currentFlow) >= 3.0;
+                const isFirstActivePush = lastPush === 0 && effectiveFlow > 0;
+                const needsPush = modeChanged || flowStepUp || ruCachedMismatch || isFirstActivePush || (now - lastPush >= minDelayMs);
+
+                // Push immediately on operating mode change, flow step-up, RU mismatch, or when cooldown expired
+                if (needsPush) {
                     try {
                         const cmdApi = _commandApi || require('./command-api');
-                        log('info', `[flow-optimizer] Triggering live config resync for circuit driver ${driverSerial} (flow=${effectiveFlow}°C, mode=${targetMode})`);
+                        const reason = modeChanged ? 'mode_change' : (flowStepUp ? 'flow_step_up' : (ruCachedMismatch ? 'ru_mismatch' : (isFirstActivePush ? 'first_active_push' : 'cooldown_expired')));
+                        log('info', `[flow-optimizer] Triggering live config resync for circuit driver ${driverSerial} (flow=${effectiveFlow}°C, mode=${targetMode}, reason=${reason})`);
                         await cmdApi.pushConfigRefresh(driverSerial);
                         _lastDriverPushTimes.set(homeId, now);
                     } catch (pushErr) {

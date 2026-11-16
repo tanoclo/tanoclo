@@ -550,7 +550,15 @@ async function handleCircuitConfig(req, res, homeId, circuitId) {
             [body.max_temp, Buffer.from(etag, 'hex'), homeId, circuitId]
         );
 
-        _log('info', `[cmd-api] Circuit config updated for H:${homeId} C:${circuitId}, new ETag=${etag}. Devices will pick up on next poll.`);
+        const [cRows] = await _db.getPool().execute(
+            'SELECT driver_serial_no FROM heating_circuits WHERE home_id=? AND number=? LIMIT 1',
+            [homeId, circuitId]
+        );
+        if (cRows.length > 0 && cRows[0].driver_serial_no && module.exports.pushConfigRefresh) {
+            module.exports.pushConfigRefresh(cRows[0].driver_serial_no).catch(e => _log('warn', `[cmd-api] Live push for ${cRows[0].driver_serial_no} failed: ${e.message}`));
+        }
+
+        _log('info', `[cmd-api] Circuit config updated for H:${homeId} C:${circuitId}, new ETag=${etag}. Live push dispatched to driver.`);
         jsonResponse(res, 200, { ok: true, etag });
     } catch (err) {
         _log('error', `[cmd-api] handleCircuitConfig failed for circuit ${circuitId}: ${err.message}`);

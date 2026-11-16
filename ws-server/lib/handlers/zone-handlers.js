@@ -168,7 +168,14 @@ async function handleCircuitActuator(ws, frame, coapMsg, decoded, peerInfo, path
     log('debug', `CIRCUIT ${circuitId}: target=${targetTemp}°C ref=${refTemp}°C demand=${demandPct}%`);
 
     if (homeId != null && circuitId != null) {
-        await db.upsertHeatingCircuit(homeId, parseInt(circuitId, 10), f);
+        // Only update physical measurements (refTemp 0x4040, targetTemp 0x4000) from actuator report.
+        // Do NOT let actuator report overwrite server-controlled zone demand (field_4080)
+        // or optimizer operating mode (field_2090), which causes severe flapping/short-cycling.
+        const actuatorFields = {};
+        if (refTemp !== null && refTemp !== undefined) actuatorFields['0x4040'] = refTemp;
+        if (targetTemp !== null && targetTemp !== undefined) actuatorFields['0x4000'] = targetTemp;
+
+        await db.upsertHeatingCircuit(homeId, parseInt(circuitId, 10), actuatorFields);
         if (mqttPublisher) {
             mqttPublisher.publishCircuitTelemetry(homeId, parseInt(circuitId, 10), f).catch(e => log('debug', `[MQTT] Circuit telemetry failed: ${e.message}`));
         }
@@ -186,6 +193,17 @@ async function handleCircuitConfig(ws, frame, coapMsg, decoded, peerInfo, pathIn
             const etags = await db.getCircuitEtags(homeId, circuitId);
             const configEtag = etags ? (etags.config_real || etags.config) : null;
             await coapHelpers.sendCoAPWithBlock2(ws, coapMsg, payload || Buffer.alloc(0), configEtag, null, peerInfo, wsBridge.DIR_SERVER_TO_CLIENT);
+            if (payload && payload.length > 0) {
+                try {
+                    const dec = tlv.decode(payload);
+                    if (dec && dec.fields) {
+                        await db.getPool().execute(
+                            'UPDATE heating_circuits SET last_config_json = ? WHERE home_id = ? AND number = ?',
+                            [JSON.stringify(dec.fields), homeId, circuitId]
+                        );
+                    }
+                } catch (_) {}
+            }
         } catch (e) {
             log('error', `CIRCUIT_CFG GET h/${homeId}/c/${circuitId}: ${e.message}`, e.stack);
             coapHelpers.sendCoAPAck(ws, coapMsg, peerInfo, frame.directionU16);
