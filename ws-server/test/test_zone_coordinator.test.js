@@ -27,6 +27,12 @@ describe('Zone Coordinator Engine', () => {
         it('returns 0 when ambient temperature exceeds target setpoint', () => {
             expect(zoneCoordinator.calculateZoneDemand(22.5, 21.0, true)).toBe(0);
             expect(zoneCoordinator.calculateZoneDemand(21.0, 21.0, true)).toBe(0);
+
+            // Stateful accumulator clear
+            const state = { pidAccumulator: 5000, pidPrevTempRaw: 2000 };
+            const demandOver = zoneCoordinator.calculateZoneDemand(21.5, 21.0, true, { kp: 10, ki: 5, kd: 15 }, state);
+            expect(demandOver).toBe(0);
+            expect(state.pidAccumulator).toBe(0);
         });
 
         it('returns proportional demand within proportional band (1.5°C)', () => {

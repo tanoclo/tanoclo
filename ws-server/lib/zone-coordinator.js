@@ -116,6 +116,19 @@ function calculateZoneDemand(currentTemp, targetTemp, isPowerOn = true, pidGains
     const curTemp = Number(currentTemp);
     const tgtTemp = Number(targetTemp);
 
+    // If current temperature has reached or exceeded target setpoint, valve must be closed (0% demand).
+    // Reset accumulator to prevent lingering integral windup from reopening valve while room is warm.
+    if (curTemp >= tgtTemp) {
+        if (pidState) {
+            pidState.pidAccumulator = 0;
+            pidState.pidPrevTempRaw = Math.round(curTemp * 100);
+            pidState.pidIState = 0;
+            pidState.pidDState = 0;
+            pidState.pidPTerm = 0;
+        }
+        return 0;
+    }
+
     // Support legacy numeric pBand call signature for backward compatibility
     if (typeof pidGains === 'number') {
         const pBand = pidGains > 0 ? pidGains : 1.5;

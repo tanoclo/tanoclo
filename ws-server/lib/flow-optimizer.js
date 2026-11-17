@@ -58,30 +58,31 @@ function scheduleEvaluation(homeId, delayMs = 3000) {
  * @returns {{ allowHeating: boolean, circuitOperatingMode: number, reason: string }}
  */
 function evaluateCircuitThermalLoad({ callingRadiators = 0, callingUfh = 0, circuitDemandPct = 0, maxZoneError = 0, inLockout = false }) {
-    // 1. Underfloor heating has massive screed thermal mass - always safe to absorb boiler output
+    // 1. Anti-flapping lockout: if boiler recently fired, block reignition on marginal/moderate demand
+    // Exception: high deficit cold recovery (>=1.5°C) can override lockout
+    if (inLockout && maxZoneError < 1.5) {
+        return { allowHeating: false, circuitOperatingMode: 0, reason: 'anti_flapping_lockout' };
+    }
+
+    // 2. Underfloor heating has massive screed thermal mass - always safe to absorb boiler output
     if (callingUfh > 0 && (circuitDemandPct >= 10 || maxZoneError >= 0.2)) {
         return { allowHeating: true, circuitOperatingMode: 1, reason: 'underfloor_thermal_mass' };
     }
 
-    // 2. Multi-room coincidence: >= 2 radiator zones calling with active demand
+    // 3. Multi-room coincidence: >= 2 radiator zones calling with active demand
     // Combined radiator surface and water loop volume can dissipate minimum burner power
     if (callingRadiators >= 2 && circuitDemandPct >= 15) {
         return { allowHeating: true, circuitOperatingMode: 1, reason: 'multi_zone_coincidence' };
     }
 
-    // 3. Significant single-zone load: valve opened wide (>=35%) and meaningful deficit (>=0.4°C)
+    // 4. Significant single-zone load: valve opened wide (>=35%) and meaningful deficit (>=0.4°C)
     if (callingRadiators === 1 && circuitDemandPct >= 35 && maxZoneError >= 0.4) {
         return { allowHeating: true, circuitOperatingMode: 1, reason: 'single_zone_significant_load' };
     }
 
-    // 4. High aggregate demand across the circuit (e.g. general recovery)
+    // 5. High aggregate demand across the circuit (e.g. general recovery)
     if (circuitDemandPct >= 40 || maxZoneError >= 0.8) {
         return { allowHeating: true, circuitOperatingMode: 1, reason: 'high_aggregate_demand' };
-    }
-
-    // 5. Anti-flapping lockout: if recently burned or in STANDBY, suppress marginal ignition attempts
-    if (inLockout) {
-        return { allowHeating: false, circuitOperatingMode: 0, reason: 'anti_flapping_lockout' };
     }
 
     // 6. Insufficient thermal load: single radiator low-demand drift (<35% demand or <0.4°C error)
@@ -189,14 +190,20 @@ function computeOptimalFlowTemperature({
     const clampedTarget = Math.max(minFlow, Math.min(maxFlowLimit, rawTarget));
 
     // 8. Hysteresis & Rate Limiting (Prevent oscillation, max ±3°C per evaluation cycle)
+    // Only apply rate limiting when actively heating in steady state.
+    // Transitioning from STANDBY jumps directly to operating target so radiators receive proper heat immediately.
+    const fromStandby = (currentMaxFlow <= minFlow);
     const delta = clampedTarget - currentMaxFlow;
-    let nextFlow = currentMaxFlow;
+    let nextFlow = clampedTarget;
     let changed = false;
 
-    if (Math.abs(delta) >= 1.0) {
+    if (!fromStandby && Math.abs(delta) >= 1.0) {
         const step = Math.max(-3.0, Math.min(3.0, delta));
         nextFlow = Math.round(currentMaxFlow + step);
         nextFlow = Math.max(minFlow, Math.min(maxFlowLimit, nextFlow));
+        changed = nextFlow !== currentMaxFlow;
+    } else if (fromStandby) {
+        nextFlow = clampedTarget;
         changed = nextFlow !== currentMaxFlow;
     }
 
@@ -222,11 +229,11 @@ function computeOptimalFlowTemperature({
     const circuitOperatingMode = thermal.circuitOperatingMode;
 
     // Emitter-specific flow temperature floor when heating is active:
-    // Radiators need >= 38°C to radiate heat and prevent instantaneous anti-cycling trip on minimum modulation.
+    // Radiators require >= 48°C (typical 50-60°C) to radiate heat and prevent instantaneous anti-cycling trip on minimum modulation.
     // Underfloor heating operates safely at lower minFlow floor.
     let effectiveFlow = 0;
     if (circuitOperatingMode === 1) {
-        const flowFloor = (ufhCount === 0 && radCount > 0) ? Math.max(minFlow, 38) : minFlow;
+        const flowFloor = (ufhCount === 0 && radCount > 0) ? Math.max(minFlow, 48) : minFlow;
         effectiveFlow = Math.max(nextFlow, flowFloor);
         effectiveFlow = Math.min(effectiveFlow, maxFlowLimit);
     }
@@ -459,14 +466,6 @@ async function evaluateHome(homeId) {
         // 8. If flow changed or circuit operating mode changed, apply and downlink to circuit
         if (opt.changed || modeChanged || flowChanged) {
             log('info', `[flow-optimizer] Home ${homeId}: flow=${currentMaxFlow}°C->${newFlow}°C (effective=${effectiveFlow}°C) mode=${currentMode}->${targetMode} (reason=${opt.reason}, outdoor=${outsideTemp.toFixed(1)}°C, maxZoneError=${maxZoneError.toFixed(1)}°C, demand=${circuitDemandPct}%)`);
-
-            if (opt.changed || flowChanged) {
-                const targetFlowToSave = (targetMode === 1 && effectiveFlow > 0) ? effectiveFlow : newFlow;
-                await pool.execute(
-                    'UPDATE flow_temperature_settings SET max_flow_temperature = ? WHERE home_id = ?',
-                    [targetFlowToSave, homeId]
-                );
-            }
 
             // Update circuit configs dynamically in DB and invalidate ETag so RU / bridge picks it up
             for (const cNum of targetCircuitNumbers) {

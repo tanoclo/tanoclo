@@ -14,6 +14,15 @@
 
 const db = require('../lib/db');
 
+async function columnExists(pool, table, column) {
+    const [rows] = await pool.execute(
+        `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS 
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?`,
+        [table, column]
+    );
+    return rows.length > 0;
+}
+
 async function up(pool) {
     console.log('[Migration 0017] Resetting zone PID tuning parameters to defaults...');
 
@@ -40,24 +49,28 @@ async function up(pool) {
     }
 
     // 3. Synchronize cached last_config_json if present
-    const [zones] = await pool.execute(`SELECT id, home_id, last_config_json FROM zones WHERE last_config_json IS NOT NULL`);
-    for (const z of zones) {
-        try {
-            let config = typeof z.last_config_json === 'string' ? JSON.parse(z.last_config_json) : z.last_config_json;
-            if (config && typeof config === 'object') {
-                config['0x60a0'] = 500;
-                config['0x60c0'] = 1500;
-                config['0x6080'] = 1000;
-                await pool.execute(
-                    `UPDATE zones SET last_config_json = ? WHERE id = ? AND home_id = ?`,
-                    [JSON.stringify(config), z.id, z.home_id]
-                );
+    if (await columnExists(pool, 'zones', 'last_config_json')) {
+        const [zones] = await pool.execute(`SELECT id, home_id, last_config_json FROM zones WHERE last_config_json IS NOT NULL`);
+        for (const z of zones) {
+            try {
+                let config = typeof z.last_config_json === 'string' ? JSON.parse(z.last_config_json) : z.last_config_json;
+                if (config && typeof config === 'object') {
+                    config['0x60a0'] = 500;
+                    config['0x60c0'] = 1500;
+                    config['0x6080'] = 1000;
+                    await pool.execute(
+                        `UPDATE zones SET last_config_json = ? WHERE id = ? AND home_id = ?`,
+                        [JSON.stringify(config), z.id, z.home_id]
+                    );
+                }
+            } catch (e) {
+                // Ignore parse errors on individual stale config rows
             }
-        } catch (e) {
-            // Ignore parse errors on individual stale config rows
         }
+        console.log(`[Migration 0017] Synchronized last_config_json for ${zones.length} zone(s).`);
+    } else {
+        console.log('[Migration 0017] zones.last_config_json does not exist, skipping.');
     }
-    console.log(`[Migration 0017] Synchronized last_config_json for ${zones.length} zone(s).`);
 }
 
 async function down(pool) {

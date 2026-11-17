@@ -663,7 +663,7 @@ async function upsertHeatingCircuit(homeId, number, fields = {}) {
         await p.execute(
             `INSERT INTO heating_circuits (home_id, number, field_4040, field_4000, field_4080, field_2090)
              VALUES (?, ?, ?, ?, ?, ?)`,
-            [homeId, number, fields['0x4040'] ?? null, fields['0x4000'] ?? null, fields['0x4080'] ?? null, fields['0x2090'] ?? null]
+            [homeId, number, fields['0x4040'] ?? null, fields['0x4000'] ?? null, fields['0x4080'] ?? null, fields['0x2090'] ?? 1]
         );
     } else {
         const updates = [];
