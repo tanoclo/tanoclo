@@ -1,0 +1,13 @@
+{
+  "apkUrl": "https://raw.githubusercontent.com/tanoclo/tanoclo/ota/tanoclo.apk",
+  "releaseNotes": "Web asset update",
+  "webVersionCode": 31,
+  "webVersionName": "0.10.0",
+  "zipUrl": "https://raw.githubusercontent.com/tanoclo/tanoclo/ota/dist.zip",
+  "apkVersionCode": 19,
+  "apkVersionName": "0.9.1",
+  "webSha256": "1310eb8a62d892aacee31f8a7207404a242e16c17f6496b6512722286ecbc916",
+  "webSize": 675773,
+  "apkSha256": "8a1f79881b2c8f249f156862f6e0ae9a48d5cedf417f3291be84710027549077",
+  "apkSize": 7220345
+}
