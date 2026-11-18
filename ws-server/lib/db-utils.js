@@ -539,6 +539,20 @@ async function buildHvacConfigTLV(homeId) {
         }
     }
 
+    // When Zone 0 (DHW) schedule is OFF, suppress 0x045b to 0.0 to shut down OpenTherm DHW keep-warm
+    try {
+        const [z0Rows] = await p.execute('SELECT id FROM zones WHERE home_id = ? AND id = 0 LIMIT 1', [homeId]);
+        if (z0Rows.length > 0) {
+            const dbZones = require('./db-zones');
+            const sched = await dbZones.getZoneScheduleState(homeId, 0, 1);
+            if (sched && sched.enabled === 0) {
+                fields['0x045b'] = 0.0;
+            } else if (sched && sched.targetTemp != null) {
+                fields['0x045b'] = sched.targetTemp;
+            }
+        }
+    } catch (_) {}
+
     return tlv.encodeFromFields(cleanFriendlyConfig(fields));
 }
 

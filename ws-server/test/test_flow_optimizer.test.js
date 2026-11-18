@@ -322,5 +322,64 @@ describe('Flow Temperature Optimizer Engine', () => {
         assert.strictEqual(result.circuitOperatingMode, 1);
         assert.ok(result.effectiveFlow <= 35, `Expected effectiveFlow <= 35, got ${result.effectiveFlow}`);
     });
+
+    test('Delta-T Anti-Microburn Guard: suppresses heating when flow water is already warm (<5°C below target)', () => {
+        const result = computeOptimalFlowTemperature({
+            outsideTemp: 5,
+            minFlow: 30,
+            maxFlowLimit: 75,
+            currentMaxFlow: 50,
+            maxZoneError: 0.4,
+            circuitDemandPct: 40,
+            callingRadiators: 2,
+            callingUfh: 0,
+            actualFlowTemp: 50.0,
+            isFlameOn: false
+        });
+
+        // Target flow is 53°C. Actual flow is 50.0°C (deltaT = 3.0°C < 5°C).
+        // Must suppress burner ignition to prevent immediate 15-second high-limit trip.
+        assert.strictEqual(result.circuitOperatingMode, 0);
+        assert.strictEqual(result.effectiveFlow, 0);
+        assert.strictEqual(result.reason, 'flow_already_hot');
+    });
+
+    test('Delta-T Anti-Microburn Guard: allows heating when flow water has cooled down (>=5°C below target)', () => {
+        const result = computeOptimalFlowTemperature({
+            outsideTemp: 5,
+            minFlow: 30,
+            maxFlowLimit: 75,
+            currentMaxFlow: 50,
+            maxZoneError: 0.4,
+            circuitDemandPct: 40,
+            callingRadiators: 2,
+            callingUfh: 0,
+            actualFlowTemp: 42.0,
+            isFlameOn: false
+        });
+
+        // Actual flow is 42.0°C (deltaT = 48 - 42 = 6°C >= 5°C). Safe to ignite.
+        assert.strictEqual(result.circuitOperatingMode, 1);
+        assert.ok(result.effectiveFlow >= 48);
+    });
+
+    test('Delta-T Anti-Microburn Guard: overridden by major cold recovery deficit (maxZoneError >= 1.0°C)', () => {
+        const result = computeOptimalFlowTemperature({
+            outsideTemp: 5,
+            minFlow: 30,
+            maxFlowLimit: 75,
+            currentMaxFlow: 50,
+            maxZoneError: 1.5,
+            circuitDemandPct: 80,
+            callingRadiators: 2,
+            callingUfh: 0,
+            actualFlowTemp: 47.5,
+            isFlameOn: false
+        });
+
+        // High room deficit overrides delta-T suppression and boosts target flow
+        assert.strictEqual(result.circuitOperatingMode, 1);
+        assert.ok(result.effectiveFlow >= 48);
+    });
 });
 

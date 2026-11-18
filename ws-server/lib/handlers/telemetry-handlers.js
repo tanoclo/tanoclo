@@ -208,6 +208,17 @@ async function handleHvac(ws, frame, coapMsg, decoded, peerInfo, pathInfo) {
 
     if (homeId) {
         const sanitizedFields = db.sanitizeHvacFields(decoded.fields);
+
+        // When Zone 0 (DHW) schedule is OFF, suppress 0x045b to 0.0 so RU telemetry does not re-enable keep-warm setpoint
+        if (sanitizedFields['0x045b'] !== undefined) {
+            try {
+                const sched = await db.getZoneScheduleState(homeId, 0, 1);
+                if (sched && sched.enabled === 0) {
+                    sanitizedFields['0x045b'] = 0.0;
+                }
+            } catch (_) {}
+        }
+
         await db.upsertHeatingSystem(homeId, sanitizedFields);
         if (mqttPublisher) {
             mqttPublisher.publishHvacTelemetry(homeId, sanitizedFields).catch(e => log('debug', `[MQTT] HVAC telemetry failed: ${e.message}`));

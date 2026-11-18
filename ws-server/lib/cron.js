@@ -372,8 +372,11 @@ async function maintenanceZone(homeId, zoneId, zoneData, initialOverlay) {
             // Detection: Has a new block started since our last persistent transition record?
             // This also handles catch-up on server restart.
             if (!lastTransition || lastTransition < blockStartLocal) {
-                const targetTemp = currentBlock.setting?.temperature?.celsius ?? 15.0;
-                log('info', `Schedule transition detected for Home ${homeId}, Zone ${zoneId}: ${targetTemp} °C (New block started at ${currentBlock.startTime})`);
+                const isDhw = (String(zoneId) === '0' || zoneData.type === 'HOT_WATER' || currentBlock.setting?.type === 'HOT_WATER');
+                const isPowerOff = (currentBlock.setting?.power === 'OFF');
+                const zoneEnabled = isPowerOff ? 0 : 1;
+                const targetTemp = (isDhw && isPowerOff) ? 0.0 : (currentBlock.setting?.temperature?.celsius ?? (isDhw ? 60.0 : 15.0));
+                log('info', `Schedule transition detected for Home ${homeId}, Zone ${zoneId}: ${targetTemp} °C (New block started at ${currentBlock.startTime}, power=${currentBlock.setting?.power || 'ON'})`);
 
                 const [currRows] = await pool.execute(
                     'SELECT field_012d, field_0135, field_40a0 FROM zone_measurements WHERE zone_id = ? AND home_id = ? ORDER BY id DESC LIMIT 1',
@@ -381,7 +384,7 @@ async function maintenanceZone(homeId, zoneId, zoneData, initialOverlay) {
                 );
                 const currMeas = currRows.length > 0 ? currRows[0] : {};
 
-                // Insert new measurement entry (cloning latest but with new field_6200)
+                // Insert new measurement entry (cloning latest but with new field_6200 and field_61e0)
                 await db.insertMergedZoneMeasurement(homeId, zoneId, {
                     field_012d: currMeas.field_012d ?? null,
                     field_0135: currMeas.field_0135 ?? null,
@@ -389,7 +392,7 @@ async function maintenanceZone(homeId, zoneId, zoneData, initialOverlay) {
                     link_state: currMeas.link_state ?? 'ONLINE',
                     tado_mode: currMeas.tado_mode ?? 'SCHEDULE',
                     field_6160: currMeas.field_6160 ?? 1,
-                    field_61e0: currMeas.field_61e0 ?? 1,
+                    field_61e0: zoneEnabled,
                     field_6240: currMeas.field_6240 ?? null,
                     field_6280: currMeas.field_6280 ?? null,
                     field_6200: targetTemp,
@@ -400,6 +403,10 @@ async function maintenanceZone(homeId, zoneId, zoneData, initialOverlay) {
                     field_6440: currMeas.field_6440 ?? 0,
                     open_window_detected: currMeas.open_window_detected ?? 0
                 });
+
+                if (isDhw) {
+                    await pool.execute('UPDATE heating_systems SET field_045b = ? WHERE home_id = ?', [targetTemp, homeId]);
+                }
 
                 // Update persistent transition tracker
                 await pool.execute('UPDATE zones SET last_schedule_transition_at = ? WHERE id = ? AND home_id = ?', [new Date().toISOString(), zoneId, homeId]);

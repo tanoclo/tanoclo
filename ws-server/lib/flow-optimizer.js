@@ -116,7 +116,9 @@ function computeOptimalFlowTemperature({
     activeDemandType = 'ANY',
     callingRadiators = 0,
     callingUfh = 0,
-    inLockout = false
+    inLockout = false,
+    actualFlowTemp = null,
+    isFlameOn = false
 }) {
     // 1. Guardrail sanity checks
     const isOnlyUfh = activeDemandType === 'ONLY_UNDERFLOOR';
@@ -236,6 +238,28 @@ function computeOptimalFlowTemperature({
         const flowFloor = (ufhCount === 0 && radCount > 0) ? Math.max(minFlow, 48) : minFlow;
         effectiveFlow = Math.max(nextFlow, flowFloor);
         effectiveFlow = Math.min(effectiveFlow, maxFlowLimit);
+
+        // Delta-T Anti-Microburn Guard:
+        // When loop water is already warm and burner is off, firing the boiler with small delta-T (< 5°C)
+        // trips the boiler's upper temperature limit within seconds, causing a 15-30s micro-burn.
+        // Circulate existing heat until water cools down >= 5°C below target, unless room deficit is high (>= 1.0°C).
+        if (!isFlameOn && actualFlowTemp !== null && actualFlowTemp > 0) {
+            const flowDeltaT = effectiveFlow - actualFlowTemp;
+            if (flowDeltaT < 5.0 && maxZoneError < 1.0) {
+                return {
+                    targetFlow: nextFlow,
+                    effectiveFlow: 0,
+                    baseFlow: Math.round(baseFlow * 10) / 10,
+                    demandBoost,
+                    forecastAdj,
+                    modAdj,
+                    reason: 'flow_already_hot',
+                    thermalReason: 'flow_already_hot',
+                    changed,
+                    circuitOperatingMode: 0
+                };
+            }
+        }
     }
 
     return {
@@ -440,7 +464,9 @@ async function evaluateHome(homeId) {
             activeDemandType,
             callingRadiators,
             callingUfh,
-            inLockout
+            inLockout,
+            actualFlowTemp,
+            isFlameOn
         });
 
         const newFlow = opt.targetFlow;
