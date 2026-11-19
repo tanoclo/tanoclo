@@ -140,11 +140,13 @@ async function sendToDevice(deviceId, wsMessage) {
 
     let isReboot = false;
     let isConfig = false;
+    let isResponse = false;
     try {
         const frame = wsBridge.parse(Buffer.from(wsMessage));
         if (frame.ok && frame.coapBytes) {
             const coapMsg = coap.parse(frame.coapBytes);
             if (coapMsg.ok) {
+                isResponse = !coap.isRequest(coapMsg.code);
                 const uriPathStr = coap.uriPath(coapMsg);
                 if (coapMsg.mid !== undefined && uriPathStr) {
                     proxyMidCache.set(coapMsg.mid, { path: uriPathStr, ts: Date.now() });
@@ -165,6 +167,8 @@ async function sendToDevice(deviceId, wsMessage) {
     }
 
     if (proxyConnections.has(clientInfo.ws)) {
+        // Cache local replies for comparison, but leave the wire reply to the cloud.
+        if (isResponse) return;
 
         if (isReboot) {
             log('info', `[sendToDevice] Allowing system reboot command for ${deviceId} despite active proxy.`);
