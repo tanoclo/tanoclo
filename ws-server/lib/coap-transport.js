@@ -286,7 +286,7 @@ function scheduleRetry(mid, bridgeId, wsFrame, attempt, intent = null) {
         return;
     }
 
-    const pending = { bridgeId, wsFrame, attempt, intent, timer: null };
+    const pending = { bridgeId, wsFrame, attempt, intent, timer: null, sentAt: existing?.sentAt ?? Date.now() };
     const timer = setTimeout(() => {
         // A canceled callback may already be runnable. Compare intent identity,
         // not just MID, since the MID generator eventually wraps.
@@ -321,8 +321,13 @@ function handleAckReceived(midInput, deviceIdOrMsg) {
         resolvedDeviceId = pending.bridgeId;
     }
     const displayId = resolvedDeviceId || 'unknown';
+    const responseCode = deviceIdOrMsg?.coapMsg?.code;
+    const codeClass = responseCode >> 5;
+    const outcome = !responseCode ? 'transport_ack' : codeClass === 2 ? 'accepted' : 'rejected';
 
     if (pending) {
+        commandLog.logAck(mid, Date.now() - pending.sentAt,
+            outcome + (responseCode ? `:${coap.codeStr(responseCode)}` : ''));
         _log('debug', `[cmd-api] Received ACK for MID ${mid} from ${displayId}. Canceling retry timer.`);
         if (pending.timer) clearTimeout(pending.timer);
         _pendingCommands.delete(mid);
@@ -334,7 +339,8 @@ function handleAckReceived(midInput, deviceIdOrMsg) {
         if (trId !== undefined) {
             const entry = _commandTracker.get(trId);
             if (entry && entry.status === 'pending') {
-                entry.status = 'acked';
+                entry.status = outcome === 'rejected' ? 'failed' : 'acked';
+                entry.ackOutcome = outcome;
                 entry.ackedAt = new Date().toISOString();
             }
         }
@@ -356,7 +362,7 @@ function handleAckReceived(midInput, deviceIdOrMsg) {
         const bytes = payload ? Array.from(payload) : null;
         const code = coapMsg ? (coapMsg.codeStr || (coap.formatCode ? coap.formatCode(coapMsg.code) : coapMsg.code)) : null;
         _log('debug', `[cmd-api] Resolving waitForAck for MID ${mid} with payload: ${hex || '(empty)'}`);
-        cb.resolve({ ok: true, mid, payload, hex, bytes, coapMsg, code });
+        cb.resolve({ ok: outcome !== 'rejected', outcome, mid, payload, hex, bytes, coapMsg, code });
         _ackCallbacks.delete(mid);
         _ackCallbacks.delete(midInput);
     }
