@@ -16,6 +16,7 @@ const stateSnapshot = require('../state-snapshot');
 const commandLog = require('../command-log');
 const messageCache = require('../message-cache');
 const configCapture = require('../config-capture');
+const mqttPublisher = require('../mqtt-publisher');
 const coapDedup = require('../coap-dedup');
 const { reconstructBuffers } = require('../utils');
 const WebSocket = require('ws');
@@ -116,6 +117,14 @@ function stop() {
     }
 }
 
+async function refreshConnectedDevice(shortSerial, ipv6 = null) {
+    // IPv6 learning already records an online observation. Publish only after
+    // that write, including session-token recovery that has no fresh handshake.
+    if (ipv6) await db.updateDeviceIPv6(shortSerial, ipv6);
+    else await db.updateDeviceConnectionState(shortSerial, true);
+    await mqttPublisher.publishDeviceAvailability(shortSerial);
+}
+
 async function handleMessage(ws, message, isBinary, isDownlink = false) {
     if (!isDownlink) {
         const { isBridgeBlocked } = require('../device-manager');
@@ -128,7 +137,7 @@ async function handleMessage(ws, message, isBinary, isDownlink = false) {
         }
         if (bridgeId) {
             const client = clients.get(bridgeId);
-            if (client) {
+            if (client && client.ws === ws) {
                 client.lastMessageAt = new Date().toISOString();
                 const _api1 = getApiProcess();
                 if (_api1 && _api1.connected) {
@@ -143,7 +152,7 @@ async function handleMessage(ws, message, isBinary, isDownlink = false) {
                     client.lastDbUpdate = now;
                     const shortSerial = extractShortSerial(bridgeId);
                     if (shortSerial) {
-                        db.updateDeviceConnectionState(shortSerial, true).catch(err => {
+                        refreshConnectedDevice(shortSerial).catch(err => {
                             log('error', `Failed to refresh bridge status: ${err.message}`);
                         });
                     }
@@ -384,19 +393,23 @@ async function handleMessage(ws, message, isBinary, isDownlink = false) {
                             info: reconstructBuffers(infoCopy)
                         });
                     }
-                    const shortSerial = extractShortSerial(tokenBridgeId);
-                    if (shortSerial) {
-                        db.updateDeviceConnectionState(shortSerial, true).catch(e => log('debug', `[router] updateDeviceConnectionState failed for ${shortSerial}: ${e.message}`));
-                        db.updateDeviceIPv6(tokenBridgeId, frame.ipv6).catch(e => log('debug', `[router] updateDeviceIPv6 failed for ${tokenBridgeId}: ${e.message}`));
-                    }
                 } else {
+                    // Session-token reconnects replace the transport as well as
+                    // the DB state, so the old socket's close event is stale.
+                    const info = clients.get(tokenBridgeId);
+                    Object.assign(info, { ws, ipv6: frame.ipv6, fieldA: frame.fieldA,
+                        fieldB: frame.fieldB, udpPort: frame.udpPort, fieldC: frame.fieldC,
+                        session2048, lastMessageAt: new Date().toISOString() });
                     wsToBridgeId.set(ws, tokenBridgeId);
-                    const shortSerial = extractShortSerial(tokenBridgeId);
-                    if (shortSerial) {
-                        db.updateDeviceConnectionState(shortSerial, true).catch(e => log('debug', `[router] updateDeviceConnectionState failed for ${shortSerial}: ${e.message}`));
-                        db.updateDeviceIPv6(tokenBridgeId, frame.ipv6).catch(e => log('debug', `[router] updateDeviceIPv6 failed for ${tokenBridgeId}: ${e.message}`));
+                    const api = getApiProcess();
+                    if (api && api.connected) {
+                        const updates = { ...info };
+                        delete updates.ws;
+                        api.send({ type: 'CLIENT_UPDATE', deviceId: tokenBridgeId, updates: reconstructBuffers(updates) });
                     }
                 }
+                const shortSerial = extractShortSerial(tokenBridgeId);
+                if (shortSerial) await refreshConnectedDevice(shortSerial, frame.ipv6);
             }
         } catch (err) {
             log('error', `Failed to identify bridge by session token: ${err.message}`);
@@ -448,7 +461,7 @@ async function handleMessage(ws, message, isBinary, isDownlink = false) {
         }
         const shortSerialForResurrection = extractShortSerial(activeDeviceId);
         if (shortSerialForResurrection) {
-            db.updateDeviceConnectionState(shortSerialForResurrection, true).catch(err => {
+            refreshConnectedDevice(shortSerialForResurrection).catch(err => {
                 log('error', `Failed to update resurrected bridge state: ${err.message}`);
             });
         }
