@@ -321,12 +321,14 @@ function handleAckReceived(midInput, deviceIdOrMsg) {
         resolvedDeviceId = pending.bridgeId;
     }
     const displayId = resolvedDeviceId || 'unknown';
-    const responseCode = deviceIdOrMsg?.coapMsg?.code;
+    const coapMsg = deviceIdOrMsg?.coapMsg ?? (Number.isInteger(deviceIdOrMsg?.code) ? deviceIdOrMsg : null);
+    const responseCode = coapMsg?.code;
     const codeClass = responseCode >> 5;
     const outcome = !responseCode ? 'transport_ack' : codeClass === 2 ? 'accepted' : 'rejected';
 
     if (pending) {
-        commandLog.logAck(mid, Date.now() - pending.sentAt,
+        const latency = Number.isFinite(pending.sentAt) ? Math.max(0, Date.now() - pending.sentAt) : null;
+        commandLog.logAck(mid, latency,
             outcome + (responseCode ? `:${coap.codeStr(responseCode)}` : ''));
         _log('debug', `[cmd-api] Received ACK for MID ${mid} from ${displayId}. Canceling retry timer.`);
         if (pending.timer) clearTimeout(pending.timer);
@@ -347,13 +349,9 @@ function handleAckReceived(midInput, deviceIdOrMsg) {
     }
 
     let payload = null;
-    let coapMsg = null;
-    if (deviceIdOrMsg && typeof deviceIdOrMsg === 'object' && deviceIdOrMsg.coapMsg) {
-        coapMsg = deviceIdOrMsg.coapMsg;
-        if (coapMsg.payload) {
-            const raw = coapMsg.payload;
-            payload = Buffer.isBuffer(raw) ? raw : Buffer.from(raw.data || raw);
-        }
+    if (coapMsg?.payload) {
+        const raw = coapMsg.payload;
+        payload = Buffer.isBuffer(raw) ? raw : Buffer.from(raw.data || raw);
     }
 
     const cb = _ackCallbacks.get(mid) || _ackCallbacks.get(midInput);

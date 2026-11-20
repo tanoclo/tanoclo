@@ -63,6 +63,14 @@ test.each([
     expect(mids()).toEqual([0x7001]);
 });
 
+test('reports a directly supplied parsed CoAP rejection and its payload', async () => {
+    send(0x7001);
+    const result = transport.waitForAck(0x7001);
+    const payload = Buffer.from('rejected');
+    transport.handleAckReceived(0x7001, { code: 0x80, payload });
+    await expect(result).resolves.toMatchObject({ ok: false, outcome: 'rejected', payload });
+});
+
 describe('superseded zone-state commands', () => {
     test('keeps only the latest queued state and never retries an older state', () => {
         transport.setDownlinkPacingMs(100);
