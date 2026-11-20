@@ -173,7 +173,7 @@ describe('Flow Temperature Optimizer Engine', () => {
         assert.strictEqual(result.circuitOperatingMode, 1);
     });
 
-    test('Circuit operating mode: SCHEDULE (1) when zone error >= 0.4°C even on low demand', () => {
+    test('Circuit operating mode: STANDBY (0) on single radiator low demand (<25%) even with zone error', () => {
         const result = computeOptimalFlowTemperature({
             outsideTemp: 10,
             minFlow: 30,
@@ -183,7 +183,8 @@ describe('Flow Temperature Optimizer Engine', () => {
             circuitDemandPct: 15
         });
 
-        assert.strictEqual(result.circuitOperatingMode, 1);
+        assert.strictEqual(result.circuitOperatingMode, 0);
+        assert.strictEqual(result.thermalReason, 'suppress_micro_burn_low_thermal_load');
     });
 
     test('Underfloor heating clamp: restricts flow target to max 45°C when only UFH calls for heat', () => {
@@ -238,7 +239,7 @@ describe('Flow Temperature Optimizer Engine', () => {
         const thermal = evaluateCircuitThermalLoad({
             callingRadiators: 2,
             callingUfh: 0,
-            circuitDemandPct: 20,
+            circuitDemandPct: 25,
             maxZoneError: 0.25,
             inLockout: false
         });
@@ -246,6 +247,20 @@ describe('Flow Temperature Optimizer Engine', () => {
         assert.strictEqual(thermal.allowHeating, true);
         assert.strictEqual(thermal.circuitOperatingMode, 1);
         assert.strictEqual(thermal.reason, 'multi_zone_coincidence');
+    });
+
+    test('Generic Thermal Load Gating: multi-room coincidence with low demand (<25%) suppresses micro-burn', () => {
+        const thermal = evaluateCircuitThermalLoad({
+            callingRadiators: 2,
+            callingUfh: 0,
+            circuitDemandPct: 20,
+            maxZoneError: 0.25,
+            inLockout: false
+        });
+
+        assert.strictEqual(thermal.allowHeating, false);
+        assert.strictEqual(thermal.circuitOperatingMode, 0);
+        assert.strictEqual(thermal.reason, 'suppress_micro_burn_low_thermal_load');
     });
 
     test('Generic Thermal Load Gating: single radiator zone with significant deficit enables heating', () => {

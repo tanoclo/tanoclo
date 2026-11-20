@@ -21,3 +21,4 @@ test_config.json
 *scratch*
 /.ota/
 .vitest/
+.projectmem

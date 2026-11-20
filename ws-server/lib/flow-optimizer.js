@@ -71,7 +71,7 @@ function evaluateCircuitThermalLoad({ callingRadiators = 0, callingUfh = 0, circ
 
     // 3. Multi-room coincidence: >= 2 radiator zones calling with active demand
     // Combined radiator surface and water loop volume can dissipate minimum burner power
-    if (callingRadiators >= 2 && circuitDemandPct >= 15) {
+    if (callingRadiators >= 2 && circuitDemandPct >= 25) {
         return { allowHeating: true, circuitOperatingMode: 1, reason: 'multi_zone_coincidence' };
     }
 
@@ -81,7 +81,7 @@ function evaluateCircuitThermalLoad({ callingRadiators = 0, callingUfh = 0, circ
     }
 
     // 5. High aggregate demand across the circuit (e.g. general recovery)
-    if (circuitDemandPct >= 40 || maxZoneError >= 0.8) {
+    if (circuitDemandPct >= 45 || (circuitDemandPct >= 30 && maxZoneError >= 0.8)) {
         return { allowHeating: true, circuitOperatingMode: 1, reason: 'high_aggregate_demand' };
     }
 
@@ -217,7 +217,7 @@ function computeOptimalFlowTemperature({
         if (activeDemandType === 'ONLY_UNDERFLOOR') {
             ufhCount = circuitDemandPct > 0 ? 1 : 0;
         } else if (circuitDemandPct >= 25 || maxZoneError >= 0.4) {
-            radCount = (circuitDemandPct >= 25 || maxZoneError >= 0.4) ? 2 : 1;
+            radCount = (circuitDemandPct >= 30) ? 2 : 1;
         }
     }
 
@@ -404,11 +404,11 @@ async function evaluateHome(homeId) {
                             if (err > maxZoneError) {
                                 maxZoneError = err;
                             }
-                            // Only count as calling radiator if valve is actively open (>=10%) and room has deficit (>=0.2°C)
+                            // Only count as calling radiator if valve is actively open (>=15%) and room has deficit (>=0.25°C)
                             if (z.heating_type === 'UNDERFLOOR') {
                                 if (zDemand >= 10 || err >= 0.2) callingUfh++;
                             } else {
-                                if (zDemand >= 10 && err >= 0.2) callingRadiators++;
+                                if (zDemand >= 15 && err >= 0.25) callingRadiators++;
                             }
                         }
                     }
