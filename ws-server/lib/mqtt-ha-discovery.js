@@ -126,6 +126,7 @@ function unpublishDevice(serial, homeId) {
         ['sensor', `tanoclo_${serial}_firmware`],
         ['sensor', `tanoclo_${serial}_reset_reason`],
         ['sensor', `tanoclo_${serial}_error_flags`],
+        ['binary_sensor', `tanoclo_${serial}_fault`],
         ['binary_sensor', `tanoclo_${serial}_emulated`],
         ['sensor', `tanoclo_${serial}_battery_level`],
         ['sensor', `tanoclo_${serial}_battery_mv`],
