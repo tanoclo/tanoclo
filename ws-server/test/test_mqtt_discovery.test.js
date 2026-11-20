@@ -109,7 +109,7 @@ test('legacy test suite runs successfully', async () => {
   
   mqttHaDiscovery.init(mockMqttClient, mockDb, mockConfig, mockLog);
   
-  (async () => {
+  await (async () => {
       publishedConfigs.length = 0;
       await mqttHaDiscovery.publishAllDiscovery();
   
@@ -183,6 +183,17 @@ test('legacy test suite runs successfully', async () => {
           test('Error flags state topic is correct', errorFlagsEntity.payload.state_topic === 'tado/tanoclo/h/1/d/VA1234567890/error_flags');
       }
   
+      const faultTopic = 'homeassistant/binary_sensor/tanoclo_VA1234567890_fault/config';
+      const faultEntity = publishedConfigs.find(c => c.topic === faultTopic);
+      test('Valve fault is discovered as a problem binary sensor on the hardware device',
+          faultEntity?.payload.device_class === 'problem' &&
+          faultEntity.payload.device.identifiers[0] === 'tanoclo_dev_VA1234567890');
+      test('Valve fault uses raw error flags and hardware availability',
+          faultEntity?.payload.state_topic === 'tado/tanoclo/h/1/d/VA1234567890/error_flags_raw' &&
+          faultEntity.payload.availability_topic === 'tado/tanoclo/h/1/d/VA1234567890/availability');
+      test('Room units do not get a valve fault entity',
+          !publishedConfigs.some(c => c.topic === 'homeassistant/binary_sensor/tanoclo_RU1234567890_fault/config'));
+
       const actDevEntity = publishedConfigs.find(c => c.topic.includes('sensor/tanoclo_VA1234567890_actuator_deviation'));
       test('Actuator deviation entity discovered', !!actDevEntity);
       if (actDevEntity) {
@@ -215,6 +226,10 @@ test('legacy test suite runs successfully', async () => {
       // ═══════════════════════════════════════════
       // Summary
       // ═══════════════════════════════════════════
+      mqttHaDiscovery.unpublishDevice('VA1234567890', 1);
+      test('Device removal clears retained valve fault discovery',
+          publishedConfigs.some(c => c.topic === faultTopic && c.payload === '' && c.opts.retain));
+
       section('RESULTS');
       const total = passed + failed;
       console.log(`  Total: ${total} | Passed: ${passed} | Failed: ${failed}`);
