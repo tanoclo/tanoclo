@@ -86,6 +86,19 @@ test('Sleepy Device Downlink Queue operations', async () => {
     assert.strictEqual(queue.has('d/config'), true);
     assert.strictEqual(queue.get('d/config').mid, mid);
 
+    // Identify reaches the bridge immediately, without flushing the queued config.
+    const identifyMid = await commandApi.pushDeviceIdentify('VA0000000001');
+    assert.strictEqual(sentFrames.length, 1);
+    assert.strictEqual(sentFrames[0].bridgeId, 'IB0000000001');
+    const identifyFrame = wsBridge.parse(sentFrames[0].frame);
+    assert.strictEqual(identifyFrame.ipv6, 'fd00:0:0:0:0:0:0:2');
+    const identify = coap.parse(identifyFrame.coapBytes);
+    assert.strictEqual(identify.mid, identifyMid);
+    assert.strictEqual(identify.code, coap.CODE_PUT);
+    assert.strictEqual(coap.uriPath(identify), 'd/identify');
+    assert.deepStrictEqual([...queue.keys()], ['d/config']);
+    sentFrames = [];
+
     // 3. drains queued commands when device wakes up and sends uplink
     commandApi.drainSleepyDownlink('VA0000000001');
 
