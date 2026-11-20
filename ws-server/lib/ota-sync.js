@@ -85,19 +85,18 @@ function getDistZipPath() {
 }
 
 function loadLocalManifest() {
-  try {
-    if (fs.existsSync(manifestCacheFile)) {
-      const data = fs.readFileSync(manifestCacheFile, 'utf8');
-      currentManifest = JSON.parse(data);
-    } else {
-      const distManifest = path.join(frontendDistPath, 'manifest.json');
-      if (fs.existsSync(distManifest)) {
-        const data = fs.readFileSync(distManifest, 'utf8');
-        currentManifest = JSON.parse(data);
-      }
+  currentManifest = null;
+  for (const file of [manifestCacheFile, path.join(frontendDistPath, 'manifest.json')]) {
+    try {
+      if (!fs.existsSync(file)) continue;
+      const manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
+      // The frontend bundle may contain a PWA manifest with the same filename.
+      if (!Number.isInteger(manifest?.webVersionCode) || !Number.isInteger(manifest?.apkVersionCode)) continue;
+      currentManifest = manifest;
+      break;
+    } catch (err) {
+      log('error', `Error reading local manifest: ${err.message}`);
     }
-  } catch (err) {
-    log('error', `Error reading local manifest: ${err.message}`);
   }
   if (!currentManifest) {
     currentManifest = {

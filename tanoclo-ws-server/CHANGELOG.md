@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-18
+
+- fix(heating): add CH delta-T guard and suppress DHW when OFF
+- fix(heating): eliminate micro-burns and guard migrations
+- fix(heating): harden control chain and drop last_config_json
+- fix(heating): eliminate boiler short-cycling loop and sync RU flow ceiling
+- fix(optimizer): suppress micro-burns and cycling
+- fix: address REST listener configuration and error handling review
+- fix: reject late ACK waiters for superseded CoAP commands
+- fix: prefer live measuring-device connectivity in zone state
+- fix: suppress superseded CoAP zone-state commands
+- feat: support dual-stack REST API listening
+- fix(frontend): resolve eslint errors and warnings
+- feat(zone): add virtual sensor leader with CoAP observe and PID
+- feat: implement anti-seize valve exercise routine
+
 ## [0.9.1] - 2026-11-09
 
 - feat(pid): account for micro-burns in PID tuning
