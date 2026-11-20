@@ -37,6 +37,17 @@ describe('effective device and zone availability', () => {
         const device = { ...valve(), is_emulated: 1 };
         expect(deviceAvailability([bridge(0), device])(device)).toBe(true);
     });
+    test.each([
+        { serial_no: 'IB-untagged', device_type: null },
+        { serial_no: 'legacy', device_type: 'GW01' },
+        { serial_no: 'GW-untagged', device_type: null },
+        { serial_no: 'bridge', device_type: 'BRIDGE' }
+    ])('recognizes a bridge from its type or serial: %j', identification => {
+        const devices = [{ ...identification, connection_state: 0 }, valve()];
+        expect(deviceAvailability(devices)(devices[1])).toBe(false);
+        devices[0].connection_state = 1;
+        expect(deviceAvailability(devices)(devices[1])).toBe(true);
+    });
     test('does not infer bridge ownership in multi-bridge homes', () => {
         const devices = [bridge(0), { ...bridge(0), serial_no: 'IB-other' }, valve()];
         expect(deviceAvailability(devices)(devices[2])).toBe(true);

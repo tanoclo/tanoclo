@@ -294,7 +294,9 @@ async function startServer() {
 
     // Cached TRV observations survive a backend restart. Bridge transport state
     // does not: only a newly established bridge session can make it reachable.
-    await db.getPool().execute("UPDATE devices SET connection_state = 0 WHERE device_type LIKE 'IB%'");
+    await db.getPool().execute(`UPDATE devices SET connection_state = 0
+        WHERE device_type LIKE 'IB%' OR device_type LIKE 'GW%' OR device_type = 'BRIDGE'
+           OR serial_no LIKE 'IB%' OR serial_no LIKE 'GW%'`);
     await populateIpv6Map();
     await seedBatteryGuard();
     await config.loadFromDb();

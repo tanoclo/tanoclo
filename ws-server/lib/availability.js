@@ -18,13 +18,19 @@
  * @param {ReadonlyArray<DeviceObservation>} devices Home-scoped observations.
  * @returns {(device: DeviceObservation) => boolean} Effective availability for this snapshot.
  */
+function isBridge(device) {
+    const type = String(device.device_type || '').toUpperCase();
+    const serial = String(device.serial_no || '').toUpperCase();
+    return /^(IB|GW)/.test(type) || /^(IB|GW)/.test(serial) || type === 'BRIDGE';
+}
+
 function deviceAvailability(devices) {
-    const bridges = devices.filter(device => String(device.device_type || '').startsWith('IB'));
+    const bridges = devices.filter(isBridge);
     const bridgeOnline = bridges.some(device => device.connection_state === 1);
     return device => {
         if (device.connection_state !== 1) return false;
         if (device.is_emulated === 1 || device.is_emulated === true) return true;
-        if (String(device.device_type || '').startsWith('IB')) return true;
+        if (isBridge(device)) return true;
         // The database does not map devices to their bridge. Infer reachability
         // only in single-bridge homes; otherwise keep the device observation.
         return bridges.length !== 1 || bridgeOnline;
