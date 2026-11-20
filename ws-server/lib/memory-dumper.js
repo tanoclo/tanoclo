@@ -139,7 +139,7 @@ async function _runDumpLoop(job) {
 
                 // Wait up to 35 seconds for device ACK/Content payload
                 const ack = await commandApi.waitForAck(mid, 35000);
-                if (ack && (ack.payload || (ack.bytes && ack.bytes.length > 0))) {
+                if (ack?.ok && (ack.payload || (ack.bytes && ack.bytes.length > 0))) {
                     const rawPayload = ack.payload ? (Buffer.isBuffer(ack.payload) ? ack.payload : Buffer.from(ack.payload)) : Buffer.from(ack.bytes);
                     const bytesToCopy = Math.min(rawPayload.length, curLen);
 

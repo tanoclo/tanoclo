@@ -49,6 +49,28 @@ afterEach(() => {
     vi.useRealTimers();
 });
 
+test.each([
+    [0, 'transport_ack', 'acked', true],
+    [0x44, 'accepted', 'acked', true],
+    [0x80, 'rejected', 'failed', false]
+])('reports ACK code %i without conflating receipt with acceptance', async (code, outcome, status, ok) => {
+    send(0x7001);
+    const result = transport.waitForAck(0x7001);
+    transport.handleAckReceived(0x7001, { deviceId: 'IB-test', coapMsg: { code } });
+    await expect(result).resolves.toMatchObject({ ok, outcome });
+    expect([...transport._commandTracker.values()]).toContainEqual(expect.objectContaining({ mid: 0x7001, status, ackOutcome: outcome }));
+    vi.advanceTimersByTime(6000);
+    expect(mids()).toEqual([0x7001]);
+});
+
+test('reports a directly supplied parsed CoAP rejection and its payload', async () => {
+    send(0x7001);
+    const result = transport.waitForAck(0x7001);
+    const payload = Buffer.from('rejected');
+    transport.handleAckReceived(0x7001, { code: 0x80, payload });
+    await expect(result).resolves.toMatchObject({ ok: false, outcome: 'rejected', payload });
+});
+
 describe('superseded zone-state commands', () => {
     test('keeps only the latest queued state and never retries an older state', () => {
         transport.setDownlinkPacingMs(100);
