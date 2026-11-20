@@ -281,6 +281,7 @@ function broadcastRfKey() {
 }
 
 const INTERNAL_UWS_PORT = 19880;
+let isShuttingDown = false;
 
 async function startServer() {
     let deps;
@@ -291,6 +292,11 @@ async function startServer() {
     const dbMigrate = require('./lib/db-migrate');
     await dbMigrate.runPending(db.getPool(), log);
 
+    // Cached TRV observations survive a backend restart. Bridge transport state
+    // does not: only a newly established bridge session can make it reachable.
+    await db.getPool().execute(`UPDATE devices SET connection_state = 0
+        WHERE device_type LIKE 'IB%' OR device_type LIKE 'GW%' OR device_type = 'BRIDGE'
+           OR serial_no LIKE 'IB%' OR serial_no LIKE 'GW%'`);
     await populateIpv6Map();
     await seedBatteryGuard();
     await config.loadFromDb();
@@ -465,13 +471,13 @@ async function startServer() {
                 wsToBridgeId.delete(ws);
 
                 const shortSerial = extractShortSerial(deviceId);
-                if (shortSerial) {
-                    db.updateDeviceConnectionState(shortSerial, false).catch(err => {
-                        log('error', `Failed to update disconnect state: ${err.message}`);
-                    });
-                    if (mqttPublisher) {
-                        mqttPublisher.publishDeviceAvailability(shortSerial, false).catch(() => { });
-                    }
+                // An old socket closing must not take its replacement offline.
+                // During shutdown the backend MQTT status handles availability,
+                // without erasing the last observed physical-device state.
+                if (shortSerial && info && info.ws === ws && !isShuttingDown) {
+                    db.updateDeviceConnectionState(shortSerial, false)
+                        .then(() => mqttPublisher.publishDeviceAvailability(shortSerial))
+                        .catch(err => log('error', `Failed to update disconnect state: ${err.message}`));
                 }
             }
 
@@ -539,12 +545,14 @@ async function startServer() {
     log('debug', `Server startup complete`);
 }
 
-let isShuttingDown = false;
-
 async function handleShutdown() {
     if (isShuttingDown) return;
     isShuttingDown = true;
     log('debug', 'Shutting down...');
+    // Gate HA controls before closing transports or the API child.
+    if (mqttClient) {
+        try { await mqttClient.shutdown(); } catch (e) { }
+    }
     if (uwsListenSocket) {
         try {
             uWS.us_listen_socket_close(uwsListenSocket);
@@ -576,26 +584,14 @@ async function handleShutdown() {
     }
 
     try { await workerPool.shutdown(); } catch (e) { }
-    if (mqttClient) {
-        try { await mqttClient.shutdown(); } catch (e) { }
-    }
     try {
         const cron = require('./lib/cron');
         cron.stop();
     } catch (e) { }
     commandApi.stop();
 
-    const updatePromises = [];
-    for (const [deviceId] of clients.entries()) {
-        const shortSerial = extractShortSerial(deviceId);
-        if (shortSerial) {
-            updatePromises.push(db.updateDeviceConnectionState(shortSerial, false).catch(() => { }));
-        }
-    }
-    await Promise.race([
-        Promise.allSettled(updatePromises),
-        new Promise(resolve => setTimeout(resolve, 3000))
-    ]);
+    // mqttClient.shutdown() has advertised backend offline. Do not turn a
+    // process restart into persistent offline observations for sleeping TRVs.
 
     try {
         await Promise.race([
