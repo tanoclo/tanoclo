@@ -29,6 +29,14 @@ test.each([0, 0x45, 0x84])('caches but does not forward local CoAP reply %i on a
     expect(ws.send).not.toHaveBeenCalled();
 });
 
+test('caches but does not forward a malformed local CoAP frame on a proxied socket', async () => {
+    const { send, ws, cacheMessage } = setup(true);
+    const malformed = Buffer.from([0x60]);
+    await send('bridge', malformed);
+    expect(cacheMessage).toHaveBeenCalledWith('bridge', malformed, 'TANOCLO');
+    expect(ws.send).not.toHaveBeenCalled();
+});
+
 test('still forwards allowed local requests on a proxied socket', async () => {
     const { send, ws } = setup(true);
     const request = coap.buildRequest({ code: coap.CODE_PUT, path: 'z/s', mid: 1 });
