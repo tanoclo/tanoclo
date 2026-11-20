@@ -21,8 +21,8 @@ const onConnectCallbacks = [];
 
 let ownsBackendStatus = true;
 
-function init(_config, _log, { ownsStatus = true } = {}) {
-    ownsBackendStatus = ownsStatus;
+function init(_config, _log, options) {
+    ownsBackendStatus = options?.ownsStatus ?? true;
     config = _config;
     log = _log;
 

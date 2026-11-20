@@ -17,6 +17,12 @@ function connect(options) {
     return { client: module.exports, socket, options: broker.connect.mock.calls[0][1] };
 }
 
+test('null options keep the default backend status ownership', async () => {
+    const backend = connect(null);
+    expect(backend.options.will).toMatchObject({ topic: 'tado/tanoclo/status' });
+    await backend.client.shutdown();
+});
+
 test('starting and stopping the API worker cannot change backend availability', async () => {
     const backend = connect();
     const api = connect({ ownsStatus: false });
