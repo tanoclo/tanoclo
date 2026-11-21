@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-11-21
+
+- fix(flow-optimizer): stop burner short-cycling from demand flapping
+- fix(heating): Improve flow optimizer
+- fix(ota): ignore PWA manifests when loading version metadata
+
 ## [0.10.0] - 2026-11-18
 
 - fix(heating): add CH delta-T guard and suppress DHW when OFF
