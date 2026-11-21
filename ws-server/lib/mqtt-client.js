@@ -19,7 +19,10 @@ const throttles = new Map();
 const subscriptions = [];
 const onConnectCallbacks = [];
 
-function init(_config, _log) {
+let ownsBackendStatus = true;
+
+function init(_config, _log, options) {
+    ownsBackendStatus = options?.ownsStatus ?? true;
     config = _config;
     log = _log;
 
@@ -46,14 +49,16 @@ function _connect() {
     }
     const opts = {
         reconnectPeriod: 0, // Disable automatic reconnect so we can do it with backoff
-        connectTimeout: 30 * 1000,
-        will: {
+        connectTimeout: 30 * 1000
+    };
+    if (ownsBackendStatus) {
+        opts.will = {
             topic: 'tado/tanoclo/status',
             payload: 'offline',
             qos: 1,
             retain: true
-        }
-    };
+        };
+    }
 
     if (user) opts.username = user;
     if (password) opts.password = password;
@@ -72,10 +77,11 @@ function _connect() {
 
         if (log) log('info', `[mqtt] Connected successfully to ${url}`);
 
-        // Publish status -> online
-        client.publish('tado/tanoclo/status', 'online', { retain: true, qos: 1 }, (err) => {
-            if (err && log) log('error', `[mqtt] Failed to publish status: ${err.message}`);
-        });
+        if (ownsBackendStatus) {
+            client.publish('tado/tanoclo/status', 'online', { retain: true, qos: 1 }, (err) => {
+                if (err && log) log('error', `[mqtt] Failed to publish status: ${err.message}`);
+            });
+        }
 
         // Resubscribe to all existing subscriptions
         for (const sub of subscriptions) {
@@ -261,7 +267,7 @@ function shutdown() {
             reconnectTimer = null;
         }
         if (client) {
-            if (connected) {
+            if (connected && ownsBackendStatus) {
                 client.publish('tado/tanoclo/status', 'offline', { retain: true, qos: 1 }, () => {
                     client.end(false, {}, () => {
                         client = null;
@@ -270,7 +276,7 @@ function shutdown() {
                     });
                 });
             } else {
-                client.end(true, {}, () => {
+                client.end(!connected, {}, () => {
                     client = null;
                     connected = false;
                     resolve();

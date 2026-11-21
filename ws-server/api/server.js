@@ -601,7 +601,8 @@ async function startAPI() {
         const mqttClient = require('../lib/mqtt-client');
         const mqttPublisher = require('../lib/mqtt-publisher');
         const mqttHaDiscovery = require('../lib/mqtt-ha-discovery');
-        mqttClient.init(config, _log);
+        // The API worker can publish state, but does not own backend availability.
+        mqttClient.init(config, _log, { ownsStatus: false });
         mqttPublisher.init(mqttClient, db, config, _log);
         mqttHaDiscovery.init(mqttClient, db, config, _log);
         _log('info', `[REST-API] Initialized MQTT client, publisher, and HA discovery`);
