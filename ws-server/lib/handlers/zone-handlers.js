@@ -173,11 +173,30 @@ async function handleCircuitActuator(ws, frame, coapMsg, decoded, peerInfo, path
         const actuatorFields = {};
         if (refTemp !== null && refTemp !== undefined) actuatorFields['0x4040'] = refTemp;
         if (targetTemp !== null && targetTemp !== undefined) actuatorFields['0x4000'] = targetTemp;
-        if (demandPct !== null && demandPct !== undefined) actuatorFields['0x4080'] = demandPct;
+        if (demandPct !== null && demandPct !== undefined) {
+            try {
+                const pool = db && typeof db.getPool === 'function' ? db.getPool() : null;
+                if (pool) {
+                    const [curCirc] = await pool.execute(
+                        'SELECT field_4080 FROM heating_circuits WHERE home_id = ? AND number = ? LIMIT 1',
+                        [homeId, parseInt(circuitId, 10)]
+                    );
+                    const curDemand = (curCirc.length > 0 && curCirc[0].field_4080 != null) ? Number(curCirc[0].field_4080) : 0;
+                    actuatorFields['0x4080'] = Math.max(demandPct, curDemand);
+                } else {
+                    actuatorFields['0x4080'] = demandPct;
+                }
+            } catch (_) {
+                actuatorFields['0x4080'] = demandPct;
+            }
+        }
 
         await db.upsertHeatingCircuit(homeId, parseInt(circuitId, 10), actuatorFields);
         if (mqttPublisher) {
             mqttPublisher.publishCircuitTelemetry(homeId, parseInt(circuitId, 10), f).catch(e => log('debug', `[MQTT] Circuit telemetry failed: ${e.message}`));
+        }
+        if (zoneCoordinator && typeof zoneCoordinator.relayBoilerCircuitDemand === 'function') {
+            zoneCoordinator.relayBoilerCircuitDemand(homeId).catch(() => {});
         }
     }
 }

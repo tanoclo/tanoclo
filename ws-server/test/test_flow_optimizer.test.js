@@ -396,5 +396,34 @@ describe('Flow Temperature Optimizer Engine', () => {
         assert.strictEqual(result.circuitOperatingMode, 1);
         assert.ok(result.effectiveFlow >= 48);
     });
+
+    test('Hysteresis: maintains active mode 1 at 20% coincidence demand but requires 25% to turn on from mode 0', () => {
+        // From mode 0 (OFF): 20% coincidence demand is below 25% turn-on threshold -> stays OFF
+        const resultOff = computeOptimalFlowTemperature({
+            outsideTemp: 5,
+            minFlow: 30,
+            maxFlowLimit: 75,
+            currentMaxFlow: 50,
+            maxZoneError: 0.3,
+            circuitDemandPct: 20,
+            callingRadiators: 2,
+            currentMode: 0
+        });
+        assert.strictEqual(resultOff.circuitOperatingMode, 0);
+
+        // From mode 1 (ON): 20% coincidence demand is above 15% sustain threshold -> stays ON
+        const resultOn = computeOptimalFlowTemperature({
+            outsideTemp: 5,
+            minFlow: 30,
+            maxFlowLimit: 75,
+            currentMaxFlow: 50,
+            maxZoneError: 0.3,
+            circuitDemandPct: 20,
+            callingRadiators: 2,
+            currentMode: 1
+        });
+        assert.strictEqual(resultOn.circuitOperatingMode, 1);
+        assert.ok(resultOn.effectiveFlow >= 48);
+    });
 });
 
