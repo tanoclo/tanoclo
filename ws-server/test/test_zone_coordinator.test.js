@@ -19,6 +19,27 @@ describe('Zone Coordinator Engine', () => {
         });
     });
 
+    it('refreshes virtual leader contact and availability when room telemetry arrives', async () => {
+        const execute = vi.fn(async (sql) => {
+            if (sql.startsWith('SELECT measuring_device_serial')) return [[{ measuring_device_serial: 'IB_VS_1_1' }]];
+            if (sql.includes('FROM zone_overlays')) return [[{ setting_power: 'ON', setting_temp_celsius: 21 }]];
+            return [[]];
+        });
+        const publishDeviceAvailability = vi.fn(async () => {});
+        zoneCoordinator.init({
+            db: { getPool: () => ({ execute }), insertMergedZoneMeasurement: vi.fn(async () => {}) },
+            coap, tlv,
+            mqttPublisher: { publishDeviceAvailability },
+            coapTransport: { findBridgeForHome: () => null }
+        });
+        await zoneCoordinator.onExternalTelemetry(1, 1, 22.2, 64);
+        expect(execute).toHaveBeenCalledWith(
+            expect.stringContaining('AND is_virtual_leader = 1'),
+            [expect.any(String), 'IB_VS_1_1']
+        );
+        expect(publishDeviceAvailability).toHaveBeenCalledWith('IB_VS_1_1');
+    });
+
     describe('calculateZoneDemand', () => {
         it('returns 0 when heating is turned OFF', () => {
             expect(zoneCoordinator.calculateZoneDemand(18.0, 22.0, false)).toBe(0);
