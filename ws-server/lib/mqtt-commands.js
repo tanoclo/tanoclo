@@ -82,6 +82,11 @@ function init(_mqttClient, _db, _commandApi, _mqttPublisher, _log, _onStateChang
         });
     });
 
+    mqttClient.subscribe('tado/tanoclo/h/+/weather/telemetry', (topic, payload) => {
+        return commandQueue.run(`weather:${topic}`, () => require('./mqtt-weather').ingestWeather(db, mqttPublisher, topic, payload))
+            .catch(err => { if (log) log('error', `[mqtt-weather] ${err.message}`); });
+    });
+
     // Subscribe to home gas energy measurements (cumulative m³)
     mqttClient.subscribe('tado/tanoclo/h/+/energy/gas_meter', (topic, payload) => {
         handleGasMeterPayload(topic, payload).catch(err => {

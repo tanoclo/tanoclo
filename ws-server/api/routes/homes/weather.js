@@ -270,9 +270,9 @@ router.get('/:homeId/climateQuality', getAirComfortHandler);
 router.get('/:homeId/weather', async (req, res) => {
     try {
         const homeId = req.params.homeId;
-        const pool = db.getPool();
-        const [weather] = await pool.execute('SELECT * FROM home_weather WHERE home_id = ? ORDER BY timestamp DESC LIMIT 1', [homeId]);
-        const w = weather.length > 0 ? weather[0] : { outside_temp_celsius: 18.0, solar_intensity_percentage: 10.0, weather_state: 'SUNNY', timestamp: new Date().toISOString() };
+        const status = await require('../../../lib/weather-source').getReading(db, homeId);
+        const w = status.reading && !status.stale ? status.reading : { outside_temp_celsius: null, solar_intensity_percentage: null, weather_state: 'UNKNOWN', timestamp: status.timestamp };
+        const temperature = w.outside_temp_celsius == null ? null : Number(w.outside_temp_celsius);
 
         res.json({
             solarIntensity: {
@@ -280,9 +280,11 @@ router.get('/:homeId/weather', async (req, res) => {
                 percentage: parseFloat(parseFloat(w.solar_intensity_percentage).toFixed(1)),
                 timestamp: w.timestamp ? (typeof w.timestamp === 'string' ? w.timestamp : w.timestamp.toISOString()) : new Date().toISOString()
             },
+            source: status.source,
+            stale: status.stale,
             outsideTemperature: {
-                celsius: parseFloat(parseFloat(w.outside_temp_celsius).toFixed(2)),
-                fahrenheit: parseFloat((w.outside_temp_celsius * 1.8 + 32).toFixed(2)),
+                celsius: temperature,
+                fahrenheit: temperature == null ? null : Number((temperature * 1.8 + 32).toFixed(2)),
                 timestamp: w.timestamp ? (typeof w.timestamp === 'string' ? w.timestamp : w.timestamp.toISOString()) : new Date().toISOString(),
                 type: 'TEMPERATURE',
                 precision: {
@@ -299,6 +301,23 @@ router.get('/:homeId/weather', async (req, res) => {
     } catch (err) {
         res.status(500).json({ error: 'internal_error' });
     }
+});
+
+router.get('/:homeId/weather-source', async (req, res) => {
+    if (!req.user?.homes?.map(String).includes(String(req.params.homeId))) return res.status(403).json({ error: 'forbidden' });
+    try {
+        const status = await require('../../../lib/weather-source').getReading(db, req.params.homeId);
+        res.json({ ...status, mqttTopic: `tado/tanoclo/h/${req.params.homeId}/weather/telemetry` });
+    } catch (err) { _log('error', err.message); res.status(500).json({ error: 'internal_error' }); }
+});
+router.put('/:homeId/weather-source', async (req, res) => {
+    if (!req.user?.homes?.map(String).includes(String(req.params.homeId))) return res.status(403).json({ error: 'forbidden' });
+    if (!['open_meteo', 'mqtt'].includes(req.body?.source)) return res.status(400).json({ error: 'invalid_weather_source' });
+    try {
+        await require('../../../lib/weather-source').setSource(db, req.params.homeId, req.body.source);
+        await require('../../../lib/mqtt-publisher').publishHomeTelemetry(req.params.homeId);
+        res.json({ source: req.body.source });
+    } catch (err) { _log('error', err.message); res.status(500).json({ error: 'internal_error' }); }
 });
 
 module.exports = router;

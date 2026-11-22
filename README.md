@@ -111,6 +111,12 @@ A complete Home Assistant OS app is available in the `tanoclo-ws-server/` direct
 
 TaNoClo can be used in several ways depending on your preferences:
 
+### Outdoor temperature source
+
+In **Home settings → Outdoor temperature source**, choose **Open-Meteo** (default) or **External sensor (MQTT)**. The MQTT input is `tado/tanoclo/h/<homeId>/weather/telemetry`, with a Celsius payload such as `{"temperature": 5.2, "observed_at": "2026-11-22T09:00:00Z"}`. `observed_at` is optional; without it the receipt time is used. Include the sensor's actual observation time when replaying readings.
+
+Only the selected source is used. MQTT readings older than two hours, future timestamps beyond one minute, nonnumeric temperatures, and temperatures outside -90 to 60 °C are rejected. Duplicate or older observations do not replace newer ones. Missing or stale selected readings are marked unavailable rather than replaced with a fixed temperature or another source. MQTT temperature input does not fabricate weather conditions, solar radiation, or air-quality data. Open-Meteo requires internet access and enabled weather refresh jobs.
+
 ### 1. Home Assistant via MQTT
 TaNoClo includes an integrated MQTT client that automatically registers devices with Home Assistant via **MQTT Discovery**. Once enabled, the following entities are exposed:
 - **Climate Entities**: Dual control for standard heating zones and hot water zones (`water_heater`).

@@ -339,16 +339,14 @@ async function evaluateHome(homeId) {
 
         // 2. Outdoor temperature
         let outsideTemp = 10.0;
-        const [weatherRows] = await pool.execute(
-            'SELECT outside_temp_celsius FROM home_weather WHERE home_id = ? ORDER BY timestamp DESC LIMIT 1',
-            [homeId]
-        );
-        if (weatherRows.length > 0 && weatherRows[0].outside_temp_celsius !== null) {
-            outsideTemp = parseFloat(weatherRows[0].outside_temp_celsius);
+        const weatherStatus = await require('./weather-source').getReading(_db, homeId);
+        if (weatherStatus.source === 'mqtt' && weatherStatus.stale) return;
+        if (!weatherStatus.stale && weatherStatus.reading?.outside_temp_celsius != null) {
+            outsideTemp = Number(weatherStatus.reading.outside_temp_celsius);
         }
 
         // 3. Hourly Forecast
-        const forecastObj = weather.getHomeForecast ? weather.getHomeForecast(homeId) : null;
+        const forecastObj = weatherStatus.source === 'open_meteo' && weather.getHomeForecast ? weather.getHomeForecast(homeId) : null;
         const forecastHourly = forecastObj ? forecastObj.hourly : null;
 
         // 4. Boiler live telemetry
