@@ -96,6 +96,16 @@ test('Sleepy Device Downlink Queue operations', async () => {
     assert.strictEqual(identify.mid, identifyMid);
     assert.strictEqual(identify.code, coap.CODE_PUT);
     assert.strictEqual(coap.uriPath(identify), 'd/identify');
+
+    for (const [path, expected] of [['/d/identify', 'd/identify'], ['d/zone/identify?id=1', 'd/zone/identify']]) {
+        const previousCount = sentFrames.length;
+        const variantMid = await commandApi.internalPushViabridge('VA0000000001', coap.CODE_PUT, path);
+        assert.strictEqual(sentFrames.length, previousCount + 1);
+        const variant = coap.parse(wsBridge.parse(sentFrames.at(-1).frame).coapBytes);
+        assert.strictEqual(variant.mid, variantMid);
+        assert.strictEqual(coap.uriPath(variant), expected);
+    }
+
     assert.deepStrictEqual([...queue.keys()], ['d/config']);
     sentFrames = [];
 
