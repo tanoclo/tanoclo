@@ -8,6 +8,9 @@
 const battery = require('./battery');
 const geoUtils = require('./geo-utils');
 const { describeOverlay } = require('./overlay-codes');
+const { SerialCommandQueue } = require('./serial-command-queue');
+const { deviceAvailability, zoneAvailability } = require('./availability');
+const availabilityQueue = new SerialCommandQueue();
 
 let mqttClient = null;
 let db = null;
@@ -164,15 +167,6 @@ async function publishFullState() {
 
         // Fetch all devices to derive zone availability
         const [devices] = await pool.execute('SELECT * FROM devices');
-        const devicesByZone = new Map();
-        for (const dev of devices) {
-            if (dev.zone_id) {
-                if (!devicesByZone.has(dev.zone_id)) {
-                    devicesByZone.set(dev.zone_id, []);
-                }
-                devicesByZone.get(dev.zone_id).push(dev);
-            }
-        }
 
         for (const zone of zones) {
             const lastMeas = measurementsMap.get(zone.id) || {};
@@ -202,18 +196,6 @@ async function publishFullState() {
                 _pub(`${BASE_TOPIC}/h/${zone.home_id}/z/${zone.id}/overlay/expiry`, '');
             }
 
-            // Derive zone availability
-            let isZoneOnline = false;
-            if (zone.type === 'HOT_WATER') {
-                // HOT_WATER availability is based on the circuit leader (driver_serial_no in heating_circuits)
-                const homeCircuits = circuits.filter(c => c.home_id === zone.home_id);
-                const leaderSerials = homeCircuits.map(c => c.driver_serial_no).filter(Boolean);
-                isZoneOnline = devices.some(d => leaderSerials.includes(d.serial_no) && d.connection_state === 1);
-            } else {
-                const zoneDevices = devicesByZone.get(zone.id) || [];
-                isZoneOnline = zoneDevices.length > 0 ? zoneDevices.some(d => d.connection_state === 1) : false;
-            }
-            _pubAvailability(`${BASE_TOPIC}/h/${zone.home_id}/z/${zone.id}/availability`, isZoneOnline);
         }
 
         // 3. Fetch devices
@@ -230,7 +212,6 @@ async function publishFullState() {
         for (const dev of devices) {
             const lastMeas = devMeasMap.get(dev.serial_no) || {};
             await publishDeviceTelemetry(dev.serial_no, dev.home_id, dev.zone_id, lastMeas, dev);
-            _pubAvailability(`${BASE_TOPIC}/h/${dev.home_id}/d/${dev.serial_no}/availability`, dev.connection_state === 1);
         }
 
         // 3b. Fetch and publish emulated devices states
@@ -291,6 +272,9 @@ async function publishFullState() {
             await publishMobileDeviceTelemetry(md.home_id, md.id, Boolean(md.at_home), md.latitude, md.longitude, null, true);
         }
 
+        // Read fresh connection state after telemetry. A snapshot captured before
+        // a bridge reconnect must not overwrite its newer availability event.
+        for (const home of homes) await refreshHomeAvailability(home.id);
         if (log) log('info', '[mqtt-publisher] Full state publish complete.');
     } catch (err) {
         if (log) log('error', `[mqtt-publisher] Failed to publish full state: ${err.message}`);
@@ -826,45 +810,35 @@ async function publishHomeTelemetry(homeId, homeData = null) {
 }
 
 /**
- * Publish Device Availability
+ * Publish a fresh, home-scoped connectivity snapshot in event order. Device
+ * flags are last observed state. A registered physical bridge is a separate
+ * prerequisite, while emulated devices remain independent of that bridge.
  */
-async function publishDeviceAvailability(shortSerial, online) {
+function refreshHomeAvailability(homeId) {
+    return availabilityQueue.run(String(homeId), async () => {
+        const devices = await db.getDevicesForHome(homeId);
+        const pool = db.getPool();
+        const [zones] = await pool.execute('SELECT id, home_id, type FROM zones WHERE home_id = ?', [homeId]);
+        const [circuits] = await pool.execute('SELECT driver_serial_no FROM heating_circuits WHERE home_id = ?', [homeId]);
+        const available = deviceAvailability(devices);
+        for (const device of devices) {
+            _pubAvailability(`${BASE_TOPIC}/h/${homeId}/d/${device.serial_no}/availability`, available(device));
+        }
+        for (const zone of zones) {
+            _pubAvailability(`${BASE_TOPIC}/h/${homeId}/z/${zone.id}/availability`, zoneAvailability(zone, devices, circuits, available));
+        }
+    });
+}
+
+/**
+ * Reconcile after awaiting the DB connection-state update. The triggering
+ * event's boolean is deliberately not used to override a newer committed state.
+ */
+async function publishDeviceAvailability(shortSerial) {
     if (!db) return;
     try {
-        const dev = await db.getDeviceBySerial(shortSerial);
-        if (!dev) return;
-
-        const homeId = dev.home_id;
-        shortSerial = dev.serial_no;
-        _pubAvailability(`${BASE_TOPIC}/h/${homeId}/d/${shortSerial}/availability`, online);
-
-        // 1. If device is in a zone, update that zone's availability
-        if (dev.zone_id) {
-            const zoneId = dev.zone_id;
-            const zoneDevices = await db.getDevicesInZone(homeId, zoneId);
-            const isZoneOnline = zoneDevices.some(d => {
-                return (d.serial_no === shortSerial) ? online : (d.connection_state === 1);
-            });
-            _pubAvailability(`${BASE_TOPIC}/h/${homeId}/z/${zoneId}/availability`, isZoneOnline);
-        }
-
-        // 2. Also check if this device affects HOT_WATER zones in the home (based on circuit leader)
-        const pool = db.getPool();
-        const [hwZones] = await pool.execute('SELECT id FROM zones WHERE home_id = ? AND type = "HOT_WATER"', [homeId]);
-        if (hwZones.length > 0) {
-            const [circuits] = await pool.execute('SELECT driver_serial_no FROM heating_circuits WHERE home_id = ?', [homeId]);
-            const leaderSerials = circuits.map(c => c.driver_serial_no).filter(Boolean);
-
-            if (leaderSerials.includes(dev.serial_no)) {
-                const [allLeaders] = await pool.query('SELECT serial_no, connection_state FROM devices WHERE serial_no IN (?)', [leaderSerials]);
-                const isLeaderOnline = allLeaders.some(d => {
-                    return (d.serial_no === dev.serial_no) ? online : (d.connection_state === 1);
-                });
-                for (const hwZone of hwZones) {
-                    _pubAvailability(`${BASE_TOPIC}/h/${homeId}/z/${hwZone.id}/availability`, isLeaderOnline);
-                }
-            }
-        }
+        const device = await db.getDeviceBySerial(shortSerial);
+        if (device) await refreshHomeAvailability(device.home_id);
     } catch (e) {
         if (log) log('error', `[mqtt-publisher] Failed to update availability for ${shortSerial}: ${e.message}`);
     }

@@ -12,6 +12,9 @@
  */
 const { getPool, _log, safeJsonParse, extractShortSerial, mapOrientation, unmapOrientation, mapMountState, generateEtag, tlvNameToHex, cleanFriendlyConfig, assertAllowedColumns } = require('./db-base');
 
+const { SerialCommandQueue } = require('./serial-command-queue');
+const connectionUpdates = new SerialCommandQueue();
+
 const ALLOWED_DEVICE_ACT_COLS = new Set([
     'field_0265', 'field_0266', 'field_0273', 'field_027c', 'field_0280', 'field_0283', 'field_028c',
     'in_pairing_mode', 'act_etag'
@@ -97,7 +100,11 @@ async function getDevicesInZone(homeId, zoneId) {
     return rows;
 }
 
-async function updateDeviceConnectionState(shortSerial, isConnected, batteryState = null, batteryPercent = null) {
+function updateDeviceConnectionState(shortSerial, isConnected, batteryState = null, batteryPercent = null) {
+    return connectionUpdates.run(shortSerial, () => updateDeviceConnectionStateNow(shortSerial, isConnected, batteryState, batteryPercent));
+}
+
+async function updateDeviceConnectionStateNow(shortSerial, isConnected, batteryState, batteryPercent) {
     const p = getPool();
     const now = new Date().toISOString();
     const ts = now.replace('T', ' ').replace(/\.\d+Z$/, '');
@@ -130,7 +137,11 @@ async function updateDeviceConnectionState(shortSerial, isConnected, batteryStat
     }
 }
 
-async function updateDeviceIPv6(deviceId, ipv6) {
+function updateDeviceIPv6(deviceId, ipv6) {
+    return connectionUpdates.run(extractShortSerial(deviceId) || deviceId, () => updateDeviceIPv6Now(deviceId, ipv6));
+}
+
+async function updateDeviceIPv6Now(deviceId, ipv6) {
     const p = getPool();
     const now = new Date().toISOString();
     const ts = now.replace('T', ' ').replace(/\.\d+Z$/, '');
