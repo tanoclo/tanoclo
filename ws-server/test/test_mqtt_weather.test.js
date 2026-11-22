@@ -24,6 +24,15 @@ test('selected MQTT input persists observation time and publishes the selected t
     expect(await ingestWeather(db, null, 'tado/tanoclo/h/1/weather/telemetry', payload, now)).toBe(false);
     expect((await weather.getReading(db, 1, now + 3 * 3600000)).stale).toBe(true);
 });
+test('optional fields are normalized without inventing absent measurements', async () => {
+    const payload = { temperature: 5, condition: 'cloudy', solar_radiation: 375, aqi: 42, pollen: { grass: 'LOW' }, forecast: [{ datetime: '2026-11-22T13:00:00Z', temperature: 6 }] };
+    expect(await ingestWeather(db, null, 'tado/tanoclo/h/1/weather/telemetry', JSON.stringify(payload), now)).toBe(true);
+    const { reading } = await weather.getReading(db, 1, now);
+    expect(reading).toMatchObject({ weather_state: 'CLOUDY', solar_intensity_percentage: 38, aqi: 42, pollen_grass: 'LOW', pollen_birch: null, forecast: [{ datetime: '2026-11-22T13:00:00.000Z', temperature: 6 }] });
+});
+test.each([{condition:'invalid'}, {solar_radiation:-1}, {aqi:501}, {pollen:{grass:'invalid'}}, {forecast:[{datetime:'bad',temperature:6}]}, {forecast:[{datetime:'2026-11-22T14:00:00Z',temperature:6},{datetime:'2026-11-22T13:00:00Z',temperature:5}]}])('rejects invalid optional data %j', async extra => {
+    expect(await ingestWeather(db, null, 'tado/tanoclo/h/1/weather/telemetry', JSON.stringify({temperature:5,...extra}), now)).toBe(false);
+});
 test.each(['bad', '{}', '{"temperature":null}', '{"temperature":"5"}', '{"temperature":100}', '{"temperature":5,"observed_at":"bad"}', '{"temperature":5,"observed_at":"2026-11-22T08:00:00Z"}'])('rejects invalid or stale payload %s', async payload => {
     expect(await ingestWeather(db, null, 'tado/tanoclo/h/1/weather/telemetry', payload, now)).toBe(false);
     expect(values.has('mqtt_weather_1')).toBe(false);

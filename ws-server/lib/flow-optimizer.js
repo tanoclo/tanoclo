@@ -347,7 +347,9 @@ async function evaluateHome(homeId) {
 
         // 3. Hourly Forecast
         const forecastObj = weatherStatus.source === 'open_meteo' && weather.getHomeForecast ? weather.getHomeForecast(homeId) : null;
-        const forecastHourly = forecastObj ? forecastObj.hourly : null;
+        const forecastHourly = weatherStatus.source === 'mqtt'
+            ? weatherStatus.reading?.forecast?.filter(point => Date.parse(point.datetime) >= Date.now()).slice(0, 6).map(point => point.temperature) ?? null
+            : forecastObj ? forecastObj.hourly : null;
 
         // 4. Boiler live telemetry
         const [boilerRows] = await pool.execute(

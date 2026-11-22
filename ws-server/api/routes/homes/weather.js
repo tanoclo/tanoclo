@@ -186,8 +186,8 @@ const getAirComfortHandler = async (req, res) => {
         }
 
         if (isV1) {
-            const [weather] = await pool.execute('SELECT aqi, pollen_grass, pollen_birch, pollen_ragweed, pollen_olive FROM home_weather WHERE home_id = ? ORDER BY timestamp DESC LIMIT 1', [homeId]);
-            const w = weather.length > 0 ? weather[0] : { aqi: null, pollen_grass: null, pollen_birch: null, pollen_ragweed: null, pollen_olive: null };
+            const weatherStatus = await require('../../../lib/weather-source').getReading(db, homeId);
+            const w = weatherStatus.reading && !weatherStatus.stale ? weatherStatus.reading : { aqi: null, pollen_grass: null, pollen_birch: null, pollen_ragweed: null, pollen_olive: null };
             const pollen = {
                 grass: w.pollen_grass,
                 birch: w.pollen_birch,
@@ -282,6 +282,7 @@ router.get('/:homeId/weather', async (req, res) => {
             },
             source: status.source,
             stale: status.stale,
+            forecast: status.stale ? null : status.reading?.forecast ?? null,
             outsideTemperature: {
                 celsius: temperature,
                 fahrenheit: temperature == null ? null : Number((temperature * 1.8 + 32).toFixed(2)),

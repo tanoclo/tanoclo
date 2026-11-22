@@ -28,11 +28,12 @@ export default function WeatherSourceSettings({ homeId }) {
       <p style={{ margin: 0 }}>Publish a JSON temperature in °C to this topic:</p>
       <code style={{ overflowWrap: 'anywhere' }}>{data.mqttTopic}</code>
       <code>{'{"temperature": 5.2}'}</code>
-      <p style={{ margin: 0 }}>Optionally include observed_at as an ISO 8601 timestamp to preserve the sensor’s observation time.</p>
+      <p style={{ margin: 0 }}>Optional fields: condition (for example, cloudy), solar_radiation (W/m²), aqi (US AQI), pollen, and forecast. Include observed_at as an ISO 8601 timestamp to preserve the sensor’s observation time.</p>
       <p style={{ margin: 0 }}>Readings older than two hours are unavailable. There is no automatic fallback to Open-Meteo.</p>
     </> : <p style={{ margin: 0 }}>Uses the home coordinates. Requires internet access and the weather refresh job to be enabled.</p>}
     {data && <p role="status" style={{ margin: 0 }}>
       {!data.reading ? 'No reading received.' : data.stale ? 'Reading is stale.' : `${data.reading.outside_temp_celsius} °C`}
+      {data.reading?.weather_state && data.reading.weather_state !== 'UNKNOWN' && ` · ${data.reading.weather_state}`}
       {data.timestamp && ` · Last observation: ${new Date(data.timestamp).toLocaleString()}`}
     </p>}
     {(error || saveError) && <p role="alert">{saveError || 'Could not load weather source.'}</p>}
