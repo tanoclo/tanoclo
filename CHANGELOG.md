@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.10.2] - 2026-11-22
+
+- fix(optimizer): decouple CH lockout from flame and fix rate base
+- feat: distinguish external scheduling from full external regulation
+- feat: accept optional MQTT weather condition and forecast data
+- feat: select Open-Meteo or MQTT outdoor temperature per home
+- fix: read virtual sensor settings telemetry from shared measurements
+- fix(optimizer): gate delta-T and lockout guards by standby mode
+- fix: send virtual sensor parameters without nonexistent port column
+- fix: announce MQTT readiness after state replay
+- feat: support external heating controller mode
+- fix: exclude emulated valves from fault discovery
+- fix: recognize alternate identify CoAP paths
+- feat: expose TRV faults in Home Assistant Maintenance
+- fix: send TRV identify commands without waiting for wake
+- fix(coap): handle missing ACK latency and direct parsed replies
+- fix(proxy): forward only parsed local requests
+- fix: recognize legacy and untyped bridges for availability
+- fix(mqtt): accept null client options
+- fix(coap): distinguish transport ACKs from command responses
+- fix(proxy): leave device request replies to the cloud
+- fix: preserve device availability observations across restarts
+- fix(mqtt): let only the backend publish availability
+
 ## [0.10.1] - 2026-11-21
 
 - fix(flow-optimizer): stop burner short-cycling from demand flapping
