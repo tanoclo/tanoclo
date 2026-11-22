@@ -7,6 +7,7 @@
 
 const { getLogger } = require('./logger');
 const log = getLogger('flow-optimizer');
+const config = require('./config');
 const weather = require('./weather');
 const interfaceModules = require('./interface-modules');
 
@@ -41,6 +42,7 @@ function init(db, commandApi, mqttPublisher) {
  * @param {number} [delayMs=3000]
  */
 function scheduleEvaluation(homeId, delayMs = 3000) {
+    if (config.externalController) return;
     if (_pendingEvals.has(homeId)) {
         clearTimeout(_pendingEvals.get(homeId));
     }
@@ -644,6 +646,7 @@ async function evaluateHome(homeId) {
  * Runs flow optimization evaluation cycle for all homes with auto-adaptation enabled.
  */
 async function evaluateAllHomes() {
+    if (config.externalController) return;
     if (!_db || _db.isOffline()) return;
     const pool = _db.getPool();
 

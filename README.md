@@ -117,6 +117,17 @@ In **Home settings → Outdoor temperature source**, choose **Open-Meteo** (defa
 
 Only the selected source is used. MQTT readings older than two hours, future timestamps beyond one minute, nonnumeric temperatures, and temperatures outside -90 to 60 °C are rejected. Duplicate or older observations do not replace newer ones. Missing or stale selected readings are marked unavailable rather than replaced with a fixed temperature or another source. Optional MQTT fields are `condition` (Home Assistant weather condition, such as `cloudy` or `sunny`), `solar_radiation` (W/m², 0–2000), `aqi` (US AQI, 0–500), `pollen` (grass/birch/ragweed/olive levels: NONE, LOW, MODERATE, HIGH, VERY_HIGH), and `forecast` (up to 48 chronological `{datetime, temperature}` hourly points in °C). Solar intensity uses the same conversion as Open-Meteo. Missing optional fields remain unknown and do not carry over from older observations. MQTT temperature input does not fabricate weather conditions, solar radiation, or air-quality data. Open-Meteo requires internet access and enabled weather refresh jobs.
 
+### External heating controllers
+
+Choose the mode that matches what your external software owns, then restart TaNoClo:
+
+- **External scheduling:** `TANOCLO_EXTERNAL_SCHEDULER=true` (`external_scheduler: true` in the Home Assistant app). The external scheduler supplies target temperatures through MQTT. TaNoClo stops its automatic schedules, presence and profile transitions, but keeps Virtual Sensor regulation, valve demand, window detection, and flow optimization. This fits Velair when Room Assist is off and TaNoClo uses room hygrometers.
+- **Full external control:** `TANOCLO_EXTERNAL_CONTROLLER=true` (`external_controller: true` in the app). Also disables server-side window detection, flow optimization and virtual leader demand. Use this when the external controller handles regulation too. This setting implies external scheduling and takes precedence when both flags are set.
+
+Both modes keep explicit MQTT/API commands, device maintenance, and database housekeeping. Neither is enabled by default.
+
+This does not erase schedules already stored on devices or turn off device-side window detection. Disable those separately if the external controller should be the sole owner. Make sure the external controller has a fallback before relying on this mode.
+
 ### 1. Home Assistant via MQTT
 TaNoClo includes an integrated MQTT client that automatically registers devices with Home Assistant via **MQTT Discovery**. Once enabled, the following entities are exposed:
 - **Climate Entities**: Dual control for standard heating zones and hot water zones (`water_heater`).

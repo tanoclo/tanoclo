@@ -19,6 +19,24 @@ describe('Zone Coordinator Engine', () => {
         });
     });
 
+    it('dispatches virtual sensor updates without a nonexistent device UDP port column', async () => {
+        const sendViaBridge = vi.fn();
+        zoneCoordinator.init({
+            db: { getPool: () => ({ execute: async (sql) => {
+                if (sql.includes('udp_port')) throw new Error('Unknown column udp_port');
+                return [[{ serial_no: 'VA_TEST', ipv6_address: 'fd00::2' }]];
+            } }) },
+            coap, tlv,
+            coapTransport: {
+                findBridgeForHome: () => ({ bridgeId: 'IB_TEST', bridgeClient: {} }),
+                getNextMid: () => 30000,
+                sendViaBridge
+            }
+        });
+        await zoneCoordinator.notifyZoneObservers(1, 1, { temp: 22, targetTemp: 21, demand: 0 });
+        expect(sendViaBridge).toHaveBeenCalledWith('IB_TEST', {}, 'fd00::2', 5683, expect.any(Buffer), 'z/p:push:z1');
+    });
+
     describe('calculateZoneDemand', () => {
         it('returns 0 when heating is turned OFF', () => {
             expect(zoneCoordinator.calculateZoneDemand(18.0, 22.0, false)).toBe(0);

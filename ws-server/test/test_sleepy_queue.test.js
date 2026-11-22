@@ -86,6 +86,29 @@ test('Sleepy Device Downlink Queue operations', async () => {
     assert.strictEqual(queue.has('d/config'), true);
     assert.strictEqual(queue.get('d/config').mid, mid);
 
+    // Identify reaches the bridge immediately, without flushing the queued config.
+    const identifyMid = await commandApi.pushDeviceIdentify('VA0000000001');
+    assert.strictEqual(sentFrames.length, 1);
+    assert.strictEqual(sentFrames[0].bridgeId, 'IB0000000001');
+    const identifyFrame = wsBridge.parse(sentFrames[0].frame);
+    assert.strictEqual(identifyFrame.ipv6, 'fd00:0:0:0:0:0:0:2');
+    const identify = coap.parse(identifyFrame.coapBytes);
+    assert.strictEqual(identify.mid, identifyMid);
+    assert.strictEqual(identify.code, coap.CODE_PUT);
+    assert.strictEqual(coap.uriPath(identify), 'd/identify');
+
+    for (const [path, expected] of [['/d/identify', 'd/identify'], ['d/zone/identify?id=1', 'd/zone/identify']]) {
+        const previousCount = sentFrames.length;
+        const variantMid = await commandApi.internalPushViabridge('VA0000000001', coap.CODE_PUT, path);
+        assert.strictEqual(sentFrames.length, previousCount + 1);
+        const variant = coap.parse(wsBridge.parse(sentFrames.at(-1).frame).coapBytes);
+        assert.strictEqual(variant.mid, variantMid);
+        assert.strictEqual(coap.uriPath(variant), expected);
+    }
+
+    assert.deepStrictEqual([...queue.keys()], ['d/config']);
+    sentFrames = [];
+
     // 3. drains queued commands when device wakes up and sends uplink
     commandApi.drainSleepyDownlink('VA0000000001');
 

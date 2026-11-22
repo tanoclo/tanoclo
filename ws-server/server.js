@@ -395,9 +395,9 @@ async function startServer() {
         const flowOptimizer = require('./lib/flow-optimizer');
         flowOptimizer.init(db, commandApi, mqttPublisher);
 
-        mqttClient.onConnect(() => {
-            mqttPublisher.publishFullState();
-            mqttHaDiscovery.publishAllDiscovery();
+        mqttClient.onConnect(async () => {
+            await mqttPublisher.publishFullState();
+            await mqttHaDiscovery.publishAllDiscovery();
         });
 
         config.onMqttChange(() => {

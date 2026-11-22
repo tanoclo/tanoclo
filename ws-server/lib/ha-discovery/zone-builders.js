@@ -68,7 +68,9 @@ function buildZoneDiscovery(publishEntity, zones, config) {
                 max_temp: isHotWater ? 65.0 : 25.0,
                 temp_step: isHotWater ? 1.0 : 0.5,
                 icon: isHotWater ? 'mdi:water-boiler' : undefined,
-                availability_topic: zAvailTopic,
+                // Cached zone state is not sufficient when the backend is down.
+                availability_mode: 'all',
+                availability: [{ topic: 'tado/tanoclo/status' }, { topic: zAvailTopic }],
                 device: zoneDev
             });
 

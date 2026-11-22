@@ -275,9 +275,12 @@ async function publishFullState() {
         // Read fresh connection state after telemetry. A snapshot captured before
         // a bridge reconnect must not overwrite its newer availability event.
         for (const home of homes) await refreshHomeAvailability(home.id);
+        // Flush the queued publications before MQTT advertises backend ready.
+        await new Promise(resolve => process.nextTick(resolve));
         if (log) log('info', '[mqtt-publisher] Full state publish complete.');
     } catch (err) {
         if (log) log('error', `[mqtt-publisher] Failed to publish full state: ${err.message}`);
+        throw err;
     }
 }
 
