@@ -275,7 +275,8 @@ function logWsCommand(deviceId, commandLabel, coapPath, coapBytes, wsFrame) {
  * @param {string} status    - 'delivered' or 'failed'
  */
 function logAck(mid, latencyMs, status) {
-    write('WS-ACK', `MID=${mid} | status=${status} | latency=${latencyMs}ms`);
+    const latency = Number.isFinite(latencyMs) ? `${latencyMs}ms` : 'unknown';
+    write('WS-ACK', `MID=${mid} | status=${status} | latency=${latency}`);
 }
 
 module.exports = { init, setEnabled, isEnabled, logApiRequest, logWsCommand, logAck, flush };
