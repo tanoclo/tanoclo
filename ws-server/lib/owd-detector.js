@@ -28,6 +28,7 @@ function init(_db, _commandApi, _mqttPublisher, _onStateChange) {
 }
 
 async function evaluate(homeId, zoneId, latestMeasurement) {
+    if (require('./config').externalController) return;
     if (!db) return;
     const pool = db.getPool();
 

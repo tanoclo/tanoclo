@@ -7,6 +7,7 @@
 
 const { getLogger } = require('./logger');
 const log = getLogger('flow-optimizer');
+const config = require('./config');
 const weather = require('./weather');
 const interfaceModules = require('./interface-modules');
 
@@ -41,6 +42,7 @@ function init(db, commandApi, mqttPublisher) {
  * @param {number} [delayMs=3000]
  */
 function scheduleEvaluation(homeId, delayMs = 3000) {
+    if (config.externalController) return;
     if (_pendingEvals.has(homeId)) {
         clearTimeout(_pendingEvals.get(homeId));
     }
@@ -339,17 +341,17 @@ async function evaluateHome(homeId) {
 
         // 2. Outdoor temperature
         let outsideTemp = 10.0;
-        const [weatherRows] = await pool.execute(
-            'SELECT outside_temp_celsius FROM home_weather WHERE home_id = ? ORDER BY timestamp DESC LIMIT 1',
-            [homeId]
-        );
-        if (weatherRows.length > 0 && weatherRows[0].outside_temp_celsius !== null) {
-            outsideTemp = parseFloat(weatherRows[0].outside_temp_celsius);
+        const weatherStatus = await require('./weather-source').getReading(_db, homeId);
+        if (weatherStatus.source === 'mqtt' && weatherStatus.stale) return;
+        if (!weatherStatus.stale && weatherStatus.reading?.outside_temp_celsius != null) {
+            outsideTemp = Number(weatherStatus.reading.outside_temp_celsius);
         }
 
         // 3. Hourly Forecast
-        const forecastObj = weather.getHomeForecast ? weather.getHomeForecast(homeId) : null;
-        const forecastHourly = forecastObj ? forecastObj.hourly : null;
+        const forecastObj = weatherStatus.source === 'open_meteo' && weather.getHomeForecast ? weather.getHomeForecast(homeId) : null;
+        const forecastHourly = weatherStatus.source === 'mqtt'
+            ? weatherStatus.reading?.forecast?.filter(point => Date.parse(point.datetime) >= Date.now()).slice(0, 6).map(point => point.temperature) ?? null
+            : forecastObj ? forecastObj.hourly : null;
 
         // 4. Boiler live telemetry
         const [boilerRows] = await pool.execute(
@@ -650,6 +652,7 @@ async function evaluateHome(homeId) {
  * Runs flow optimization evaluation cycle for all homes with auto-adaptation enabled.
  */
 async function evaluateAllHomes() {
+    if (config.externalController) return;
     if (!_db || _db.isOffline()) return;
     const pool = _db.getPool();
 

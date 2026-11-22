@@ -79,6 +79,9 @@ test('legacy test suite runs successfully', async () => {
                               connection_state: 1,
                               child_lock_enabled: 0
                           },
+                          { serial_no: 'VA1234567891', device_type: 'VA02', home_id: 1, is_emulated: 1 },
+                          { serial_no: 'VA1234567892', device_type: 'VA02', home_id: 1, emulated_mode: 'WIRELESS_SENSOR' },
+                          { serial_no: 'VA1234567893', device_type: 'VA02', home_id: 1 },
                           {
                               serial_no: 'RU1234567890',
                               device_type: 'RU02',
@@ -89,6 +92,9 @@ test('legacy test suite runs successfully', async () => {
                               child_lock_enabled: 0
                           }
                       ]];
+                  }
+                  if (query.includes('FROM emulated_devices')) {
+                      return [[{ serial_no: 'VA1234567893', home_id: 1, mode: 'WIRELESS_SENSOR' }]];
                   }
                   if (query.includes('FROM heating_circuits')) {
                       return [[{ home_id: 1, number: 1, field_4000: 20.0, field_4040: 19.5, field_4080: 30 }]];
@@ -109,7 +115,7 @@ test('legacy test suite runs successfully', async () => {
   
   mqttHaDiscovery.init(mockMqttClient, mockDb, mockConfig, mockLog);
   
-  (async () => {
+  await (async () => {
       publishedConfigs.length = 0;
       await mqttHaDiscovery.publishAllDiscovery();
   
@@ -183,6 +189,21 @@ test('legacy test suite runs successfully', async () => {
           test('Error flags state topic is correct', errorFlagsEntity.payload.state_topic === 'tado/tanoclo/h/1/d/VA1234567890/error_flags');
       }
   
+      const faultTopic = 'homeassistant/binary_sensor/tanoclo_VA1234567890_fault/config';
+      const faultEntity = publishedConfigs.find(c => c.topic === faultTopic);
+      test('Valve fault is discovered as a problem binary sensor on the hardware device',
+          faultEntity?.payload.device_class === 'problem' &&
+          faultEntity.payload.device.identifiers[0] === 'tanoclo_dev_VA1234567890');
+      test('Valve fault uses raw error flags and hardware availability',
+          faultEntity?.payload.state_topic === 'tado/tanoclo/h/1/d/VA1234567890/error_flags_raw' &&
+          faultEntity.payload.availability_topic === 'tado/tanoclo/h/1/d/VA1234567890/availability');
+      test('Room units do not get a valve fault entity',
+          !publishedConfigs.some(c => c.topic === 'homeassistant/binary_sensor/tanoclo_RU1234567890_fault/config'));
+
+      test('Emulated valves do not get a fault entity',
+          ['VA1234567891', 'VA1234567892', 'VA1234567893'].every(serial =>
+              !publishedConfigs.some(c => c.topic === `homeassistant/binary_sensor/tanoclo_${serial}_fault/config`)));
+
       const actDevEntity = publishedConfigs.find(c => c.topic.includes('sensor/tanoclo_VA1234567890_actuator_deviation'));
       test('Actuator deviation entity discovered', !!actDevEntity);
       if (actDevEntity) {
@@ -215,6 +236,10 @@ test('legacy test suite runs successfully', async () => {
       // ═══════════════════════════════════════════
       // Summary
       // ═══════════════════════════════════════════
+      mqttHaDiscovery.unpublishDevice('VA1234567890', 1);
+      test('Device removal clears retained valve fault discovery',
+          publishedConfigs.some(c => c.topic === faultTopic && c.payload === '' && c.opts.retain));
+
       section('RESULTS');
       const total = passed + failed;
       console.log(`  Total: ${total} | Passed: ${passed} | Failed: ${failed}`);

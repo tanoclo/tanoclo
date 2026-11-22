@@ -107,7 +107,8 @@ async function publishAllDiscovery() {
         // Delegate to modular builders
         homeBuilders.buildHomeDiscovery(publishEntity, homes, profilesByHome);
         zoneBuilders.buildZoneDiscovery(publishEntity, zones, config);
-        deviceBuilders.buildDeviceDiscovery(publishEntity, devices, config);
+        const emulatedSerials = new Set(emulatedDevices.map(dev => dev.serial_no));
+        deviceBuilders.buildDeviceDiscovery(publishEntity, devices, config, emulatedSerials);
         emulatedBuilders.buildEmulatedDeviceDiscovery(publishEntity, emulatedDevices);
         boilerBuilders.buildBoilerDiscovery(publishEntity, heatingSystems, homesMap);
         circuitBuilders.buildCircuitDiscovery(publishEntity, circuits, homesMap);
@@ -115,6 +116,7 @@ async function publishAllDiscovery() {
 
     } catch (err) {
         if (log) log('error', `[mqtt-ha] HA discovery failed: ${err.message}`, err.stack);
+        throw err;
     }
 }
 
@@ -126,6 +128,7 @@ function unpublishDevice(serial, homeId) {
         ['sensor', `tanoclo_${serial}_firmware`],
         ['sensor', `tanoclo_${serial}_reset_reason`],
         ['sensor', `tanoclo_${serial}_error_flags`],
+        ['binary_sensor', `tanoclo_${serial}_fault`],
         ['binary_sensor', `tanoclo_${serial}_emulated`],
         ['sensor', `tanoclo_${serial}_battery_level`],
         ['sensor', `tanoclo_${serial}_battery_mv`],

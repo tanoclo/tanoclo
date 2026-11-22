@@ -79,7 +79,7 @@ function start({ broadcastTime, broadcastRfKey, pushZoneOverlayDelete, pushSched
 
     // 2. Zone Maintenance (Every 1 minute)
     // Handles overlay expiry and schedule transitions
-    _intervals.push(setInterval(checkZones, 60 * 1000));
+    if (!config.externalScheduler) _intervals.push(setInterval(checkZones, 60 * 1000));
 
     // 3. Time Sync (Every 4 hours)
     _intervals.push(setInterval(syncTime, 4 * 60 * 60 * 1000));
@@ -119,7 +119,7 @@ function start({ broadcastTime, broadcastRfKey, pushZoneOverlayDelete, pushSched
     }, 24 * 60 * 60 * 1000));
 
     // 9. Auto-presence evaluation (Every 1 minute)
-    _intervals.push(setInterval(evaluateAllHomesPresence, 60 * 1000));
+    if (!config.externalScheduler) _intervals.push(setInterval(evaluateAllHomesPresence, 60 * 1000));
 
     // 10. Flow Temperature Optimization (Every 5 minutes)
     const flowOptimizer = require('./flow-optimizer');
@@ -142,7 +142,7 @@ function start({ broadcastTime, broadcastRfKey, pushZoneOverlayDelete, pushSched
     }, 15 * 60 * 1000));
 
     // 13. Auto Schedule Profile Check (Every 1 hour)
-    _intervals.push(setInterval(evaluateAllHomesAutoProfiles, 60 * 60 * 1000));
+    if (!config.externalScheduler) _intervals.push(setInterval(evaluateAllHomesAutoProfiles, 60 * 60 * 1000));
 
     // 14. Monthly Anti-Seize Valve Exercise Check (Every 1 hour)
     _intervals.push(setInterval(() => {

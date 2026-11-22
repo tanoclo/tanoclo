@@ -275,9 +275,12 @@ async function publishFullState() {
         // Read fresh connection state after telemetry. A snapshot captured before
         // a bridge reconnect must not overwrite its newer availability event.
         for (const home of homes) await refreshHomeAvailability(home.id);
+        // Flush the queued publications before MQTT advertises backend ready.
+        await new Promise(resolve => process.nextTick(resolve));
         if (log) log('info', '[mqtt-publisher] Full state publish complete.');
     } catch (err) {
         if (log) log('error', `[mqtt-publisher] Failed to publish full state: ${err.message}`);
+        throw err;
     }
 }
 
@@ -792,16 +795,14 @@ async function publishHomeTelemetry(homeId, homeData = null) {
     // Weather telemetry
     if (db) {
         try {
-            const pool = db.getPool();
-            const [rows] = await pool.execute(
-                'SELECT * FROM home_weather WHERE home_id = ? ORDER BY id DESC LIMIT 1',
-                [homeId]
-            );
-            if (rows.length > 0) {
-                const w = rows[0];
+            const status = await require('./weather-source').getReading(db, homeId);
+            if (status.reading && !status.stale) {
+                const w = status.reading;
                 _pub(`${BASE_TOPIC}/h/${homeId}/outside_temperature`, w.outside_temp_celsius);
                 _pub(`${BASE_TOPIC}/h/${homeId}/solar_intensity`, w.solar_intensity_percentage);
                 _pub(`${BASE_TOPIC}/h/${homeId}/weather_state`, w.weather_state);
+            } else {
+                _pub(`${BASE_TOPIC}/h/${homeId}/outside_temperature`, null);
             }
         } catch (e) {
             if (log) log('error', `[mqtt-publisher] Failed to get weather for home ${homeId}: ${e.message}`);
