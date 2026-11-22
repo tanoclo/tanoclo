@@ -116,6 +116,7 @@ async function publishAllDiscovery() {
 
     } catch (err) {
         if (log) log('error', `[mqtt-ha] HA discovery failed: ${err.message}`, err.stack);
+        throw err;
     }
 }
 
