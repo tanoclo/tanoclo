@@ -5,7 +5,7 @@
 
 'use strict';
 
-function buildDeviceDiscovery(publishEntity, devices, config) {
+function buildDeviceDiscovery(publishEntity, devices, config, emulatedSerials = new Set()) {
     for (const dev of devices) {
         const shortSerial = dev.serial_no;
         const serial = dev.serial_no;
@@ -68,7 +68,7 @@ function buildDeviceDiscovery(publishEntity, devices, config) {
         });
 
         // Home Assistant's Maintenance dashboard lists problem binary sensors.
-        if (isVA && !dev.is_emulated) {
+        if (isVA && !dev.is_emulated && !dev.emulated_mode && !emulatedSerials.has(serial)) {
             publishEntity('binary_sensor', `tanoclo_${serial}_fault`, {
                 unique_id: `tanoclo_${serial}_fault`,
                 name: 'Fault',

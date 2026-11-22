@@ -107,7 +107,8 @@ async function publishAllDiscovery() {
         // Delegate to modular builders
         homeBuilders.buildHomeDiscovery(publishEntity, homes, profilesByHome);
         zoneBuilders.buildZoneDiscovery(publishEntity, zones, config);
-        deviceBuilders.buildDeviceDiscovery(publishEntity, devices, config);
+        const emulatedSerials = new Set(emulatedDevices.map(dev => dev.serial_no));
+        deviceBuilders.buildDeviceDiscovery(publishEntity, devices, config, emulatedSerials);
         emulatedBuilders.buildEmulatedDeviceDiscovery(publishEntity, emulatedDevices);
         boilerBuilders.buildBoilerDiscovery(publishEntity, heatingSystems, homesMap);
         circuitBuilders.buildCircuitDiscovery(publishEntity, circuits, homesMap);
