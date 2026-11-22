@@ -70,9 +70,9 @@ function scheduleEvaluation(homeId, delayMs = 3000) {
  */
 function evaluateCircuitThermalLoad({ callingRadiators = 0, callingUfh = 0, circuitDemandPct = 0, maxZoneError = 0, inLockout = false, currentMode = 0 }) {
     // 1. Anti-flapping lockout: if boiler recently fired, block reignition on marginal/moderate demand
-    // Exception: high deficit cold recovery (>=1.5°C) can override lockout
+    // Exception: high deficit cold recovery (>=2.0°C) can override lockout
     // Lockout only gates initial ignition from Standby (currentMode === 0); never aborts active heating.
-    if (currentMode === 0 && inLockout && maxZoneError < 1.5) {
+    if (currentMode === 0 && inLockout && maxZoneError < 2.0) {
         return { allowHeating: false, circuitOperatingMode: 0, reason: 'anti_flapping_lockout' };
     }
 
@@ -456,29 +456,10 @@ async function evaluateHome(homeId) {
         }
 
         // 7. Calculate optimal flow temperature and evaluate thermal load
-        let lastBurnEnd = _lastBurnEndTimes.get(homeId) || 0;
         const now = Date.now();
-        const lockoutMs = 10 * 60 * 1000; // 10 minutes anti-flapping lockout on small loads
+        const lockoutMs = 10 * 60 * 1000; // minimum off-time after the circuit drops to standby
 
-        // Check live boiler flame state and recent burn end from DB to prevent memory loss on restart
         const isFlameOn = (boilerRows.length > 0 && (boilerRows[0].field_0457 === 1 || (boilerRows[0].field_0452 && boilerRows[0].field_0452 > 0)));
-        try {
-            const [recentBurnRows] = await pool.execute(
-                `SELECT timestamp FROM circuit_measurements 
-                 WHERE home_id = ? AND (field_0457 = 1 OR field_0452 > 0) 
-                 ORDER BY id DESC LIMIT 1`,
-                [homeId]
-            );
-            if (recentBurnRows.length > 0 && recentBurnRows[0].timestamp) {
-                const dbBurnTime = parseDbTimestamp(recentBurnRows[0].timestamp);
-                if (dbBurnTime > lastBurnEnd) {
-                    lastBurnEnd = dbBurnTime;
-                    _lastBurnEndTimes.set(homeId, lastBurnEnd);
-                }
-            }
-        } catch (_) {}
-
-        const inLockout = !isFlameOn && (now - lastBurnEnd < lockoutMs);
 
         const currentMode = circRows.length > 0 && circRows[0].field_2090 !== null && circRows[0].field_2090 !== undefined
             ? parseInt(circRows[0].field_2090, 10)
@@ -487,11 +468,44 @@ async function evaluateHome(homeId) {
             ? parseFloat(circRows[0].field_2040)
             : null;
 
+        // Lockout runs from the server's own 1 -> 0 transition, not from boiler flame telemetry
+        // (DHW and keep-warm flames must not affect the CH lockout). Restore it from history after a restart.
+        let lastBurnEnd = _lastBurnEndTimes.get(homeId) || 0;
+        if (!lastBurnEnd && currentMode === 0) {
+            try {
+                const [mode1Rows] = await pool.execute(
+                    `SELECT timestamp FROM circuit_measurements
+                     WHERE home_id = ? AND field_2090 = 1
+                     ORDER BY id DESC LIMIT 1`,
+                    [homeId]
+                );
+                if (mode1Rows.length > 0 && mode1Rows[0].timestamp) {
+                    const [mode0Rows] = await pool.execute(
+                        `SELECT timestamp FROM circuit_measurements
+                         WHERE home_id = ? AND field_2090 = 0 AND timestamp > ?
+                         ORDER BY id ASC LIMIT 1`,
+                        [homeId, mode1Rows[0].timestamp]
+                    );
+                    if (mode0Rows.length > 0 && mode0Rows[0].timestamp) {
+                        lastBurnEnd = parseDbTimestamp(mode0Rows[0].timestamp);
+                        _lastBurnEndTimes.set(homeId, lastBurnEnd);
+                    }
+                }
+            } catch (_) {}
+        }
+
+        const inLockout = now - lastBurnEnd < lockoutMs;
+
+        // Rate-limit base is the last flow commanded to the circuit; standby (0) restarts from minFlow
+        const rateBaseFlow = circRows.length > 0
+            ? (currentFlow > 0 ? currentFlow : minFlow)
+            : currentMaxFlow;
+
         const opt = computeOptimalFlowTemperature({
             outsideTemp,
             minFlow,
             maxFlowLimit,
-            currentMaxFlow,
+            currentMaxFlow: rateBaseFlow,
             maxZoneError,
             circuitDemandPct,
             modulationPct,
@@ -558,7 +572,7 @@ async function evaluateHome(homeId) {
 
         // 8. If flow changed or circuit operating mode changed, apply and downlink to circuit
         if (shouldUpdateCircuit) {
-            log('info', `[flow-optimizer] Home ${homeId}: flow=${currentMaxFlow}°C->${newFlow}°C (effective=${effectiveFlow}°C) mode=${currentMode}->${targetMode} (reason=${opt.reason}, outdoor=${outsideTemp.toFixed(1)}°C, maxZoneError=${maxZoneError.toFixed(1)}°C, demand=${circuitDemandPct}%)`);
+            log('info', `[flow-optimizer] Home ${homeId}: flow=${rateBaseFlow}°C->${newFlow}°C (effective=${effectiveFlow}°C) mode=${currentMode}->${targetMode} (reason=${opt.reason}, outdoor=${outsideTemp.toFixed(1)}°C, maxZoneError=${maxZoneError.toFixed(1)}°C, demand=${circuitDemandPct}%)`);
 
             // Update circuit configs dynamically in DB and invalidate ETag so RU / bridge picks it up
             for (const cNum of targetCircuitNumbers) {
@@ -572,24 +586,16 @@ async function evaluateHome(homeId) {
                 const lastPush = _lastDriverPushTimes.get(homeId) || 0;
                 const minDelayMs = 15 * 60 * 1000; // 15-minute cooldown between minor flow tweaks
 
-                let ruCachedMismatch = false;
-                if (circRows.length > 0 && circRows[0].field_2040 !== null && circRows[0].field_2040 !== undefined) {
-                    const cached2040 = parseFloat(circRows[0].field_2040);
-                    if (effectiveFlow > 0 && Math.abs(cached2040 - effectiveFlow) >= 2.0) {
-                        ruCachedMismatch = true;
-                    }
-                }
-
                 const flowStepUp = effectiveFlow > 0 && currentFlow !== null && (effectiveFlow - currentFlow) >= 3.0;
                 const isFirstActivePush = lastPush === 0 && effectiveFlow > 0;
                 const cooldownExpired = isCircuitActive && (now - lastPush >= minDelayMs);
-                const needsPush = modeChanged || flowStepUp || ruCachedMismatch || isFirstActivePush || cooldownExpired;
+                const needsPush = modeChanged || flowStepUp || isFirstActivePush || cooldownExpired;
 
-                // Push immediately on operating mode change, flow step-up, RU mismatch, or when cooldown expired during active heating
+                // Push immediately on operating mode change, flow step-up, or when cooldown expired during active heating
                 if (needsPush) {
                     try {
                         const cmdApi = _commandApi || require('./command-api');
-                        const reason = modeChanged ? 'mode_change' : (flowStepUp ? 'flow_step_up' : (ruCachedMismatch ? 'ru_mismatch' : (isFirstActivePush ? 'first_active_push' : 'cooldown_expired')));
+                        const reason = modeChanged ? 'mode_change' : (flowStepUp ? 'flow_step_up' : (isFirstActivePush ? 'first_active_push' : 'cooldown_expired'));
                         log('info', `[flow-optimizer] Triggering live config resync for circuit driver ${driverSerial} (flow=${effectiveFlow}°C, mode=${targetMode}, reason=${reason})`);
                         await cmdApi.pushConfigRefresh(driverSerial);
                         _lastDriverPushTimes.set(homeId, now);

@@ -475,6 +475,30 @@ describe('Flow Temperature Optimizer Engine', () => {
         assert.strictEqual(result.reason, 'anti_flapping_lockout');
     });
 
+    test('Anti-flapping lockout: only a room deficit >= 2.0°C bypasses the minimum off-time', () => {
+        const blocked = evaluateCircuitThermalLoad({
+            callingRadiators: 2, circuitDemandPct: 60, maxZoneError: 1.8, inLockout: true, currentMode: 0
+        });
+        assert.strictEqual(blocked.reason, 'anti_flapping_lockout');
+        assert.strictEqual(blocked.circuitOperatingMode, 0);
+
+        const bypassed = evaluateCircuitThermalLoad({
+            callingRadiators: 2, circuitDemandPct: 60, maxZoneError: 2.1, inLockout: true, currentMode: 0
+        });
+        assert.strictEqual(bypassed.circuitOperatingMode, 1);
+    });
+
+    test('Rate base: from standby (base = minFlow) jumps to target, then holds steady without change', () => {
+        const params = { outsideTemp: 5, minFlow: 30, maxFlowLimit: 80, maxZoneError: 0.5, circuitDemandPct: 40 };
+        const fromStandby = computeOptimalFlowTemperature({ ...params, currentMaxFlow: 30 });
+        assert.strictEqual(fromStandby.targetFlow, 55);
+        assert.strictEqual(fromStandby.changed, true);
+
+        const steady = computeOptimalFlowTemperature({ ...params, currentMaxFlow: 55 });
+        assert.strictEqual(steady.targetFlow, 55);
+        assert.strictEqual(steady.changed, false);
+    });
+
     test('parseDbTimestamp: correctly parses Date objects and UTC strings with or without Z', () => {
         const d = new Date('2026-11-22T05:16:00.000Z');
         assert.strictEqual(parseDbTimestamp(d), d.getTime());
