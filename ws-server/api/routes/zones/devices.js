@@ -302,7 +302,24 @@ router.get('/:homeId/zones/:zoneId/virtual-sensor', async (req, res) => {
         const isVirtual = Boolean(dev && (dev.is_virtual_leader || (dev.serial_no && dev.serial_no.startsWith('IB_VS_'))));
 
         const zoneCoordinator = require('../../../lib/zone-coordinator');
-        const state = zoneCoordinator.getZoneState(homeId, zoneId);
+        // MQTT ingestion runs in the backend process, not this API worker.
+        // Use shared measurements for readings rather than worker-local memory.
+        const [measurements] = await pool.execute(
+            'SELECT field_012d, field_0135, field_40a0, field_6280, timestamp FROM zone_measurements WHERE zone_id = ? AND home_id = ? ORDER BY id DESC LIMIT 1',
+            [zoneId, homeId]
+        );
+        const measurement = measurements[0];
+        const asNumber = value => value == null || !Number.isFinite(Number(value)) ? null : Number(value);
+        const state = measurement ? {
+            temperature: asNumber(measurement.field_012d),
+            humidity: asNumber(measurement.field_0135),
+            demand: asNumber(measurement.field_40a0),
+            setpoint: asNumber(measurement.field_6280),
+            timestamp: measurement.timestamp,
+            // Receipt of telemetry does not prove that a valve received a push.
+            lastPushTimestamp: null,
+            lastPushedValues: null
+        } : null;
         const observers = zoneCoordinator.getObservers(homeId, zoneId).map(o => ({
             deviceSerial: o.deviceSerial,
             ipv6: o.ipv6,
