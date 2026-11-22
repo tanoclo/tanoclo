@@ -29,6 +29,7 @@ services:
       HTTP_API_PORT: 3111
       LOG_LEVEL: info
       TANOCLO_EXTERNAL_CONTROLLER: "${TANOCLO_EXTERNAL_CONTROLLER:-false}"
+      TANOCLO_EXTERNAL_SCHEDULER: "${TANOCLO_EXTERNAL_SCHEDULER:-false}"
       CARTO_API_KEY: ""
     volumes:
       - ./ws-server:/app/ws-server

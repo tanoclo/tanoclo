@@ -59,6 +59,9 @@ if (options.ws_port) env.WS_PORT = String(options.ws_port);
 if (options.http_api_port) env.HTTP_API_PORT = String(options.http_api_port);
 if (options.log_level) env.LOG_LEVEL = options.log_level;
 if (options.tanoclo_domain) env.TANOCLO_DOMAIN = options.tanoclo_domain;
+if (options.external_scheduler !== undefined) {
+    env.TANOCLO_EXTERNAL_SCHEDULER = String(options.external_scheduler);
+}
 if (options.external_controller !== undefined) {
     env.TANOCLO_EXTERNAL_CONTROLLER = String(options.external_controller);
 }

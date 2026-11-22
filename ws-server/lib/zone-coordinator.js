@@ -269,7 +269,7 @@ function buildZoneParamsTLV({ temp, demand, targetTemp, humidity }) {
  * Notify all zone observers (and member VAs) of updated temperature and demand.
  */
 async function notifyZoneObservers(homeId, zoneId, options = {}) {
-    if (config.externalScheduler) return { dispatched: false, reason: 'external_scheduler' };
+    if (config.externalController) return { dispatched: false, reason: 'external_scheduler' };
     const key = getZoneKey(homeId, zoneId);
     let state = _zoneStates.get(key);
     if (!state) {
@@ -388,7 +388,7 @@ async function notifyZoneObservers(homeId, zoneId, options = {}) {
  * Relay highest active zone demand to central boiler circuit driver if configured.
  */
 async function relayBoilerCircuitDemand(homeId) {
-    if (config.externalScheduler) return;
+    if (config.externalController) return;
     if (!_db) return;
     const pool = _db.getPool();
 
@@ -440,7 +440,7 @@ async function relayBoilerCircuitDemand(homeId) {
  * Ingest external temperature and humidity telemetry for a virtual zone leader.
  */
 async function onExternalTelemetry(homeId, zoneId, temp, humidity = null) {
-    if (config.externalScheduler) return;
+    if (config.externalController) return;
     if (!homeId || zoneId == null) return;
     const pool = _db.getPool();
 

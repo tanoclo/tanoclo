@@ -27,11 +27,27 @@ test.each([false, true])('cron keeps maintenance when external controller is %s'
     }
 });
 
+test('external scheduling preserves virtual sensor regulation', async () => {
+    const previousScheduler = config.externalScheduler;
+    const previousController = config.externalController;
+    const execute = vi.fn(async () => [[]]);
+    config.externalScheduler = true;
+    config.externalController = false;
+    try {
+        zoneCoordinator.init({ db: { getPool: () => ({ execute }) } });
+        await zoneCoordinator.onExternalTelemetry(1, 10, 19);
+        expect(execute).toHaveBeenCalledWith(expect.stringContaining('SELECT measuring_device_serial'), [10, 1]);
+    } finally {
+        config.externalScheduler = previousScheduler;
+        config.externalController = previousController;
+    }
+});
+
 test('external controller mode suppresses reactive control before it reads the database', async () => {
-    const previous = config.externalScheduler;
+    const previous = config.externalController;
     const db = { getPool: vi.fn(() => { throw new Error('Unexpected database access'); }) };
     vi.useFakeTimers();
-    config.externalScheduler = true;
+    config.externalController = true;
     try {
         flowOptimizer.init(db);
         zoneCoordinator.init({ db });
@@ -45,7 +61,7 @@ test('external controller mode suppresses reactive control before it reads the d
         await owd.evaluate(1, 10, { temperature: 19 });
         expect(db.getPool).not.toHaveBeenCalled();
     } finally {
-        config.externalScheduler = previous;
+        config.externalController = previous;
         vi.useRealTimers();
     }
 });

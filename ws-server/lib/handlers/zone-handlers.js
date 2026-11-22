@@ -174,8 +174,8 @@ async function handleCircuitActuator(ws, frame, coapMsg, decoded, peerInfo, path
         if (refTemp !== null && refTemp !== undefined) actuatorFields['0x4040'] = refTemp;
         if (targetTemp !== null && targetTemp !== undefined) actuatorFields['0x4000'] = targetTemp;
         if (demandPct !== null && demandPct !== undefined) actuatorFields['0x4080'] = demandPct;
-        // No demand relay will refresh the merged value in external-scheduler mode.
-        if (!config?.externalScheduler && actuatorFields['0x4080'] !== undefined) {
+        // No demand relay will refresh the merged value in full external-control mode.
+        if (!config?.externalController && actuatorFields['0x4080'] !== undefined) {
             try {
                 const pool = db && typeof db.getPool === 'function' ? db.getPool() : null;
                 if (pool) {
@@ -195,7 +195,7 @@ async function handleCircuitActuator(ws, frame, coapMsg, decoded, peerInfo, path
         if (mqttPublisher) {
             mqttPublisher.publishCircuitTelemetry(homeId, parseInt(circuitId, 10), f).catch(e => log('debug', `[MQTT] Circuit telemetry failed: ${e.message}`));
         }
-        if (!config?.externalScheduler && zoneCoordinator && typeof zoneCoordinator.relayBoilerCircuitDemand === 'function') {
+        if (!config?.externalController && zoneCoordinator && typeof zoneCoordinator.relayBoilerCircuitDemand === 'function') {
             zoneCoordinator.relayBoilerCircuitDemand(homeId).catch(() => {});
         }
     }

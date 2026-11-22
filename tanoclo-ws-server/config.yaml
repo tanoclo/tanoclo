@@ -37,6 +37,7 @@ options:
   log_level: "info"
   zone_config_readonly: true
   external_controller: false
+  external_scheduler: false
   carto_api_key: ""
 schema:
   db_host: "str"
@@ -55,4 +56,5 @@ schema:
   log_level: "list(info|warn|error|debug)"
   zone_config_readonly: "bool"
   external_controller: "bool?"
+  external_scheduler: "bool?"
   carto_api_key: "str?"
