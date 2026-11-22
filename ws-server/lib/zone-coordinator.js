@@ -296,7 +296,7 @@ async function notifyZoneObservers(homeId, zoneId, options = {}) {
 
     const pool = _db.getPool();
     const [vaRows] = await pool.execute(
-        "SELECT serial_no, ipv6_address, udp_port FROM devices WHERE home_id = ? AND zone_id = ? AND device_type LIKE 'VA%' AND ipv6_address IS NOT NULL",
+        "SELECT serial_no, ipv6_address FROM devices WHERE home_id = ? AND zone_id = ? AND device_type LIKE 'VA%' AND ipv6_address IS NOT NULL",
         [homeId, zoneId]
     );
 
@@ -356,7 +356,7 @@ async function notifyZoneObservers(homeId, zoneId, options = {}) {
                 bridge.bridgeId,
                 bridge.bridgeClient,
                 va.ipv6_address,
-                va.udp_port || 5683,
+                5683,
                 coapBytes,
                 `z/p:push:z${zoneId}`
             );
