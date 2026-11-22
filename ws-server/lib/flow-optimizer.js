@@ -18,6 +18,15 @@ const _lastBurnStartTimes = new Map();
 const _lastBurnEndTimes = new Map();
 const _pendingEvals = new Map();
 
+function parseDbTimestamp(ts) {
+    if (!ts) return 0;
+    if (ts instanceof Date) return ts.getTime();
+    const str = String(ts).trim();
+    if (!str) return 0;
+    const iso = str.includes('T') ? str : str.replace(' ', 'T');
+    return new Date(iso.endsWith('Z') ? iso : iso + 'Z').getTime();
+}
+
 function init(db, commandApi, mqttPublisher) {
     _db = db;
     _commandApi = commandApi;
@@ -62,7 +71,8 @@ function scheduleEvaluation(homeId, delayMs = 3000) {
 function evaluateCircuitThermalLoad({ callingRadiators = 0, callingUfh = 0, circuitDemandPct = 0, maxZoneError = 0, inLockout = false, currentMode = 0 }) {
     // 1. Anti-flapping lockout: if boiler recently fired, block reignition on marginal/moderate demand
     // Exception: high deficit cold recovery (>=1.5°C) can override lockout
-    if (inLockout && maxZoneError < 1.5) {
+    // Lockout only gates initial ignition from Standby (currentMode === 0); never aborts active heating.
+    if (currentMode === 0 && inLockout && maxZoneError < 1.5) {
         return { allowHeating: false, circuitOperatingMode: 0, reason: 'anti_flapping_lockout' };
     }
 
@@ -252,9 +262,10 @@ function computeOptimalFlowTemperature({
         // When loop water is already warm and burner is off, firing the boiler with small delta-T (< 5°C)
         // trips the boiler's upper temperature limit within seconds, causing a 15-30s micro-burn.
         // Circulate existing heat until water cools down >= 5°C below target, unless room deficit is high (>= 1.0°C).
-        if (!isFlameOn && actualFlowTemp !== null && actualFlowTemp > 0) {
+        // Only gates ignition from Standby (currentMode === 0); must never abort active heating (currentMode === 1).
+        if (currentMode === 0 && !isFlameOn && actualFlowTemp !== null && actualFlowTemp > 0) {
             const flowDeltaT = effectiveFlow - actualFlowTemp;
-            if (flowDeltaT < 5.0 && maxZoneError < 1.0) {
+            if (flowDeltaT < 5.0 && maxZoneError < 1.0 && circuitDemandPct < 50) {
                 return {
                     targetFlow: nextFlow,
                     effectiveFlow: 0,
@@ -459,7 +470,7 @@ async function evaluateHome(homeId) {
                 [homeId]
             );
             if (recentBurnRows.length > 0 && recentBurnRows[0].timestamp) {
-                const dbBurnTime = new Date(recentBurnRows[0].timestamp).getTime();
+                const dbBurnTime = parseDbTimestamp(recentBurnRows[0].timestamp);
                 if (dbBurnTime > lastBurnEnd) {
                     lastBurnEnd = dbBurnTime;
                     _lastBurnEndTimes.set(homeId, lastBurnEnd);
@@ -501,7 +512,28 @@ async function evaluateHome(homeId) {
         // Once heating mode turns ON (1), hold for at least 3 minutes before permitting mode 0 standby drop,
         // unless all zones are completely satisfied (0 demand and 0 error).
         const minRunTimeMs = 3 * 60 * 1000;
-        const lastBurnStart = _lastBurnStartTimes.get(homeId) || 0;
+        let lastBurnStart = _lastBurnStartTimes.get(homeId) || 0;
+        if (!lastBurnStart && currentMode === 1) {
+            try {
+                const [mode0Rows] = await pool.execute(
+                    `SELECT timestamp FROM circuit_measurements 
+                     WHERE home_id = ? AND field_2090 = 0 
+                     ORDER BY id DESC LIMIT 1`,
+                    [homeId]
+                );
+                const lastMode0Ts = (mode0Rows.length > 0 && mode0Rows[0].timestamp) ? mode0Rows[0].timestamp : '1970-01-01';
+                const [mode1Rows] = await pool.execute(
+                    `SELECT timestamp FROM circuit_measurements 
+                     WHERE home_id = ? AND field_2090 = 1 AND timestamp > ? 
+                     ORDER BY id ASC LIMIT 1`,
+                    [homeId, lastMode0Ts]
+                );
+                if (mode1Rows.length > 0 && mode1Rows[0].timestamp) {
+                    lastBurnStart = parseDbTimestamp(mode1Rows[0].timestamp);
+                    _lastBurnStartTimes.set(homeId, lastBurnStart);
+                }
+            } catch (_) {}
+        }
         if (currentMode === 1 && targetMode === 0 && (now - lastBurnStart < minRunTimeMs)) {
             if (circuitDemandPct > 0 || maxZoneError > 0) {
                 log('debug', `[flow-optimizer] Home ${homeId}: holding mode 1 (minimum run-time guard active, ${Math.round((now - lastBurnStart)/1000)}s / 180s)`);
@@ -634,5 +666,6 @@ module.exports = {
     evaluateCircuitThermalLoad,
     scheduleEvaluation,
     evaluateHome,
-    evaluateAllHomes
+    evaluateAllHomes,
+    parseDbTimestamp
 };
