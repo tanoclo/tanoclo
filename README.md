@@ -111,6 +111,12 @@ A complete Home Assistant OS app is available in the `tanoclo-ws-server/` direct
 
 TaNoClo can be used in several ways depending on your preferences:
 
+### External heating controllers
+
+Set `TANOCLO_EXTERNAL_CONTROLLER=true` (or `external_controller: true` in the Home Assistant app) when a controller such as Velair owns heating through MQTT. Restart TaNoClo after changing the setting. TaNoClo continues to publish telemetry and accept explicit commands, but no longer applies its own schedules, presence and profile changes, server-side window detection, flow optimization, or virtual leader demand. Device maintenance and database housekeeping still run.
+
+This does not erase schedules already stored on devices or turn off device-side window detection. Disable those separately if the external controller should be the sole owner. Make sure the external controller has a fallback before relying on this mode.
+
 ### 1. Home Assistant via MQTT
 TaNoClo includes an integrated MQTT client that automatically registers devices with Home Assistant via **MQTT Discovery**. Once enabled, the following entities are exposed:
 - **Climate Entities**: Dual control for standard heating zones and hot water zones (`water_heater`).

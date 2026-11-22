@@ -36,6 +36,7 @@ options:
   mqtt_password: ""
   log_level: "info"
   zone_config_readonly: true
+  external_controller: false
   carto_api_key: ""
 schema:
   db_host: "str"
@@ -53,4 +54,5 @@ schema:
   mqtt_password: "str?"
   log_level: "list(info|warn|error|debug)"
   zone_config_readonly: "bool"
+  external_controller: "bool?"
   carto_api_key: "str?"

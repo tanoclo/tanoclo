@@ -173,7 +173,9 @@ async function handleCircuitActuator(ws, frame, coapMsg, decoded, peerInfo, path
         const actuatorFields = {};
         if (refTemp !== null && refTemp !== undefined) actuatorFields['0x4040'] = refTemp;
         if (targetTemp !== null && targetTemp !== undefined) actuatorFields['0x4000'] = targetTemp;
-        if (demandPct !== null && demandPct !== undefined) {
+        if (demandPct !== null && demandPct !== undefined) actuatorFields['0x4080'] = demandPct;
+        // No demand relay will refresh the merged value in external-scheduler mode.
+        if (!config?.externalScheduler && actuatorFields['0x4080'] !== undefined) {
             try {
                 const pool = db && typeof db.getPool === 'function' ? db.getPool() : null;
                 if (pool) {
@@ -183,11 +185,9 @@ async function handleCircuitActuator(ws, frame, coapMsg, decoded, peerInfo, path
                     );
                     const curDemand = (curCirc.length > 0 && curCirc[0].field_4080 != null) ? Number(curCirc[0].field_4080) : 0;
                     actuatorFields['0x4080'] = Math.max(demandPct, curDemand);
-                } else {
-                    actuatorFields['0x4080'] = demandPct;
                 }
             } catch (_) {
-                actuatorFields['0x4080'] = demandPct;
+                // Keep the reported actuator demand if the lookup fails.
             }
         }
 
@@ -195,7 +195,7 @@ async function handleCircuitActuator(ws, frame, coapMsg, decoded, peerInfo, path
         if (mqttPublisher) {
             mqttPublisher.publishCircuitTelemetry(homeId, parseInt(circuitId, 10), f).catch(e => log('debug', `[MQTT] Circuit telemetry failed: ${e.message}`));
         }
-        if (zoneCoordinator && typeof zoneCoordinator.relayBoilerCircuitDemand === 'function') {
+        if (!config?.externalScheduler && zoneCoordinator && typeof zoneCoordinator.relayBoilerCircuitDemand === 'function') {
             zoneCoordinator.relayBoilerCircuitDemand(homeId).catch(() => {});
         }
     }

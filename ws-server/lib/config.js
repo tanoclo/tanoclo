@@ -60,6 +60,7 @@ const config = {
     logLevel: process.env.LOG_LEVEL || 'debug', // 'debug', 'info', 'warn', 'error'
     // Default: readonly (true). Set TANOCLO_ZONE_CONFIG_READONLY=false to allow config pushes.
     // Protects against accidental writes in new deployments.
+    externalScheduler: process.env.TANOCLO_EXTERNAL_CONTROLLER === 'true',
     zoneConfigReadonly: process.env.TANOCLO_ZONE_CONFIG_READONLY !== 'false',
     swaggerEnabled: process.env.TANOCLO_SWAGGER_ENABLED !== 'false',
     otaAutoUpdate: process.env.OTA_AUTO_UPDATE !== 'false', // Auto-update frontend from GitHub OTA branch
