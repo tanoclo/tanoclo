@@ -6,11 +6,15 @@
 'use strict';
 
 const mqtt = require('mqtt');
+const statusTopic = 'tado/tanoclo/status';
+let ownsBackendStatus = true;
 
 let config = null;
 let log = null;
 let client = null;
 let connected = false;
+let connectionReady = false;
+let connectionGeneration = 0;
 let manuallyClosed = false;
 let reconnectDelay = 1000;
 let reconnectTimer = null;
@@ -18,8 +22,6 @@ let reconnectAttempts = 0;
 const throttles = new Map();
 const subscriptions = [];
 const onConnectCallbacks = [];
-
-let ownsBackendStatus = true;
 
 function init(_config, _log, options) {
     ownsBackendStatus = options?.ownsStatus ?? true;
@@ -53,7 +55,7 @@ function _connect() {
     };
     if (ownsBackendStatus) {
         opts.will = {
-            topic: 'tado/tanoclo/status',
+            topic: statusTopic,
             payload: 'offline',
             qos: 1,
             retain: true
@@ -64,10 +66,14 @@ function _connect() {
     if (password) opts.password = password;
 
     if (log) log('info', `[mqtt] Connecting to ${url}...`);
-    client = mqtt.connect(url, opts);
+    const connection = mqtt.connect(url, opts);
+    client = connection;
 
-    client.on('connect', () => {
+    connection.on('connect', async () => {
+        if (connection !== client) return;
+        const generation = ++connectionGeneration;
         connected = true;
+        connectionReady = false;
         reconnectDelay = 1000;
         reconnectAttempts = 0;
         if (reconnectTimer) {
@@ -77,11 +83,10 @@ function _connect() {
 
         if (log) log('info', `[mqtt] Connected successfully to ${url}`);
 
-        if (ownsBackendStatus) {
-            client.publish('tado/tanoclo/status', 'online', { retain: true, qos: 1 }, (err) => {
-                if (err && log) log('error', `[mqtt] Failed to publish status: ${err.message}`);
-            });
-        }
+        // Invalidate retained readiness before replaying state and discovery.
+        if (ownsBackendStatus) connection.publish(statusTopic, 'offline', { retain: true, qos: 1 }, (err) => {
+            if (err && log) log('error', `[mqtt] Failed to publish status: ${err.message}`);
+        });
 
         // Resubscribe to all existing subscriptions
         for (const sub of subscriptions) {
@@ -90,17 +95,30 @@ function _connect() {
             });
         }
 
-        // Fire onConnect callbacks
-        for (const cb of onConnectCallbacks) {
-            try {
-                cb();
-            } catch (e) {
-                if (log) log('error', `[mqtt] Error in onConnect callback: ${e.message}`);
+        try {
+            for (const cb of onConnectCallbacks) await cb();
+            // An older initialization must never advertise a newer connection.
+            if (generation !== connectionGeneration || connection !== client || !connected || manuallyClosed) return;
+            connectionReady = true;
+            if (ownsBackendStatus) connection.publish(statusTopic, 'online', { retain: true, qos: 1 }, err => {
+                if (err && log) log('error', `[mqtt] Failed to publish readiness: ${err.message}`);
+            });
+        } catch (e) {
+            if (log) log('error', `[mqtt] Error in onConnect callback: ${e.message}`);
+            if (generation === connectionGeneration && connection === client && !manuallyClosed) {
+                connection.end(true);
+                connected = false;
+                connectionReady = false;
+                clearThrottles();
+                _handleDisconnect();
             }
         }
     });
 
-    client.on('close', () => {
+    connection.on('close', () => {
+        if (connection !== client) return;
+        connectionGeneration++;
+        connectionReady = false;
         if (connected) {
             connected = false;
             if (log) log('info', '[mqtt] Connection closed');
@@ -109,12 +127,14 @@ function _connect() {
         _handleDisconnect();
     });
 
-    client.on('error', (err) => {
+    connection.on('error', (err) => {
+        if (connection !== client) return;
         if (log) log('error', `[mqtt] Client error: ${err.message}`);
         _handleDisconnect();
     });
 
-    client.on('message', (topic, message, packet) => {
+    connection.on('message', (topic, message, packet) => {
+        if (connection !== client) return;
         const payloadStr = message.toString();
         for (const sub of subscriptions) {
             if (mqttTopicMatch(sub.topic, topic)) {
@@ -179,6 +199,14 @@ function publish(topic, payload, opts) {
     }
 
     const finalOpts = Object.assign({ retain: true }, opts);
+    // Liveness transitions must reach HA in order, before readiness. Keeping an
+    // older retained value for the telemetry throttle window is not safe here.
+    if (topic.endsWith('/availability') || topic === statusTopic) {
+        client.publish(topic, payload, finalOpts, err => {
+            if (err && log) log('error', `[mqtt] Publish error on ${topic}: ${err.message}`);
+        });
+        return;
+    }
 
     const entry = throttles.get(topic);
     if (!entry) {
@@ -261,6 +289,8 @@ function reconnect() {
 function shutdown() {
     return new Promise((resolve) => {
         manuallyClosed = true;
+        connectionReady = false;
+        connectionGeneration++;
         clearThrottles();
         if (reconnectTimer) {
             clearTimeout(reconnectTimer);
@@ -268,7 +298,7 @@ function shutdown() {
         }
         if (client) {
             if (connected && ownsBackendStatus) {
-                client.publish('tado/tanoclo/status', 'offline', { retain: true, qos: 1 }, () => {
+                client.publish(statusTopic, 'offline', { retain: true, qos: 1 }, () => {
                     client.end(false, {}, () => {
                         client = null;
                         connected = false;
@@ -290,12 +320,10 @@ function shutdown() {
 
 function onConnect(callback) {
     onConnectCallbacks.push(callback);
-    if (connected) {
-        try {
-            callback();
-        } catch (e) {
+    if (connected && connectionReady) {
+        Promise.resolve().then(callback).catch(e => {
             if (log) log('error', `[mqtt] Error in immediate onConnect callback: ${e.message}`);
-        }
+        });
     }
 }
 

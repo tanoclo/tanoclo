@@ -29,7 +29,7 @@ test('starting and stopping the API worker cannot change backend availability', 
 
     expect(backend.options.will).toMatchObject({ topic: 'tado/tanoclo/status', payload: 'offline', retain: true });
     expect(backend.socket.publish.mock.calls.map(call => call.slice(0, 2)))
-        .toEqual([['tado/tanoclo/status', 'online']]);
+        .toEqual([['tado/tanoclo/status', 'offline'], ['tado/tanoclo/status', 'online']]);
     expect(api.options.will).toBeUndefined();
     expect(api.socket.publish).not.toHaveBeenCalled();
 
