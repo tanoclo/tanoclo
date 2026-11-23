@@ -723,8 +723,8 @@ async function insertCircuitMeasurement(homeId, circuitNumber, circuitFields = {
     const targetTemp = (circuitFields['0x4000'] !== undefined ? circuitFields['0x4000'] : (circuitFields.field_4000 !== undefined ? circuitFields.field_4000 : (prev?.field_4000 ?? cRow?.field_4000))) ?? null;
     const refTemp = (circuitFields['0x4040'] !== undefined ? circuitFields['0x4040'] : (circuitFields.field_4040 !== undefined ? circuitFields.field_4040 : (prev?.field_4040 ?? cRow?.field_4040))) ?? null;
     const demand = (circuitFields['0x4080'] !== undefined ? circuitFields['0x4080'] : (circuitFields.field_4080 !== undefined ? circuitFields.field_4080 : (prev?.field_4080 ?? cRow?.field_4080))) ?? null;
-    const mode = (circuitFields['0x2090'] !== undefined ? circuitFields['0x2090'] : (circuitFields.field_2090 !== undefined ? circuitFields.field_2090 : (prev?.field_2090 ?? cRow?.field_2090))) ?? null;
-    const dhwMaxFlow = (circuitFields['0x2040'] !== undefined ? circuitFields['0x2040'] : (circuitFields.field_2040 !== undefined ? circuitFields.field_2040 : (prev?.field_2040 ?? cRow?.field_2040))) ?? null;
+    const mode = (circuitFields['0x2090'] !== undefined ? circuitFields['0x2090'] : (circuitFields.field_2090 !== undefined ? circuitFields.field_2090 : (cRow?.field_2090 !== null && cRow?.field_2090 !== undefined ? cRow.field_2090 : prev?.field_2090))) ?? null;
+    const dhwMaxFlow = (circuitFields['0x2040'] !== undefined ? circuitFields['0x2040'] : (circuitFields.field_2040 !== undefined ? circuitFields.field_2040 : (cRow?.field_2040 !== null && cRow?.field_2040 !== undefined ? cRow.field_2040 : prev?.field_2040))) ?? null;
 
     const chFlowTemp = (hvacFields['0x044c'] !== undefined ? hvacFields['0x044c'] : (hvacFields.field_044c !== undefined ? hvacFields.field_044c : (prev?.field_044c ?? hRow?.field_044c))) ?? null;
     const chReturnTemp = (hvacFields['0x044d'] !== undefined ? hvacFields['0x044d'] : (hvacFields.field_044d !== undefined ? hvacFields.field_044d : (prev?.field_044d ?? hRow?.field_044d))) ?? null;
@@ -815,6 +815,10 @@ async function updateCircuitConfig(homeId, circuitNumber, fields) {
             [devEtag, cDevRows[0].driver_serial_no, homeId]
         );
     }
+
+    try {
+        await insertCircuitMeasurement(homeId, circuitNumber, { '0x2040': newFlow, '0x2090': newMode }, {});
+    } catch (_) {}
 }
 
 async function upsertHeatingSystem(homeId, fields, fullConfigJson = null) {
