@@ -506,6 +506,17 @@ async function onExternalTelemetry(homeId, zoneId, temp, humidity = null) {
         ).catch(() => {});
     }
 
+    // MQTT is the virtual leader's contact with the backend; it has no socket.
+    if (measuringSerial && temp != null && Number.isFinite(Number(temp))) {
+        await pool.execute(
+            'UPDATE devices SET connection_state = 1, last_contact = ?, connection_state_timestamp = NOW() WHERE serial_no = ? AND is_virtual_leader = 1',
+            [new Date().toISOString(), measuringSerial]
+        );
+        if (_mqttPublisher && typeof _mqttPublisher.publishDeviceAvailability === 'function') {
+            await _mqttPublisher.publishDeviceAvailability(measuringSerial);
+        }
+    }
+
     // 5. Notify zone observers with gating
     await notifyZoneObservers(homeId, zoneId, {
         temp: Number(temp),
