@@ -23145,7 +23145,19 @@ CREATE TABLE `flow_temperature_settings` (
   `max_flow_temperature` int(11) NOT NULL,
   `min_flow_temperature` int(11) NOT NULL,
   `max_flow_temperature_limit` int(11) NOT NULL,
-  `auto_adaptation_enabled` tinyint(1) NOT NULL
+  `auto_adaptation_enabled` tinyint(1) NOT NULL,
+  `guard_lockout_enabled` tinyint(1) NOT NULL DEFAULT 1,
+  `guard_lockout_duration_min` int(11) NOT NULL DEFAULT 10,
+  `guard_lockout_override_deficit` decimal(3,1) NOT NULL DEFAULT 2.0,
+  `guard_delta_t_enabled` tinyint(1) NOT NULL DEFAULT 1,
+  `guard_delta_t_min_temp` decimal(3,1) NOT NULL DEFAULT 5.0,
+  `guard_min_runtime_enabled` tinyint(1) NOT NULL DEFAULT 1,
+  `guard_min_runtime_seconds` int(11) NOT NULL DEFAULT 180,
+  `guard_thermal_load_enabled` tinyint(1) NOT NULL DEFAULT 1,
+  `guard_radiator_floor_enabled` tinyint(1) NOT NULL DEFAULT 1,
+  `guard_radiator_floor_temp` int(11) NOT NULL DEFAULT 48,
+  `guard_rate_limit_enabled` tinyint(1) NOT NULL DEFAULT 1,
+  `guard_rate_limit_max_step` decimal(3,1) NOT NULL DEFAULT 3.0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `flow_temperature_history` (

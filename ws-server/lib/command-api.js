@@ -608,11 +608,17 @@ async function pushBoilerMaxFlowTemp(homeId, temp) {
         maxLimit = parseInt(existing.max_flow_temperature_limit, 10);
         autoAdapt = parseInt(existing.auto_adaptation_enabled, 10);
     }
-
-    await pool.execute(
-        'REPLACE INTO flow_temperature_settings (home_id, max_flow_temperature, min_flow_temperature, max_flow_temperature_limit, auto_adaptation_enabled) VALUES (?, ?, ?, ?, ?)',
-        [homeId, temp, minTemp, maxLimit, autoAdapt]
-    );
+    if (existing) {
+        await pool.execute(
+            'UPDATE flow_temperature_settings SET max_flow_temperature = ? WHERE home_id = ?',
+            [temp, homeId]
+        );
+    } else {
+        await pool.execute(
+            'INSERT INTO flow_temperature_settings (home_id, max_flow_temperature, min_flow_temperature, max_flow_temperature_limit, auto_adaptation_enabled) VALUES (?, ?, ?, ?, ?)',
+            [homeId, temp, minTemp, maxLimit, autoAdapt]
+        );
+    }
 
     return null;
 }

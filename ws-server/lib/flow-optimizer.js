@@ -70,12 +70,32 @@ function scheduleEvaluation(homeId, delayMs = 3000) {
  * @param {number} [params.currentMode=0] Current circuit operating mode (0=STANDBY, 1=SCHEDULE)
  * @returns {{ allowHeating: boolean, circuitOperatingMode: number, reason: string }}
  */
-function evaluateCircuitThermalLoad({ callingRadiators = 0, callingUfh = 0, circuitDemandPct = 0, maxZoneError = 0, inLockout = false, currentMode = 0 }) {
+function evaluateCircuitThermalLoad({
+    callingRadiators = 0,
+    callingUfh = 0,
+    circuitDemandPct = 0,
+    maxZoneError = 0,
+    inLockout = false,
+    currentMode = 0,
+    guards = {}
+}) {
+    const lockoutEnabled = guards.lockoutEnabled !== undefined ? Boolean(guards.lockoutEnabled) : true;
+    const lockoutOverrideDeficit = guards.lockoutOverrideDeficit !== undefined ? Number(guards.lockoutOverrideDeficit) : 2.0;
+    const thermalLoadEnabled = guards.thermalLoadEnabled !== undefined ? Boolean(guards.thermalLoadEnabled) : true;
+
     // 1. Anti-flapping lockout: if boiler recently fired, block reignition on marginal/moderate demand
-    // Exception: high deficit cold recovery (>=2.0°C) can override lockout
+    // Exception: high deficit cold recovery (>= lockoutOverrideDeficit) can override lockout
     // Lockout only gates initial ignition from Standby (currentMode === 0); never aborts active heating.
-    if (currentMode === 0 && inLockout && maxZoneError < 2.0) {
+    if (lockoutEnabled && currentMode === 0 && inLockout && maxZoneError < lockoutOverrideDeficit) {
         return { allowHeating: false, circuitOperatingMode: 0, reason: 'anti_flapping_lockout' };
+    }
+
+    // If thermal load gating disabled: any active circuit demand or error allows heating
+    if (!thermalLoadEnabled) {
+        if (circuitDemandPct > 0 || maxZoneError > 0) {
+            return { allowHeating: true, circuitOperatingMode: 1, reason: 'thermal_load_gating_disabled' };
+        }
+        return { allowHeating: false, circuitOperatingMode: 0, reason: 'idle_standby' };
     }
 
     // 2. Underfloor heating has massive screed thermal mass - always safe to absorb boiler output
@@ -138,8 +158,16 @@ function computeOptimalFlowTemperature({
     inLockout = false,
     actualFlowTemp = null,
     isFlameOn = false,
-    currentMode = 0
+    currentMode = 0,
+    guards = {}
 }) {
+    const rateLimitEnabled = guards.rateLimitEnabled !== undefined ? Boolean(guards.rateLimitEnabled) : true;
+    const rateLimitMaxStep = guards.rateLimitMaxStep !== undefined ? Number(guards.rateLimitMaxStep) : 3.0;
+    const radiatorFloorEnabled = guards.radiatorFloorEnabled !== undefined ? Boolean(guards.radiatorFloorEnabled) : true;
+    const radiatorFloorTemp = guards.radiatorFloorTemp !== undefined ? Number(guards.radiatorFloorTemp) : 48;
+    const deltaTEnabled = guards.deltaTEnabled !== undefined ? Boolean(guards.deltaTEnabled) : true;
+    const deltaTMinTemp = guards.deltaTMinTemp !== undefined ? Number(guards.deltaTMinTemp) : 5.0;
+
     // 1. Guardrail sanity checks
     const isOnlyUfh = activeDemandType === 'ONLY_UNDERFLOOR';
     const effectiveMaxLimit = isOnlyUfh ? Math.min(maxFlowLimit, 45) : maxFlowLimit;
@@ -153,7 +181,9 @@ function computeOptimalFlowTemperature({
         const targetFlow = minFlow;
         const diff = targetFlow - currentMaxFlow;
         const changed = Math.abs(diff) >= 1.0;
-        const steppedFlow = changed ? currentMaxFlow + Math.max(-3.0, Math.min(3.0, diff)) : currentMaxFlow;
+        const steppedFlow = (rateLimitEnabled && changed)
+            ? currentMaxFlow + Math.max(-rateLimitMaxStep, Math.min(rateLimitMaxStep, diff))
+            : targetFlow;
         return {
             targetFlow: Math.round(steppedFlow),
             baseFlow: minFlow,
@@ -211,7 +241,7 @@ function computeOptimalFlowTemperature({
     const rawTarget = Math.round(baseFlow + demandBoost + forecastAdj + modAdj);
     const clampedTarget = Math.max(minFlow, Math.min(maxFlowLimit, rawTarget));
 
-    // 8. Hysteresis & Rate Limiting (Prevent oscillation, max ±3°C per evaluation cycle)
+    // 8. Hysteresis & Rate Limiting (Prevent oscillation, max ±rateLimitMaxStep per evaluation cycle)
     // Only apply rate limiting when actively heating in steady state.
     // Transitioning from STANDBY jumps directly to operating target so radiators receive proper heat immediately.
     const fromStandby = (currentMaxFlow <= minFlow);
@@ -219,12 +249,12 @@ function computeOptimalFlowTemperature({
     let nextFlow = clampedTarget;
     let changed = false;
 
-    if (!fromStandby && Math.abs(delta) >= 1.0) {
-        const step = Math.max(-3.0, Math.min(3.0, delta));
+    if (rateLimitEnabled && !fromStandby && Math.abs(delta) >= 1.0) {
+        const step = Math.max(-rateLimitMaxStep, Math.min(rateLimitMaxStep, delta));
         nextFlow = Math.round(currentMaxFlow + step);
         nextFlow = Math.max(minFlow, Math.min(maxFlowLimit, nextFlow));
         changed = nextFlow !== currentMaxFlow;
-    } else if (fromStandby) {
+    } else if (!rateLimitEnabled || fromStandby) {
         nextFlow = clampedTarget;
         changed = nextFlow !== currentMaxFlow;
     }
@@ -247,27 +277,30 @@ function computeOptimalFlowTemperature({
         circuitDemandPct,
         maxZoneError,
         inLockout,
-        currentMode
+        currentMode,
+        guards
     });
     const circuitOperatingMode = thermal.circuitOperatingMode;
 
     // Emitter-specific flow temperature floor when heating is active:
-    // Radiators require >= 48°C (typical 50-60°C) to radiate heat and prevent instantaneous anti-cycling trip on minimum modulation.
+    // Radiators require >= radiatorFloorTemp (default 48°C) to radiate heat and prevent instantaneous anti-cycling trip on minimum modulation.
     // Underfloor heating operates safely at lower minFlow floor.
     let effectiveFlow = 0;
     if (circuitOperatingMode === 1) {
-        const flowFloor = (ufhCount === 0 && radCount > 0) ? Math.max(minFlow, 48) : minFlow;
+        const flowFloor = (radiatorFloorEnabled && ufhCount === 0 && radCount > 0)
+            ? Math.max(minFlow, radiatorFloorTemp)
+            : minFlow;
         effectiveFlow = Math.max(nextFlow, flowFloor);
         effectiveFlow = Math.min(effectiveFlow, maxFlowLimit);
 
         // Delta-T Anti-Microburn Guard:
-        // When loop water is already warm and burner is off, firing the boiler with small delta-T (< 5°C)
+        // When loop water is already warm and burner is off, firing the boiler with small delta-T (< deltaTMinTemp)
         // trips the boiler's upper temperature limit within seconds, causing a 15-30s micro-burn.
-        // Circulate existing heat until water cools down >= 5°C below target, unless room deficit is high (>= 1.0°C).
+        // Circulate existing heat until water cools down >= deltaTMinTemp below target, unless room deficit is high (>= 1.0°C).
         // Only gates ignition from Standby (currentMode === 0); must never abort active heating (currentMode === 1).
-        if (currentMode === 0 && !isFlameOn && actualFlowTemp !== null && actualFlowTemp > 0) {
+        if (deltaTEnabled && currentMode === 0 && !isFlameOn && actualFlowTemp !== null && actualFlowTemp > 0) {
             const flowDeltaT = effectiveFlow - actualFlowTemp;
-            if (flowDeltaT < 5.0 && maxZoneError < 1.0 && circuitDemandPct < 50) {
+            if (flowDeltaT < deltaTMinTemp && maxZoneError < 1.0 && circuitDemandPct < 50) {
                 return {
                     targetFlow: nextFlow,
                     effectiveFlow: 0,
@@ -459,7 +492,22 @@ async function evaluateHome(homeId) {
 
         // 7. Calculate optimal flow temperature and evaluate thermal load
         const now = Date.now();
-        const lockoutMs = 10 * 60 * 1000; // minimum off-time after the circuit drops to standby
+        const guards = {
+            lockoutEnabled: settings.guard_lockout_enabled !== undefined ? Boolean(settings.guard_lockout_enabled) : true,
+            lockoutDurationMin: settings.guard_lockout_duration_min !== undefined ? parseInt(settings.guard_lockout_duration_min, 10) : 10,
+            lockoutOverrideDeficit: settings.guard_lockout_override_deficit !== undefined ? parseFloat(settings.guard_lockout_override_deficit) : 2.0,
+            deltaTEnabled: settings.guard_delta_t_enabled !== undefined ? Boolean(settings.guard_delta_t_enabled) : true,
+            deltaTMinTemp: settings.guard_delta_t_min_temp !== undefined ? parseFloat(settings.guard_delta_t_min_temp) : 5.0,
+            minRuntimeEnabled: settings.guard_min_runtime_enabled !== undefined ? Boolean(settings.guard_min_runtime_enabled) : true,
+            minRuntimeSeconds: settings.guard_min_runtime_seconds !== undefined ? parseInt(settings.guard_min_runtime_seconds, 10) : 180,
+            thermalLoadEnabled: settings.guard_thermal_load_enabled !== undefined ? Boolean(settings.guard_thermal_load_enabled) : true,
+            radiatorFloorEnabled: settings.guard_radiator_floor_enabled !== undefined ? Boolean(settings.guard_radiator_floor_enabled) : true,
+            radiatorFloorTemp: settings.guard_radiator_floor_temp !== undefined ? parseInt(settings.guard_radiator_floor_temp, 10) : 48,
+            rateLimitEnabled: settings.guard_rate_limit_enabled !== undefined ? Boolean(settings.guard_rate_limit_enabled) : true,
+            rateLimitMaxStep: settings.guard_rate_limit_max_step !== undefined ? parseFloat(settings.guard_rate_limit_max_step) : 3.0
+        };
+
+        const lockoutMs = (guards.lockoutDurationMin || 10) * 60 * 1000;
 
         const isFlameOn = (boilerRows.length > 0 && (boilerRows[0].field_0457 === 1 || (boilerRows[0].field_0452 && boilerRows[0].field_0452 > 0)));
 
@@ -496,7 +544,7 @@ async function evaluateHome(homeId) {
             } catch (_) {}
         }
 
-        const inLockout = now - lastBurnEnd < lockoutMs;
+        const inLockout = guards.lockoutEnabled && (now - lastBurnEnd < lockoutMs);
 
         // Rate-limit base is the last flow commanded to the circuit; standby (0) restarts from minFlow
         const rateBaseFlow = circRows.length > 0
@@ -518,16 +566,17 @@ async function evaluateHome(homeId) {
             inLockout,
             actualFlowTemp,
             isFlameOn,
-            currentMode
+            currentMode,
+            guards
         });
 
         const newFlow = opt.targetFlow;
         let targetMode = opt.circuitOperatingMode ?? 1;
 
         // Anti-cycling minimum run-time guard:
-        // Once heating mode turns ON (1), hold for at least 3 minutes before permitting mode 0 standby drop,
+        // Once heating mode turns ON (1), hold for at least minRuntimeSeconds before permitting mode 0 standby drop,
         // unless all zones are completely satisfied (0 demand and 0 error).
-        const minRunTimeMs = 3 * 60 * 1000;
+        const minRunTimeMs = (guards.minRuntimeSeconds || 180) * 1000;
         let lastBurnStart = _lastBurnStartTimes.get(homeId) || 0;
         if (!lastBurnStart && currentMode === 1) {
             try {
@@ -550,9 +599,9 @@ async function evaluateHome(homeId) {
                 }
             } catch (_) {}
         }
-        if (currentMode === 1 && targetMode === 0 && (now - lastBurnStart < minRunTimeMs)) {
+        if (guards.minRuntimeEnabled && currentMode === 1 && targetMode === 0 && (now - lastBurnStart < minRunTimeMs)) {
             if (circuitDemandPct > 0 || maxZoneError > 0) {
-                log('debug', `[flow-optimizer] Home ${homeId}: holding mode 1 (minimum run-time guard active, ${Math.round((now - lastBurnStart)/1000)}s / 180s)`);
+                log('debug', `[flow-optimizer] Home ${homeId}: holding mode 1 (minimum run-time guard active, ${Math.round((now - lastBurnStart)/1000)}s / ${guards.minRuntimeSeconds || 180}s)`);
                 targetMode = 1;
             }
         }

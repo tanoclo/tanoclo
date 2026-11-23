@@ -512,5 +512,115 @@ describe('Flow Temperature Optimizer Engine', () => {
         assert.strictEqual(parseDbTimestamp(null), 0);
         assert.strictEqual(parseDbTimestamp(''), 0);
     });
+
+    describe('Configurable Guards Toggles and Thresholds', () => {
+        test('Lockout guard: disabling lockout allows firing despite inLockout', () => {
+            const blocked = evaluateCircuitThermalLoad({
+                callingRadiators: 2, circuitDemandPct: 30, maxZoneError: 0.3, inLockout: true, currentMode: 0
+            });
+            assert.strictEqual(blocked.allowHeating, false);
+            assert.strictEqual(blocked.reason, 'anti_flapping_lockout');
+
+            const allowed = evaluateCircuitThermalLoad({
+                callingRadiators: 2, circuitDemandPct: 30, maxZoneError: 0.3, inLockout: true, currentMode: 0,
+                guards: { lockoutEnabled: false }
+            });
+            assert.strictEqual(allowed.allowHeating, true);
+            assert.strictEqual(allowed.circuitOperatingMode, 1);
+            assert.strictEqual(allowed.reason, 'multi_zone_coincidence');
+        });
+
+        test('Lockout guard: custom override deficit threshold', () => {
+            const blocked = evaluateCircuitThermalLoad({
+                callingRadiators: 2, circuitDemandPct: 30, maxZoneError: 1.2, inLockout: true, currentMode: 0,
+                guards: { lockoutOverrideDeficit: 1.5 }
+            });
+            assert.strictEqual(blocked.reason, 'anti_flapping_lockout');
+
+            const bypassed = evaluateCircuitThermalLoad({
+                callingRadiators: 2, circuitDemandPct: 30, maxZoneError: 1.6, inLockout: true, currentMode: 0,
+                guards: { lockoutOverrideDeficit: 1.5 }
+            });
+            assert.strictEqual(bypassed.circuitOperatingMode, 1);
+        });
+
+        test('Thermal load gating guard: disabling allows single radiator micro-demand to fire', () => {
+            const blocked = evaluateCircuitThermalLoad({
+                callingRadiators: 1, circuitDemandPct: 10, maxZoneError: 0.1, inLockout: false, currentMode: 0
+            });
+            assert.strictEqual(blocked.allowHeating, false);
+            assert.strictEqual(blocked.reason, 'suppress_micro_burn_low_thermal_load');
+
+            const allowed = evaluateCircuitThermalLoad({
+                callingRadiators: 1, circuitDemandPct: 10, maxZoneError: 0.1, inLockout: false, currentMode: 0,
+                guards: { thermalLoadEnabled: false }
+            });
+            assert.strictEqual(allowed.allowHeating, true);
+            assert.strictEqual(allowed.circuitOperatingMode, 1);
+            assert.strictEqual(allowed.reason, 'thermal_load_gating_disabled');
+        });
+
+        test('Radiator floor guard: disabling permits low flow without 48°C floor clamp', () => {
+            // outdoor temp 18°C -> base flow low ~35°C
+            const clamped = computeOptimalFlowTemperature({
+                outsideTemp: 18, minFlow: 30, maxFlowLimit: 80, currentMaxFlow: 30, maxZoneError: 0.5,
+                circuitDemandPct: 40, callingRadiators: 2, callingUfh: 0, currentMode: 0
+            });
+            assert.strictEqual(clamped.effectiveFlow, 48);
+
+            const unclamped = computeOptimalFlowTemperature({
+                outsideTemp: 18, minFlow: 30, maxFlowLimit: 80, currentMaxFlow: 30, maxZoneError: 0.5,
+                circuitDemandPct: 40, callingRadiators: 2, callingUfh: 0, currentMode: 0,
+                guards: { radiatorFloorEnabled: false }
+            });
+            assert.strictEqual(unclamped.effectiveFlow < 48, true);
+            assert.strictEqual(unclamped.effectiveFlow, unclamped.targetFlow);
+        });
+
+        test('Radiator floor guard: custom floor temperature', () => {
+            const customFloor = computeOptimalFlowTemperature({
+                outsideTemp: 18, minFlow: 30, maxFlowLimit: 80, currentMaxFlow: 30, maxZoneError: 0.5,
+                circuitDemandPct: 40, callingRadiators: 2, callingUfh: 0, currentMode: 0,
+                guards: { radiatorFloorTemp: 52 }
+            });
+            assert.strictEqual(customFloor.effectiveFlow, 52);
+        });
+
+        test('Delta-T guard: disabling permits firing even when loop water is warm', () => {
+            const blocked = computeOptimalFlowTemperature({
+                outsideTemp: 5, minFlow: 30, maxFlowLimit: 80, currentMaxFlow: 30, maxZoneError: 0.5,
+                circuitDemandPct: 40, callingRadiators: 2, callingUfh: 0, currentMode: 0,
+                actualFlowTemp: 54, isFlameOn: false // target flow is 55, deltaT is only 1°C < 5°C
+            });
+            assert.strictEqual(blocked.circuitOperatingMode, 0);
+            assert.strictEqual(blocked.reason, 'flow_already_hot');
+
+            const allowed = computeOptimalFlowTemperature({
+                outsideTemp: 5, minFlow: 30, maxFlowLimit: 80, currentMaxFlow: 30, maxZoneError: 0.5,
+                circuitDemandPct: 40, callingRadiators: 2, callingUfh: 0, currentMode: 0,
+                actualFlowTemp: 54, isFlameOn: false,
+                guards: { deltaTEnabled: false }
+            });
+            assert.strictEqual(allowed.circuitOperatingMode, 1);
+            assert.notStrictEqual(allowed.reason, 'flow_already_hot');
+        });
+
+        test('Rate limit guard: disabling rate limiting steps directly to target', () => {
+            // Steady state at 40°C, cold weather target is ~63°C (delta 23°C)
+            const rateLimited = computeOptimalFlowTemperature({
+                outsideTemp: 0, minFlow: 30, maxFlowLimit: 80, currentMaxFlow: 40, maxZoneError: 0.5,
+                circuitDemandPct: 40, currentMode: 1
+            });
+            // Stepped by max 3°C from 40 to 43
+            assert.strictEqual(rateLimited.targetFlow, 43);
+
+            const directJump = computeOptimalFlowTemperature({
+                outsideTemp: 0, minFlow: 30, maxFlowLimit: 80, currentMaxFlow: 40, maxZoneError: 0.5,
+                circuitDemandPct: 40, currentMode: 1,
+                guards: { rateLimitEnabled: false }
+            });
+            assert.strictEqual(directJump.targetFlow > 50, true);
+        });
+    });
 });
 
