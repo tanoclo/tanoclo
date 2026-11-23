@@ -7,7 +7,7 @@
 
 require('./test_config');
 const assert = require('assert');
-const { computeOptimalFlowTemperature, evaluateCircuitThermalLoad } = require('../lib/flow-optimizer');
+const { computeOptimalFlowTemperature, evaluateCircuitThermalLoad, parseDbTimestamp } = require('../lib/flow-optimizer');
 
 describe('Flow Temperature Optimizer Engine', () => {
     test('Idle / Standby drops to minFlow when no demand and rooms satisfied', () => {
@@ -424,6 +424,93 @@ describe('Flow Temperature Optimizer Engine', () => {
         });
         assert.strictEqual(resultOn.circuitOperatingMode, 1);
         assert.ok(resultOn.effectiveFlow >= 48);
+    });
+
+    test('Delta-T Anti-Microburn Guard: does not abort active heating when currentMode === 1', () => {
+        const result = computeOptimalFlowTemperature({
+            outsideTemp: 5,
+            minFlow: 30,
+            maxFlowLimit: 75,
+            currentMaxFlow: 50,
+            maxZoneError: 0.4,
+            circuitDemandPct: 30,
+            callingRadiators: 2,
+            callingUfh: 0,
+            actualFlowTemp: 45.0,
+            isFlameOn: false,
+            currentMode: 1
+        });
+
+        // Loop water at 45°C with target 48°C (deltaT = 3°C < 5°C).
+        // In active heating (currentMode 1), must remain in Mode 1 to allow pump circulation without flapping.
+        assert.strictEqual(result.circuitOperatingMode, 1);
+        assert.ok(result.effectiveFlow >= 48);
+    });
+
+    test('Anti-flapping lockout: does not terminate active heating when currentMode === 1', () => {
+        const result = evaluateCircuitThermalLoad({
+            callingRadiators: 2,
+            circuitDemandPct: 20,
+            maxZoneError: 0.3,
+            inLockout: true,
+            currentMode: 1
+        });
+
+        assert.strictEqual(result.allowHeating, true);
+        assert.strictEqual(result.circuitOperatingMode, 1);
+        assert.strictEqual(result.reason, 'multi_zone_coincidence');
+    });
+
+    test('Anti-flapping lockout: blocks ignition when in standby (currentMode === 0)', () => {
+        const result = evaluateCircuitThermalLoad({
+            callingRadiators: 2,
+            circuitDemandPct: 30,
+            maxZoneError: 0.3,
+            inLockout: true,
+            currentMode: 0
+        });
+
+        assert.strictEqual(result.allowHeating, false);
+        assert.strictEqual(result.circuitOperatingMode, 0);
+        assert.strictEqual(result.reason, 'anti_flapping_lockout');
+    });
+
+    test('Anti-flapping lockout: only a room deficit >= 2.0°C bypasses the minimum off-time', () => {
+        const blocked = evaluateCircuitThermalLoad({
+            callingRadiators: 2, circuitDemandPct: 60, maxZoneError: 1.8, inLockout: true, currentMode: 0
+        });
+        assert.strictEqual(blocked.reason, 'anti_flapping_lockout');
+        assert.strictEqual(blocked.circuitOperatingMode, 0);
+
+        const bypassed = evaluateCircuitThermalLoad({
+            callingRadiators: 2, circuitDemandPct: 60, maxZoneError: 2.1, inLockout: true, currentMode: 0
+        });
+        assert.strictEqual(bypassed.circuitOperatingMode, 1);
+    });
+
+    test('Rate base: from standby (base = minFlow) jumps to target, then holds steady without change', () => {
+        const params = { outsideTemp: 5, minFlow: 30, maxFlowLimit: 80, maxZoneError: 0.5, circuitDemandPct: 40 };
+        const fromStandby = computeOptimalFlowTemperature({ ...params, currentMaxFlow: 30 });
+        assert.strictEqual(fromStandby.targetFlow, 55);
+        assert.strictEqual(fromStandby.changed, true);
+
+        const steady = computeOptimalFlowTemperature({ ...params, currentMaxFlow: 55 });
+        assert.strictEqual(steady.targetFlow, 55);
+        assert.strictEqual(steady.changed, false);
+    });
+
+    test('parseDbTimestamp: correctly parses Date objects and UTC strings with or without Z', () => {
+        const d = new Date('2026-11-22T05:16:00.000Z');
+        assert.strictEqual(parseDbTimestamp(d), d.getTime());
+
+        const isoStrWithZ = '2026-11-22T05:16:00Z';
+        assert.strictEqual(parseDbTimestamp(isoStrWithZ), d.getTime());
+
+        const dbSpaceStr = '2026-11-22 05:16:00';
+        assert.strictEqual(parseDbTimestamp(dbSpaceStr), d.getTime());
+
+        assert.strictEqual(parseDbTimestamp(null), 0);
+        assert.strictEqual(parseDbTimestamp(''), 0);
     });
 });
 

@@ -653,6 +653,7 @@ export default function HomeSettings({ homeId, homeInfo, mutateHomeInfo }) {
       </div>
 
       <HomeSettingsGeneral
+        homeId={homeId}
         name={name}
         setName={setName}
         address={address}

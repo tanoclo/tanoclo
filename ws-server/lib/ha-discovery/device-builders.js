@@ -5,7 +5,7 @@
 
 'use strict';
 
-function buildDeviceDiscovery(publishEntity, devices, config) {
+function buildDeviceDiscovery(publishEntity, devices, config, emulatedSerials = new Set()) {
     for (const dev of devices) {
         const shortSerial = dev.serial_no;
         const serial = dev.serial_no;
@@ -66,6 +66,20 @@ function buildDeviceDiscovery(publishEntity, devices, config) {
             availability_topic: devAvailTopic,
             device: hwDev
         });
+
+        // Home Assistant's Maintenance dashboard lists problem binary sensors.
+        if (isVA && !dev.is_emulated && !dev.emulated_mode && !emulatedSerials.has(serial)) {
+            publishEntity('binary_sensor', `tanoclo_${serial}_fault`, {
+                unique_id: `tanoclo_${serial}_fault`,
+                name: 'Fault',
+                state_topic: `tado/tanoclo/h/${dev.home_id}/d/${shortSerial}/error_flags_raw`,
+                device_class: 'problem',
+                entity_category: 'diagnostic',
+                value_template: "{% set flags = value | int(none) %}{{ 'None' if flags is none or flags < 0 else 'ON' if flags else 'OFF' }}",
+                availability_topic: devAvailTopic,
+                device: hwDev
+            });
+        }
 
         // Emulated Device Binary Sensor
         publishEntity('binary_sensor', `tanoclo_${serial}_emulated`, {

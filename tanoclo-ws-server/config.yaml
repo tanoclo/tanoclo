@@ -5,7 +5,7 @@
 #              certificates lookup, log levels, and domain strings.
 # ==============================================================================
 name: "TaNoClo WebSocket Server"
-version: "0.10.1"
+version: "0.10.2"
 slug: "tanoclo-ws-server"
 description: "Self-hosted Tado compatible WebSocket and API Server"
 url: "https://github.com/tanoclo/tanoclo"
@@ -36,6 +36,8 @@ options:
   mqtt_password: ""
   log_level: "info"
   zone_config_readonly: true
+  external_controller: false
+  external_scheduler: false
   carto_api_key: ""
 schema:
   db_host: "str"
@@ -53,4 +55,6 @@ schema:
   mqtt_password: "str?"
   log_level: "list(info|warn|error|debug)"
   zone_config_readonly: "bool"
+  external_controller: "bool?"
+  external_scheduler: "bool?"
   carto_api_key: "str?"

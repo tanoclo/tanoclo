@@ -133,7 +133,9 @@ async function internalPushViabridge(deviceId, code, path, payload = Buffer.allo
         code, path, token: pushToken, mid, type, payload, extraOptions
     });
 
-    const isQueueable = !path.includes('pair') && (
+    // Identify is interactive: send it to the bridge without waiting for a valve uplink.
+    const isIdentify = code === coap.CODE_PUT && /(?:^|\/)identify\/*$/.test(path.split('?', 1)[0]);
+    const isQueueable = !isIdentify && !path.includes('pair') && (
         path.includes('config') ||
         path.endsWith('/lock') ||
         path === 'd/lock' ||

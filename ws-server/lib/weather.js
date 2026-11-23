@@ -79,6 +79,7 @@ const _forecastCache = new Map(); // homeId -> { hourly: number[], ts: number }
  * Fetches and updates weather for a specific home
  */
 async function updateHomeWeather(homeId, lat, lon) {
+    if (await require('./weather-source').getSource(db, homeId) !== 'open_meteo') return;
     try {
         const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,shortwave_radiation&hourly=temperature_2m&forecast_hours=6&timezone=auto`;
         const aqiUrl = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=us_aqi,alder_pollen,birch_pollen,grass_pollen,mugwort_pollen,olive_pollen,ragweed_pollen`;
