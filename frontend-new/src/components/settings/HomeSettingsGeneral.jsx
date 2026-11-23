@@ -328,7 +328,6 @@ export default function HomeSettingsGeneral({
 
   return (
     <form onSubmit={handleSaveProperties} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      <WeatherSourceSettings homeId={homeId} />
       {/* Building Envelope & Insulation Quality */}
       <Card style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
         <div>
@@ -395,6 +394,7 @@ export default function HomeSettingsGeneral({
           </span>
         </div>
       </Card>
+      <WeatherSourceSettings homeId={homeId} t={t} />
 
       {/* Address Fields */}
       <Card style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
