@@ -161,6 +161,7 @@ struct EmulatedDeviceConfig {
   uint32_t last_token_req_ms{0};
   uint32_t last_sen_tx_ts{0};
   uint32_t last_zp_tx_ts{0};
+  uint32_t last_act_tx_ts{0};          // Last zone demand report (PUT h/{home}/z/{zone}/act)
   float last_reported_temp{0.0f};
 
   // CON retransmission queue (RFC 7252 §4.2)

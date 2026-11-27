@@ -121,8 +121,8 @@ Only the selected source is used. MQTT readings older than two hours, future tim
 
 Choose the mode that matches what your external software owns, then restart TaNoClo:
 
-- **External scheduling:** `TANOCLO_EXTERNAL_SCHEDULER=true` (`external_scheduler: true` in the Home Assistant app). The external scheduler supplies target temperatures through MQTT. TaNoClo stops its automatic schedules, presence and profile transitions, but keeps Virtual Sensor regulation, valve demand, window detection, and flow optimization. This fits Velair when Room Assist is off and TaNoClo uses room hygrometers.
-- **Full external control:** `TANOCLO_EXTERNAL_CONTROLLER=true` (`external_controller: true` in the app). Also disables server-side window detection, flow optimization and virtual leader demand. Use this when the external controller handles regulation too. This setting implies external scheduling and takes precedence when both flags are set.
+- **External scheduling:** `TANOCLO_EXTERNAL_SCHEDULER=true` (`external_scheduler: true` in the Home Assistant app). The external scheduler supplies target temperatures through MQTT. TaNoClo stops its automatic schedules, presence and profile transitions, but keeps valve demand, window detection, and flow optimization. This fits Velair when Room Assist is off and TaNoClo uses room hygrometers.
+- **Full external control:** `TANOCLO_EXTERNAL_CONTROLLER=true` (`external_controller: true` in the app). Also disables server-side window detection and flow optimization. Use this when the external controller handles regulation too. This setting implies external scheduling and takes precedence when both flags are set.
 
 Both modes keep explicit MQTT/API commands, device maintenance, and database housekeeping. Neither is enabled by default.
 

@@ -244,9 +244,16 @@ async function getGasUsageAndCosts(pool, homeId, from, to) {
         isEstimated = true;
     }
 
-    // 2. Fetch OpenTherm circuit measurements to differentiate DHW and CH
+    // 2. Check if DHW is commissioned / enabled for this home
+    const [dhwZones] = await pool.execute(
+        "SELECT id FROM zones WHERE home_id = ? AND type IN ('HOT_WATER', 'DHW') LIMIT 1",
+        [homeId]
+    );
+    const hasDhwCommissioned = dhwZones.length > 0;
+
+    // 3. Fetch circuit measurements (including hardware counters if present) to differentiate DHW and CH
     const [cMeas] = await pool.execute(
-        `SELECT timestamp, field_4080, field_0457, field_0452, field_045e 
+        `SELECT timestamp, field_4080, field_0457, field_0452, field_045e, field_0467, field_0468 
          FROM circuit_measurements 
          WHERE home_id = ? AND timestamp >= ? AND timestamp <= ?
          ORDER BY timestamp ASC`,
@@ -272,7 +279,8 @@ async function getGasUsageAndCosts(pool, homeId, from, to) {
         const modulation = Math.max(1, parseFloat(cur.field_0452) || 100) / 100;
         const weightedSec = deltaSec * modulation;
 
-        const isDhw = parseFloat(cur.field_045e) > 0;
+        // When DHW is decommissioned or OFF, all firings are strictly CH
+        const isDhw = hasDhwCommissioned && (parseFloat(cur.field_045e) > 0);
         if (isDhw) {
             dhwDemandSeconds += weightedSec;
         } else {
@@ -300,12 +308,36 @@ async function getGasUsageAndCosts(pool, homeId, from, to) {
         totalM3 = Math.round((estKwh / settings.calorific_value_kwh_per_m3) * 1000) / 1000;
     }
 
-    const totalDemandSeconds = dhwDemandSeconds + chDemandSeconds;
     let dhwRatio = 0;
-    if (totalDemandSeconds > 0) {
-        dhwRatio = dhwDemandSeconds / totalDemandSeconds;
-    } else {
-        dhwRatio = 0; // Default to 0 DHW if no firing observed
+    let usedHardwareCounters = false;
+
+    // Check monotonic hardware counters delta first if DHW is active
+    if (hasDhwCommissioned) {
+        const counterRows = cMeas.filter(r => r.field_0467 !== null && r.field_0468 !== null && r.field_0467 !== undefined && r.field_0468 !== undefined);
+        if (counterRows.length >= 2) {
+            const first = counterRows[0];
+            const last = counterRows[counterRows.length - 1];
+            const deltaCh = Math.max(0, parseFloat(last.field_0467) - parseFloat(first.field_0467));
+            const deltaDhw = Math.max(0, parseFloat(last.field_0468) - parseFloat(first.field_0468));
+            const totalHwDelta = deltaCh + deltaDhw;
+            if (totalHwDelta > 0) {
+                dhwRatio = deltaDhw / totalHwDelta;
+                usedHardwareCounters = true;
+            }
+        }
+    }
+
+    if (!usedHardwareCounters) {
+        if (!hasDhwCommissioned) {
+            dhwRatio = 0;
+        } else {
+            const totalDemandSeconds = dhwDemandSeconds + chDemandSeconds;
+            if (totalDemandSeconds > 0) {
+                dhwRatio = dhwDemandSeconds / totalDemandSeconds;
+            } else {
+                dhwRatio = 0;
+            }
+        }
     }
 
     const dhwM3 = Math.round(totalM3 * dhwRatio * 1000) / 1000;

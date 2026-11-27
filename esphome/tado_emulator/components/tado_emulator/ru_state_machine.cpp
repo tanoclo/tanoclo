@@ -22,6 +22,7 @@ RUStateMachine::RUStateMachine(const EmulatedDeviceConfig &cfg) : config_(cfg) {
   config_.last_fallback_push_ts = config_.last_telemetry_ts;
   config_.last_sen_tx_ts = 0;
   config_.last_zp_tx_ts = 0;
+  config_.last_act_tx_ts = 0;
 }
 
 uint8_t RUStateMachine::calculate_periodic_pid() {
@@ -224,7 +225,26 @@ void RUStateMachine::tick(uint32_t now_ms, uint32_t now_s, std::vector<OutboundF
         std::vector<uint8_t> act_tlv = protocol::build_z_act_tlv(new_demand);
         OutboundFrame act_frame = build_encrypted_coap_frame(COAP_TYPE_CON, COAP_CODE_PUT, act_path,
                                                             act_tlv.data(), act_tlv.size(), config_.ib_mac);
-        if (!act_frame.empty()) outbound_frames.push_back(std::move(act_frame));
+        if (!act_frame.empty()) {
+          outbound_frames.push_back(std::move(act_frame));
+          config_.last_act_tx_ts = now_s;
+        }
+      }
+    }
+
+    // Zone demand keepalive: physical zone leaders report h/{home}/z/{zone}/act at least every
+    // ~20 min (observed max gap 26 min), so the server never holds a stale zone demand.
+    if (config_.is_measuring_leader && config_.home_id > 0 && config_.zone_id > 0 && config_.ib_mac_known &&
+        (config_.last_act_tx_ts == 0 || now_s < config_.last_act_tx_ts || now_s - config_.last_act_tx_ts >= 1200)) {
+      std::string act_path = "h/" + std::to_string(config_.home_id) + "/z/" + std::to_string(config_.zone_id) + "/act";
+      std::vector<uint8_t> act_tlv = protocol::build_z_act_tlv(config_.current_demand_percent);
+      OutboundFrame act_frame = build_encrypted_coap_frame(COAP_TYPE_CON, COAP_CODE_PUT, act_path,
+                                                          act_tlv.data(), act_tlv.size(), config_.ib_mac);
+      if (!act_frame.empty()) {
+        outbound_frames.push_back(std::move(act_frame));
+        config_.last_act_tx_ts = now_s;
+        ESP_LOGD(TAG, "[%s] Zone demand keepalive: PUT %s demand=%u%%", config_.serial_no.c_str(),
+                 act_path.c_str(), config_.current_demand_percent);
       }
     }
 

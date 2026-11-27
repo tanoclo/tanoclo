@@ -56,18 +56,6 @@ export default function SupplyTempSettings({ homeId }) {
   const [showGuardsAccordion, setShowGuardsAccordion] = useState(false);
 
   // Granular guards states
-  const [lockoutEnabled, setLockoutEnabled] = useState(true);
-  const [lockoutDurationMin, setLockoutDurationMin] = useState(10);
-  const [lockoutOverrideDeficit, setLockoutOverrideDeficit] = useState(2.0);
-
-  const [deltaTEnabled, setDeltaTEnabled] = useState(true);
-  const [deltaTMinTemp, setDeltaTMinTemp] = useState(5.0);
-
-  const [minRuntimeEnabled, setMinRuntimeEnabled] = useState(true);
-  const [minRuntimeSeconds, setMinRuntimeSeconds] = useState(180);
-
-  const [thermalLoadEnabled, setThermalLoadEnabled] = useState(true);
-
   const [radiatorFloorEnabled, setRadiatorFloorEnabled] = useState(true);
   const [radiatorFloorTemp, setRadiatorFloorTemp] = useState(48);
 
@@ -88,14 +76,6 @@ export default function SupplyTempSettings({ homeId }) {
 
       if (optData.guards) {
         const g = optData.guards;
-        setLockoutEnabled(g.lockoutEnabled ?? true);
-        setLockoutDurationMin(g.lockoutDurationMin ?? 10);
-        setLockoutOverrideDeficit(g.lockoutOverrideDeficit ?? 2.0);
-        setDeltaTEnabled(g.deltaTEnabled ?? true);
-        setDeltaTMinTemp(g.deltaTMinTemp ?? 5.0);
-        setMinRuntimeEnabled(g.minRuntimeEnabled ?? true);
-        setMinRuntimeSeconds(g.minRuntimeSeconds ?? 180);
-        setThermalLoadEnabled(g.thermalLoadEnabled ?? true);
         setRadiatorFloorEnabled(g.radiatorFloorEnabled ?? true);
         setRadiatorFloorTemp(g.radiatorFloorTemp ?? 48);
         setRateLimitEnabled(g.rateLimitEnabled ?? true);
@@ -138,14 +118,6 @@ export default function SupplyTempSettings({ homeId }) {
           enabled: autoAdapt
         },
         guards: {
-          lockoutEnabled,
-          lockoutDurationMin,
-          lockoutOverrideDeficit,
-          deltaTEnabled,
-          deltaTMinTemp,
-          minRuntimeEnabled,
-          minRuntimeSeconds,
-          thermalLoadEnabled,
           radiatorFloorEnabled,
           radiatorFloorTemp,
           rateLimitEnabled,
@@ -368,95 +340,7 @@ export default function SupplyTempSettings({ homeId }) {
 
           {showGuardsAccordion && (
             <div style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1.25rem', borderTop: '1px solid var(--border-color, rgba(255,255,255,0.08))' }}>
-              {/* 1. Anti-Flapping Lockout Guard */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', paddingBottom: '1rem', borderBottom: '1px solid var(--border-color, rgba(255,255,255,0.05))' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div>
-                    <strong style={{ fontSize: '0.9rem', fontWeight: 700 }}>{t('settings.guard_lockout_title')}</strong>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '2px 0 0', maxWidth: '560px' }}>
-                      {t('settings.guard_lockout_desc')}
-                    </p>
-                  </div>
-                  <Toggle checked={lockoutEnabled} onChange={setLockoutEnabled} />
-                </div>
-                {lockoutEnabled && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '0.5rem', padding: '0.75rem', borderRadius: '8px', background: 'var(--card-bg, rgba(255,255,255,0.02))' }}>
-                    <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '4px' }}>
-                        <span>{t('settings.guard_lockout_duration')}</span>
-                        <strong style={{ color: 'var(--primary)' }}>{lockoutDurationMin} min</strong>
-                      </div>
-                      <Slider min={1} max={60} step={1} value={lockoutDurationMin} onChange={setLockoutDurationMin} />
-                    </div>
-                    <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '4px' }}>
-                        <span>{t('settings.guard_lockout_deficit')}</span>
-                        <strong style={{ color: 'var(--primary)' }}>{lockoutOverrideDeficit}°C</strong>
-                      </div>
-                      <Slider min={0.5} max={5.0} step={0.5} value={lockoutOverrideDeficit} onChange={setLockoutOverrideDeficit} />
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* 2. Delta-T Anti-Microburn Guard */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', paddingBottom: '1rem', borderBottom: '1px solid var(--border-color, rgba(255,255,255,0.05))' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div>
-                    <strong style={{ fontSize: '0.9rem', fontWeight: 700 }}>{t('settings.guard_delta_t_title')}</strong>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '2px 0 0', maxWidth: '560px' }}>
-                      {t('settings.guard_delta_t_desc')}
-                    </p>
-                  </div>
-                  <Toggle checked={deltaTEnabled} onChange={setDeltaTEnabled} />
-                </div>
-                {deltaTEnabled && (
-                  <div style={{ marginTop: '0.5rem', padding: '0.75rem', borderRadius: '8px', background: 'var(--card-bg, rgba(255,255,255,0.02))' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '4px' }}>
-                      <span>{t('settings.guard_delta_t_min_temp')}</span>
-                      <strong style={{ color: '#38bdf8' }}>{deltaTMinTemp}°C</strong>
-                    </div>
-                    <Slider min={1.0} max={15.0} step={0.5} value={deltaTMinTemp} onChange={setDeltaTMinTemp} />
-                  </div>
-                )}
-              </div>
-
-              {/* 3. Minimum Burn Run-Time Hold */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', paddingBottom: '1rem', borderBottom: '1px solid var(--border-color, rgba(255,255,255,0.05))' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div>
-                    <strong style={{ fontSize: '0.9rem', fontWeight: 700 }}>{t('settings.guard_min_runtime_title')}</strong>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '2px 0 0', maxWidth: '560px' }}>
-                      {t('settings.guard_min_runtime_desc')}
-                    </p>
-                  </div>
-                  <Toggle checked={minRuntimeEnabled} onChange={setMinRuntimeEnabled} />
-                </div>
-                {minRuntimeEnabled && (
-                  <div style={{ marginTop: '0.5rem', padding: '0.75rem', borderRadius: '8px', background: 'var(--card-bg, rgba(255,255,255,0.02))' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', marginBottom: '4px' }}>
-                      <span>{t('settings.guard_min_runtime_hold')}</span>
-                      <strong style={{ color: '#10b981' }}>{minRuntimeSeconds}s ({Math.round(minRuntimeSeconds / 60)} min)</strong>
-                    </div>
-                    <Slider min={30} max={600} step={15} value={minRuntimeSeconds} onChange={setMinRuntimeSeconds} />
-                  </div>
-                )}
-              </div>
-
-              {/* 4. Thermal Load Gating Guard */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', paddingBottom: '1rem', borderBottom: '1px solid var(--border-color, rgba(255,255,255,0.05))' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div>
-                    <strong style={{ fontSize: '0.9rem', fontWeight: 700 }}>{t('settings.guard_thermal_load_title')}</strong>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '2px 0 0', maxWidth: '560px' }}>
-                      {t('settings.guard_thermal_load_desc')}
-                    </p>
-                  </div>
-                  <Toggle checked={thermalLoadEnabled} onChange={setThermalLoadEnabled} />
-                </div>
-              </div>
-
-              {/* 5. Radiator Flow Floor Guard */}
+              {/* 1. Radiator Flow Floor Guard */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', paddingBottom: '1rem', borderBottom: '1px solid var(--border-color, rgba(255,255,255,0.05))' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <div>
@@ -478,7 +362,7 @@ export default function SupplyTempSettings({ homeId }) {
                 )}
               </div>
 
-              {/* 6. Rate Limiting Guard */}
+              {/* 2. Rate Limiting Guard */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <div>

@@ -3,7 +3,6 @@
 const config = require('../lib/config');
 const cron = require('../lib/cron');
 const flowOptimizer = require('../lib/flow-optimizer');
-const zoneCoordinator = require('../lib/zone-coordinator');
 const owd = require('../lib/owd-detector');
 
 test.each([false, true])('cron keeps maintenance when external controller is %s', external => {
@@ -27,22 +26,6 @@ test.each([false, true])('cron keeps maintenance when external controller is %s'
     }
 });
 
-test('external scheduling preserves virtual sensor regulation', async () => {
-    const previousScheduler = config.externalScheduler;
-    const previousController = config.externalController;
-    const execute = vi.fn(async () => [[]]);
-    config.externalScheduler = true;
-    config.externalController = false;
-    try {
-        zoneCoordinator.init({ db: { getPool: () => ({ execute }) } });
-        await zoneCoordinator.onExternalTelemetry(1, 10, 19);
-        expect(execute).toHaveBeenCalledWith(expect.stringContaining('SELECT measuring_device_serial'), [10, 1]);
-    } finally {
-        config.externalScheduler = previousScheduler;
-        config.externalController = previousController;
-    }
-});
-
 test('external controller mode suppresses reactive control before it reads the database', async () => {
     const previous = config.externalController;
     const db = { getPool: vi.fn(() => { throw new Error('Unexpected database access'); }) };
@@ -50,14 +33,10 @@ test('external controller mode suppresses reactive control before it reads the d
     config.externalController = true;
     try {
         flowOptimizer.init(db);
-        zoneCoordinator.init({ db });
         const timerCount = vi.getTimerCount();
         flowOptimizer.scheduleEvaluation(1);
         expect(vi.getTimerCount()).toBe(timerCount);
         await flowOptimizer.evaluateAllHomes();
-        await zoneCoordinator.onExternalTelemetry(1, 10, 19);
-        await zoneCoordinator.relayBoilerCircuitDemand(1);
-        await expect(zoneCoordinator.notifyZoneObservers(1, 10)).resolves.toMatchObject({ dispatched: false });
         await owd.evaluate(1, 10, { temperature: 19 });
         expect(db.getPool).not.toHaveBeenCalled();
     } finally {

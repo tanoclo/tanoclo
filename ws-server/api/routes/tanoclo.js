@@ -1324,6 +1324,78 @@ router.get('/:homeId/tanoclo/circuits/:circuitId/runningTimes', async (req, res)
     }
 });
 
+// GET /:homeId/tanoclo/boiler-cycles
+router.get('/:homeId/tanoclo/boiler-cycles', async (req, res) => {
+    try {
+        const { homeId } = req.params;
+        const circuitNumber = req.query.circuit ? parseInt(req.query.circuit, 10) : null;
+        const fromDateStr = req.query.from || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        const toDateStr = req.query.to || new Date().toISOString().slice(0, 10);
+        const cycleType = req.query.type || null;
+        const limit = Math.min(parseInt(req.query.limit || '200', 10), 1000);
+
+        const pool = db.getPool();
+        const fromTs = fromDateStr + ' 00:00:00';
+        const toTs = toDateStr + ' 23:59:59';
+
+        let whereClause = 'WHERE home_id = ? AND start_time >= ? AND start_time <= ?';
+        const params = [homeId, fromTs, toTs];
+
+        if (circuitNumber !== null) {
+            whereClause += ' AND circuit_number = ?';
+            params.push(circuitNumber);
+        }
+        if (cycleType) {
+            whereClause += ' AND cycle_type = ?';
+            params.push(cycleType);
+        }
+
+        const [rows] = await pool.execute(
+            `SELECT id, home_id, circuit_number, start_time, end_time, duration_seconds,
+                    cycle_type, start_flow_temp, max_flow_temp, end_flow_temp,
+                    start_return_temp, max_return_temp, end_return_temp,
+                    avg_modulation, max_modulation,
+                    burner_starts_counter, ch_hours_counter, dhw_hours_counter
+             FROM boiler_cycles 
+             ${whereClause}
+             ORDER BY start_time DESC 
+             LIMIT ${limit}`,
+            params
+        );
+
+        const [summaryRows] = await pool.execute(
+            `SELECT 
+                COUNT(*) as total_cycles,
+                SUM(CASE WHEN cycle_type = 'CH' THEN 1 ELSE 0 END) as ch_cycles,
+                SUM(CASE WHEN cycle_type = 'DHW' THEN 1 ELSE 0 END) as dhw_cycles,
+                SUM(CASE WHEN cycle_type = 'KEEP_WARM' THEN 1 ELSE 0 END) as keep_warm_cycles,
+                SUM(duration_seconds) as total_duration_seconds,
+                AVG(duration_seconds) as avg_duration_seconds
+             FROM boiler_cycles
+             ${whereClause}`,
+            params
+        );
+
+        const summary = summaryRows[0] || {};
+
+        res.json({
+            homeId: parseInt(homeId, 10),
+            summary: {
+                totalCycles: parseInt(summary.total_cycles || 0, 10),
+                chCycles: parseInt(summary.ch_cycles || 0, 10),
+                dhwCycles: parseInt(summary.dhw_cycles || 0, 10),
+                keepWarmCycles: parseInt(summary.keep_warm_cycles || 0, 10),
+                totalDurationSeconds: parseInt(summary.total_duration_seconds || 0, 10),
+                meanDurationSeconds: Math.round(parseFloat(summary.avg_duration_seconds || 0) * 10) / 10
+            },
+            cycles: rows
+        });
+    } catch (err) {
+        _log('error', `Boiler Cycles Error: ${err.message}\n${err.stack}`);
+        res.status(500).json({ error: 'internal_error' });
+    }
+});
+
 // GET /:homeId/tanoclo/timezone
 router.get('/:homeId/tanoclo/timezone', async (req, res) => {
     try {

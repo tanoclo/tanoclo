@@ -19,7 +19,8 @@ import {
   postGasMeterReading,
   getGasMeterReadings,
   postBulkGasMeterReadings,
-  deleteGasMeterReading
+  deleteGasMeterReading,
+  getBoilerCycles
 } from '../../api/heating';
 import { SWR_KEYS } from '../../utils/swrKeys';
 
@@ -94,6 +95,13 @@ export default function GasEnergySection({ homeId, zones: _zones = [] }) {
     homeId && showReadingModal ? SWR_KEYS.gasMeterReadings(homeId) : null,
     () => getGasMeterReadings(homeId, 50)
   );
+
+  const { data: cyclesData } = useSWR(
+    homeId && fromDate && toDate ? SWR_KEYS.boilerCycles(homeId, fromDate, toDate) : null,
+    () => getBoilerCycles(homeId, { from: fromDate, to: toDate, limit: 100 })
+  );
+  const cycleSummary = cyclesData?.summary || {};
+  const cyclesList = cyclesData?.cycles || [];
 
   const handleOpenConfig = () => {
     if (energySettings) {
@@ -486,6 +494,92 @@ export default function GasEnergySection({ homeId, zones: _zones = [] }) {
             ) : (
               <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '1rem', fontSize: '0.85rem' }}>
                 {t('zone.no_zones', 'No heating zones configured')}
+              </div>
+            )}
+          </Card>
+          {/* Boiler Cycles & Burner Statistics */}
+          <Card style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+              <div>
+                <h4 style={{ fontSize: '1rem', fontWeight: 700, margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <span>🔄</span>
+                  {t('settings.energy.boiler_cycles_title', 'Boiler Cycles & Burner Statistics')}
+                </h4>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '0.2rem 0 0' }}>
+                  {t('settings.energy.boiler_cycles_desc', 'Tracked ignition events, burn run-times, and cycle categorization.')}
+                </p>
+              </div>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <Badge variant="neutral">
+                  {cycleSummary.totalCycles || 0} {t('settings.energy.total_cycles', 'Cycles')}
+                </Badge>
+              </div>
+            </div>
+
+            {/* Cycle KPI metrics */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+              gap: '0.75rem'
+            }}>
+              <div style={{ padding: '0.6rem 0.8rem', backgroundColor: 'var(--bg-input)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)' }}>
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Central Heating</div>
+                <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#fb923c' }}>{cycleSummary.chCycles || 0}</div>
+              </div>
+              <div style={{ padding: '0.6rem 0.8rem', backgroundColor: 'var(--bg-input)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)' }}>
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontWeight: 600 }}>DHW Tap</div>
+                <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#38bdf8' }}>{cycleSummary.dhwCycles || 0}</div>
+              </div>
+              <div style={{ padding: '0.6rem 0.8rem', backgroundColor: 'var(--bg-input)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)' }}>
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Keep-Warm</div>
+                <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#a855f7' }}>{cycleSummary.keepWarmCycles || 0}</div>
+              </div>
+              <div style={{ padding: '0.6rem 0.8rem', backgroundColor: 'var(--bg-input)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)' }}>
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Avg Burn Duration</div>
+                <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                  {cycleSummary.meanDurationSeconds ? `${Math.round(cycleSummary.meanDurationSeconds / 60)} min` : '0 min'}
+                </div>
+              </div>
+            </div>
+
+            {/* Recent cycles list */}
+            {cyclesList.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', maxHeight: '240px', overflowY: 'auto' }}>
+                {cyclesList.slice(0, 15).map(c => (
+                  <div
+                    key={c.id}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '0.45rem 0.65rem',
+                      backgroundColor: 'var(--bg-input)',
+                      borderRadius: 'var(--radius-sm)',
+                      fontSize: '0.75rem'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <Badge
+                        variant={c.cycle_type === 'CH' ? 'warning' : c.cycle_type === 'DHW' ? 'info' : 'purple'}
+                        style={{ fontSize: '0.65rem', padding: '0.15rem 0.4rem' }}
+                      >
+                        {c.cycle_type}
+                      </Badge>
+                      <span style={{ color: 'var(--text-secondary)', fontSize: '0.7rem' }}>
+                        {c.start_time?.replace('T', ' ').slice(5, 16)}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontWeight: 600 }}>
+                      <span>⏱️ {Math.round(c.duration_seconds / 60)}m ({c.duration_seconds}s)</span>
+                      {c.max_flow_temp && <span style={{ color: 'var(--text-secondary)' }}>Max: {c.max_flow_temp}°C</span>}
+                      {c.avg_modulation > 0 && <span style={{ color: 'var(--text-secondary)' }}>Mod: {c.avg_modulation}%</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', textAlign: 'center', padding: '0.75rem' }}>
+                {t('settings.energy.no_cycles', 'No boiler cycles logged in this date range yet.')}
               </div>
             )}
           </Card>

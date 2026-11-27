@@ -208,6 +208,11 @@ async function insertZoneMeasurement(homeId, zoneId, tempCelsius, humidityPct, h
     await insertMergedZoneMeasurement(homeId, zoneId, updates);
 }
 
+// Zone leaders refresh zone demand (0x40a0) at least every ~20 min. A demand value older than
+// this is no longer carried forward into new rows (it would otherwise persist indefinitely).
+const ZONE_DEMAND_STALE_MS = 45 * 60 * 1000;
+const _lastZoneDemandTs = new Map();
+
 async function insertMergedZoneMeasurement(homeId, zoneId, updates) {
     const p = getPool();
     const now = new Date().toISOString().replace('T', ' ').replace(/\.\d+Z$/, '');
@@ -222,7 +227,13 @@ async function insertMergedZoneMeasurement(homeId, zoneId, updates) {
 
     const tempCelsius = (updates['0x012d'] !== undefined ? updates['0x012d'] : (updates.field_012d !== undefined ? updates.field_012d : prev.field_012d)) ?? null;
     const humidityPct = (updates['0x0135'] !== undefined ? updates['0x0135'] : (updates.field_0135 !== undefined ? updates.field_0135 : prev.field_0135)) ?? null;
-    const heatingPower = (updates['0x40a0'] !== undefined ? updates['0x40a0'] : (updates.field_40a0 !== undefined ? updates.field_40a0 : prev.field_40a0)) ?? null;
+    const demandKey = `${homeId}:${zoneId}`;
+    const demandReported = updates['0x40a0'] !== undefined || updates.field_40a0 !== undefined;
+    if (demandReported || !_lastZoneDemandTs.has(demandKey)) _lastZoneDemandTs.set(demandKey, Date.now());
+    const demandStale = !demandReported && Date.now() - _lastZoneDemandTs.get(demandKey) > ZONE_DEMAND_STALE_MS;
+    const heatingPower = demandStale
+        ? null
+        : ((updates['0x40a0'] !== undefined ? updates['0x40a0'] : (updates.field_40a0 !== undefined ? updates.field_40a0 : prev.field_40a0)) ?? null);
     const linkState = updates.link_state !== undefined ? updates.link_state : (prev.link_state ?? 'ONLINE');
     const tadoMode = updates.tado_mode !== undefined ? updates.tado_mode : (prev.tado_mode ?? 'HOME');
     const zoneEnabled = (updates['0x61e0'] !== undefined ? updates['0x61e0'] : (updates.field_61e0 !== undefined ? updates.field_61e0 : prev.field_61e0)) ?? 1;
@@ -305,12 +316,8 @@ async function insertMergedZoneMeasurement(homeId, zoneId, updates) {
         _log('debug', `zone_measurements: home=${homeId} zone=${zoneId} [DHW] sch=${scheduleTemp}°C ovr=${overlayMode} enabled=${zoneEnabled}`);
     }
 
-    // Update central boiler circuit demand aggregate and trigger debounced flow optimization
+    // Trigger debounced flow optimization
     try {
-        const zoneCoordinator = require('../zone-coordinator');
-        if (typeof zoneCoordinator.relayBoilerCircuitDemand === 'function') {
-            zoneCoordinator.relayBoilerCircuitDemand(homeId).catch(() => {});
-        }
         const flowOptimizer = require('../flow-optimizer');
         if (typeof flowOptimizer.scheduleEvaluation === 'function') {
             flowOptimizer.scheduleEvaluation(homeId);
@@ -714,7 +721,9 @@ async function insertCircuitMeasurement(homeId, circuitNumber, circuitFields = {
     let hRow = null;
     try {
         const [hRows] = await p.execute(
-            'SELECT field_044c, field_044d, field_044e, field_044f, field_0450, field_0452, field_0457, field_045a, field_045e, field_0460, field_0462 FROM heating_systems WHERE home_id=? LIMIT 1',
+            `SELECT field_044c, field_044d, field_044e, field_044f, field_0450, field_0452, field_0457, field_045a, field_045e, field_0460, field_0462,
+                    field_0463, field_0464, field_0465, field_0466, field_0467, field_0468, field_0458, field_045b, field_0471, field_046f, field_046c, field_046d
+             FROM heating_systems WHERE home_id=? LIMIT 1`,
             [homeId]
         );
         if (hRows.length > 0) hRow = hRows[0];
@@ -738,6 +747,19 @@ async function insertCircuitMeasurement(homeId, circuitNumber, circuitFields = {
     const outsideTemp = (hvacFields['0x044f'] !== undefined ? hvacFields['0x044f'] : (hvacFields.field_044f !== undefined ? hvacFields.field_044f : (prev?.field_044f ?? hRow?.field_044f))) ?? null;
     const waterPressureBar = (hvacFields['0x0462'] !== undefined ? hvacFields['0x0462'] : (hvacFields.field_0462 !== undefined ? hvacFields.field_0462 : (prev?.field_0462 ?? hRow?.field_0462))) ?? null;
 
+    const burnerStarts = (hvacFields['0x0463'] !== undefined ? hvacFields['0x0463'] : (hvacFields.field_0463 !== undefined ? hvacFields.field_0463 : (prev?.field_0463 ?? hRow?.field_0463))) ?? null;
+    const dhwStarts = (hvacFields['0x0464'] !== undefined ? hvacFields['0x0464'] : (hvacFields.field_0464 !== undefined ? hvacFields.field_0464 : (prev?.field_0464 ?? hRow?.field_0464))) ?? null;
+    const chStarts = (hvacFields['0x0465'] !== undefined ? hvacFields['0x0465'] : (hvacFields.field_0465 !== undefined ? hvacFields.field_0465 : (prev?.field_0465 ?? hRow?.field_0465))) ?? null;
+    const burnerHours = (hvacFields['0x0466'] !== undefined ? hvacFields['0x0466'] : (hvacFields.field_0466 !== undefined ? hvacFields.field_0466 : (prev?.field_0466 ?? hRow?.field_0466))) ?? null;
+    const chHours = (hvacFields['0x0467'] !== undefined ? hvacFields['0x0467'] : (hvacFields.field_0467 !== undefined ? hvacFields.field_0467 : (prev?.field_0467 ?? hRow?.field_0467))) ?? null;
+    const dhwHours = (hvacFields['0x0468'] !== undefined ? hvacFields['0x0468'] : (hvacFields.field_0468 !== undefined ? hvacFields.field_0468 : (prev?.field_0468 ?? hRow?.field_0468))) ?? null;
+    const flameCurrent = (hvacFields['0x0458'] !== undefined ? hvacFields['0x0458'] : (hvacFields.field_0458 !== undefined ? hvacFields.field_0458 : (prev?.field_0458 ?? hRow?.field_0458))) ?? null;
+    const dhwTargetTemp = (hvacFields['0x045b'] !== undefined ? hvacFields['0x045b'] : (hvacFields.field_045b !== undefined ? hvacFields.field_045b : (prev?.field_045b ?? hRow?.field_045b))) ?? null;
+    const dhwUpperBound = (hvacFields['0x0471'] !== undefined ? hvacFields['0x0471'] : (hvacFields.field_0471 !== undefined ? hvacFields.field_0471 : (prev?.field_0471 ?? hRow?.field_0471))) ?? null;
+    const maxChFlow = (hvacFields['0x046f'] !== undefined ? hvacFields['0x046f'] : (hvacFields.field_046f !== undefined ? hvacFields.field_046f : (prev?.field_046f ?? hRow?.field_046f))) ?? null;
+    const dhwTank = (hvacFields['0x046c'] !== undefined ? hvacFields['0x046c'] : (hvacFields.field_046c !== undefined ? hvacFields.field_046c : (prev?.field_046c ?? hRow?.field_046c))) ?? null;
+    const dhwInstant = (hvacFields['0x046d'] !== undefined ? hvacFields['0x046d'] : (hvacFields.field_046d !== undefined ? hvacFields.field_046d : (prev?.field_046d ?? hRow?.field_046d))) ?? null;
+
     // Deduplication guard: ignore redundant insert if identical measurement within 15 seconds
     if (prev && prev.timestamp) {
         const prevMs = new Date(prev.timestamp).getTime();
@@ -759,7 +781,10 @@ async function insertCircuitMeasurement(homeId, circuitNumber, circuitFields = {
             numEq(dhwTemp, prev.field_045a) &&
             numEq(dhwFlowRate, prev.field_045e) &&
             numEq(outsideTemp, prev.field_044f) &&
-            numEq(waterPressureBar, prev.field_0462)) {
+            numEq(waterPressureBar, prev.field_0462) &&
+            numEq(burnerStarts, prev.field_0463) &&
+            numEq(chHours, prev.field_0467) &&
+            numEq(dhwHours, prev.field_0468)) {
             return;
         }
     }
@@ -769,16 +794,37 @@ async function insertCircuitMeasurement(homeId, circuitNumber, circuitFields = {
          (home_id, circuit_number, timestamp,
           field_4000, field_4040, field_4080, field_2090, field_2040,
           field_044c, field_044d, field_0450, field_0452, field_0457, field_0460,
-          field_044e, field_045a, field_045e, field_044f, field_0462)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          field_044e, field_045a, field_045e, field_044f, field_0462,
+          field_0463, field_0464, field_0465, field_0466, field_0467, field_0468,
+          field_0458, field_045b, field_0471, field_046f, field_046c, field_046d)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
             homeId, circuitNumber, now,
             targetTemp, refTemp, demand, mode, dhwMaxFlow,
             chFlowTemp, chReturnTemp, setpoint, modulation, flameActive, waterPressure,
-            exhaustTemp, dhwTemp, dhwFlowRate, outsideTemp, waterPressureBar
+            exhaustTemp, dhwTemp, dhwFlowRate, outsideTemp, waterPressureBar,
+            burnerStarts, dhwStarts, chStarts, burnerHours, chHours, dhwHours,
+            flameCurrent, dhwTargetTemp, dhwUpperBound, maxChFlow, dhwTank, dhwInstant
         ]
     );
     _log('debug', `circuit_measurements: home=${homeId} circuit=${circuitNumber} target=${targetTemp}°C ref=${refTemp}°C demand=${demand}% flow=${chFlowTemp}°C`);
+
+    try {
+        const boilerCycleTracker = require('../boiler-cycle-tracker');
+        boilerCycleTracker.onMeasurement(homeId, circuitNumber, {
+            timestamp: now,
+            field_4080: demand,
+            field_2090: mode,
+            field_044c: chFlowTemp,
+            field_044d: chReturnTemp,
+            field_0452: modulation,
+            field_0457: flameActive,
+            field_045e: dhwFlowRate,
+            field_0463: burnerStarts,
+            field_0467: chHours,
+            field_0468: dhwHours
+        }).catch(() => {});
+    } catch (_) {}
 }
 
 async function updateCircuitConfig(homeId, circuitNumber, fields) {

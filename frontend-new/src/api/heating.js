@@ -153,3 +153,19 @@ export function deleteGasMeterReading(homeId, readingId) {
     method: 'DELETE'
   });
 }
+
+/**
+ * Gets boiler ignition cycles and summary statistics
+ * @param {string|number} homeId
+ * @param {object} [params] - { from, to, circuit, type, limit }
+ */
+export function getBoilerCycles(homeId, params = {}) {
+  const query = new URLSearchParams();
+  if (params.from) query.append('from', params.from);
+  if (params.to) query.append('to', params.to);
+  if (params.circuit) query.append('circuit', params.circuit);
+  if (params.type) query.append('type', params.type);
+  if (params.limit) query.append('limit', params.limit);
+  const qStr = query.toString();
+  return apiFetch(`/api/v2/homes/${homeId}/tanoclo/boiler-cycles${qStr ? `?${qStr}` : ''}`);
+}

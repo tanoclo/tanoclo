@@ -178,6 +178,9 @@ describe('Gas Energy Analyzer', () => {
                 { timestamp: '2026-11-06 12:00:00', meter_m3: '1010.000', unit_cost: 1.50 }
             ]]);
 
+            // DHW zones check (DHW is active)
+            mockPool.execute.mockResolvedValueOnce([[{ id: 99 }]]);
+
             // Circuit measurements:
             // 1000s DHW (field_045e = 5.0, field_0457 = 1)
             // 3000s Space Heating (field_045e = 0, field_0457 = 1)
@@ -254,6 +257,9 @@ describe('Gas Energy Analyzer', () => {
                 { timestamp: '2026-11-06 12:00:00', meter_m3: '1010.000', unit_cost: 1.00 }
             ]]);
 
+            // DHW zone check: active
+            mockPool.execute.mockResolvedValueOnce([[{ id: 99 }]]);
+
             // Circuit measurements: only CH firing
             mockPool.execute.mockResolvedValueOnce([[
                 { timestamp: '2026-11-06 01:00:00', field_0457: 1, field_0452: 100, field_045e: 0 },
@@ -302,6 +308,9 @@ describe('Gas Energy Analyzer', () => {
             mockPool.execute.mockResolvedValueOnce([[]]);
             mockPool.execute.mockResolvedValueOnce([[]]);
 
+            // DHW check
+            mockPool.execute.mockResolvedValueOnce([[{ id: 99 }]]);
+
             // Circuit measurements: 1 hour firing at 100% modulation (3600 seconds)
             mockPool.execute.mockResolvedValueOnce([[
                 { timestamp: '2026-11-06 01:00:00', field_0457: 1, field_0452: 100, field_045e: 0 },
@@ -319,6 +328,81 @@ describe('Gas Energy Analyzer', () => {
             expect(result.meterReading.isEstimated).toBe(true);
             expect(result.totals.totalM3).toBe(2.0);
             expect(result.totals.totalCost).toBe(3.0);
+        });
+
+        it('attributes 0% to DHW when DHW is not commissioned/active', async () => {
+            mockPool.execute.mockResolvedValueOnce([[{
+                home_id: 1,
+                gas_unit_cost: 1.50,
+                currency: '€',
+                allocation_method: 'demand',
+                calorific_value_kwh_per_m3: 10.0
+            }]]);
+
+            // Meter readings: 10 m³
+            mockPool.execute.mockResolvedValueOnce([[
+                { timestamp: '2026-11-06 00:00:00', meter_m3: '1000.000', unit_cost: 1.50 },
+                { timestamp: '2026-11-06 12:00:00', meter_m3: '1010.000', unit_cost: 1.50 }
+            ]]);
+
+            // DHW check: NO DHW ZONE
+            mockPool.execute.mockResolvedValueOnce([[]]);
+
+            // Circuit measurements: firing has field_045e = 5.0, but DHW is OFF!
+            mockPool.execute.mockResolvedValueOnce([[
+                { timestamp: '2026-11-06 01:00:00', field_0457: 1, field_0452: 100, field_045e: 5.0 },
+                { timestamp: '2026-11-06 02:00:00', field_0457: 0, field_0452: 0, field_045e: 0 }
+            ]]);
+
+            mockPool.execute.mockResolvedValueOnce([[{ boiler_capacity_kw: 24.0 }]]);
+            mockPool.execute.mockResolvedValueOnce([[]]); // No zones
+
+            const from = new Date('2026-11-06T00:00:00Z');
+            const to = new Date('2026-11-06T12:00:00Z');
+            const result = await getGasUsageAndCosts(mockPool, 1, from, to);
+
+            expect(result.dhw.percentage).toBe(0);
+            expect(result.dhw.m3).toBe(0);
+            expect(result.heating.percentage).toBe(100);
+            expect(result.heating.m3).toBe(10.0);
+        });
+
+        it('uses monotonic hardware counters delta when DHW is commissioned', async () => {
+            mockPool.execute.mockResolvedValueOnce([[{
+                home_id: 1,
+                gas_unit_cost: 1.50,
+                currency: '€',
+                allocation_method: 'demand',
+                calorific_value_kwh_per_m3: 10.0
+            }]]);
+
+            // Meter readings: 10 m³
+            mockPool.execute.mockResolvedValueOnce([[
+                { timestamp: '2026-11-06 00:00:00', meter_m3: '1000.000', unit_cost: 1.50 },
+                { timestamp: '2026-11-06 12:00:00', meter_m3: '1010.000', unit_cost: 1.50 }
+            ]]);
+
+            // DHW zone present
+            mockPool.execute.mockResolvedValueOnce([[{ id: 99 }]]);
+
+            // Circuit measurements with hardware counters:
+            // Delta CH = 3h, Delta DHW = 21h -> total = 24h -> 21/24 = 87.5% DHW
+            mockPool.execute.mockResolvedValueOnce([[
+                { timestamp: '2026-11-06 00:00:00', field_0457: 0, field_0452: 0, field_045e: 0, field_0467: 0, field_0468: 2 },
+                { timestamp: '2026-11-06 12:00:00', field_0457: 0, field_0452: 0, field_045e: 0, field_0467: 3, field_0468: 23 }
+            ]]);
+
+            mockPool.execute.mockResolvedValueOnce([[{ boiler_capacity_kw: 24.0 }]]);
+            mockPool.execute.mockResolvedValueOnce([[]]); // No zones
+
+            const from = new Date('2026-11-06T00:00:00Z');
+            const to = new Date('2026-11-06T12:00:00Z');
+            const result = await getGasUsageAndCosts(mockPool, 1, from, to);
+
+            expect(result.dhw.percentage).toBe(87.5);
+            expect(result.dhw.m3).toBe(8.75);
+            expect(result.heating.percentage).toBe(12.5);
+            expect(result.heating.m3).toBe(1.25);
         });
     });
 });

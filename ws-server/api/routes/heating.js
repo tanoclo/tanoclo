@@ -89,14 +89,6 @@ const getFlowTempOpt = async (req, res) => {
                 lastOptimized: latestHist ? latestHist.timestamp : null
             },
             guards: {
-                lockoutEnabled: settings ? Boolean(settings.guard_lockout_enabled ?? 1) : true,
-                lockoutDurationMin: settings ? parseInt(settings.guard_lockout_duration_min ?? 10, 10) : 10,
-                lockoutOverrideDeficit: settings ? parseFloat(settings.guard_lockout_override_deficit ?? 2.0) : 2.0,
-                deltaTEnabled: settings ? Boolean(settings.guard_delta_t_enabled ?? 1) : true,
-                deltaTMinTemp: settings ? parseFloat(settings.guard_delta_t_min_temp ?? 5.0) : 5.0,
-                minRuntimeEnabled: settings ? Boolean(settings.guard_min_runtime_enabled ?? 1) : true,
-                minRuntimeSeconds: settings ? parseInt(settings.guard_min_runtime_seconds ?? 180, 10) : 180,
-                thermalLoadEnabled: settings ? Boolean(settings.guard_thermal_load_enabled ?? 1) : true,
                 radiatorFloorEnabled: settings ? Boolean(settings.guard_radiator_floor_enabled ?? 1) : true,
                 radiatorFloorTemp: settings ? parseInt(settings.guard_radiator_floor_temp ?? 48, 10) : 48,
                 rateLimitEnabled: settings ? Boolean(settings.guard_rate_limit_enabled ?? 1) : true,
@@ -121,14 +113,6 @@ const putFlowTempOpt = async (req, res) => {
         const existing = existingRows.length > 0 ? existingRows[0] : null;
 
         let temp = 60, minTemp = 30, maxLimit = 80, autoAdapt = 0;
-        let lockoutEnabled = existing ? (existing.guard_lockout_enabled ?? 1) : 1;
-        let lockoutDurationMin = existing ? (existing.guard_lockout_duration_min ?? 10) : 10;
-        let lockoutOverrideDeficit = existing ? (existing.guard_lockout_override_deficit ?? 2.0) : 2.0;
-        let deltaTEnabled = existing ? (existing.guard_delta_t_enabled ?? 1) : 1;
-        let deltaTMinTemp = existing ? (existing.guard_delta_t_min_temp ?? 5.0) : 5.0;
-        let minRuntimeEnabled = existing ? (existing.guard_min_runtime_enabled ?? 1) : 1;
-        let minRuntimeSeconds = existing ? (existing.guard_min_runtime_seconds ?? 180) : 180;
-        let thermalLoadEnabled = existing ? (existing.guard_thermal_load_enabled ?? 1) : 1;
         let radiatorFloorEnabled = existing ? (existing.guard_radiator_floor_enabled ?? 1) : 1;
         let radiatorFloorTemp = existing ? (existing.guard_radiator_floor_temp ?? 48) : 48;
         let rateLimitEnabled = existing ? (existing.guard_rate_limit_enabled ?? 1) : 1;
@@ -168,14 +152,6 @@ const putFlowTempOpt = async (req, res) => {
 
         if (data.guards) {
             const g = data.guards;
-            if (g.lockoutEnabled !== undefined) lockoutEnabled = g.lockoutEnabled ? 1 : 0;
-            if (g.lockoutDurationMin !== undefined) lockoutDurationMin = Math.max(1, Math.min(60, parseInt(g.lockoutDurationMin, 10)));
-            if (g.lockoutOverrideDeficit !== undefined) lockoutOverrideDeficit = Math.max(0.5, Math.min(5.0, parseFloat(g.lockoutOverrideDeficit)));
-            if (g.deltaTEnabled !== undefined) deltaTEnabled = g.deltaTEnabled ? 1 : 0;
-            if (g.deltaTMinTemp !== undefined) deltaTMinTemp = Math.max(1.0, Math.min(15.0, parseFloat(g.deltaTMinTemp)));
-            if (g.minRuntimeEnabled !== undefined) minRuntimeEnabled = g.minRuntimeEnabled ? 1 : 0;
-            if (g.minRuntimeSeconds !== undefined) minRuntimeSeconds = Math.max(30, Math.min(600, parseInt(g.minRuntimeSeconds, 10)));
-            if (g.thermalLoadEnabled !== undefined) thermalLoadEnabled = g.thermalLoadEnabled ? 1 : 0;
             if (g.radiatorFloorEnabled !== undefined) radiatorFloorEnabled = g.radiatorFloorEnabled ? 1 : 0;
             if (g.radiatorFloorTemp !== undefined) radiatorFloorTemp = Math.max(30, Math.min(65, parseInt(g.radiatorFloorTemp, 10)));
             if (g.rateLimitEnabled !== undefined) rateLimitEnabled = g.rateLimitEnabled ? 1 : 0;
@@ -185,19 +161,11 @@ const putFlowTempOpt = async (req, res) => {
         await pool.execute(
             `REPLACE INTO flow_temperature_settings (
                 home_id, max_flow_temperature, min_flow_temperature, max_flow_temperature_limit, auto_adaptation_enabled,
-                guard_lockout_enabled, guard_lockout_duration_min, guard_lockout_override_deficit,
-                guard_delta_t_enabled, guard_delta_t_min_temp,
-                guard_min_runtime_enabled, guard_min_runtime_seconds,
-                guard_thermal_load_enabled,
                 guard_radiator_floor_enabled, guard_radiator_floor_temp,
                 guard_rate_limit_enabled, guard_rate_limit_max_step
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 homeId, temp, minTemp, maxLimit, autoAdapt,
-                lockoutEnabled, lockoutDurationMin, lockoutOverrideDeficit,
-                deltaTEnabled, deltaTMinTemp,
-                minRuntimeEnabled, minRuntimeSeconds,
-                thermalLoadEnabled,
                 radiatorFloorEnabled, radiatorFloorTemp,
                 rateLimitEnabled, rateLimitMaxStep
             ]

@@ -26,7 +26,6 @@ const coapHelpers = require('./handlers/coap-helpers');
 const deviceHandlers = require('./handlers/device-handlers');
 const telemetryHandlers = require('./handlers/telemetry-handlers');
 const zoneHandlers = require('./handlers/zone-handlers');
-const zoneCoordinator = require('./zone-coordinator');
 
 // Injected dependencies (set by init())
 let db, coap, tlv, wsBridge, battery, messageCache, configCapture, config, metrics, ZS_SCHEMA, mqttPublisher, workerPool;
@@ -102,7 +101,6 @@ function init(containerOrDeps) {
     deviceHandlers.init(deps);
     telemetryHandlers.init(deps);
     zoneHandlers.init(deps);
-    zoneCoordinator.init(deps);
 }
 
 const classifyPath = pathClassifier.classifyPath;

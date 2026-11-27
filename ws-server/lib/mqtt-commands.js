@@ -57,36 +57,6 @@ function init(_mqttClient, _db, _commandApi, _mqttPublisher, _log, _onStateChang
         });
     });
 
-    // Subscribe to virtual device telemetry and command topics
-    mqttClient.subscribe('tado/tanoclo/virtual/+/telemetry', (topic, payload) => {
-        handleVirtualTelemetry(topic, payload).catch(err => {
-            if (log) log('error', `[mqtt-commands] Error handling virtual telemetry ${topic}: ${err.message}`);
-        });
-    });
-
-    mqttClient.subscribe('tado/tanoclo/virtual/+/set/#', (topic, payload) => {
-        handleVirtualTelemetry(topic, payload).catch(err => {
-            if (log) log('error', `[mqtt-commands] Error handling virtual command ${topic}: ${err.message}`);
-        });
-    });
-
-    mqttClient.subscribe('tado/tanoclo/h/+/d/+/telemetry', (topic, payload) => {
-        handleVirtualTelemetry(topic, payload).catch(err => {
-            if (log) log('error', `[mqtt-commands] Error handling device telemetry ${topic}: ${err.message}`);
-        });
-    });
-
-    mqttClient.subscribe('tado/tanoclo/h/+/d/+/cmd/#', (topic, payload) => {
-        handleVirtualTelemetry(topic, payload).catch(err => {
-            if (log) log('error', `[mqtt-commands] Error handling device cmd ${topic}: ${err.message}`);
-        });
-    });
-
-    mqttClient.subscribe('tado/tanoclo/h/+/weather/telemetry', (topic, payload) => {
-        return commandQueue.run(`weather:${topic}`, () => require('./mqtt-weather').ingestWeather(db, mqttPublisher, topic, payload))
-            .catch(err => { if (log) log('error', `[mqtt-weather] ${err.message}`); });
-    });
-
     // Subscribe to home gas energy measurements (cumulative m³)
     mqttClient.subscribe('tado/tanoclo/h/+/energy/gas_meter', (topic, payload) => {
         handleGasMeterPayload(topic, payload).catch(err => {
@@ -663,18 +633,6 @@ async function handleCommand(topic, payload) {
                 await valveExercise.exerciseValve(dev.serial_no, homeId, { force: true }).catch(err => {
                     if (log) log('warn', `[mqtt-commands] Valve exercise failed for ${dev.serial_no}: ${err.message}`);
                 });
-            } else if ((command === 'temperature' || command === 'temp') && dev.zone_id != null) {
-                const val = parseFloat(payload);
-                if (!isNaN(val)) {
-                    const zoneCoordinator = require('./zone-coordinator');
-                    await zoneCoordinator.onExternalTelemetry(dev.home_id, dev.zone_id, val, null);
-                }
-            } else if (command === 'humidity' && dev.zone_id != null) {
-                const val = parseFloat(payload);
-                if (!isNaN(val)) {
-                    const zoneCoordinator = require('./zone-coordinator');
-                    await zoneCoordinator.onExternalTelemetry(dev.home_id, dev.zone_id, null, val);
-                }
             }
         }
     }
@@ -987,59 +945,6 @@ async function preloadCustomEnergyTopics() {
         }
     } catch (e) {
         if (log) log('warn', `[mqtt-energy] Failed to preload custom energy topics: ${e.message}`);
-    }
-}
-
-async function handleVirtualTelemetry(topic, payloadStr) {
-    const segs = topic.split('/');
-    let serial = null;
-    let explicitCommand = null;
-
-    if (segs[2] === 'virtual') {
-        serial = segs[3];
-        if (segs[4] === 'set') explicitCommand = segs[5];
-    } else if (segs[2] === 'h' && segs[4] === 'd') {
-        serial = segs[5];
-        if (segs[6] === 'cmd' || segs[6] === 'set') explicitCommand = segs[7];
-    }
-    if (!serial) return;
-
-    const pool = db.getPool();
-    const [devs] = await pool.execute(
-        'SELECT serial_no, home_id, zone_id, is_virtual_leader FROM devices WHERE serial_no = ?',
-        [serial]
-    );
-    if (devs.length === 0) return;
-    const dev = devs[0];
-    if (dev.zone_id == null) return;
-
-    const raw = String(payloadStr).trim();
-    let temp = null;
-    let humidity = null;
-
-    if (raw.startsWith('{')) {
-        try {
-            const data = JSON.parse(raw);
-            temp = data.temp_celsius ?? data.temperature ?? data.temp ?? null;
-            humidity = data.humidity_percent ?? data.humidity ?? null;
-        } catch (e) {
-            if (log) log('warn', `[mqtt-commands] Invalid JSON payload for virtual device ${serial}: ${e.message}`);
-            return;
-        }
-    } else {
-        const val = parseFloat(raw);
-        if (!isNaN(val)) {
-            if (explicitCommand === 'humidity') {
-                humidity = val;
-            } else {
-                temp = val;
-            }
-        }
-    }
-
-    if (temp != null || humidity != null) {
-        const zoneCoordinator = require('./zone-coordinator');
-        await zoneCoordinator.onExternalTelemetry(dev.home_id, dev.zone_id, temp, humidity);
     }
 }
 

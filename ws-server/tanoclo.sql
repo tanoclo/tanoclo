@@ -23076,8 +23076,7 @@ CREATE TABLE `devices` (
   `battery_curve_custom` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL COMMENT 'Custom discharge curve [[mv, pct], ...] overrides default for battery_type' CHECK (json_valid(`battery_curve_custom`)),
   `va_motor_error_detection` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Enable low-battery inference from persistent motor errors (VA only)',
   `last_exercised_at` datetime DEFAULT NULL COMMENT 'Timestamp of last anti-seize stroke exercise',
-  `auto_valve_exercise_enabled` tinyint(1) NOT NULL DEFAULT 1 COMMENT 'Per-device automated valve exercise enable toggle',
-  `is_virtual_leader` tinyint(1) NOT NULL DEFAULT 0 COMMENT 'Flag indicating device is an IB/gateway-hosted virtual zone leader'
+  `auto_valve_exercise_enabled` tinyint(1) NOT NULL DEFAULT 1 COMMENT 'Per-device automated valve exercise enable toggle'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `balancing_snapshots` (
@@ -23119,7 +23118,40 @@ CREATE TABLE `circuit_measurements` (
   `field_045a` decimal(5,2) DEFAULT NULL COMMENT 'ot_dhw_temperature',
   `field_045e` decimal(5,2) DEFAULT NULL COMMENT 'ot_dhw_flow_rate',
   `field_044f` decimal(5,2) DEFAULT NULL COMMENT 'ot_outside_temperature',
-  `field_0462` decimal(5,2) DEFAULT NULL COMMENT 'ot_ch_water_pressure_bar'
+  `field_0462` decimal(5,2) DEFAULT NULL COMMENT 'ot_ch_water_pressure_bar',
+  `field_0463` int(11) DEFAULT NULL COMMENT 'burner_starts',
+  `field_0464` int(11) DEFAULT NULL COMMENT 'dhw_burner_starts',
+  `field_0465` int(11) DEFAULT NULL COMMENT 'ch_burner_starts',
+  `field_0466` int(11) DEFAULT NULL COMMENT 'burner_hours_total',
+  `field_0467` int(11) DEFAULT NULL COMMENT 'burner_hours_ch',
+  `field_0468` int(11) DEFAULT NULL COMMENT 'burner_hours_dhw',
+  `field_0458` decimal(5,2) DEFAULT NULL COMMENT 'flame_current_ua',
+  `field_045b` decimal(5,2) DEFAULT NULL COMMENT 'dhw_target_temperature',
+  `field_0471` decimal(5,2) DEFAULT NULL COMMENT 'dhw_setpoint_upper_bound',
+  `field_046f` decimal(5,2) DEFAULT NULL COMMENT 'max_ch_flow_temperature',
+  `field_046c` tinyint(1) DEFAULT NULL COMMENT 'dhw_storage_tank',
+  `field_046d` tinyint(1) DEFAULT NULL COMMENT 'dhw_instantaneous'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `boiler_cycles` (
+  `id` bigint(20) NOT NULL,
+  `home_id` int(11) NOT NULL,
+  `circuit_number` int(11) NOT NULL DEFAULT 1,
+  `start_time` datetime NOT NULL,
+  `end_time` datetime DEFAULT NULL,
+  `duration_seconds` int(11) DEFAULT 0,
+  `cycle_type` enum('CH','DHW','KEEP_WARM','UNKNOWN') NOT NULL DEFAULT 'CH',
+  `start_flow_temp` decimal(5,2) DEFAULT NULL,
+  `max_flow_temp` decimal(5,2) DEFAULT NULL,
+  `end_flow_temp` decimal(5,2) DEFAULT NULL,
+  `start_return_temp` decimal(5,2) DEFAULT NULL,
+  `max_return_temp` decimal(5,2) DEFAULT NULL,
+  `end_return_temp` decimal(5,2) DEFAULT NULL,
+  `avg_modulation` decimal(5,2) DEFAULT NULL,
+  `max_modulation` int(11) DEFAULT NULL,
+  `burner_starts_counter` int(11) DEFAULT NULL,
+  `ch_hours_counter` int(11) DEFAULT NULL,
+  `dhw_hours_counter` int(11) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE `device_measurements` (
@@ -23146,14 +23178,6 @@ CREATE TABLE `flow_temperature_settings` (
   `min_flow_temperature` int(11) NOT NULL,
   `max_flow_temperature_limit` int(11) NOT NULL,
   `auto_adaptation_enabled` tinyint(1) NOT NULL,
-  `guard_lockout_enabled` tinyint(1) NOT NULL DEFAULT 1,
-  `guard_lockout_duration_min` int(11) NOT NULL DEFAULT 10,
-  `guard_lockout_override_deficit` decimal(3,1) NOT NULL DEFAULT 2.0,
-  `guard_delta_t_enabled` tinyint(1) NOT NULL DEFAULT 1,
-  `guard_delta_t_min_temp` decimal(3,1) NOT NULL DEFAULT 5.0,
-  `guard_min_runtime_enabled` tinyint(1) NOT NULL DEFAULT 1,
-  `guard_min_runtime_seconds` int(11) NOT NULL DEFAULT 180,
-  `guard_thermal_load_enabled` tinyint(1) NOT NULL DEFAULT 1,
   `guard_radiator_floor_enabled` tinyint(1) NOT NULL DEFAULT 1,
   `guard_radiator_floor_temp` int(11) NOT NULL DEFAULT 48,
   `guard_rate_limit_enabled` tinyint(1) NOT NULL DEFAULT 1,

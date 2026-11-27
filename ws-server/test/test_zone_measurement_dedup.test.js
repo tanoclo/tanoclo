@@ -123,4 +123,21 @@ describe('zone measurement deduplication', () => {
         expect(fixture.inserts[1].field_6280).toBe(21);
         expect(fixture.inserts[1].field_40a0).toBe(10);
     });
+
+    test('zone demand is not carried forward once the leader stops reporting it for 45 minutes', async () => {
+        vi.useFakeTimers();
+        try {
+            vi.setSystemTime(new Date('2026-11-25T08:00:00Z'));
+            const fixture = measurementFixture({ timestamp: '2026-11-25 07:00:00', field_40a0: 0 });
+            await fixture.state.insertMergedZoneMeasurement(1, 6, { '0x40a0': 34 });
+            vi.setSystemTime(new Date('2026-11-25T08:30:00Z'));
+            await fixture.state.insertMergedZoneMeasurement(1, 6, { '0x012d': 16.1 });
+            expect(fixture.inserts[1].field_40a0).toBe(34);
+            vi.setSystemTime(new Date('2026-11-25T08:50:00Z'));
+            await fixture.state.insertMergedZoneMeasurement(1, 6, { '0x012d': 16.2 });
+            expect(fixture.inserts[2].field_40a0).toBeNull();
+        } finally {
+            vi.useRealTimers();
+        }
+    });
 });

@@ -20,7 +20,6 @@ export const SWR_KEYS = {
   zoneState: (homeId, zoneId) => `/homes/${homeId}/zones/${zoneId}/state`,
   defaultOverlay: (homeId, zoneId) => `/homes/${homeId}/zones/${zoneId}/defaultOverlay`,
   zoneControl: (homeId, zoneId) => `/homes/${homeId}/zones/${zoneId}/control`,
-  virtualSensor: (homeId, zoneId) => `/homes/${homeId}/zones/${zoneId}/virtual-sensor`,
 
   // Schedules
   activeTimetable: (homeId, zoneId) => `/homes/${homeId}/zones/${zoneId}/schedule/activeTimetable`,
@@ -62,4 +61,5 @@ export const SWR_KEYS = {
   gasEnergyDaily: (homeId, days) => `/homes/${homeId}/energy/gas/daily?days=${days}`,
   gasEnergySettings: (homeId) => `/homes/${homeId}/energy/settings`,
   gasMeterReadings: (homeId) => `/homes/${homeId}/energy/gas/readings`,
+  boilerCycles: (homeId, from, to) => `/homes/${homeId}/tanoclo/boiler-cycles?from=${from}&to=${to}`,
 };

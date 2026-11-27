@@ -1,6 +1,13 @@
 /**
  * @file lib/flow-optimizer.js
- * @brief Dynamic flow temperature optimizer based on weather, zone demand, and boiler telemetry.
+ * @brief Dynamic flow temperature optimizer based on weather and zone demand.
+ *
+ * The optimizer only shapes the circuit maximum flow temperature (0x2040). It never
+ * switches the boiler on or off: the RU OpenTherm bus module enables CH whenever its
+ * circuit demand is > 0 and scales TSet = minCH + demand * (maxCH - minCH) / 100,
+ * capped at maxCH (bus-module firmware 0x0800b682 / 0x0800c4fc). Writing 0x2040 = 0
+ * does not stop the burner; it leaves CH enabled with TSet = 0 and the boiler then
+ * fires on its own internal minimum.
  */
 
 'use strict';
@@ -11,33 +18,33 @@ const config = require('./config');
 const weather = require('./weather');
 const interfaceModules = require('./interface-modules');
 
+// Minimum change (°C) before a new max flow temperature is written to the circuit.
+const FLOW_DEADBAND = 2;
+
+// Low-load ceiling: in on/off operation the RU commands TSet = 0x2040, so with only a few valves
+// open the boiler overshoots and stops within ~100 s. While the RU-reported circuit demand stays
+// low the ceiling is capped. Hysteresis keeps the cap from toggling with small demand changes.
+const LOW_LOAD_CAP_ON_PCT = 25;
+const LOW_LOAD_CAP_OFF_PCT = 35;
+const LOW_LOAD_CAP_TEMP = 48;
+// A room deficit this large is a recovery, not a low load; the cap does not apply.
+const LOW_LOAD_CAP_MAX_ERROR = 1.0;
+
 let _db = null;
 let _commandApi = null;
-let _mqttPublisher = null;
 const _lastDriverPushTimes = new Map();
-const _lastBurnStartTimes = new Map();
-const _lastBurnEndTimes = new Map();
 const _pendingEvals = new Map();
+const _lowLoadCapActive = new Map();
 
-function parseDbTimestamp(ts) {
-    if (!ts) return 0;
-    if (ts instanceof Date) return ts.getTime();
-    const str = String(ts).trim();
-    if (!str) return 0;
-    const iso = str.includes('T') ? str : str.replace(' ', 'T');
-    return new Date(iso.endsWith('Z') ? iso : iso + 'Z').getTime();
-}
-
-function init(db, commandApi, mqttPublisher) {
+function init(db, commandApi) {
     _db = db;
     _commandApi = commandApi;
-    _mqttPublisher = mqttPublisher;
     log('info', 'TaNoClo Flow Temperature Optimizer initialized');
 }
 
 /**
  * Schedules a debounced reactive flow optimization evaluation for a home.
- * 
+ *
  * @param {number|string} homeId
  * @param {number} [delayMs=3000]
  */
@@ -58,90 +65,20 @@ function scheduleEvaluation(homeId, delayMs = 3000) {
 }
 
 /**
- * Evaluates whether the calling heating circuit has sufficient thermal dissipation
- * capacity to absorb the boiler's minimum burner output without short-cycling.
- * 
- * @param {Object} params
- * @param {number} [params.callingRadiators=0] Count of radiator zones calling with active demand
- * @param {number} [params.callingUfh=0] Count of underfloor zones calling with active demand
- * @param {number} [params.circuitDemandPct=0] Aggregate demand percentage across the circuit
- * @param {number} [params.maxZoneError=0] Maximum error (°C) across calling zones
- * @param {boolean} [params.inLockout=false] Whether circuit is in anti-flapping lockout
- * @param {number} [params.currentMode=0] Current circuit operating mode (0=STANDBY, 1=SCHEDULE)
- * @returns {{ allowHeating: boolean, circuitOperatingMode: number, reason: string }}
- */
-function evaluateCircuitThermalLoad({
-    callingRadiators = 0,
-    callingUfh = 0,
-    circuitDemandPct = 0,
-    maxZoneError = 0,
-    inLockout = false,
-    currentMode = 0,
-    guards = {}
-}) {
-    const lockoutEnabled = guards.lockoutEnabled !== undefined ? Boolean(guards.lockoutEnabled) : true;
-    const lockoutOverrideDeficit = guards.lockoutOverrideDeficit !== undefined ? Number(guards.lockoutOverrideDeficit) : 2.0;
-    const thermalLoadEnabled = guards.thermalLoadEnabled !== undefined ? Boolean(guards.thermalLoadEnabled) : true;
-
-    // 1. Anti-flapping lockout: if boiler recently fired, block reignition on marginal/moderate demand
-    // Exception: high deficit cold recovery (>= lockoutOverrideDeficit) can override lockout
-    // Lockout only gates initial ignition from Standby (currentMode === 0); never aborts active heating.
-    if (lockoutEnabled && currentMode === 0 && inLockout && maxZoneError < lockoutOverrideDeficit) {
-        return { allowHeating: false, circuitOperatingMode: 0, reason: 'anti_flapping_lockout' };
-    }
-
-    // If thermal load gating disabled: any active circuit demand or error allows heating
-    if (!thermalLoadEnabled) {
-        if (circuitDemandPct > 0 || maxZoneError > 0) {
-            return { allowHeating: true, circuitOperatingMode: 1, reason: 'thermal_load_gating_disabled' };
-        }
-        return { allowHeating: false, circuitOperatingMode: 0, reason: 'idle_standby' };
-    }
-
-    // 2. Underfloor heating has massive screed thermal mass - always safe to absorb boiler output
-    if (callingUfh > 0 && (circuitDemandPct >= 10 || maxZoneError >= 0.2)) {
-        return { allowHeating: true, circuitOperatingMode: 1, reason: 'underfloor_thermal_mass' };
-    }
-
-    // 3. Multi-room coincidence: >= 2 radiator zones calling with active demand
-    // Hysteresis: require >= 25% demand to turn ON (currentMode 0), but only >= 15% to sustain active heating (currentMode 1)
-    const coincidenceThreshold = (currentMode === 1) ? 15 : 25;
-    if (callingRadiators >= 2 && circuitDemandPct >= coincidenceThreshold) {
-        return { allowHeating: true, circuitOperatingMode: 1, reason: 'multi_zone_coincidence' };
-    }
-
-    // 4. Significant single-zone load:
-    // Hysteresis: require >= 35% and error >= 0.4°C to turn ON, maintain active if demand >= 25% and error >= 0.25°C
-    const singleDemandThreshold = (currentMode === 1) ? 25 : 35;
-    const singleErrorThreshold = (currentMode === 1) ? 0.25 : 0.4;
-    if (callingRadiators === 1 && circuitDemandPct >= singleDemandThreshold && maxZoneError >= singleErrorThreshold) {
-        return { allowHeating: true, circuitOperatingMode: 1, reason: 'single_zone_significant_load' };
-    }
-
-    // 5. High aggregate demand across the circuit (e.g. general recovery)
-    const aggregateThreshold = (currentMode === 1) ? 30 : 45;
-    if (circuitDemandPct >= aggregateThreshold || (circuitDemandPct >= 30 && maxZoneError >= 0.8)) {
-        return { allowHeating: true, circuitOperatingMode: 1, reason: 'high_aggregate_demand' };
-    }
-
-    // 6. Insufficient thermal load: single radiator low-demand drift
-    return { allowHeating: false, circuitOperatingMode: 0, reason: 'suppress_micro_burn_low_thermal_load' };
-}
-
-/**
- * Pure calculation function for computing the optimal supply/flow temperature.
- * 
+ * Pure calculation of the circuit maximum flow temperature.
+ *
  * @param {Object} params
  * @param {number} params.outsideTemp - Current outdoor temperature in °C
  * @param {number} params.minFlow - Configured minimum flow temperature bound
  * @param {number} params.maxFlowLimit - Configured maximum flow temperature ceiling
- * @param {number} params.currentMaxFlow - Currently configured max flow temperature
+ * @param {number} params.currentMaxFlow - Max flow temperature currently configured on the circuit
  * @param {number} params.maxZoneError - Highest positive error (target - current) among active zones
  * @param {number} params.circuitDemandPct - Circuit demand percent (0 - 100)
- * @param {number|null} [params.modulationPct] - Live burner modulation percent (0 - 100)
- * @param {number[]|null} [params.forecastHourly] - Array of forecasted outdoor temperatures (next hours)
+ * @param {number[]|null} [params.forecastHourly] - Forecasted outdoor temperatures (next hours)
  * @param {string} [params.activeDemandType='ANY'] - 'ANY' | 'ONLY_UNDERFLOOR' | 'ONLY_RADIATOR' | 'MIXED'
- * @returns {Object} { targetFlow, baseFlow, demandBoost, forecastAdj, modAdj, reason, changed }
+ * @param {Object} [params.guards] - { radiatorFloorEnabled, radiatorFloorTemp, rateLimitEnabled, rateLimitMaxStep }
+ * @param {boolean} [params.lowLoad=false] - Cap the ceiling at LOW_LOAD_CAP_TEMP (decided by evaluateHome)
+ * @returns {{ targetFlow: number, baseFlow: number, demandBoost: number, forecastAdj: number, reason: string, changed: boolean }}
  */
 function computeOptimalFlowTemperature({
     outsideTemp = 10,
@@ -150,23 +87,15 @@ function computeOptimalFlowTemperature({
     currentMaxFlow = 60,
     maxZoneError = 0,
     circuitDemandPct = 0,
-    modulationPct = null,
     forecastHourly = null,
     activeDemandType = 'ANY',
-    callingRadiators = 0,
-    callingUfh = 0,
-    inLockout = false,
-    actualFlowTemp = null,
-    isFlameOn = false,
-    currentMode = 0,
-    guards = {}
+    guards = {},
+    lowLoad = false
 }) {
     const rateLimitEnabled = guards.rateLimitEnabled !== undefined ? Boolean(guards.rateLimitEnabled) : true;
     const rateLimitMaxStep = guards.rateLimitMaxStep !== undefined ? Number(guards.rateLimitMaxStep) : 3.0;
     const radiatorFloorEnabled = guards.radiatorFloorEnabled !== undefined ? Boolean(guards.radiatorFloorEnabled) : true;
     const radiatorFloorTemp = guards.radiatorFloorTemp !== undefined ? Number(guards.radiatorFloorTemp) : 48;
-    const deltaTEnabled = guards.deltaTEnabled !== undefined ? Boolean(guards.deltaTEnabled) : true;
-    const deltaTMinTemp = guards.deltaTMinTemp !== undefined ? Number(guards.deltaTMinTemp) : 5.0;
 
     // 1. Guardrail sanity checks
     const isOnlyUfh = activeDemandType === 'ONLY_UNDERFLOOR';
@@ -176,31 +105,23 @@ function computeOptimalFlowTemperature({
     maxFlowLimit = Math.max(minFlow, Math.min(effectiveMaxLimit, 85));
     currentMaxFlow = Math.max(minFlow, Math.min(currentMaxFlow, maxFlowLimit));
 
-    // 2. Idle / Standby check: If no circuit demand and all rooms satisfied
-    if (circuitDemandPct <= 0 && maxZoneError <= 0) {
-        const targetFlow = minFlow;
-        const diff = targetFlow - currentMaxFlow;
-        const changed = Math.abs(diff) >= 1.0;
-        const steppedFlow = (rateLimitEnabled && changed)
-            ? currentMaxFlow + Math.max(-rateLimitMaxStep, Math.min(rateLimitMaxStep, diff))
-            : targetFlow;
-        return {
-            targetFlow: Math.round(steppedFlow),
-            baseFlow: minFlow,
-            demandBoost: 0,
-            forecastAdj: 0,
-            modAdj: 0,
-            reason: 'idle_standby',
-            changed: Math.round(steppedFlow) !== currentMaxFlow,
-            circuitOperatingMode: 0
-        };
-    }
-
-    // 3. Weather Heating Curve (Linear outdoor compensation: +20°C -> minFlow, -10°C -> maxFlowLimit)
+    // 2. Weather heating curve (+20°C -> minFlow, -10°C -> maxFlowLimit)
     const outdoorFraction = Math.max(0, Math.min(1, (20 - outsideTemp) / 30));
     const baseFlow = minFlow + outdoorFraction * (maxFlowLimit - minFlow);
 
-    // 4. Zone Demand Adjustment
+    // 3. Nothing calls for heat: keep the current ceiling so the next call starts from it.
+    if (circuitDemandPct <= 0 && maxZoneError <= 0) {
+        return {
+            targetFlow: currentMaxFlow,
+            baseFlow: Math.round(baseFlow * 10) / 10,
+            demandBoost: 0,
+            forecastAdj: 0,
+            reason: 'idle_hold',
+            changed: false
+        };
+    }
+
+    // 4. Zone demand adjustment
     let demandBoost = 0;
     let reason = isOnlyUfh ? 'weather_curve_ufh' : (activeDemandType === 'MIXED' ? 'mixed_radiator_priority' : 'weather_curve');
 
@@ -215,126 +136,59 @@ function computeOptimalFlowTemperature({
         reason = isOnlyUfh ? 'ufh_near_setpoint' : 'near_setpoint';
     }
 
-    // 5. Weather Forecast Pre-adjustment (Next 3h trend)
+    // 5. Weather forecast pre-adjustment (next 3h trend)
     let forecastAdj = 0;
     if (forecastHourly && Array.isArray(forecastHourly) && forecastHourly.length >= 3) {
-        const futureTemp = forecastHourly[2]; // ~3 hours ahead
-        const trend = futureTemp - outsideTemp;
+        const trend = forecastHourly[2] - outsideTemp;
         if (trend >= 2.0) {
-            forecastAdj = -2.0; // Warming up rapidly: pre-cool to avoid overshoot
+            forecastAdj = -2.0;
         } else if (trend <= -2.0) {
-            forecastAdj = 2.0;  // Rapid drop coming: pre-boost
+            forecastAdj = 2.0;
         }
     }
 
-    // 6. Boiler Modulation Feedback
-    let modAdj = 0;
-    if (modulationPct !== null && modulationPct !== undefined) {
-        if (modulationPct > 0 && modulationPct < 25 && maxZoneError < 0.5) {
-            modAdj = -2.0; // Low modulation and satisfied rooms: flow temp is higher than needed
-        } else if (modulationPct > 85 && maxZoneError > 0.8) {
-            modAdj = 2.0;  // High modulation and struggling to reach setpoint: raise flow
-        }
+    // 6. Raw target, user limits and radiator floor
+    let target = Math.round(baseFlow + demandBoost + forecastAdj);
+    if (radiatorFloorEnabled && (activeDemandType === 'ONLY_RADIATOR' || activeDemandType === 'ANY')) {
+        target = Math.max(target, radiatorFloorTemp);
     }
-
-    // 7. Compute raw target and clamp to user limits
-    const rawTarget = Math.round(baseFlow + demandBoost + forecastAdj + modAdj);
-    const clampedTarget = Math.max(minFlow, Math.min(maxFlowLimit, rawTarget));
-
-    // 8. Hysteresis & Rate Limiting (Prevent oscillation, max ±rateLimitMaxStep per evaluation cycle)
-    // Only apply rate limiting when actively heating in steady state.
-    // Transitioning from STANDBY jumps directly to operating target so radiators receive proper heat immediately.
-    const fromStandby = (currentMaxFlow <= minFlow);
-    const delta = clampedTarget - currentMaxFlow;
-    let nextFlow = clampedTarget;
-    let changed = false;
-
-    if (rateLimitEnabled && !fromStandby && Math.abs(delta) >= 1.0) {
-        const step = Math.max(-rateLimitMaxStep, Math.min(rateLimitMaxStep, delta));
-        nextFlow = Math.round(currentMaxFlow + step);
-        nextFlow = Math.max(minFlow, Math.min(maxFlowLimit, nextFlow));
-        changed = nextFlow !== currentMaxFlow;
-    } else if (!rateLimitEnabled || fromStandby) {
-        nextFlow = clampedTarget;
-        changed = nextFlow !== currentMaxFlow;
+    if (lowLoad && maxZoneError < LOW_LOAD_CAP_MAX_ERROR && target > LOW_LOAD_CAP_TEMP) {
+        target = LOW_LOAD_CAP_TEMP;
+        reason = 'low_load_cap';
     }
+    target = Math.max(minFlow, Math.min(maxFlowLimit, target));
 
-    // Operating mode (0x2090) and thermal load gating
-    // If calling counts are not explicitly provided (e.g. basic unit tests), infer from demand & activeDemandType
-    let radCount = callingRadiators;
-    let ufhCount = callingUfh;
-    if (radCount === 0 && ufhCount === 0) {
-        if (activeDemandType === 'ONLY_UNDERFLOOR') {
-            ufhCount = circuitDemandPct > 0 ? 1 : 0;
-        } else if (circuitDemandPct >= 25 || maxZoneError >= 0.4) {
-            radCount = (circuitDemandPct >= 30) ? 2 : 1;
-        }
+    // 7. Deadband and rate limit
+    const delta = target - currentMaxFlow;
+    if (Math.abs(delta) < FLOW_DEADBAND) {
+        return {
+            targetFlow: currentMaxFlow,
+            baseFlow: Math.round(baseFlow * 10) / 10,
+            demandBoost,
+            forecastAdj,
+            reason,
+            changed: false
+        };
     }
-
-    const thermal = evaluateCircuitThermalLoad({
-        callingRadiators: radCount,
-        callingUfh: ufhCount,
-        circuitDemandPct,
-        maxZoneError,
-        inLockout,
-        currentMode,
-        guards
-    });
-    const circuitOperatingMode = thermal.circuitOperatingMode;
-
-    // Emitter-specific flow temperature floor when heating is active:
-    // Radiators require >= radiatorFloorTemp (default 48°C) to radiate heat and prevent instantaneous anti-cycling trip on minimum modulation.
-    // Underfloor heating operates safely at lower minFlow floor.
-    let effectiveFlow = 0;
-    if (circuitOperatingMode === 1) {
-        const flowFloor = (radiatorFloorEnabled && ufhCount === 0 && radCount > 0)
-            ? Math.max(minFlow, radiatorFloorTemp)
-            : minFlow;
-        effectiveFlow = Math.max(nextFlow, flowFloor);
-        effectiveFlow = Math.min(effectiveFlow, maxFlowLimit);
-
-        // Delta-T Anti-Microburn Guard:
-        // When loop water is already warm and burner is off, firing the boiler with small delta-T (< deltaTMinTemp)
-        // trips the boiler's upper temperature limit within seconds, causing a 15-30s micro-burn.
-        // Circulate existing heat until water cools down >= deltaTMinTemp below target, unless room deficit is high (>= 1.0°C).
-        // Only gates ignition from Standby (currentMode === 0); must never abort active heating (currentMode === 1).
-        if (deltaTEnabled && currentMode === 0 && !isFlameOn && actualFlowTemp !== null && actualFlowTemp > 0) {
-            const flowDeltaT = effectiveFlow - actualFlowTemp;
-            if (flowDeltaT < deltaTMinTemp && maxZoneError < 1.0 && circuitDemandPct < 50) {
-                return {
-                    targetFlow: nextFlow,
-                    effectiveFlow: 0,
-                    baseFlow: Math.round(baseFlow * 10) / 10,
-                    demandBoost,
-                    forecastAdj,
-                    modAdj,
-                    reason: 'flow_already_hot',
-                    thermalReason: 'flow_already_hot',
-                    changed,
-                    circuitOperatingMode: 0
-                };
-            }
-        }
+    let nextFlow = target;
+    if (rateLimitEnabled) {
+        nextFlow = Math.round(currentMaxFlow + Math.max(-rateLimitMaxStep, Math.min(rateLimitMaxStep, delta)));
     }
 
     return {
         targetFlow: nextFlow,
-        effectiveFlow,
         baseFlow: Math.round(baseFlow * 10) / 10,
         demandBoost,
         forecastAdj,
-        modAdj,
         reason,
-        thermalReason: thermal.reason,
-        changed,
-        circuitOperatingMode
+        changed: nextFlow !== currentMaxFlow
     };
 }
 
 /**
  * Evaluates and optimizes flow temperature for a single home.
- * 
- * @param {number|string} homeId 
+ *
+ * @param {number|string} homeId
  * @returns {Promise<Object|null>}
  */
 async function evaluateHome(homeId) {
@@ -342,18 +196,16 @@ async function evaluateHome(homeId) {
     const pool = _db.getPool();
 
     try {
-        // 1. Fetch flow temperature settings
+        // 1. Flow temperature settings
         const [settingsRows] = await pool.execute(
             'SELECT * FROM flow_temperature_settings WHERE home_id = ?',
             [homeId]
         );
         if (settingsRows.length === 0) return null;
         const settings = settingsRows[0];
-
-        // Skip if auto-adaptation is turned off by the user
         if (!settings.auto_adaptation_enabled) return null;
 
-        // Skip if interface module is non-modulating (e.g. Analog Relay)
+        // Skip non-modulating interface modules (e.g. analog relay)
         const [hsModRows] = await pool.execute('SELECT field_015d FROM heating_systems WHERE home_id = ? LIMIT 1', [homeId]);
         let effectiveMod015d = hsModRows.length > 0 ? hsModRows[0].field_015d : null;
         if (effectiveMod015d === null || effectiveMod015d === undefined) {
@@ -370,47 +222,49 @@ async function evaluateHome(homeId) {
 
         const minFlow = settings.min_flow_temperature ? parseInt(settings.min_flow_temperature, 10) : 30;
         const maxFlowLimit = settings.max_flow_temperature_limit ? parseInt(settings.max_flow_temperature_limit, 10) : 80;
-        const currentMaxFlow = settings.max_flow_temperature ? parseInt(settings.max_flow_temperature, 10) : 60;
+        const settingsMaxFlow = settings.max_flow_temperature ? parseInt(settings.max_flow_temperature, 10) : 60;
 
         // 2. Outdoor temperature
         let outsideTemp = 10.0;
         const weatherStatus = await require('./weather-source').getReading(_db, homeId);
-        if (weatherStatus.source === 'mqtt' && weatherStatus.stale) return;
+        if (weatherStatus.source === 'mqtt' && weatherStatus.stale) return null;
         if (!weatherStatus.stale && weatherStatus.reading?.outside_temp_celsius != null) {
             outsideTemp = Number(weatherStatus.reading.outside_temp_celsius);
         }
 
-        // 3. Hourly Forecast
+        // 3. Hourly forecast
         const forecastObj = weatherStatus.source === 'open_meteo' && weather.getHomeForecast ? weather.getHomeForecast(homeId) : null;
         const forecastHourly = weatherStatus.source === 'mqtt'
             ? weatherStatus.reading?.forecast?.filter(point => Date.parse(point.datetime) >= Date.now()).slice(0, 6).map(point => point.temperature) ?? null
             : forecastObj ? forecastObj.hourly : null;
 
-        // 4. Boiler live telemetry
+        // 4. Boiler live telemetry (history only)
         const [boilerRows] = await pool.execute(
-            'SELECT field_044c, field_044d, field_0452, field_0457 FROM heating_systems WHERE home_id = ? LIMIT 1',
+            'SELECT field_044c, field_0452 FROM heating_systems WHERE home_id = ? LIMIT 1',
             [homeId]
         );
         const actualFlowTemp = boilerRows.length > 0 && boilerRows[0].field_044c !== null ? parseFloat(boilerRows[0].field_044c) : null;
         const modulationPct = boilerRows.length > 0 && boilerRows[0].field_0452 !== null ? parseInt(boilerRows[0].field_0452, 10) : null;
 
-        // 5. Dynamic circuit determination & demand %
+        // 5. Circuits and circuit demand reported by the circuit driver
         const [circRows] = await pool.execute(
-            'SELECT number, field_4080, field_2040, field_2090, driver_serial_no FROM heating_circuits WHERE home_id = ? ORDER BY number ASC',
+            'SELECT number, field_4080, field_2040, driver_serial_no FROM heating_circuits WHERE home_id = ? ORDER BY number ASC',
             [homeId]
         );
 
         let targetCircuitNumbers = [];
         let circuitDemandPct = 0;
+        let ruCircuitDemandPct = null;
 
         if (circRows.length > 0) {
             targetCircuitNumbers = circRows.map(r => r.number);
             circuitDemandPct = Math.max(0, ...circRows.map(r => r.field_4080 || 0));
+            ruCircuitDemandPct = circuitDemandPct;
         } else {
             const [devCircRows] = await pool.execute(
-                `SELECT z.heating_circuit 
-                 FROM devices d 
-                 JOIN zones z ON d.zone_id = z.id 
+                `SELECT z.heating_circuit
+                 FROM devices d
+                 JOIN zones z ON d.zone_id = z.id
                  WHERE d.home_id = ? AND d.device_type IN ('RU01', 'RU02', 'BU01') AND z.heating_circuit IS NOT NULL LIMIT 1`,
                 [homeId]
             );
@@ -421,7 +275,7 @@ async function evaluateHome(homeId) {
             }
         }
 
-        // 6. Active zone temperatures, heating types, demand and errors
+        // 6. Zone errors, demand and emitter types
         const [zoneRows] = await pool.execute(
             `SELECT z.id, z.name, z.heating_type, zm.field_012d AS current_temp, zm.field_40a0 AS demand
              FROM zones z
@@ -441,213 +295,94 @@ async function evaluateHome(homeId) {
 
         for (const z of zoneRows) {
             try {
-                if (_db && typeof _db.isZoneAlive === 'function') {
+                if (typeof _db.isZoneAlive === 'function') {
                     const alive = await _db.isZoneAlive(homeId, z.id).catch(() => true);
-                    if (!alive) {
-                        log('debug', `Zone ${z.id} (${z.name}) is offline (>20m), skipping from thermal load evaluation`);
-                        continue;
-                    }
+                    if (!alive) continue;
                 }
                 const zState = await _db.getZoneState(homeId, z.id);
-                if (zState) {
-                    const enabled = (zState['0x61e0'] ?? zState.field_61e0 ?? 1) === 1;
-                    if (enabled) {
-                        const targetTemp = parseFloat(zState['0x6280'] ?? zState.field_6280 ?? zState['0x6200'] ?? zState.field_6200 ?? 20);
-                        const currentTemp = z.current_temp !== null && z.current_temp !== undefined ? parseFloat(z.current_temp) : null;
-                        const zDemand = parseFloat(zState['0x40a0'] ?? zState.field_40a0 ?? z.demand ?? 0) || 0;
-                        if (zDemand > maxZoneDemand) {
-                            maxZoneDemand = zDemand;
-                        }
-                        if (currentTemp !== null && targetTemp > currentTemp) {
-                            const err = targetTemp - currentTemp;
-                            if (err > maxZoneError) {
-                                maxZoneError = err;
-                            }
-                            // Only count as calling radiator if valve is actively open (>=15%) and room has deficit (>=0.25°C)
-                            if (z.heating_type === 'UNDERFLOOR') {
-                                if (zDemand >= 10 || err >= 0.2) callingUfh++;
-                            } else {
-                                if (zDemand >= 15 && err >= 0.25) callingRadiators++;
-                            }
-                        }
-                    }
+                if (!zState) continue;
+                const enabled = (zState['0x61e0'] ?? zState.field_61e0 ?? 1) === 1;
+                if (!enabled) continue;
+
+                const overlayActive = (zState['0x6240'] ?? 0) > 0 && zState['0x6280'] != null;
+                const targetTemp = parseFloat(overlayActive ? zState['0x6280'] : (zState['0x6200'] ?? 20));
+                const currentTemp = z.current_temp !== null && z.current_temp !== undefined ? parseFloat(z.current_temp) : null;
+                const zDemand = parseFloat(z.demand ?? 0) || 0;
+                const err = currentTemp !== null && targetTemp > currentTemp ? targetTemp - currentTemp : 0;
+
+                maxZoneDemand = Math.max(maxZoneDemand, zDemand);
+                maxZoneError = Math.max(maxZoneError, err);
+                if (zDemand > 0 || err > 0) {
+                    if (z.heating_type === 'UNDERFLOOR') callingUfh++;
+                    else callingRadiators++;
                 }
             } catch (err) {
                 log('warn', `Error evaluating zone ${z.id} state for home ${homeId}: ${err.message}`);
             }
         }
 
-        // Lock circuit demand against single-device RU actuator clobbering:
-        // When other rooms (e.g. Kamer Luuk) are demanding heat, aggregate demand is at least maxZoneDemand.
         circuitDemandPct = Math.max(circuitDemandPct, maxZoneDemand);
 
         let activeDemandType = 'ANY';
-        if (callingUfh > 0 && callingRadiators === 0) {
-            activeDemandType = 'ONLY_UNDERFLOOR';
-        } else if (callingUfh > 0 && callingRadiators > 0) {
-            activeDemandType = 'MIXED';
-        } else if (callingRadiators > 0) {
-            activeDemandType = 'ONLY_RADIATOR';
-        }
+        if (callingUfh > 0 && callingRadiators === 0) activeDemandType = 'ONLY_UNDERFLOOR';
+        else if (callingUfh > 0 && callingRadiators > 0) activeDemandType = 'MIXED';
+        else if (callingRadiators > 0) activeDemandType = 'ONLY_RADIATOR';
 
-        // 7. Calculate optimal flow temperature and evaluate thermal load
-        const now = Date.now();
+        // 7. Compute the new circuit ceiling from the flow last commanded to the circuit
+        const currentFlow = circRows.length > 0 && circRows[0].field_2040 !== null && parseFloat(circRows[0].field_2040) > 0
+            ? parseFloat(circRows[0].field_2040)
+            : settingsMaxFlow;
+
         const guards = {
-            lockoutEnabled: settings.guard_lockout_enabled !== undefined ? Boolean(settings.guard_lockout_enabled) : true,
-            lockoutDurationMin: settings.guard_lockout_duration_min !== undefined ? parseInt(settings.guard_lockout_duration_min, 10) : 10,
-            lockoutOverrideDeficit: settings.guard_lockout_override_deficit !== undefined ? parseFloat(settings.guard_lockout_override_deficit) : 2.0,
-            deltaTEnabled: settings.guard_delta_t_enabled !== undefined ? Boolean(settings.guard_delta_t_enabled) : true,
-            deltaTMinTemp: settings.guard_delta_t_min_temp !== undefined ? parseFloat(settings.guard_delta_t_min_temp) : 5.0,
-            minRuntimeEnabled: settings.guard_min_runtime_enabled !== undefined ? Boolean(settings.guard_min_runtime_enabled) : true,
-            minRuntimeSeconds: settings.guard_min_runtime_seconds !== undefined ? parseInt(settings.guard_min_runtime_seconds, 10) : 180,
-            thermalLoadEnabled: settings.guard_thermal_load_enabled !== undefined ? Boolean(settings.guard_thermal_load_enabled) : true,
             radiatorFloorEnabled: settings.guard_radiator_floor_enabled !== undefined ? Boolean(settings.guard_radiator_floor_enabled) : true,
             radiatorFloorTemp: settings.guard_radiator_floor_temp !== undefined ? parseInt(settings.guard_radiator_floor_temp, 10) : 48,
             rateLimitEnabled: settings.guard_rate_limit_enabled !== undefined ? Boolean(settings.guard_rate_limit_enabled) : true,
             rateLimitMaxStep: settings.guard_rate_limit_max_step !== undefined ? parseFloat(settings.guard_rate_limit_max_step) : 3.0
         };
 
-        const lockoutMs = (guards.lockoutDurationMin || 10) * 60 * 1000;
-
-        const isFlameOn = (boilerRows.length > 0 && (boilerRows[0].field_0457 === 1 || (boilerRows[0].field_0452 && boilerRows[0].field_0452 > 0)));
-
-        const currentMode = circRows.length > 0 && circRows[0].field_2090 !== null && circRows[0].field_2090 !== undefined
-            ? parseInt(circRows[0].field_2090, 10)
-            : 1;
-        const currentFlow = circRows.length > 0 && circRows[0].field_2040 !== null
-            ? parseFloat(circRows[0].field_2040)
-            : null;
-
-        // Lockout runs from the server's own 1 -> 0 transition, not from boiler flame telemetry
-        // (DHW and keep-warm flames must not affect the CH lockout). Restore it from history after a restart.
-        let lastBurnEnd = _lastBurnEndTimes.get(homeId) || 0;
-        if (!lastBurnEnd && currentMode === 0) {
-            try {
-                const [mode1Rows] = await pool.execute(
-                    `SELECT timestamp FROM circuit_measurements
-                     WHERE home_id = ? AND field_2090 = 1
-                     ORDER BY id DESC LIMIT 1`,
-                    [homeId]
-                );
-                if (mode1Rows.length > 0 && mode1Rows[0].timestamp) {
-                    const [mode0Rows] = await pool.execute(
-                        `SELECT timestamp FROM circuit_measurements
-                         WHERE home_id = ? AND field_2090 = 0 AND timestamp > ?
-                         ORDER BY id ASC LIMIT 1`,
-                        [homeId, mode1Rows[0].timestamp]
-                    );
-                    if (mode0Rows.length > 0 && mode0Rows[0].timestamp) {
-                        lastBurnEnd = parseDbTimestamp(mode0Rows[0].timestamp);
-                        _lastBurnEndTimes.set(homeId, lastBurnEnd);
-                    }
-                }
-            } catch (_) {}
+        // Low-load cap with hysteresis on the demand the circuit driver reports to the boiler
+        let lowLoad = _lowLoadCapActive.get(homeId) || false;
+        if (ruCircuitDemandPct !== null) {
+            if (lowLoad && ruCircuitDemandPct >= LOW_LOAD_CAP_OFF_PCT) lowLoad = false;
+            else if (!lowLoad && ruCircuitDemandPct > 0 && ruCircuitDemandPct < LOW_LOAD_CAP_ON_PCT) lowLoad = true;
         }
-
-        const inLockout = guards.lockoutEnabled && (now - lastBurnEnd < lockoutMs);
-
-        // Rate-limit base is the last flow commanded to the circuit; standby (0) restarts from minFlow
-        const rateBaseFlow = circRows.length > 0
-            ? (currentFlow > 0 ? currentFlow : minFlow)
-            : currentMaxFlow;
+        _lowLoadCapActive.set(homeId, lowLoad);
 
         const opt = computeOptimalFlowTemperature({
             outsideTemp,
             minFlow,
             maxFlowLimit,
-            currentMaxFlow: rateBaseFlow,
+            currentMaxFlow: currentFlow,
             maxZoneError,
             circuitDemandPct,
-            modulationPct,
             forecastHourly,
             activeDemandType,
-            callingRadiators,
-            callingUfh,
-            inLockout,
-            actualFlowTemp,
-            isFlameOn,
-            currentMode,
-            guards
+            guards,
+            lowLoad
         });
-
         const newFlow = opt.targetFlow;
-        let targetMode = opt.circuitOperatingMode ?? 1;
 
-        // Anti-cycling minimum run-time guard:
-        // Once heating mode turns ON (1), hold for at least minRuntimeSeconds before permitting mode 0 standby drop,
-        // unless all zones are completely satisfied (0 demand and 0 error).
-        const minRunTimeMs = (guards.minRuntimeSeconds || 180) * 1000;
-        let lastBurnStart = _lastBurnStartTimes.get(homeId) || 0;
-        if (!lastBurnStart && currentMode === 1) {
-            try {
-                const [mode0Rows] = await pool.execute(
-                    `SELECT timestamp FROM circuit_measurements 
-                     WHERE home_id = ? AND field_2090 = 0 
-                     ORDER BY id DESC LIMIT 1`,
-                    [homeId]
-                );
-                const lastMode0Ts = (mode0Rows.length > 0 && mode0Rows[0].timestamp) ? mode0Rows[0].timestamp : '1970-01-01';
-                const [mode1Rows] = await pool.execute(
-                    `SELECT timestamp FROM circuit_measurements 
-                     WHERE home_id = ? AND field_2090 = 1 AND timestamp > ? 
-                     ORDER BY id ASC LIMIT 1`,
-                    [homeId, lastMode0Ts]
-                );
-                if (mode1Rows.length > 0 && mode1Rows[0].timestamp) {
-                    lastBurnStart = parseDbTimestamp(mode1Rows[0].timestamp);
-                    _lastBurnStartTimes.set(homeId, lastBurnStart);
-                }
-            } catch (_) {}
-        }
-        if (guards.minRuntimeEnabled && currentMode === 1 && targetMode === 0 && (now - lastBurnStart < minRunTimeMs)) {
-            if (circuitDemandPct > 0 || maxZoneError > 0) {
-                log('debug', `[flow-optimizer] Home ${homeId}: holding mode 1 (minimum run-time guard active, ${Math.round((now - lastBurnStart)/1000)}s / ${guards.minRuntimeSeconds || 180}s)`);
-                targetMode = 1;
-            }
-        }
+        // 8. Apply and downlink only when the ceiling actually moves
+        if (opt.changed) {
+            log('info', `[flow-optimizer] Home ${homeId}: flow=${currentFlow}°C->${newFlow}°C (reason=${opt.reason}, outdoor=${outsideTemp.toFixed(1)}°C, maxZoneError=${maxZoneError.toFixed(1)}°C, demand=${circuitDemandPct}%)`);
 
-        if (currentMode === 0 && targetMode === 1) {
-            _lastBurnStartTimes.set(homeId, now);
-        } else if (currentMode === 1 && targetMode === 0) {
-            _lastBurnEndTimes.set(homeId, now);
-        }
-
-        const effectiveFlow = opt.effectiveFlow ?? (targetMode === 0 ? 0 : newFlow);
-        const nowIso = new Date().toISOString().slice(0, 19).replace('T', ' ');
-
-        const modeChanged = currentMode !== targetMode;
-        const flowChanged = currentFlow !== effectiveFlow;
-
-        const isCircuitActive = targetMode === 1;
-        const shouldUpdateCircuit = modeChanged || (isCircuitActive && (flowChanged || opt.changed));
-
-        // 8. If flow changed or circuit operating mode changed, apply and downlink to circuit
-        if (shouldUpdateCircuit) {
-            log('info', `[flow-optimizer] Home ${homeId}: flow=${rateBaseFlow}°C->${newFlow}°C (effective=${effectiveFlow}°C) mode=${currentMode}->${targetMode} (reason=${opt.reason}, outdoor=${outsideTemp.toFixed(1)}°C, maxZoneError=${maxZoneError.toFixed(1)}°C, demand=${circuitDemandPct}%)`);
-
-            // Update circuit configs dynamically in DB and invalidate ETag so RU / bridge picks it up
             for (const cNum of targetCircuitNumbers) {
-                await _db.updateCircuitConfig(homeId, cNum, { '0x2040': effectiveFlow, '0x2090': targetMode });
+                await _db.updateCircuitConfig(homeId, cNum, { '0x2040': newFlow });
             }
 
-            // Automated live config resync with rate limiting
             const driverSerial = circRows.length > 0 ? circRows[0].driver_serial_no : null;
             if (driverSerial) {
                 const now = Date.now();
                 const lastPush = _lastDriverPushTimes.get(homeId) || 0;
-                const minDelayMs = 15 * 60 * 1000; // 15-minute cooldown between minor flow tweaks
+                const minDelayMs = 15 * 60 * 1000;
+                const flowStepUp = (newFlow - currentFlow) >= 3.0;
+                const cooldownExpired = now - lastPush >= minDelayMs;
 
-                const flowStepUp = effectiveFlow > 0 && currentFlow !== null && (effectiveFlow - currentFlow) >= 3.0;
-                const isFirstActivePush = lastPush === 0 && effectiveFlow > 0;
-                const cooldownExpired = isCircuitActive && (now - lastPush >= minDelayMs);
-                const needsPush = modeChanged || flowStepUp || isFirstActivePush || cooldownExpired;
-
-                // Push immediately on operating mode change, flow step-up, or when cooldown expired during active heating
-                if (needsPush) {
+                // A step up is pushed immediately; smaller changes wait for the cooldown or the driver's own poll.
+                if (flowStepUp || cooldownExpired) {
                     try {
                         const cmdApi = _commandApi || require('./command-api');
-                        const reason = modeChanged ? 'mode_change' : (flowStepUp ? 'flow_step_up' : (isFirstActivePush ? 'first_active_push' : 'cooldown_expired'));
-                        log('info', `[flow-optimizer] Triggering live config resync for circuit driver ${driverSerial} (flow=${effectiveFlow}°C, mode=${targetMode}, reason=${reason})`);
+                        log('info', `[flow-optimizer] Triggering live config resync for circuit driver ${driverSerial} (flow=${newFlow}°C, reason=${flowStepUp ? 'flow_step_up' : 'cooldown_expired'})`);
                         await cmdApi.pushConfigRefresh(driverSerial);
                         _lastDriverPushTimes.set(homeId, now);
                     } catch (pushErr) {
@@ -659,15 +394,15 @@ async function evaluateHome(homeId) {
             }
         }
 
-        // 9. Record history log
+        // 9. History
         try {
             await pool.execute(
-                `INSERT INTO flow_temperature_history 
+                `INSERT INTO flow_temperature_history
                  (home_id, timestamp, computed_flow_temp, actual_flow_temp, outside_temp, max_zone_error, modulation_pct, demand_pct, reason)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                     homeId,
-                    nowIso,
+                    new Date().toISOString().slice(0, 19).replace('T', ' '),
                     newFlow,
                     actualFlowTemp,
                     outsideTemp,
@@ -683,7 +418,7 @@ async function evaluateHome(homeId) {
 
         return {
             homeId,
-            currentMaxFlow,
+            currentMaxFlow: currentFlow,
             newFlow,
             changed: opt.changed,
             reason: opt.reason,
@@ -698,7 +433,7 @@ async function evaluateHome(homeId) {
 }
 
 /**
- * Runs flow optimization evaluation cycle for all homes with auto-adaptation enabled.
+ * Runs flow optimization for all homes with auto-adaptation enabled.
  */
 async function evaluateAllHomes() {
     if (config.externalController) return;
@@ -709,7 +444,6 @@ async function evaluateAllHomes() {
         const [homes] = await pool.execute(
             'SELECT home_id FROM flow_temperature_settings WHERE auto_adaptation_enabled = 1'
         );
-
         for (const row of homes) {
             await evaluateHome(row.home_id);
         }
@@ -721,9 +455,7 @@ async function evaluateAllHomes() {
 module.exports = {
     init,
     computeOptimalFlowTemperature,
-    evaluateCircuitThermalLoad,
     scheduleEvaluation,
     evaluateHome,
-    evaluateAllHomes,
-    parseDbTimestamp
+    evaluateAllHomes
 };
