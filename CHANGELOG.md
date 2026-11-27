@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.10.3] - 2026-11-27
+
+- refactor: drop virtual sensors and mode guards, add boiler cycle tracker
+- fix(frontend): redesign weather source settings
+- feat(optimizer): make protection guards configurable
+- fix(telemetry): record circuit mode updates in measurements
+- fix: refresh virtual sensor availability on telemetry
+
 ## [0.10.2] - 2026-11-22
 
 - fix(optimizer): decouple CH lockout from flame and fix rate base
